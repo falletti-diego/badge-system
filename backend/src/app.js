@@ -61,7 +61,7 @@ app.get('/api', (req, res) => {
 });
 
 // Error handling middleware
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   logger.error({
     error: err.message,
     stack: err.stack,
