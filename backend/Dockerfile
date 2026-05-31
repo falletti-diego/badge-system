@@ -22,9 +22,6 @@ RUN npm ci --only=production && npm cache clean --force
 # Copy application source code
 COPY src ./src
 
-# Copy environment template (reference only, actual .env set at runtime)
-COPY .env.example .env.example
-
 # Create non-root user for security (principle of least privilege)
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 USER nodejs
