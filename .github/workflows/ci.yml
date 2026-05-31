@@ -21,6 +21,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Debug - Show app.js line 64
+        run: sed -n '62,66p' backend/src/app.js
+
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
