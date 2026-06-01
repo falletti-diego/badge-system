@@ -45,6 +45,7 @@
     "prettier": "^3.1.0",
     "@types/node": "^20.10.5",
     "@types/express": "^4.17.21",
-    "@testing-library/jest-dom": "^6.1.5"
+    "@testing-library/jest-dom": "^6.1.5",
+    "supertest": "^6.3.0"
   }
 }
