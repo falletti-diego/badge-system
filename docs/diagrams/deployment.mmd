@@ -1,0 +1,120 @@
+---
+config:
+    layout: elk
+    look: handDrawn
+---
+graph TB
+    subgraph local["🖥️ LOCAL DEVELOPMENT"]
+        docker_local["🐳 Docker Compose<br/>─────<br/>• Node.js 20<br/>• PostgreSQL 14<br/>• Redis (cache)"]
+        dev_frontend["🌐 Dev Server<br/>localhost:5173<br/>(Vite hot reload)"]
+        dev_api["🔌 API Server<br/>localhost:3000<br/>(Nodemon)"]
+        docker_local --> dev_frontend
+        docker_local --> dev_api
+    end
+
+    subgraph github["🐙 GITHUB"]
+        repo["📦 Repository<br/>─────<br/>main (prod)<br/>develop (staging)<br/>feature/* (PRs)"]
+        actions["⚙️ GitHub Actions<br/>─────<br/>Lint → Test → Build<br/>Docker push → Deploy"]
+        repo --> actions
+    end
+
+    subgraph aws["☁️ AWS INFRASTRUCTURE (eu-west-1)"]
+        subgraph vpc["VPC: badge-vpc"]
+            subgraph public_subnet["🌐 PUBLIC SUBNET (AZ-a)"]
+                sg_api["🔓 Security Group: API<br/>• Inbound: 80, 443<br/>• Outbound: all"]
+                ec2_staging["🖥️ EC2 t3.small (STAGING)<br/>─────<br/>• Ubuntu 22.04 LTS<br/>• Docker Container<br/>• 2 vCPU, 2GB RAM<br/>• EBS 20GB"]
+                ec2_prod["🖥️ EC2 t3.small+ (PRODUCTION)<br/>─────<br/>• Ubuntu 22.04 LTS<br/>• Docker Container<br/>• 2 vCPU, 4GB RAM<br/>• EBS 30GB"]
+                alb["⚖️ ALB (Phase 2)<br/>Port 443 → EC2:3000<br/>─────<br/>(Not in MVP)"]
+                sg_api --> ec2_staging
+                sg_api --> ec2_prod
+                alb -.->|"Phase 2 feature"| ec2_staging
+                alb -.->|"Phase 2 feature"| ec2_prod
+            end
+
+            subgraph private_subnet["🔒 PRIVATE SUBNET (AZ-b)"]
+                sg_db["🔐 Security Group: Database<br/>• Inbound: 5432 from API<br/>• Outbound: none"]
+                rds_staging["💾 RDS PostgreSQL<br/>(STAGING)<br/>─────<br/>• db.t3.micro<br/>• 1 vCPU, 1GB RAM<br/>• Storage: 20GB<br/>• Multi-AZ backup"]
+                rds_prod["💾 RDS PostgreSQL<br/>(PRODUCTION)<br/>─────<br/>• db.t3.small<br/>• 2 vCPU, 2GB RAM<br/>• Storage: 50GB<br/>• Multi-AZ enabled<br/>• Read replicas (Phase 2)"]
+                sg_db --> rds_staging
+                sg_db --> rds_prod
+            end
+        end
+
+        subgraph aws_services["AWS SERVICES"]
+            ecr["📦 ECR Registry<br/>─────<br/>badge:main (prod)<br/>badge:develop (staging)<br/>Cost: €0.20/GB"]
+            acm["🔐 ACM Certificates<br/>─────<br/>api.badge.dataxiom.it<br/>dashboard.badge.dataxiom.it"]
+            cw["📈 CloudWatch<br/>─────<br/>Logs: /aws/ec2/badge<br/>Metrics: CPU, Memory<br/>Alarms: CPU > 80%"]
+            route53["🧭 Route 53<br/>─────<br/>badge.dataxiom.it<br/>api.badge.dataxiom.it<br/>dashboard.badge.dataxiom.it"]
+        end
+
+        ec2_staging -.->|docker pull from| ecr
+        ec2_prod -.->|docker pull from| ecr
+        ec2_staging --> cw
+        ec2_prod --> cw
+        ec2_staging --> rds_staging
+        ec2_prod --> rds_prod
+        route53 -.->|CNAME| acm
+    end
+
+    subgraph external_services["🌐 EXTERNAL SERVICES"]
+        netlify["🚀 Netlify<br/>(FRONTEND)<br/>─────<br/>• dashboard.badge.dataxiom.it<br/>• Auto-deploy on git push<br/>• CDN Global<br/>• Cost: Free tier"]
+        sentry["🚨 Sentry<br/>─────<br/>Error tracking<br/>Performance monitoring<br/>Cost: Free tier"]
+        auth0["🔑 Auth0<br/>─────<br/>OAuth2 provider<br/>User management<br/>Cost: €20-30/mo"]
+    end
+
+    %% CI/CD Flow
+    github -->|git push main| actions
+    actions -->|npm ci| actions
+    actions -->|npm run lint| actions
+    actions -->|npm run test| actions
+    actions -->|docker build| actions
+    actions -->|docker push| ecr
+    actions -->|SSH EC2| ec2_prod
+    ec2_prod -->|Health check| cw
+
+    actions -->|git push develop| actions
+    actions -->|→ Staging| ec2_staging
+
+    %% Frontend deployment
+    github -->|git push main| netlify
+
+    %% External service connections
+    ec2_staging --> auth0
+    ec2_prod --> auth0
+    ec2_staging --> sentry
+    ec2_prod --> sentry
+
+    %% Data Flow
+    ec2_staging -->|RLS policies| rds_staging
+    ec2_prod -->|RLS policies| rds_prod
+
+    subgraph backup["💾 BACKUP & DISASTER RECOVERY"]
+        backups["RDS Automated Backups<br/>─────<br/>• Daily snapshots<br/>• 7-day retention<br/>• Point-in-time recovery<br/>• Manual snapshots before major migrations"]
+    end
+
+    rds_staging --> backups
+    rds_prod --> backups
+
+    %% Monitoring Dashboard
+    subgraph monitoring["📊 MONITORING DASHBOARD"]
+        metrics["Metrics:<br/>• API latency (< 500ms)<br/>• Check-in rate<br/>• Error rate<br/>• DB connections"]
+        alerts["Alerts:<br/>• CPU > 80%<br/>• Errors > 5/min<br/>• DB disk > 80%<br/>• RDS failover"]
+    end
+
+    cw --> metrics
+    cw --> alerts
+
+    %% Styling
+    classDef localStyle fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+    classDef githubStyle fill:#f5f5f5,stroke:#333,stroke-width:2px,color:#000
+    classDef awsStyle fill:#fef5e7,stroke:#d4a017,stroke-width:2px,color:#000
+    classDef externalStyle fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px,color:#000
+    classDef backupStyle fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef monitoringStyle fill:#ffe0b2,stroke:#e65100,stroke-width:2px,color:#000
+
+    class docker_local,dev_frontend,dev_api localStyle
+    class repo,actions githubStyle
+    class vpc,public_subnet,private_subnet,aws_services,ec2_staging,ec2_prod,rds_staging,rds_prod,ecr,acm,cw,route53,sg_api,sg_db,alb awsStyle
+    class netlify,sentry,auth0 externalStyle
+    class backup,backups backupStyle
+    class monitoring,metrics,alerts monitoringStyle

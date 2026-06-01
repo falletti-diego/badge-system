@@ -8,6 +8,7 @@ const pino = require('pino');
 const { stringify } = require('csv-stringify');
 const { pool } = require('../db/pool');
 const { createValidationMiddleware, GetExportCsvSchema } = require('../middleware/validation');
+const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 const logger = pino({
@@ -33,13 +34,14 @@ function escapeCsvField(field) {
 // GET /api/export/csv — Stream check-ins as CSV
 // =====================================================
 
-router.get('/', createValidationMiddleware(GetExportCsvSchema), async (req, res, next) => {
-  const { client_id, site_id, employee_id, date_from, date_to } = req.validated.query;
+router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), async (req, res, next) => {
+  const { site_id, employee_id, date_from, date_to } = req.validated.query;
+  const clientId = req.user.client_id;
 
   try {
     // Build WHERE clause
     const whereClauses = ['c.client_id = $1::uuid'];
-    const params = [client_id];
+    const params = [clientId];
     let paramCount = 1;
 
     if (site_id) {
@@ -75,7 +77,7 @@ router.get('/', createValidationMiddleware(GetExportCsvSchema), async (req, res,
 
     logger.info({
       action: 'csv_export_started',
-      client_id,
+      client_id: clientId,
       filters: { site_id, employee_id, date_from, date_to },
     });
 
@@ -133,7 +135,7 @@ router.get('/', createValidationMiddleware(GetExportCsvSchema), async (req, res,
 
     logger.info({
       action: 'csv_export_completed',
-      client_id,
+      client_id: clientId,
       filters: { site_id, employee_id, date_from, date_to },
       row_count: result.rows.length,
     });

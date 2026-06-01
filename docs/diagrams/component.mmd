@@ -1,0 +1,80 @@
+---
+config:
+    layout: elk
+    look: handDrawn
+    layout: elk
+---
+graph TB
+    subgraph client["🖥️ CLIENT LAYER"]
+        mobile["📱 Mobile App<br/>(React Native)<br/>─────<br/>• QR Code Scanner<br/>• Face ID Auth<br/>• Check-in UI"]
+        web["💻 Web Dashboard<br/>(React 18 + Vite)<br/>─────<br/>• Presences Table<br/>• Reporting Charts<br/>• CSV Export"]
+    end
+
+    subgraph api["🔌 API LAYER<br/>(Express.js 4.x | Node.js 20)"]
+        auth["🔐 Auth Service<br/>─────<br/>POST /api/v1/auth/login<br/>POST /api/v1/auth/refresh<br/>POST /api/v1/auth/logout"]
+        checkin["✅ Check-in Service<br/>─────<br/>POST /api/v1/checkin<br/>GET /api/v1/checkins<br/>PUT /api/v1/checkins/:id"]
+        reporting["📊 Reporting<br/>─────<br/>GET /api/v1/presences<br/>GET /api/v1/stats<br/>GET /api/v1/export/csv"]
+        admin["⚙️ Admin Service<br/>─────<br/>POST /api/v1/clients<br/>POST /api/v1/sites<br/>POST /api/v1/employees"]
+    end
+
+    subgraph external["🌐 EXTERNAL SERVICES"]
+        auth0["🔑 Auth0<br/>(OAuth 2.0)<br/>─────<br/>Token Verification<br/>User Management"]
+        sentry["🚨 Sentry<br/>─────<br/>Error Tracking<br/>Stack Traces<br/>Performance Monitoring"]
+    end
+
+    subgraph data["💾 DATA LAYER<br/>(PostgreSQL 14+)"]
+        clients["clients<br/>(Organizations)"]
+        sites["sites<br/>(Locations)"]
+        employees["employees<br/>(Staff)"]
+        checkins["check_ins<br/>(Core Data)"]
+        audit["audit_log<br/>(Compliance)"]
+    end
+
+    subgraph infrastructure["☁️ AWS INFRASTRUCTURE<br/>(eu-west-1)"]
+        ec2["🖥️ EC2 t3.small<br/>─────<br/>• Ubuntu 22.04<br/>• Docker Container<br/>• Port 443 HTTPS"]
+        rds["📦 RDS PostgreSQL<br/>─────<br/>• db.t3.micro MVP<br/>• Multi-AZ Backup<br/>• 7-day Recovery"]
+        monitoring["📈 CloudWatch<br/>─────<br/>• Logs<br/>• Metrics<br/>• Alarms"]
+    end
+
+    %% Connections: Client → API (HTTPS REST + JWT)
+    mobile -->|"HTTPS REST<br/>JWT Bearer"| api
+    web -->|"HTTPS REST<br/>JWT Bearer"| api
+
+    %% Connections: API → External Services
+    auth -->|"OAuth2 Verify"| auth0
+    auth -->|"Error Events"| sentry
+    checkin -->|"Error Events"| sentry
+    reporting -->|"Error Events"| sentry
+    admin -->|"Error Events"| sentry
+
+    %% Connections: API → Database
+    auth -->|"pg Driver<br/>RLS Policies"| data
+    checkin -->|"pg Driver<br/>RLS Policies"| data
+    reporting -->|"pg Driver<br/>RLS Policies"| data
+    admin -->|"pg Driver<br/>RLS Policies"| data
+
+    %% Connections: Database tables
+    clients --> sites
+    clients --> employees
+    sites --> checkins
+    employees --> checkins
+    checkins --> audit
+
+    %% Connections: Infrastructure
+    ec2 -->|"Docker Runtime"| api
+    ec2 -->|"Private Subnet"| rds
+    rds -->|"SQL Queries"| data
+    ec2 -->|"CloudWatch Agent"| monitoring
+
+    %% Styling
+    classDef clientStyle fill:#e1f5ff,stroke:#01579b,stroke-width:2px,color:#000
+    classDef apiStyle fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000
+    classDef externalStyle fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
+    classDef dataStyle fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000
+    classDef infraStyle fill:#fce4ec,stroke:#880e4f,stroke-width:2px,color:#000
+
+    class mobile,web clientStyle
+    class auth,checkin,reporting,admin apiStyle
+    class auth0,sentry externalStyle
+    class clients,sites,employees,checkins,audit dataStyle
+    class ec2,rds,monitoring infraStyle

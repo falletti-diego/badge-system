@@ -1,0 +1,102 @@
+---
+config:
+    layout: elk
+    look: handDrawn
+---
+sequenceDiagram
+    actor Employee as 👤 Employee
+    participant MobileApp as 📱 Mobile App
+    participant API as 🔌 API Server
+    participant Database as 💾 PostgreSQL
+    participant Dashboard as 💻 Dashboard
+    participant Manager as 👨‍💼 Manager
+
+    rect rgb(200, 220, 255)
+    Note over Employee,Dashboard: HAPPY PATH: CHECK-IN PROCESS
+    end
+
+    Employee->>MobileApp: Opens app, authenticates with Face ID
+    MobileApp->>API: POST /auth/login (Face ID token)
+    API->>Database: Verify user credentials (RLS policy)
+    Database-->>API: User authenticated ✅
+    API-->>MobileApp: Return JWT tokens (30min + 7day)
+
+    Employee->>MobileApp: Scans QR code at site
+    MobileApp->>API: POST /api/v1/checkin<br/>{qr_code, timestamp, type: IN}
+    API->>Database: ⚠️ VALIDATION (Multi-Tenant):<br/>0. Extract client_id from JWT<br/>1. JWT valid?<br/>2. Employee.client_id = request.client_id?<br/>3. Employee assigned to site?<br/>4. Duplicate (within 60s)?<br/>5. Timestamp < 1min old?
+
+    alt Validation PASSED
+        Database->>Database: INSERT check_in record
+        Database->>Database: TRIGGER audit_log<br/>(CREATE action)
+        Database-->>API: 201 Created<br/>{id, timestamp, type, status}
+        API-->>MobileApp: ✅ Check-in successful
+        MobileApp->>Employee: Display confirmation
+        Database-->>Dashboard: Real-time update (polling, 10s interval)
+        Dashboard->>Manager: 🔴 New presence visible
+    else Validation FAILED: DUPLICATE
+        API-->>MobileApp: 409 Conflict<br/>DUPLICATE_CHECKIN<br/>(within 60 seconds)
+        MobileApp->>Employee: ⚠️ Check-in already registered
+    else Validation FAILED: NOT ASSIGNED
+        API-->>MobileApp: 403 Forbidden<br/>EMPLOYEE_NOT_ASSIGNED
+        MobileApp->>Employee: ⚠️ Contact manager
+    else Validation FAILED: QR INVALID
+        API-->>MobileApp: 404 Not Found<br/>INVALID_QR_CODE
+        MobileApp->>Employee: ⚠️ QR code not valid
+    end
+
+    rect rgb(255, 220, 200)
+    Note over Manager,Dashboard: CORRECTION PROCESS: MANAGER
+    end
+
+    Manager->>Dashboard: Notices wrong timestamp in table
+    Dashboard->>API: PUT /api/v1/checkins/{checkin_id}<br/>{timestamp, reason}
+    API->>Database: 🔍 CHECK CORRECTION WINDOW:<br/>• Manager: can correct 48h old<br/>• Employee: can correct 2h old<br/>• Current: within window?
+
+    alt Window VALID
+        Database->>Database: UPDATE check_in<br/>• timestamp = new value<br/>• corrected_at = now<br/>• corrected_by = manager_id<br/>• status = 'corrected'
+        Database->>Database: TRIGGER audit_log<br/>(CORRECT action with reason)
+        Database-->>API: 200 OK<br/>{id, timestamp, status}
+        API-->>Dashboard: ✅ Correction saved
+        Dashboard->>Manager: Confirmation ✅<br/>Audit trail recorded
+    else Window CLOSED
+        API-->>Dashboard: 409 Conflict<br/>CORRECTION_WINDOW_CLOSED<br/>(too old, ask admin)
+        Dashboard->>Manager: ⚠️ Too old to correct
+    end
+
+    rect rgb(220, 255, 220)
+    Note over Dashboard,Manager: COMPLIANCE: AUDIT TRAIL
+    end
+
+    Manager->>Dashboard: View Audit Log
+    Dashboard->>API: GET /api/v1/audit?entity=checkin
+    API->>Database: SELECT from audit_log<br/>WHERE client_id = current_client<br/>AND entity_id = checkin_id
+    Database-->>API: Immutable log entries:<br/>{action, user_id, timestamp, changes}
+    API-->>Dashboard: Display audit trail:<br/>✅ CREATE @ 09:15 by Employee<br/>✏️ CORRECT @ 09:18 by Manager<br/>(timestamp: 09:15 → 09:20, reason: wrong time)
+
+    rect rgb(255, 220, 220)
+    Note over Dashboard,Manager: GDPR: DATA DELETION & RETENTION
+    end
+
+    Manager->>Dashboard: Request employee deletion
+    Dashboard->>API: PUT /api/v1/employees/:id/delete<br/>{reason: "Left company"}
+    API->>Database: 🔒 GDPR DELETION PROCESS:<br/>1. Mark employee deleted_at = NOW<br/>2. Soft delete all check-ins for employee<br/>3. TRIGGER audit_log (DELETE action)<br/>4. Schedule hard delete after 12 months
+    Database-->>API: 200 OK<br/>Deletion scheduled
+    API-->>Dashboard: ✅ Employee deleted (12-month retention)
+    Dashboard->>Manager: Confirmation:<br/>📋 Employee data will be permanently deleted<br/>📅 Hard delete scheduled: 12 months from now<br/>✅ Audit trail preserved for compliance
+
+    rect rgb(200, 255, 255)
+    Note over Dashboard,Manager: REPORTING: CSV EXPORT
+    end
+
+    Manager->>Dashboard: Export presences (date range)
+    Dashboard->>API: GET /api/v1/export/csv<br/>?from=2026-05-28&to=2026-05-29
+    API->>Database: SELECT check_ins with corrections<br/>WHERE client_id = current_client<br/>ORDER BY timestamp DESC
+    Database-->>API: Results with status flags<br/>(confirmed vs corrected)
+    API-->>Dashboard: CSV file<br/>employee,site,time_in,time_out,status
+    Dashboard->>Manager: ⬇️ Download checkins_2026-05-28.csv
+
+    rect rgb(255, 200, 200)
+    Note over API,Database: ⏱️ TIMING CONSTRAINTS
+    end
+
+    Note over API: • Check-in response: < 500ms<br/>• Duplicate detection: exact 60s window<br/>• Correction window: 2h employee / 48h manager<br/>• Dashboard refresh: real-time (WebSocket) or 10s polling

@@ -11,6 +11,9 @@ const { pool } = require('../db/pool');
 const { createValidationMiddleware, PostCheckinSchema, GetCheckinsSchema, PutCheckinSchema } = require('../middleware/validation');
 const { logAudit } = require('../middleware/audit');
 const { withTransaction } = require('../middleware/db-transaction');
+const { requireAuth } = require('../middleware/auth');
+const { NotFoundError, ValidationError } = require('../utils/errors');
+const { deleteCacheByPattern } = require('../db/redis');
 
 const router = express.Router();
 const logger = pino({
@@ -21,24 +24,21 @@ const logger = pino({
 // POST /api/checkins — Create check-in
 // =====================================================
 
-router.post('/', createValidationMiddleware(PostCheckinSchema), async (req, res, next) => {
+router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), async (req, res, next) => {
   const { employee_id, site_id, type } = req.validated.body;
+  const clientId = req.user.client_id;
 
   try {
     const result = await withTransaction(async (client) => {
-      // 1. Verify employee exists
+      // 1. Verify employee exists and belongs to authenticated client
       const employeeResult = await client.query(
-        'SELECT id, client_id FROM employees WHERE id = $1::uuid LIMIT 1',
-        [employee_id]
+        'SELECT id, client_id FROM employees WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1',
+        [employee_id, clientId]
       );
 
       if (employeeResult.rows.length === 0) {
-        const err = new Error('Employee not found');
-        err.statusCode = 404;
-        throw err;
+        throw new NotFoundError('Employee not found or not assigned to your organization', 'EMPLOYEE_NOT_FOUND');
       }
-
-      const clientId = employeeResult.rows[0].client_id;
 
       // 2. Verify site exists
       const siteResult = await client.query(
@@ -47,9 +47,7 @@ router.post('/', createValidationMiddleware(PostCheckinSchema), async (req, res,
       );
 
       if (siteResult.rows.length === 0) {
-        const err = new Error('Site not found or not assigned to client');
-        err.statusCode = 404;
-        throw err;
+        throw new NotFoundError('Site not found or not assigned to your organization', 'SITE_NOT_FOUND');
       }
 
       // 3. Verify employee is assigned to site
@@ -60,9 +58,10 @@ router.post('/', createValidationMiddleware(PostCheckinSchema), async (req, res,
       );
 
       if (assignmentResult.rows.length === 0) {
-        const err = new Error('Employee is not assigned to this site');
-        err.statusCode = 400;
-        throw err;
+        throw new ValidationError('Employee is not assigned to this site', {
+          field: 'employee_id',
+          code: 'NOT_ASSIGNED_TO_SITE',
+        });
       }
 
       // 4. Create check-in
@@ -71,26 +70,25 @@ router.post('/', createValidationMiddleware(PostCheckinSchema), async (req, res,
           employee_id, site_id, client_id, type, timestamp, created_by, created_at
         ) VALUES ($1, $2, $3, $4, NOW(), $5, NOW())
         RETURNING id, employee_id, site_id, type, timestamp, created_at`,
-        [employee_id, site_id, clientId, type, 'system']
+        [employee_id, site_id, clientId, type, req.user.user_id]
       );
 
       const checkin = checkinResult.rows[0];
 
       // 5. Log audit trail
-      // TODO: Fix audit log type mismatch (Phase 2)
-      // await logAudit(client, {
-      //   action: 'checkin_created',
-      //   entityId: checkin.id,
-      //   clientId,
-      //   oldValue: null,
-      //   newValue: {
-      //     employee_id,
-      //     site_id,
-      //     type,
-      //     timestamp: checkin.timestamp,
-      //   },
-      //   userId: 'system',
-      // });
+      await logAudit(client, {
+        action: 'checkin_created',
+        entityId: checkin.id,
+        clientId,
+        oldValue: null,
+        newValue: {
+          employee_id,
+          site_id,
+          type,
+          timestamp: checkin.timestamp,
+        },
+        userId: req.user.user_id,
+      });
 
       return checkin;
     });
@@ -103,16 +101,19 @@ router.post('/', createValidationMiddleware(PostCheckinSchema), async (req, res,
       type,
     });
 
+    // Invalidate cache for this client's checkins
+    deleteCacheByPattern(`cache:*api:checkins*${clientId}*`).catch((err) => {
+      logger.warn({
+        action: 'cache_invalidation_error',
+        error: err.message,
+      });
+    });
+
     res.status(201).json({
       data: result,
       message: 'Check-in created successfully',
     });
   } catch (err) {
-    if (err.statusCode) {
-      return res.status(err.statusCode).json({
-        error: err.message,
-      });
-    }
     next(err);
   }
 });
@@ -121,13 +122,14 @@ router.post('/', createValidationMiddleware(PostCheckinSchema), async (req, res,
 // GET /api/checkins — List check-ins with filters
 // =====================================================
 
-router.get('/', createValidationMiddleware(GetCheckinsSchema), async (req, res, next) => {
-  const { client_id, site_id, employee_id, date_from, date_to, limit, offset } = req.validated.query;
+router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), async (req, res, next) => {
+  const { site_id, employee_id, date_from, date_to, limit, offset } = req.validated.query;
+  const clientId = req.user.client_id;
 
   try {
     // Build WHERE clause dynamically
     const whereClauses = ['c.client_id = $1::uuid'];
-    const params = [client_id];
+    const params = [clientId];
     let paramCount = 1;
 
     if (site_id) {
@@ -224,23 +226,22 @@ router.get('/', createValidationMiddleware(GetCheckinsSchema), async (req, res, 
 // PUT /api/checkins/:id — Correct check-in (within 15 min)
 // =====================================================
 
-router.put('/:id', createValidationMiddleware(PutCheckinSchema), async (req, res, next) => {
+router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), async (req, res, next) => {
   const { id } = req.validated.params;
   const { type: newType } = req.validated.body;
+  const clientId = req.user.client_id;
 
   try {
     const result = await withTransaction(async (client) => {
-      // 1. Find check-in
+      // 1. Find check-in and verify ownership
       const checkinResult = await client.query(
         `SELECT id, employee_id, site_id, client_id, type, timestamp
-         FROM checkins WHERE id = $1::uuid`,
-        [id]
+         FROM checkins WHERE id = $1::uuid AND client_id = $2::uuid`,
+        [id, clientId]
       );
 
       if (checkinResult.rows.length === 0) {
-        const err = new Error('Check-in not found');
-        err.statusCode = 404;
-        throw err;
+        throw new NotFoundError('Check-in not found or not assigned to your organization', 'CHECKIN_NOT_FOUND');
       }
 
       const checkin = checkinResult.rows[0];
@@ -252,9 +253,10 @@ router.put('/:id', createValidationMiddleware(PutCheckinSchema), async (req, res
       const diffMinutes = (now - createdAt) / (1000 * 60);
 
       if (diffMinutes > 15) {
-        const err = new Error(`Cannot modify check-in: outside 15-minute correction window (${Math.floor(diffMinutes)} minutes old)`);
-        err.statusCode = 400;
-        throw err;
+        throw new ValidationError(
+          `Cannot modify check-in: outside 15-minute correction window (${Math.floor(diffMinutes)} minutes old)`,
+          { field: 'checkin_id', code: 'CORRECTION_WINDOW_EXPIRED' }
+        );
       }
 
       // 3. Skip update if type is unchanged
@@ -268,26 +270,25 @@ router.put('/:id', createValidationMiddleware(PutCheckinSchema), async (req, res
          SET type = $1, modified_at = NOW(), modified_by = $2
          WHERE id = $3::uuid
          RETURNING id, employee_id, site_id, type, timestamp, modified_at, modified_by`,
-        [newType, 'system', id]
+        [newType, req.user.user_id, id]
       );
 
       const updated = updateResult.rows[0];
 
       // 5. Log audit trail
-      // TODO: Fix audit log type mismatch (Phase 2)
-      // await logAudit(client, {
-      //   action: 'checkin_corrected',
-      //   entityId: id,
-      //   clientId: checkin.client_id,
-      //   oldValue: {
-      //     type: oldType,
-      //   },
-      //   newValue: {
-      //     type: newType,
-      //     modified_at: updated.modified_at,
-      //   },
-      //   userId: 'system',
-      // });
+      await logAudit(client, {
+        action: 'checkin_corrected',
+        entityId: id,
+        clientId: checkin.client_id,
+        oldValue: {
+          type: oldType,
+        },
+        newValue: {
+          type: newType,
+          modified_at: updated.modified_at,
+        },
+        userId: req.user.user_id,
+      });
 
       return updated;
     });
@@ -298,16 +299,19 @@ router.put('/:id', createValidationMiddleware(PutCheckinSchema), async (req, res
       old_type: req.validated.body.type === result.type ? null : 'changed',
     });
 
+    // Invalidate cache for this client's checkins
+    deleteCacheByPattern(`cache:*api:checkins*${clientId}*`).catch((err) => {
+      logger.warn({
+        action: 'cache_invalidation_error',
+        error: err.message,
+      });
+    });
+
     res.json({
       data: result,
       message: 'Check-in corrected successfully',
     });
   } catch (err) {
-    if (err.statusCode) {
-      return res.status(err.statusCode).json({
-        error: err.message,
-      });
-    }
     next(err);
   }
 });

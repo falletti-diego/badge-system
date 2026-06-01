@@ -7,6 +7,8 @@
 const express = require('express');
 const pino = require('pino');
 const { pool } = require('../db/pool');
+const { requireAuth } = require('../middleware/auth');
+const { NotFoundError } = require('../utils/errors');
 
 const router = express.Router();
 const logger = pino({
@@ -15,19 +17,12 @@ const logger = pino({
 
 /**
  * GET /api/employees
- * List employees (filtered by client_id for multi-tenant)
- * Query params: client_id, limit, offset
+ * List employees (filtered by authenticated user's client_id)
+ * Query params: limit, offset
  */
-router.get('/', async (req, res, next) => {
-  const { client_id, limit = 50, offset = 0 } = req.query;
-
-  // For MVP, client_id is required to prevent data leakage
-  if (!client_id) {
-    return res.status(400).json({
-      error: 'Bad Request',
-      message: 'client_id query parameter is required',
-    });
-  }
+router.get('/', requireAuth, async (req, res, next) => {
+  const { limit = 50, offset = 0 } = req.query;
+  const clientId = req.user.client_id;
 
   try {
     // Query employees with pagination
@@ -47,11 +42,11 @@ router.get('/', async (req, res, next) => {
       LIMIT $2 OFFSET $3
     `;
 
-    const result = await pool.query(query, [client_id, parseInt(limit, 10), parseInt(offset, 10)]);
+    const result = await pool.query(query, [clientId, parseInt(limit, 10), parseInt(offset, 10)]);
 
     logger.info({
       action: 'list_employees',
-      client_id,
+      client_id: clientId,
       count: result.rows.length,
     });
 
@@ -77,16 +72,9 @@ router.get('/', async (req, res, next) => {
  * GET /api/employees/:id
  * Get single employee by ID
  */
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', requireAuth, async (req, res, next) => {
   const { id } = req.params;
-  const { client_id } = req.query;
-
-  if (!client_id) {
-    return res.status(400).json({
-      error: 'Bad Request',
-      message: 'client_id query parameter is required',
-    });
-  }
+  const clientId = req.user.client_id;
 
   try {
     const query = `
@@ -103,19 +91,16 @@ router.get('/:id', async (req, res, next) => {
       WHERE id = $1::uuid AND client_id = $2::uuid
     `;
 
-    const result = await pool.query(query, [id, client_id]);
+    const result = await pool.query(query, [id, clientId]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'Employee not found',
-      });
+      throw new NotFoundError('Employee not found', 'EMPLOYEE_NOT_FOUND');
     }
 
     logger.info({
       action: 'get_employee',
       employee_id: id,
-      client_id,
+      client_id: clientId,
     });
 
     res.json({

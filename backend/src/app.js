@@ -9,6 +9,11 @@ const helmet = require('helmet');
 const cors = require('cors');
 const pino = require('pino');
 const { testConnection, closePool } = require('./db/pool');
+const { initializeRedis, closeRedis } = require('./db/redis');
+const { ApiError, RateLimitError } = require('./utils/errors');
+const { apiLimiter, authLimiter, csvLimiter } = require('./middleware/rateLimiter');
+const { cacheMiddleware } = require('./middleware/cache');
+const authRouter = require('./routes/auth');
 const employeesRouter = require('./routes/employees');
 const checkinsRouter = require('./routes/checkins');
 const exportRouter = require('./routes/export');
@@ -37,6 +42,11 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Rate limiting middleware
+app.use('/api/', apiLimiter); // General API limiter
+app.use('/api/auth/', authLimiter); // Tighter limit for auth endpoints
+app.use('/api/export/csv', csvLimiter); // CSV export limiter
+
 // Request logging
 app.use((req, res, next) => {
   logger.info({
@@ -64,20 +74,72 @@ app.get('/api', (req, res) => {
   });
 });
 
+// Cache middleware for GET requests
+app.use('/api/', cacheMiddleware());
+
 // Register routes
+app.use('/api/auth', authRouter);
 app.use('/api/employees', employeesRouter);
 app.use('/api/checkins', checkinsRouter);
 app.use('/api/export/csv', exportRouter);
 
 // Error handling middleware
 app.use((err, req, res, _next) => {
+  // Handle custom API errors
+  if (err instanceof ApiError) {
+    const statusCode = err.statusCode || 500;
+    const logLevel = statusCode >= 500 ? 'error' : 'info';
+
+    const logData = {
+      action: 'api_error',
+      error: err.code,
+      message: err.message,
+      statusCode,
+      method: req.method,
+      path: req.path,
+      user_id: req.user?.user_id,
+    };
+
+    if (logLevel === 'error') {
+      logData.stack = err.stack;
+    }
+
+    logger[logLevel](logData);
+
+    const response = {
+      error: err.code,
+      message: err.message,
+      statusCode,
+    };
+
+    // Include details for rate limit errors
+    if (err instanceof RateLimitError) {
+      response.retryAfter = err.retryAfter;
+      res.set('Retry-After', err.retryAfter);
+    }
+
+    // Include validation details if present
+    if (err.details) {
+      response.details = err.details;
+    }
+
+    return res.status(statusCode).json(response);
+  }
+
+  // Handle generic errors
   logger.error({
+    action: 'unhandled_error',
     error: err.message,
     stack: err.stack,
+    method: req.method,
+    path: req.path,
+    user_id: req.user?.user_id,
   });
+
   res.status(500).json({
-    error: 'Internal Server Error',
+    error: 'INTERNAL_ERROR',
     message: NODE_ENV === 'development' ? err.message : 'An error occurred',
+    statusCode: 500,
   });
 });
 
@@ -96,6 +158,9 @@ if (require.main === module) {
       // Test database connection before starting
       await testConnection();
 
+      // Initialize Redis (optional, gracefully continues if not available)
+      await initializeRedis();
+
       app.listen(PORT, () => {
         logger.info(`Server running on port ${PORT} (${NODE_ENV})`);
       });
@@ -103,6 +168,7 @@ if (require.main === module) {
       // Graceful shutdown
       process.on('SIGTERM', async () => {
         logger.info('SIGTERM received, closing gracefully...');
+        await closeRedis();
         await closePool();
         process.exit(0);
       });

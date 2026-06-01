@@ -1,0 +1,1005 @@
+openapi: 3.0.0
+info:
+  title: Badge System API
+  description: |
+    REST API per il Badge System - SaaS multi-tenant per il tracciamento delle presenze nel retail.
+
+    ## Autenticazione
+    Tutti gli endpoint protetti richiedono JWT Bearer token nel header Authorization.
+
+    ## Rate Limiting
+    Limite: 100 richieste/minuto per IP. Headers di risposta includeranno X-RateLimit-*.
+
+    ## Timezone
+    Tutti i timestamp sono in ISO 8601 UTC (es. 2026-05-28T14:30:00Z)
+  version: 1.0.0
+  contact:
+    name: Badge System Support
+    url: https://badge.dataxiom.it/support
+  license:
+    name: Proprietary
+    url: https://badge.dataxiom.it/license
+
+servers:
+  - url: https://api.badge.dataxiom.it
+    description: Production
+  - url: http://localhost:3000
+    description: Development
+
+tags:
+  - name: Authentication
+    description: Login, logout, token refresh
+  - name: Check-ins
+    description: Register, list, correct check-ins
+  - name: Reporting
+    description: Dashboard presences, statistics, export
+  - name: Admin
+    description: Manage clients, sites, employees (admin only)
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /auth/login
+
+  schemas:
+    # ─────────────────────────────────────────────────────────────────
+    # Request/Response Objects
+    # ─────────────────────────────────────────────────────────────────
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: emp_001
+        email:
+          type: string
+          format: email
+          example: mario@retail.it
+        name:
+          type: string
+          example: Mario Rossi
+        role:
+          type: string
+          enum: [employee, manager, admin]
+          example: employee
+      required: [id, email, name, role]
+
+    CheckIn:
+      type: object
+      properties:
+        id:
+          type: string
+          example: checkin_abc123
+        employee_id:
+          type: string
+          example: emp_001
+        employee_email:
+          type: string
+          format: email
+        site_id:
+          type: string
+          example: site_milano_001
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-05-28T09:15:00Z"
+        type:
+          type: string
+          enum: [IN, OUT]
+          example: IN
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          description: User ID who registered the check-in
+          example: emp_001
+        corrected_at:
+          type: string
+          format: date-time
+          nullable: true
+        corrected_by:
+          type: string
+          nullable: true
+          description: User ID who corrected the check-in
+          example: mgr_005
+        status:
+          type: string
+          enum: [confirmed, corrected]
+          example: confirmed
+      required: [id, employee_id, site_id, timestamp, type, created_at, status]
+
+    Presence:
+      type: object
+      properties:
+        id:
+          type: string
+        employee:
+          type: object
+          properties:
+            id:
+              type: string
+            email:
+              type: string
+              format: email
+            name:
+              type: string
+        site:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            location:
+              type: string
+        timestamp:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum: [IN, OUT]
+        status:
+          type: string
+          enum: [confirmed, corrected]
+        corrected:
+          type: boolean
+
+    Meta:
+      type: object
+      properties:
+        request_id:
+          type: string
+          example: req_xyz789
+        timestamp:
+          type: string
+          format: date-time
+        processing_ms:
+          type: integer
+          example: 85
+      required: [request_id, timestamp, processing_ms]
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+        meta:
+          $ref: '#/components/schemas/Meta'
+      required: [success, data, meta]
+
+    ErrorDetail:
+      type: object
+      properties:
+        code:
+          type: string
+          example: INVALID_QR_CODE
+        message:
+          type: string
+          example: QR code not found
+        details:
+          type: object
+          example: { qr_code: "Invalid format" }
+        http_status:
+          type: integer
+          example: 400
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+        meta:
+          $ref: '#/components/schemas/Meta'
+      required: [success, error, meta]
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 47
+        total_pages:
+          type: integer
+          example: 3
+
+paths:
+  # ═══════════════════════════════════════════════════════════════════
+  # AUTHENTICATION ENDPOINTS
+  # ═══════════════════════════════════════════════════════════════════
+
+  /api/v1/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login con email e password
+      description: Ottieni access token e refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+              required: [email, password]
+            example:
+              email: mario@retail.it
+              password: secure_password_123
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      access_token:
+                        type: string
+                      refresh_token:
+                        type: string
+                      token_type:
+                        type: string
+                        example: Bearer
+                      expires_in:
+                        type: integer
+                        example: 1800
+                      user:
+                        $ref: '#/components/schemas/User'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '400':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+              required: [refresh_token]
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      access_token:
+                        type: string
+                      token_type:
+                        type: string
+                      expires_in:
+                        type: integer
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Logout (invalidate token)
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Logged out successfully
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ═══════════════════════════════════════════════════════════════════
+  # CHECK-IN ENDPOINTS
+  # ═══════════════════════════════════════════════════════════════════
+
+  /api/v1/checkin:
+    post:
+      tags: [Check-ins]
+      summary: Register a new check-in (IN or OUT)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                qr_code_content:
+                  type: string
+                  description: QR code URL or content
+                  example: https://api.badge.dataxiom.it/checkin/site/site_milano_001
+                timestamp:
+                  type: string
+                  format: date-time
+                  example: "2026-05-28T09:15:00Z"
+                type:
+                  type: string
+                  enum: [IN, OUT]
+                  example: IN
+              required: [qr_code_content, timestamp, type]
+      responses:
+        '201':
+          description: Check-in registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/CheckIn'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Duplicate check-in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/checkins:
+    get:
+      tags: [Check-ins]
+      summary: List user's check-ins
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Items per page (max 100)
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date
+            example: "2026-05-01"
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date
+            example: "2026-05-31"
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [IN, OUT]
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [timestamp_asc, timestamp_desc]
+            default: timestamp_desc
+      responses:
+        '200':
+          description: List of check-ins
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CheckIn'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationMeta'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/checkins/{checkin_id}:
+    get:
+      tags: [Check-ins]
+      summary: Get single check-in details
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: checkin_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: checkin_abc123
+      responses:
+        '200':
+          description: Check-in details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/CheckIn'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Check-in not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Check-ins]
+      summary: Correct a check-in timestamp
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: checkin_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                timestamp:
+                  type: string
+                  format: date-time
+                  example: "2026-05-28T09:20:00Z"
+                reason:
+                  type: string
+                  example: System glitch, actual time was 9:20
+              required: [timestamp]
+      responses:
+        '200':
+          description: Check-in corrected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/CheckIn'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Check-in not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Correction window closed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ═══════════════════════════════════════════════════════════════════
+  # REPORTING ENDPOINTS
+  # ═══════════════════════════════════════════════════════════════════
+
+  /api/v1/presences:
+    get:
+      tags: [Reporting]
+      summary: Get presences for dashboard
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+          description: Items per page (max 100)
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: site_id
+          in: query
+          schema:
+            type: string
+        - name: employee_id
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [IN, OUT]
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [timestamp_asc, timestamp_desc, employee_asc]
+            default: timestamp_desc
+          description: "Sort by: timestamp_asc/timestamp_desc (check-in time), employee_asc (employee ID)"
+      responses:
+        '200':
+          description: Presences list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Presence'
+                  pagination:
+                    $ref: '#/components/schemas/PaginationMeta'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/stats:
+    get:
+      tags: [Reporting]
+      summary: Get aggregated statistics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: site_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      date:
+                        type: string
+                        format: date
+                      total_employees:
+                        type: integer
+                      present_today:
+                        type: integer
+                      absent:
+                        type: integer
+                      late_arrivals:
+                        type: integer
+                      total_checkins:
+                        type: integer
+                      by_type:
+                        type: object
+                        properties:
+                          IN:
+                            type: integer
+                          OUT:
+                            type: integer
+                      average_arrival_time:
+                        type: string
+                        example: "09:12:30"
+                      average_departure_time:
+                        type: string
+                        example: "17:42:15"
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/export/csv:
+    get:
+      tags: [Reporting]
+      summary: Export presences to CSV
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: site_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ═══════════════════════════════════════════════════════════════════
+  # ADMIN ENDPOINTS
+  # ═══════════════════════════════════════════════════════════════════
+
+  /api/v1/admin/clients:
+    post:
+      tags: [Admin]
+      summary: Create new client
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Retail Chain XYZ
+                email:
+                  type: string
+                  format: email
+                plan:
+                  type: string
+                  enum: [basic, pro, enterprise]
+                timezone:
+                  type: string
+                  example: Europe/Rome
+              required: [name, email, plan]
+      responses:
+        '201':
+          description: Client created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      plan:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date-time
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/sites:
+    post:
+      tags: [Admin]
+      summary: Create new site
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                client_id:
+                  type: string
+                name:
+                  type: string
+                location:
+                  type: string
+                address:
+                  type: string
+              required: [client_id, name, location]
+      responses:
+        '201':
+          description: Site created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      client_id:
+                        type: string
+                      name:
+                        type: string
+                      qr_code_content:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date-time
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/employees:
+    post:
+      tags: [Admin]
+      summary: Create employees (bulk)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                client_id:
+                  type: string
+                employees:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      email:
+                        type: string
+                        format: email
+                      name:
+                        type: string
+                      phone:
+                        type: string
+                      assigned_sites:
+                        type: array
+                        items:
+                          type: string
+                    required: [email, name]
+              required: [client_id, employees]
+      responses:
+        '201':
+          description: Employees created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      created:
+                        type: integer
+                      failed:
+                        type: integer
+                      employees:
+                        type: array
+                        items:
+                          type: object
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/metrics:
+    get:
+      tags: [Admin]
+      summary: Get system-wide metrics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: System metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      period:
+                        type: object
+                      clients:
+                        type: object
+                      employees:
+                        type: object
+                      checkins:
+                        type: object
+                      api_stats:
+                        type: object
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+        '403':
+          description: Not admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
