@@ -6,8 +6,8 @@ LABEL maintainer="Diego Falletti <falletti.diego2533@gmail.com>"
 LABEL description="Badge System Backend API - Node.js 20 + Express.js"
 LABEL version="1.0.0"
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+# Install build dependencies for native modules (csv-stringify, pg) + dumb-init
+RUN apk add --no-cache build-base python3 dumb-init
 
 # Set working directory
 WORKDIR /app
