@@ -9,12 +9,11 @@ echo "======================================"
 echo "Badge System Backend - EC2 Deployment"
 echo "======================================"
 
-# Load environment variables from .env
+# Load environment variables from .env (safely, only VAR=value lines)
 if [ -f .env ]; then
   echo "📋 Loading environment from .env..."
-  set -a
-  source .env
-  set +a
+  export $(grep -E '^[A-Z_]+=' .env | xargs)
+  echo "✅ Loaded $(grep -E '^[A-Z_]+=' .env | wc -l) variables"
 else
   echo "⚠️  .env file not found - using defaults"
 fi
@@ -34,6 +33,16 @@ DB_USER="${DB_USER:-postgres}"
 DB_PASSWORD="${DB_PASSWORD:-}"
 DB_NAME="${DB_NAME:-badge_system}"
 AWS_REGION="${AWS_REGION:-eu-west-1}"
+
+# Debug: Show loaded values
+echo ""
+echo "🔍 Database Configuration:"
+echo "   DB_HOST: $DB_HOST"
+echo "   DB_PORT: $DB_PORT"
+echo "   DB_USER: $DB_USER"
+echo "   DB_NAME: $DB_NAME"
+echo "   DB_PASSWORD: $(if [ -z \"$DB_PASSWORD\" ]; then echo \"[EMPTY]\"; else echo \"[SET]\"; fi)"
+echo ""
 
 # Validate DB_PASSWORD is set
 if [ -z "$DB_PASSWORD" ]; then

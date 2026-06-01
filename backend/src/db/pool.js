@@ -42,22 +42,35 @@ pool.on('remove', () => {
  * Test database connection on startup
  */
 async function testConnection() {
-  const client = await pool.connect();
   try {
-    const result = await client.query('SELECT NOW()');
-    logger.info({
-      message: 'Database connection successful',
-      timestamp: result.rows[0].now,
-    });
-    return true;
+    const client = await pool.connect();
+    try {
+      const result = await client.query('SELECT NOW()');
+      logger.info({
+        message: 'Database connection successful',
+        timestamp: result.rows[0].now,
+      });
+      return true;
+    } catch (err) {
+      logger.error({
+        message: 'Database query failed',
+        error: err.message || err.toString(),
+        code: err.code,
+        details: err,
+      });
+      throw err;
+    } finally {
+      client.release();
+    }
   } catch (err) {
     logger.error({
-      message: 'Database connection failed',
-      error: err.message,
+      message: 'Database connection pool failed',
+      error: err.message || err.toString(),
+      code: err.code,
+      stack: err.stack,
+      details: JSON.stringify(err, null, 2),
     });
     throw err;
-  } finally {
-    client.release();
   }
 }
 
