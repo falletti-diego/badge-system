@@ -8,8 +8,10 @@ const dotenv = require('dotenv');
 const helmet = require('helmet');
 const cors = require('cors');
 const pino = require('pino');
-const { pool, testConnection, closePool } = require('./db/pool');
+const { testConnection, closePool } = require('./db/pool');
 const employeesRouter = require('./routes/employees');
+const checkinsRouter = require('./routes/checkins');
+const exportRouter = require('./routes/export');
 
 // Load environment variables
 dotenv.config();
@@ -64,6 +66,8 @@ app.get('/api', (req, res) => {
 
 // Register routes
 app.use('/api/employees', employeesRouter);
+app.use('/api/checkins', checkinsRouter);
+app.use('/api/export/csv', exportRouter);
 
 // Error handling middleware
 app.use((err, req, res, _next) => {

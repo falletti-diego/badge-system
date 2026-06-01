@@ -1,0 +1,163 @@
+/**
+ * Export Routes
+ * GET /api/export/csv — Export check-ins as CSV with streaming
+ */
+
+const express = require('express');
+const pino = require('pino');
+const { stringify } = require('csv-stringify');
+const { pool } = require('../db/pool');
+const { createValidationMiddleware, GetExportCsvSchema } = require('../middleware/validation');
+
+const router = express.Router();
+const logger = pino({
+  level: process.env.LOG_LEVEL || 'info',
+});
+
+/**
+ * Escape CSV field to prevent formula injection
+ * @param {*} field - Value to escape
+ * @returns {string} - Escaped value
+ */
+function escapeCsvField(field) {
+  if (field === null || field === undefined) return '';
+  const stringField = String(field);
+  // Escape formula characters (=, +, @, -)
+  if (/^[=+@-]/.test(stringField)) {
+    return "'" + stringField;
+  }
+  return stringField;
+}
+
+// =====================================================
+// GET /api/export/csv — Stream check-ins as CSV
+// =====================================================
+
+router.get('/', createValidationMiddleware(GetExportCsvSchema), async (req, res, next) => {
+  const { client_id, site_id, employee_id, date_from, date_to } = req.validated.query;
+
+  try {
+    // Build WHERE clause
+    const whereClauses = ['c.client_id = $1::uuid'];
+    const params = [client_id];
+    let paramCount = 1;
+
+    if (site_id) {
+      paramCount++;
+      whereClauses.push(`c.site_id = $${paramCount}::uuid`);
+      params.push(site_id);
+    }
+
+    if (employee_id) {
+      paramCount++;
+      whereClauses.push(`c.employee_id = $${paramCount}::uuid`);
+      params.push(employee_id);
+    }
+
+    if (date_from) {
+      paramCount++;
+      whereClauses.push(`c.timestamp >= $${paramCount}::date`);
+      params.push(date_from);
+    }
+
+    if (date_to) {
+      paramCount++;
+      whereClauses.push(`c.timestamp < $${paramCount}::date + INTERVAL '1 day'`);
+      params.push(date_to);
+    }
+
+    const whereClause = whereClauses.join(' AND ');
+
+    // Set response headers for CSV download
+    const filename = `presenze_${new Date().toISOString().split('T')[0]}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    logger.info({
+      action: 'csv_export_started',
+      client_id,
+      filters: { site_id, employee_id, date_from, date_to },
+    });
+
+    // Create CSV stringifier
+    const stringifier = stringify({
+      header: true,
+      columns: {
+        employee_name: 'Employee Name',
+        employee_email: 'Email',
+        site_name: 'Site',
+        timestamp: 'Check-in Time',
+        type: 'Type (IN/OUT)',
+        modified_at: 'Last Modified',
+        modified_by: 'Modified By',
+      },
+      cast: {
+        string: (value) => escapeCsvField(value),
+        boolean: (value) => value ? 'Yes' : 'No',
+        object: (value) => {
+          if (value === null) return '';
+          return JSON.stringify(value);
+        },
+      },
+    });
+
+    // Pipe CSV stringifier to response
+    stringifier.pipe(res);
+
+    // Stream data from database
+    const query = `
+      SELECT
+        e.name as employee_name,
+        e.email as employee_email,
+        s.name as site_name,
+        c.timestamp,
+        c.type,
+        c.modified_at,
+        c.modified_by
+      FROM checkins c
+      LEFT JOIN employees e ON c.employee_id = e.id
+      LEFT JOIN sites s ON c.site_id = s.id
+      WHERE ${whereClause}
+      ORDER BY c.timestamp DESC
+    `;
+
+    const cursor = await pool.query(query, params);
+
+    cursor.on('row', (row) => {
+      stringifier.write(row);
+    });
+
+    cursor.on('end', () => {
+      stringifier.end();
+      logger.info({
+        action: 'csv_export_completed',
+        client_id,
+        filters: { site_id, employee_id, date_from, date_to },
+      });
+    });
+
+    cursor.on('error', (err) => {
+      logger.error({
+        action: 'csv_export_error',
+        error: err.message,
+        client_id,
+      });
+      stringifier.destroy();
+      res.status(500).json({ error: 'Export failed' });
+    });
+
+    // Handle response errors
+    res.on('error', (err) => {
+      logger.error({
+        action: 'csv_stream_error',
+        error: err.message,
+        client_id,
+      });
+      stringifier.destroy();
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+module.exports = router;
