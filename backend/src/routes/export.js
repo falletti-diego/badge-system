@@ -24,7 +24,7 @@ function escapeCsvField(field) {
   const stringField = String(field);
   // Escape formula characters (=, +, @, -)
   if (/^[=+@-]/.test(stringField)) {
-    return "'" + stringField;
+    return '\'' + stringField;
   }
   return stringField;
 }
