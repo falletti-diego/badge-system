@@ -23,6 +23,7 @@ const dbConfig = {
   connectionTimeoutMillis: 10000,
   statement_timeout: 30000, // 30s query timeout
   application_name: 'badge-system-api',
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 };
 
 // Log connection attempt (without password)
