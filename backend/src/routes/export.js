@@ -104,7 +104,7 @@ router.get('/', createValidationMiddleware(GetExportCsvSchema), async (req, res,
     // Pipe CSV stringifier to response
     stringifier.pipe(res);
 
-    // Stream data from database
+    // Query data from database
     const query = `
       SELECT
         e.name as employee_name,
@@ -121,39 +121,21 @@ router.get('/', createValidationMiddleware(GetExportCsvSchema), async (req, res,
       ORDER BY c.timestamp DESC
     `;
 
-    const cursor = await pool.query(query, params);
+    const result = await pool.query(query, params);
 
-    cursor.on('row', (row) => {
+    // Write rows to CSV stringifier
+    result.rows.forEach((row) => {
       stringifier.write(row);
     });
 
-    cursor.on('end', () => {
-      stringifier.end();
-      logger.info({
-        action: 'csv_export_completed',
-        client_id,
-        filters: { site_id, employee_id, date_from, date_to },
-      });
-    });
+    // End the CSV stream
+    stringifier.end();
 
-    cursor.on('error', (err) => {
-      logger.error({
-        action: 'csv_export_error',
-        error: err.message,
-        client_id,
-      });
-      stringifier.destroy();
-      res.status(500).json({ error: 'Export failed' });
-    });
-
-    // Handle response errors
-    res.on('error', (err) => {
-      logger.error({
-        action: 'csv_stream_error',
-        error: err.message,
-        client_id,
-      });
-      stringifier.destroy();
+    logger.info({
+      action: 'csv_export_completed',
+      client_id,
+      filters: { site_id, employee_id, date_from, date_to },
+      row_count: result.rows.length,
     });
   } catch (err) {
     next(err);
