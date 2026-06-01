@@ -202,7 +202,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
 
     logger.info({
       action: 'list_checkins',
-      client_id,
+      client_id: clientId,
       filters: { site_id, employee_id, date_from, date_to },
       count: result.rows.length,
       total,

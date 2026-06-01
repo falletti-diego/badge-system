@@ -28,7 +28,7 @@ const apiLimiter = rateLimit({
     if (req.path === '/health') return true;
     return false;
   },
-  keyGenerator: (req, res) => {
+  keyGenerator: (req) => {
     // Rate limit by user_id if authenticated, else by IP
     return req.user?.user_id || req.ip;
   },
@@ -62,7 +62,7 @@ const authLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS, // 1 minute
   max: 5, // 5 attempts per minute
   standardHeaders: false,
-  keyGenerator: (req, res) => req.ip,
+  keyGenerator: (req) => req.ip,
   handler: (req, res) => {
     const retryAfter = Math.ceil(RATE_LIMIT_WINDOW_MS / 1000);
 
@@ -91,7 +91,7 @@ const csvLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS, // 1 minute
   max: 10, // 10 exports per minute
   standardHeaders: false,
-  keyGenerator: (req, res) => req.user?.user_id || req.ip,
+  keyGenerator: (req) => req.user?.user_id || req.ip,
   handler: (req, res) => {
     const retryAfter = Math.ceil(RATE_LIMIT_WINDOW_MS / 1000);
 

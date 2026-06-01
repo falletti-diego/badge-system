@@ -58,7 +58,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       });
     }
 
-    const { sub, email, name } = auth0User;
+    const { sub, email } = auth0User;
 
     if (!sub || !email) {
       return res.status(400).json({
@@ -69,7 +69,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
     }
 
     const result = await pool.query(
-      `SELECT id, client_id, role FROM users WHERE auth0_sub = $1 LIMIT 1`,
+      'SELECT id, client_id, role FROM users WHERE auth0_sub = $1 LIMIT 1',
       [sub]
     );
 
@@ -108,7 +108,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
     // Store refresh token in database
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
     await pool.query(
-      `INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)`,
+      'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
       [user.id, refreshToken, expiresAt]
     );
 
@@ -157,7 +157,7 @@ router.post('/refresh', createValidationMiddleware(RefreshSchema), async (req, r
 
     // Check if refresh token exists and is not revoked
     const tokenResult = await pool.query(
-      `SELECT id FROM refresh_tokens WHERE token = $1 AND revoked_at IS NULL LIMIT 1`,
+      'SELECT id FROM refresh_tokens WHERE token = $1 AND revoked_at IS NULL LIMIT 1',
       [refresh_token]
     );
 
@@ -171,7 +171,7 @@ router.post('/refresh', createValidationMiddleware(RefreshSchema), async (req, r
 
     // Get user info
     const userResult = await pool.query(
-      `SELECT id, client_id, role, auth0_sub FROM users WHERE id = $1 LIMIT 1`,
+      'SELECT id, client_id, role, auth0_sub FROM users WHERE id = $1 LIMIT 1',
       [userId]
     );
 
@@ -212,11 +212,11 @@ router.post('/refresh', createValidationMiddleware(RefreshSchema), async (req, r
     // Store new refresh token and revoke old one
     await pool.query('BEGIN');
     await pool.query(
-      `UPDATE refresh_tokens SET revoked_at = NOW() WHERE token = $1`,
+      'UPDATE refresh_tokens SET revoked_at = NOW() WHERE token = $1',
       [refresh_token]
     );
     await pool.query(
-      `INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)`,
+      'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
       [user.id, newRefreshToken, expiresAt]
     );
     await pool.query('COMMIT');
@@ -260,7 +260,7 @@ router.post('/logout', requireAuth, async (req, res, next) => {
 
     // Revoke refresh token
     await pool.query(
-      `UPDATE refresh_tokens SET revoked_at = NOW() WHERE token = $1 AND user_id = $2`,
+      'UPDATE refresh_tokens SET revoked_at = NOW() WHERE token = $1 AND user_id = $2',
       [refresh_token, req.user.user_id]
     );
 
