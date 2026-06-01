@@ -10,16 +10,31 @@ const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
 });
 
-// Parse DATABASE_URL or use individual connection parameters
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+// Build connection config from environment variables
+const dbConfig = {
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT || '5432', 10),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
   min: parseInt(process.env.DB_POOL_MIN || '2', 10),
   max: parseInt(process.env.DB_POOL_MAX || '10', 10),
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
   statement_timeout: 30000, // 30s query timeout
   application_name: 'badge-system-api',
+};
+
+// Log connection attempt (without password)
+logger.info({
+  message: 'Initializing database pool',
+  host: dbConfig.host,
+  port: dbConfig.port,
+  user: dbConfig.user,
+  database: dbConfig.database,
 });
+
+const pool = new Pool(dbConfig);
 
 // Event handlers for pool
 pool.on('connect', () => {
