@@ -8,6 +8,8 @@ const dotenv = require('dotenv');
 const helmet = require('helmet');
 const cors = require('cors');
 const pino = require('pino');
+const { pool, testConnection, closePool } = require('./db/pool');
+const employeesRouter = require('./routes/employees');
 
 // Load environment variables
 dotenv.config();
@@ -51,7 +53,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API routes (placeholder for future implementation)
+// API routes
 app.get('/api', (req, res) => {
   res.json({
     message: 'Badge System API',
@@ -59,6 +61,9 @@ app.get('/api', (req, res) => {
     status: 'operational',
   });
 });
+
+// Register routes
+app.use('/api/employees', employeesRouter);
 
 // Error handling middleware
 app.use((err, req, res, _next) => {
@@ -82,9 +87,29 @@ app.use((req, res) => {
 
 // Start server
 if (require.main === module) {
-  app.listen(PORT, () => {
-    logger.info(`Server running on port ${PORT} (${NODE_ENV})`);
-  });
+  (async () => {
+    try {
+      // Test database connection before starting
+      await testConnection();
+
+      app.listen(PORT, () => {
+        logger.info(`Server running on port ${PORT} (${NODE_ENV})`);
+      });
+
+      // Graceful shutdown
+      process.on('SIGTERM', async () => {
+        logger.info('SIGTERM received, closing gracefully...');
+        await closePool();
+        process.exit(0);
+      });
+    } catch (err) {
+      logger.error({
+        message: 'Failed to start server',
+        error: err.message,
+      });
+      process.exit(1);
+    }
+  })();
 }
 
 module.exports = app;
