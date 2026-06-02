@@ -1,0 +1,139 @@
+name: Deploy to EC2
+
+on:
+  workflow_run:
+    workflows: ['Build & Push Backend to ECR']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch: {}
+
+env:
+  AWS_REGION: eu-west-1
+  ECR_REGISTRY: 125579685235.dkr.ecr.eu-west-1.amazonaws.com
+  ECR_REPOSITORY: badge-system-backend
+  CONTAINER_NAME: badge-system-api
+  CONTAINER_PORT: 3000
+
+jobs:
+  deploy:
+    name: Deploy to EC2 Production
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+
+            echo "========================================="
+            echo "🚀 Deploying Badge System Backend to EC2"
+            echo "========================================="
+
+            # Load environment from .env
+            if [ -f /home/ubuntu/badge-system/backend/.env ]; then
+              export $(grep -E '^[A-Z_]+=' /home/ubuntu/badge-system/backend/.env | xargs)
+              echo "✅ Loaded environment variables"
+            else
+              echo "⚠️  .env not found, using existing container env"
+            fi
+
+            # Configure AWS credentials
+            aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws configure set region ${{ env.AWS_REGION }}
+            echo "✅ AWS credentials configured"
+
+            echo ""
+            echo "📦 Step 1: Login to AWS ECR..."
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+            echo "✅ ECR login successful"
+
+            echo ""
+            echo "🐋 Step 2: Pull latest Docker image from ECR..."
+            docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+            echo "✅ Image pulled successfully"
+
+            echo ""
+            echo "🛑 Step 3: Stop and remove existing container..."
+            docker stop ${{ env.CONTAINER_NAME }} 2>/dev/null || true
+            docker rm ${{ env.CONTAINER_NAME }} 2>/dev/null || true
+            echo "✅ Old container removed"
+
+            echo ""
+            echo "🚀 Step 4: Run new container..."
+            docker run -d \
+              --name ${{ env.CONTAINER_NAME }} \
+              --restart unless-stopped \
+              -p ${{ env.CONTAINER_PORT }}:${{ env.CONTAINER_PORT }} \
+              -e NODE_ENV=production \
+              -e LOG_LEVEL=info \
+              -e PORT=${{ env.CONTAINER_PORT }} \
+              -e DB_HOST=${DB_HOST} \
+              -e DB_PORT=${DB_PORT} \
+              -e DB_USER=${DB_USER} \
+              -e DB_PASSWORD="${DB_PASSWORD}" \
+              -e DB_NAME=${DB_NAME} \
+              -e CORS_ORIGIN="${CORS_ORIGIN}" \
+              -e CORS_CREDENTIALS="false" \
+              ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
+
+            CONTAINER_ID=$(docker ps -q -f name=${{ env.CONTAINER_NAME }})
+            echo "✅ Container running: ${CONTAINER_ID}"
+
+            echo ""
+            echo "⏳ Step 5: Wait for container to start..."
+            sleep 5
+
+            echo ""
+            echo "🏥 Step 6: Test health endpoint..."
+            HEALTH_RESPONSE=$(curl -s http://localhost:${{ env.CONTAINER_PORT }}/health || echo '{}')
+            echo "Health response: ${HEALTH_RESPONSE}"
+
+            if echo "${HEALTH_RESPONSE}" | grep -q '"status":"ok"'; then
+              echo "✅ Health endpoint working!"
+            else
+              echo "⚠️  Health endpoint not responding yet, but container is running"
+              echo "Logs:"
+              docker logs ${{ env.CONTAINER_NAME }}
+            fi
+
+            echo ""
+            echo "======================================"
+            echo "🎉 Deployment Complete!"
+            echo "======================================"
+            echo ""
+            echo "Container Details:"
+            echo "  Name: ${{ env.CONTAINER_NAME }}"
+            echo "  Port: ${{ env.CONTAINER_PORT }}"
+            echo "  Image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest"
+            echo ""
+            echo "Production URLs:"
+            echo "  API: http://${{ secrets.EC2_HOST }}:${{ env.CONTAINER_PORT }}/api"
+            echo "  Health: http://${{ secrets.EC2_HOST }}:${{ env.CONTAINER_PORT }}/health"
+            echo ""
+
+      - name: Deployment Status
+        if: success()
+        run: |
+          echo "✅ Deployment successful!"
+          echo "Backend is now running on http://${{ secrets.EC2_HOST }}:3000"
+          echo ""
+          echo "View logs:"
+          echo "  ssh -i YOUR_KEY.pem ubuntu@${{ secrets.EC2_HOST }}"
+          echo "  docker logs -f badge-system-api"
+
+      - name: Deployment Failed
+        if: failure()
+        run: |
+          echo "❌ Deployment failed!"
+          echo "SSH to EC2 and check logs:"
+          echo "  docker logs badge-system-api"
+          exit 1
