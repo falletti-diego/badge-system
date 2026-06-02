@@ -78,6 +78,7 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
       // 5. Log audit trail
       await logAudit(client, {
         action: 'checkin_created',
+        entity: 'checkin',
         entityId: checkin.id,
         clientId,
         oldValue: null,
@@ -278,6 +279,7 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
       // 5. Log audit trail
       await logAudit(client, {
         action: 'checkin_corrected',
+        entity: 'checkin',
         entityId: id,
         clientId: checkin.client_id,
         oldValue: {

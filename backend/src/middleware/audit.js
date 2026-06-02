@@ -15,6 +15,7 @@ const logger = pino({
  * @param {PoolClient} client - Database client (for transaction)
  * @param {Object} params
  * @param {string} params.action - 'checkin_created' | 'checkin_corrected'
+ * @param {string} params.entity - Entity type ('checkin', 'employee', etc.)
  * @param {string} params.entityId - Check-in UUID
  * @param {string} params.clientId - Client UUID (for multi-tenant isolation)
  * @param {Object} params.oldValue - Previous value (null for created)
@@ -23,13 +24,14 @@ const logger = pino({
  */
 async function logAudit(client, {
   action,
+  entity,
   entityId,
   clientId,
   oldValue,
   newValue,
   userId = 'system',
 }) {
-  if (!action || !entityId || !clientId || !newValue) {
+  if (!action || !entity || !entityId || !clientId || !newValue) {
     throw new Error('Missing required audit parameters');
   }
 
@@ -37,17 +39,19 @@ async function logAudit(client, {
     const query = `
       INSERT INTO audit_log (
         action,
+        entity,
         entity_id,
         client_id,
         old_value,
         new_value,
         user_id,
         timestamp
-      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
     `;
 
     await client.query(query, [
       action,
+      entity,
       entityId,
       clientId,
       oldValue ? JSON.stringify(oldValue) : null,
