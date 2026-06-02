@@ -8,6 +8,7 @@ const express = require('express');
 const pino = require('pino');
 const { pool } = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
+const { createValidationMiddleware, GetEmployeesSchema } = require('../middleware/validation');
 const { NotFoundError } = require('../utils/errors');
 
 const router = express.Router();
@@ -20,8 +21,8 @@ const logger = pino({
  * List employees (filtered by authenticated user's client_id)
  * Query params: limit, offset
  */
-router.get('/', requireAuth, async (req, res, next) => {
-  const { limit = 50, offset = 0 } = req.query;
+router.get('/', requireAuth, createValidationMiddleware(GetEmployeesSchema), async (req, res, next) => {
+  const { limit, offset } = req.validated.query;
   const clientId = req.user.client_id;
 
   try {

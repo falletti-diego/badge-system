@@ -17,24 +17,30 @@ const CACHE_TTL = parseInt(process.env.CACHE_TTL || '300', 10);
 
 /**
  * Generate cache key from request
- * Combines route, client_id, and all query parameters
+ * Combines route, client_id, and all query parameters with explicit format
+ * Format: cache:api:endpoint:client:CLIENT_ID:query:param1=value1:param2=value2...
  * @param {Express.Request} req - Express request
  * @returns {string} - Cache key
  */
 function generateCacheKey(req) {
   const parts = [
+    'cache',
     req.path.replace(/\//g, ':'),
+    'client',
     req.user?.client_id || 'anonymous',
   ];
 
   // Add all query params to key (order-independent)
   const queryKeys = Object.keys(req.query || {}).sort();
-  for (const key of queryKeys) {
-    const value = req.query[key];
-    parts.push(`${key}=${value}`);
+  if (queryKeys.length > 0) {
+    parts.push('query');
+    for (const key of queryKeys) {
+      const value = req.query[key];
+      parts.push(`${key}=${value}`);
+    }
   }
 
-  return `cache:${parts.join(':')}`;
+  return parts.join(':');
 }
 
 /**

@@ -102,7 +102,7 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
     });
 
     // Invalidate cache for this client's checkins
-    deleteCacheByPattern(`cache:*api:checkins*${clientId}*`).catch((err) => {
+    deleteCacheByPattern(`cache:api:checkins:client:${clientId}:*`).catch((err) => {
       logger.warn({
         action: 'cache_invalidation_error',
         error: err.message,
@@ -302,7 +302,7 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
     });
 
     // Invalidate cache for this client's checkins
-    deleteCacheByPattern(`cache:*api:checkins*${clientId}*`).catch((err) => {
+    deleteCacheByPattern(`cache:api:checkins:client:${clientId}:*`).catch((err) => {
       logger.warn({
         action: 'cache_invalidation_error',
         error: err.message,

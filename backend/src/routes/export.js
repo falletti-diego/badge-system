@@ -70,7 +70,26 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
 
     const whereClause = whereClauses.join(' AND ');
 
-    // Set response headers for CSV download
+    // Query data from database FIRST (before headers)
+    const query = `
+      SELECT
+        e.name as employee_name,
+        e.email as employee_email,
+        s.name as site_name,
+        c.timestamp,
+        c.type,
+        c.modified_at,
+        c.modified_by
+      FROM checkins c
+      LEFT JOIN employees e ON c.employee_id = e.id
+      LEFT JOIN sites s ON c.site_id = s.id
+      WHERE ${whereClause}
+      ORDER BY c.timestamp DESC
+    `;
+
+    const result = await pool.query(query, params);
+
+    // Set response headers AFTER successful query
     const filename = `presenze_${new Date().toISOString().split('T')[0]}.csv`;
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -79,9 +98,10 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
       action: 'csv_export_started',
       client_id: clientId,
       filters: { site_id, employee_id, date_from, date_to },
+      row_count: result.rows.length,
     });
 
-    // Create CSV stringifier
+    // Create CSV stringifier with error handler
     const stringifier = stringify({
       header: true,
       columns: {
@@ -103,34 +123,23 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
       },
     });
 
-    // Pipe CSV stringifier to response
+    // Handle stringifier errors
+    stringifier.on('error', (err) => {
+      logger.error({
+        action: 'csv_stringifier_error',
+        error: err.message,
+        client_id: clientId,
+      });
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'CSV generation failed' });
+      }
+    });
+
+    // Pipe CSV stringifier to response and write rows
     stringifier.pipe(res);
-
-    // Query data from database
-    const query = `
-      SELECT
-        e.name as employee_name,
-        e.email as employee_email,
-        s.name as site_name,
-        c.timestamp,
-        c.type,
-        c.modified_at,
-        c.modified_by
-      FROM checkins c
-      LEFT JOIN employees e ON c.employee_id = e.id
-      LEFT JOIN sites s ON c.site_id = s.id
-      WHERE ${whereClause}
-      ORDER BY c.timestamp DESC
-    `;
-
-    const result = await pool.query(query, params);
-
-    // Write rows to CSV stringifier
     result.rows.forEach((row) => {
       stringifier.write(row);
     });
-
-    // End the CSV stream
     stringifier.end();
 
     logger.info({

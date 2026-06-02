@@ -124,6 +124,26 @@ const GetExportCsvSchema = z.object({
 });
 
 // =====================================================
+// 5. GET /api/employees — List employees with pagination
+// =====================================================
+
+const GetEmployeesSchema = z.object({
+  query: z.object({
+    limit: z.coerce
+      .number()
+      .int('limit must be an integer')
+      .min(1, 'limit must be at least 1')
+      .max(1000, 'limit cannot exceed 1000')
+      .default(50),
+    offset: z.coerce
+      .number()
+      .int('offset must be an integer')
+      .min(0, 'offset cannot be negative')
+      .default(0),
+  }),
+});
+
+// =====================================================
 // Validation Middleware Factory
 // =====================================================
 
@@ -169,5 +189,6 @@ module.exports = {
   GetCheckinsSchema,
   PutCheckinSchema,
   GetExportCsvSchema,
+  GetEmployeesSchema,
   createValidationMiddleware,
 };
