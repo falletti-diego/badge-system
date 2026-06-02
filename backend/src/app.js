@@ -8,6 +8,9 @@ const dotenv = require('dotenv');
 const helmet = require('helmet');
 const cors = require('cors');
 const pino = require('pino');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const { testConnection, closePool } = require('./db/pool');
 const { initializeRedis, closeRedis } = require('./db/redis');
 const { ApiError, RateLimitError } = require('./utils/errors');
@@ -161,9 +164,26 @@ if (require.main === module) {
       // Initialize Redis (optional, gracefully continues if not available)
       await initializeRedis();
 
-      app.listen(PORT, () => {
-        logger.info(`Server running on port ${PORT} (${NODE_ENV})`);
-      });
+      // Check if HTTPS certificates exist
+      const certPath = path.join(__dirname, '../..', 'cert.pem');
+      const keyPath = path.join(__dirname, '../..', 'key.pem');
+      const useHttps = fs.existsSync(certPath) && fs.existsSync(keyPath);
+
+      let server;
+      if (useHttps) {
+        const options = {
+          cert: fs.readFileSync(certPath),
+          key: fs.readFileSync(keyPath),
+        };
+        server = https.createServer(options, app);
+        server.listen(PORT, () => {
+          logger.info(`Server running on HTTPS port ${PORT} (${NODE_ENV})`);
+        });
+      } else {
+        server = app.listen(PORT, () => {
+          logger.info(`Server running on HTTP port ${PORT} (${NODE_ENV})`);
+        });
+      }
 
       // Graceful shutdown
       process.on('SIGTERM', async () => {
