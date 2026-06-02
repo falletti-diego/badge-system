@@ -73,6 +73,10 @@ jobs:
               -e DB_USER=postgres \
               -e DB_PASSWORD='${{ secrets.RDS_PASSWORD }}' \
               -e DB_NAME=badge_system \
+              -e JWT_SECRET='${{ secrets.JWT_SECRET }}' \
+              -e JWT_REFRESH_SECRET='${{ secrets.JWT_REFRESH_SECRET }}' \
+              -e JWT_EXPIRY=30m \
+              -e JWT_REFRESH_EXPIRY=7d \
               -e CORS_ORIGIN="http://${{ secrets.EC2_HOST }}:3000" \
               -e CORS_CREDENTIALS="false" \
               ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
