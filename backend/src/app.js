@@ -165,8 +165,8 @@ if (require.main === module) {
       await initializeRedis();
 
       // Check if HTTPS certificates exist
-      const certPath = path.join(__dirname, '../..', 'cert.pem');
-      const keyPath = path.join(__dirname, '../..', 'key.pem');
+      const certPath = path.join(__dirname, '..', 'cert.pem');
+      const keyPath = path.join(__dirname, '..', 'key.pem');
       const useHttps = fs.existsSync(certPath) && fs.existsSync(keyPath);
 
       let server;
