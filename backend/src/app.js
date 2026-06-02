@@ -167,7 +167,18 @@ if (require.main === module) {
       // Check if HTTPS certificates exist
       const certPath = path.join(__dirname, '..', 'cert.pem');
       const keyPath = path.join(__dirname, '..', 'key.pem');
-      const useHttps = fs.existsSync(certPath) && fs.existsSync(keyPath);
+      const certExists = fs.existsSync(certPath);
+      const keyExists = fs.existsSync(keyPath);
+      const useHttps = certExists && keyExists;
+
+      logger.info({
+        message: 'Certificate check',
+        certPath,
+        keyPath,
+        certExists,
+        keyExists,
+        useHttps,
+      });
 
       let server;
       if (useHttps) {
