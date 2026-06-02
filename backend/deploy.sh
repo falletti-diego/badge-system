@@ -33,6 +33,7 @@ DB_USER="${DB_USER:-postgres}"
 DB_PASSWORD="${DB_PASSWORD:-}"
 DB_NAME="${DB_NAME:-badge_system}"
 AWS_REGION="${AWS_REGION:-eu-west-1}"
+CORS_ORIGIN="${CORS_ORIGIN:-http://localhost:3000}"
 
 # Debug: Show loaded values
 echo ""
@@ -68,10 +69,14 @@ echo "✅ Old container removed"
 
 echo ""
 echo "🚀 Step 4: Run container with environment variables..."
+echo "   CORS_ORIGIN: ${CORS_ORIGIN}"
+
 docker run -d \
   --name ${CONTAINER_NAME} \
   --restart unless-stopped \
   -p ${HOST_PORT}:${CONTAINER_PORT} \
+  -v /home/ubuntu/badge-api/cert.pem:/app/cert.pem:ro \
+  -v /home/ubuntu/badge-api/key.pem:/app/key.pem:ro \
   -e NODE_ENV=production \
   -e LOG_LEVEL=info \
   -e PORT=${CONTAINER_PORT} \
@@ -80,8 +85,8 @@ docker run -d \
   -e DB_USER=${DB_USER} \
   -e DB_PASSWORD="${DB_PASSWORD}" \
   -e DB_NAME=${DB_NAME} \
-  -e CORS_ORIGIN="http://localhost:3000,http://34.245.145.143:3000" \
-  -e CORS_CREDENTIALS="false" \
+  -e CORS_ORIGIN="${CORS_ORIGIN}" \
+  -e CORS_CREDENTIALS="true" \
   ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
 
 CONTAINER_ID=$(docker ps -q -f name=${CONTAINER_NAME})
@@ -93,7 +98,8 @@ sleep 5
 
 echo ""
 echo "🏥 Step 6: Test health endpoint..."
-HEALTH_RESPONSE=$(curl -s http://localhost:${HOST_PORT}/health)
+# Try HTTPS first (if certificates available), fallback to HTTP
+HEALTH_RESPONSE=$(curl -s -k https://localhost:${HOST_PORT}/health 2>/dev/null || curl -s http://localhost:${HOST_PORT}/health)
 echo "Health response: ${HEALTH_RESPONSE}"
 
 if echo "${HEALTH_RESPONSE}" | grep -q '"status":"ok"'; then
@@ -115,8 +121,10 @@ echo "  Port: ${HOST_PORT}"
 echo "  Image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 echo ""
 echo "Test URLs:"
-echo "  Health: http://34.245.145.143:${HOST_PORT}/health"
-echo "  API: http://34.245.145.143:${HOST_PORT}/api"
+echo "  Health (HTTPS): https://34.245.145.143:${HOST_PORT}/health"
+echo "  Health (HTTP): http://34.245.145.143:${HOST_PORT}/health"
+echo "  API (HTTPS): https://34.245.145.143:${HOST_PORT}/api"
+echo "  API (HTTP): http://34.245.145.143:${HOST_PORT}/api"
 echo ""
 echo "View logs:"
 echo "  docker logs ${CONTAINER_NAME}"
