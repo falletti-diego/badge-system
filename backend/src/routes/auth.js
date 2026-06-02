@@ -11,6 +11,7 @@ const pino = require('pino');
 const { pool } = require('../db/pool');
 const { createValidationMiddleware } = require('../middleware/validation');
 const { requireAuth } = require('../middleware/auth');
+const { withTransaction } = require('../middleware/db-transaction');
 const { z } = require('zod');
 
 const router = express.Router();
@@ -209,17 +210,17 @@ router.post('/refresh', createValidationMiddleware(RefreshSchema), async (req, r
 
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    // Store new refresh token and revoke old one
-    await pool.query('BEGIN');
-    await pool.query(
-      'UPDATE refresh_tokens SET revoked_at = NOW() WHERE token = $1',
-      [refresh_token]
-    );
-    await pool.query(
-      'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
-      [user.id, newRefreshToken, expiresAt]
-    );
-    await pool.query('COMMIT');
+    // Store new refresh token and revoke old one (atomic transaction)
+    await withTransaction(async (client) => {
+      await client.query(
+        'UPDATE refresh_tokens SET revoked_at = NOW() WHERE token = $1',
+        [refresh_token]
+      );
+      await client.query(
+        'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
+        [user.id, newRefreshToken, expiresAt]
+      );
+    });
 
     logger.info({
       action: 'refresh_token_rotated',

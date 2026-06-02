@@ -44,10 +44,19 @@ router.get('/', requireAuth, async (req, res, next) => {
 
     const result = await pool.query(query, [clientId, parseInt(limit, 10), parseInt(offset, 10)]);
 
+    // Get total count for pagination
+    const countQuery = `
+      SELECT COUNT(*) as total FROM employees
+      WHERE client_id = $1::uuid
+    `;
+    const countResult = await pool.query(countQuery, [clientId]);
+    const total = parseInt(countResult.rows[0].total, 10);
+
     logger.info({
       action: 'list_employees',
       client_id: clientId,
       count: result.rows.length,
+      total,
     });
 
     res.json({
@@ -55,7 +64,8 @@ router.get('/', requireAuth, async (req, res, next) => {
       pagination: {
         limit: parseInt(limit, 10),
         offset: parseInt(offset, 10),
-        total: result.rows.length,
+        total,
+        hasMore: parseInt(offset, 10) + parseInt(limit, 10) < total,
       },
     });
   } catch (err) {

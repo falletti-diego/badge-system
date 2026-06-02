@@ -290,13 +290,15 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
         userId: req.user.user_id,
       });
 
-      return updated;
+      return { updated, oldType };
     });
+
+    const { updated, oldType } = result;
 
     logger.info({
       action: 'checkin_corrected',
-      checkin_id: result.id,
-      old_type: req.validated.body.type === result.type ? null : 'changed',
+      checkin_id: updated.id,
+      old_type: oldType,
     });
 
     // Invalidate cache for this client's checkins
@@ -308,7 +310,7 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
     });
 
     res.json({
-      data: result,
+      data: updated,
       message: 'Check-in corrected successfully',
     });
   } catch (err) {
