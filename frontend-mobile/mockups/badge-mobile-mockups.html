@@ -1,0 +1,4395 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Badge System — Mobile Mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --linen:    #F5F2ED;
+    --parchment:#EDE9E2;
+    --bone:     #D9D4CB;
+    --dust:     #A89F94;
+    --stone:    #6B625A;
+    --ink:      #2A2520;
+    --white:    #FFFFFF;
+    --navy-50:  #EEF2F7;
+    --navy-200: #8FACCC;
+    --navy-500: #1E3A5F;
+    --navy-700: #132543;
+    --navy-900: #0A1628;
+    --success:  #2D7049;
+    --success-bg:#EEF6F1;
+    --error:    #C0392B;
+    --error-bg: #FDF1F1;
+    --warning:  #B45309;
+    --warning-bg:#FEF6EC;
+    --gold:     #C9A86C;
+    --font-d:   'Cormorant', Georgia, serif;
+    --font-b:   'DM Sans', system-ui, sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--font-b);
+    background: #1A1816;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  /* Page layout */
+  .page-header {
+    padding: 40px 40px 32px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+
+  .page-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--navy-200);
+    margin-bottom: 12px;
+  }
+
+  .page-title {
+    font-family: var(--font-d);
+    font-size: clamp(2rem, 3vw, 3rem);
+    font-weight: 300;
+    color: var(--linen);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+
+  .page-title em { font-style: italic; color: var(--navy-200); }
+
+  .page-desc {
+    font-size: 14px;
+    color: var(--dust);
+    margin-top: 8px;
+    line-height: 1.6;
+  }
+
+  /* Screens grid */
+  .screens-wrapper {
+    padding: 48px 40px 64px;
+    display: flex;
+    gap: 40px;
+    align-items: flex-start;
+    overflow-x: auto;
+    min-height: 100vh;
+  }
+
+  .screen-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+
+  .screen-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dust);
+  }
+
+  /* Phone frame */
+  .phone {
+    width: 375px;
+    background: var(--white);
+    border-radius: 44px;
+    overflow: hidden;
+    position: relative;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.12),
+      0 2px 4px rgba(0,0,0,0.4),
+      0 16px 64px rgba(0,0,0,0.5);
+  }
+
+  /* Dynamic Island */
+  .dynamic-island {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 34px;
+    background: #0A0A0A;
+    border-radius: 20px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .di-camera {
+    width: 10px; height: 10px;
+    background: #1A1A1A;
+    border-radius: 50%;
+    border: 1px solid #2A2A2A;
+    position: relative;
+  }
+
+  .di-camera::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 4px; height: 4px;
+    background: #111;
+    border-radius: 50%;
+  }
+
+  /* Status bar */
+  .status-bar {
+    height: 54px;
+    padding: 14px 24px 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .status-time {
+    font-size: 15px;
+    font-weight: 600;
+    color: inherit;
+    letter-spacing: -0.01em;
+  }
+
+  .status-icons {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  /* Home indicator */
+  .home-indicator {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 8px;
+  }
+
+  .home-bar {
+    width: 134px;
+    height: 5px;
+    background: currentColor;
+    border-radius: 3px;
+    opacity: 0.18;
+  }
+
+  /* ============================================================
+     SCREEN 1: QR SCANNER
+     ============================================================ */
+
+  .screen-qr {
+    min-height: 812px;
+    display: flex;
+    flex-direction: column;
+    background: var(--navy-900);
+    color: white;
+  }
+
+  .screen-qr .status-bar { color: white; }
+  .screen-qr .home-bar { color: white; }
+
+  .qr-header {
+    padding: 8px 24px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .qr-logo {
+    font-family: var(--font-d);
+    font-size: 20px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: white;
+  }
+
+  .qr-logo em { font-style: italic; color: var(--navy-200); }
+
+  .qr-site-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.85);
+  }
+
+  .qr-site-dot {
+    width: 7px; height: 7px;
+    background: #4ADE80;
+    border-radius: 50%;
+    animation: pulse-dot 2s infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* Camera viewfinder */
+  .qr-viewfinder {
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 32px;
+  }
+
+  .viewfinder-bg {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(10,22,40,0) 0%, rgba(10,22,40,0.3) 100%);
+  }
+
+  /* Simulated camera feed */
+  .camera-feed {
+    width: 280px;
+    height: 280px;
+    border-radius: 24px;
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 20px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 20px),
+      linear-gradient(135deg, #0d1f35 0%, #162a47 50%, #0d1f35 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Scan line animation */
+  .scan-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--navy-200), #5AADFF, var(--navy-200), transparent);
+    animation: scan 2.5s ease-in-out infinite;
+    box-shadow: 0 0 10px rgba(90,173,255,0.6);
+  }
+
+  @keyframes scan {
+    0%   { top: 10%; opacity: 0; }
+    10%  { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { top: 90%; opacity: 0; }
+  }
+
+  /* Corner brackets */
+  .corner-brackets {
+    position: absolute;
+    inset: -2px;
+  }
+
+  .bracket {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-color: #5AADFF;
+    border-style: solid;
+    border-width: 0;
+  }
+
+  .bracket-tl { top: 0; left: 0; border-top-width: 3px; border-left-width: 3px; border-radius: 6px 0 0 0; }
+  .bracket-tr { top: 0; right: 0; border-top-width: 3px; border-right-width: 3px; border-radius: 0 6px 0 0; }
+  .bracket-bl { bottom: 0; left: 0; border-bottom-width: 3px; border-left-width: 3px; border-radius: 0 0 0 6px; }
+  .bracket-br { bottom: 0; right: 0; border-bottom-width: 3px; border-right-width: 3px; border-radius: 0 0 6px 0; }
+
+  /* Simulated QR code */
+  .qr-code-sim {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100px; height: 100px;
+    opacity: 0.25;
+  }
+
+  .qr-code-sim .qr-row {
+    display: flex;
+    height: 12.5px;
+  }
+
+  .qr-cell {
+    width: 12.5px;
+    height: 100%;
+  }
+
+  .qr-cell.b { background: rgba(255,255,255,0.8); }
+
+  .qr-instruction {
+    font-size: 14px;
+    color: rgba(255,255,255,0.7);
+    text-align: center;
+    margin-top: 20px;
+    line-height: 1.5;
+    position: relative;
+    z-index: 1;
+  }
+
+  .qr-instruction strong {
+    display: block;
+    font-size: 16px;
+    color: white;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  /* Bottom actions */
+  .qr-actions {
+    padding: 20px 24px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .btn-qr-primary {
+    height: 56px;
+    background: var(--navy-500);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-family: var(--font-b);
+    font-size: 15px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+  }
+
+  .qr-alt-row {
+    display: flex;
+    gap: 12px;
+  }
+
+  .btn-qr-alt {
+    flex: 1;
+    height: 48px;
+    background: rgba(255,255,255,0.07);
+    color: rgba(255,255,255,0.8);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    font-family: var(--font-b);
+    font-size: 13px;
+    font-weight: 400;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+
+  /* ============================================================
+     SCREEN 2: FACE ID
+     ============================================================ */
+
+  .screen-faceid {
+    min-height: 812px;
+    display: flex;
+    flex-direction: column;
+    background: var(--linen);
+  }
+
+  .faceid-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 32px;
+    text-align: center;
+  }
+
+  /* Face outline */
+  .face-ring-outer {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    border: 1.5px solid var(--bone);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    margin-bottom: 32px;
+    animation: face-pulse 3s ease-in-out infinite;
+  }
+
+  @keyframes face-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(30,58,95,0); }
+    50% { box-shadow: 0 0 0 12px rgba(30,58,95,0.06); }
+  }
+
+  .face-ring-inner {
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    border: 2px solid var(--navy-500);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    background: var(--navy-50);
+  }
+
+  /* Scanning arc animation */
+  .face-scan-arc {
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2.5px solid transparent;
+    border-top-color: var(--navy-500);
+    border-right-color: var(--navy-200);
+    animation: rotate-arc 2s linear infinite;
+  }
+
+  @keyframes rotate-arc {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Face SVG icon */
+  .face-icon {
+    color: var(--navy-500);
+  }
+
+  /* Corner dots on the ring */
+  .face-ring-outer::before,
+  .face-ring-outer::after {
+    content: '';
+    position: absolute;
+    width: 8px; height: 8px;
+    background: var(--navy-500);
+    border-radius: 50%;
+    top: 16px;
+  }
+  .face-ring-outer::before { left: 16px; }
+  .face-ring-outer::after  { right: 16px; }
+
+  .faceid-title {
+    font-family: var(--font-d);
+    font-size: 28px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin-bottom: 8px;
+  }
+
+  .faceid-subtitle {
+    font-size: 14px;
+    color: var(--stone);
+    line-height: 1.6;
+    margin-bottom: 40px;
+    max-width: 260px;
+  }
+
+  /* User card */
+  .faceid-user-card {
+    width: 100%;
+    background: var(--white);
+    border-radius: 16px;
+    border: 1px solid var(--bone);
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 8px rgba(42,37,32,0.07);
+  }
+
+  .faceid-avatar {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: var(--navy-50);
+    color: var(--navy-500);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .faceid-user-info { flex: 1; text-align: left; }
+
+  .faceid-user-name {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .faceid-user-role {
+    font-size: 12px;
+    color: var(--stone);
+    margin-top: 1px;
+  }
+
+  .faceid-user-site {
+    font-size: 11px;
+    color: var(--navy-500);
+    background: var(--navy-50);
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-weight: 500;
+  }
+
+  /* Status dots */
+  .faceid-status {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 32px;
+  }
+
+  .status-dot-step {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--bone);
+  }
+
+  .status-dot-step.active { background: var(--navy-500); width: 24px; border-radius: 4px; }
+
+  .faceid-footer {
+    width: 100%;
+    padding: 0;
+  }
+
+  .btn-faceid {
+    width: 100%;
+    height: 56px;
+    background: var(--navy-500);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-family: var(--font-b);
+    font-size: 15px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    margin-bottom: 12px;
+  }
+
+  .btn-pin-link {
+    width: 100%;
+    height: 44px;
+    background: transparent;
+    color: var(--stone);
+    border: none;
+    font-family: var(--font-b);
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--bone);
+  }
+
+  /* ============================================================
+     SCREEN 3: CHECK-IN SUCCESS
+     ============================================================ */
+
+  .screen-checkin {
+    min-height: 812px;
+    display: flex;
+    flex-direction: column;
+    background: var(--white);
+  }
+
+  .checkin-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 24px 0;
+  }
+
+  /* Success animation */
+  .checkin-success-ring {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: var(--success-bg);
+    border: 2px solid rgba(45,112,73,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 20px 0 24px;
+    position: relative;
+  }
+
+  .checkin-success-ring::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(45,112,73,0.1);
+  }
+
+  .checkin-greeting {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--success);
+    margin-bottom: 8px;
+  }
+
+  .checkin-name {
+    font-family: var(--font-d);
+    font-size: 32px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin-bottom: 4px;
+    text-align: center;
+  }
+
+  .checkin-role {
+    font-size: 13px;
+    color: var(--stone);
+    margin-bottom: 28px;
+  }
+
+  /* Time display */
+  .checkin-time-display {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  .checkin-time-big {
+    font-family: var(--font-d);
+    font-size: 56px;
+    font-weight: 300;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    color: var(--ink);
+  }
+
+  .checkin-time-ampm {
+    font-size: 20px;
+    font-weight: 300;
+    color: var(--stone);
+    margin-left: 4px;
+  }
+
+  .checkin-date {
+    font-size: 13px;
+    color: var(--stone);
+    margin-top: 6px;
+    letter-spacing: 0.02em;
+  }
+
+  /* Detail card */
+  .checkin-detail-card {
+    width: 100%;
+    background: var(--linen);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+
+  .checkin-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--bone);
+  }
+
+  .checkin-detail-row:last-child { border-bottom: none; }
+
+  .checkin-detail-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--stone);
+  }
+
+  .checkin-detail-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink);
+    text-align: right;
+  }
+
+  .checkin-method-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--navy-50);
+    color: var(--navy-500);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  /* Actions */
+  .checkin-actions {
+    width: 100%;
+    padding: 0 24px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .btn-checkin-done {
+    height: 56px;
+    background: var(--navy-500);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-family: var(--font-b);
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+  }
+
+  .btn-checkin-history {
+    height: 48px;
+    background: transparent;
+    color: var(--navy-500);
+    border: 1.5px solid var(--navy-200);
+    border-radius: 14px;
+    font-family: var(--font-b);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  /* ============================================================
+     SCREEN 4: HISTORY
+     ============================================================ */
+
+  .screen-history {
+    min-height: 812px;
+    display: flex;
+    flex-direction: column;
+    background: var(--linen);
+  }
+
+  .history-header {
+    padding: 8px 24px 20px;
+    background: var(--white);
+    border-bottom: 1px solid var(--bone);
+  }
+
+  .history-title {
+    font-family: var(--font-d);
+    font-size: 24px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin-bottom: 12px;
+  }
+
+  /* Filter pills */
+  .filter-pills {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .filter-pills::-webkit-scrollbar { display: none; }
+
+  .filter-pill {
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    border: 1px solid var(--bone);
+    background: var(--white);
+    color: var(--stone);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    text-align: center;
+  }
+
+  .filter-pill.active {
+    background: var(--navy-500);
+    color: white;
+    border-color: var(--navy-500);
+  }
+
+  /* Month label */
+  .month-divider {
+    padding: 12px 24px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dust);
+  }
+
+  /* History list */
+  .history-list {
+    flex: 1;
+    overflow: auto;
+  }
+
+  .history-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 24px;
+    background: var(--white);
+    border-bottom: 1px solid var(--linen);
+  }
+
+  .history-date-box {
+    width: 44px;
+    height: 52px;
+    background: var(--linen);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .history-date-day {
+    font-family: var(--font-d);
+    font-size: 22px;
+    font-weight: 400;
+    line-height: 1;
+    color: var(--ink);
+  }
+
+  .history-date-dow {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--stone);
+    margin-top: 1px;
+  }
+
+  .history-info { flex: 1; }
+
+  .history-times {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ink);
+    margin-bottom: 3px;
+  }
+
+  .history-site {
+    font-size: 12px;
+    color: var(--stone);
+  }
+
+  .history-duration {
+    font-family: var(--font-d);
+    font-size: 20px;
+    font-weight: 400;
+    color: var(--navy-500);
+    text-align: right;
+    flex-shrink: 0;
+    letter-spacing: -0.02em;
+  }
+
+  .history-duration-label {
+    font-size: 10px;
+    color: var(--stone);
+    text-align: right;
+    font-family: var(--font-b);
+  }
+
+  /* Weekly summary */
+  .history-week-summary {
+    margin: 12px 24px;
+    background: var(--white);
+    border-radius: 14px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid var(--bone);
+  }
+
+  .week-sum-label {
+    font-size: 12px;
+    color: var(--stone);
+  }
+
+  .week-sum-value {
+    font-family: var(--font-d);
+    font-size: 24px;
+    font-weight: 300;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+  }
+
+  .week-sum-sub {
+    font-size: 11px;
+    color: var(--success);
+    font-weight: 600;
+  }
+
+  /* Bottom tab bar */
+  .tab-bar {
+    height: 82px;
+    padding: 8px 0 0;
+    background: var(--white);
+    border-top: 1px solid var(--bone);
+    display: flex;
+  }
+
+  .tab-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+  }
+
+  .tab-icon {
+    width: 24px; height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--dust);
+  }
+
+  .tab-item.active .tab-icon { color: var(--navy-500); }
+
+  .tab-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--dust);
+    letter-spacing: 0.02em;
+  }
+
+  .tab-item.active .tab-label { color: var(--navy-500); font-weight: 600; }
+
+  /* ============================================================
+     SCREEN 5: SETTINGS
+     ============================================================ */
+
+  .screen-settings {
+    min-height: 812px;
+    display: flex;
+    flex-direction: column;
+    background: var(--linen);
+  }
+
+  .settings-header {
+    padding: 8px 24px 24px;
+    background: var(--white);
+    border-bottom: 1px solid var(--bone);
+  }
+
+  .settings-title {
+    font-family: var(--font-d);
+    font-size: 24px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+
+  /* Profile banner */
+  .settings-profile {
+    margin: 16px 24px;
+    background: var(--white);
+    border-radius: 16px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid var(--bone);
+  }
+
+  .settings-avatar {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: var(--navy-500);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .settings-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 2px;
+  }
+
+  .settings-email {
+    font-size: 12px;
+    color: var(--stone);
+    margin-bottom: 6px;
+  }
+
+  /* Setting rows */
+  .settings-section {
+    margin: 8px 24px;
+    background: var(--white);
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--bone);
+  }
+
+  .settings-section-title {
+    padding: 10px 16px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--dust);
+  }
+
+  .settings-row {
+    display: flex;
+    align-items: center;
+    padding: 14px 16px;
+    border-top: 1px solid var(--linen);
+    gap: 12px;
+    cursor: pointer;
+  }
+
+  .settings-row-icon {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .settings-row-label {
+    flex: 1;
+    font-size: 14px;
+    color: var(--ink);
+    font-weight: 400;
+  }
+
+  .settings-row-value {
+    font-size: 13px;
+    color: var(--stone);
+  }
+
+  .settings-row-chevron {
+    color: var(--bone);
+  }
+
+  /* Switch inline */
+  .sw {
+    width: 44px; height: 24px;
+    background: var(--bone);
+    border-radius: 12px;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .sw::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 20px; height: 20px;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+
+  .sw.on { background: var(--navy-500); }
+  .sw.on::after { transform: translateX(20px); }
+
+  .settings-logout {
+    margin: 16px 24px;
+    height: 52px;
+    background: var(--error-bg);
+    color: var(--error);
+    border: 1.5px solid rgba(192,57,43,0.2);
+    border-radius: 14px;
+    font-family: var(--font-b);
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+
+  .settings-version {
+    text-align: center;
+    font-size: 11px;
+    color: var(--dust);
+    padding: 8px;
+  }
+
+  /* Page meta nav */
+  .page-nav {
+    padding: 20px 40px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    display: flex;
+    gap: 24px;
+    align-items: center;
+  }
+
+  .page-nav a {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--dust);
+    text-decoration: none;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: color 0.15s;
+  }
+
+  .page-nav a:hover { color: var(--linen); }
+
+  .page-nav-logo {
+    font-family: var(--font-d);
+    font-size: 16px;
+    color: var(--linen);
+    margin-right: 12px;
+    letter-spacing: -0.02em;
+  }
+
+  .page-nav-logo em { color: var(--navy-200); font-style: italic; }
+
+  .page-nav-sep { color: rgba(255,255,255,0.15); user-select: none; }
+
+  /* Responsive scroll note */
+  .scroll-hint {
+    display: none;
+    padding: 12px 40px;
+    font-size: 12px;
+    color: var(--dust);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  @media (max-width: 900px) { .scroll-hint { display: block; } }
+
+  /* Annotations */
+  .annotation {
+    max-width: 200px;
+    text-align: center;
+  }
+
+  .annotation-line {
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    line-height: 1.5;
+    margin-top: 4px;
+  }
+
+  /* Fade in */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .screen-col { animation: fadeIn 0.5s ease-out both; }
+  .screen-col:nth-child(1) { animation-delay: 0.05s; }
+  .screen-col:nth-child(2) { animation-delay: 0.15s; }
+  .screen-col:nth-child(3) { animation-delay: 0.25s; }
+  .screen-col:nth-child(4) { animation-delay: 0.35s; }
+  .screen-col:nth-child(5) { animation-delay: 0.45s; }
+  .screen-col:nth-child(6) { animation-delay: 0.55s; }
+  .screen-col:nth-child(7) { animation-delay: 0.65s; }
+  .screen-col:nth-child(8)  { animation-delay: 0.70s; }
+  .screen-col:nth-child(9)  { animation-delay: 0.75s; }
+  .screen-col:nth-child(10) { animation-delay: 0.80s; }
+
+  /* ============================================================
+     SCREEN 6: SMART WORKING
+     ============================================================ */
+
+  .screen-smartwork {
+    min-height: 812px;
+    display: flex;
+    flex-direction: column;
+    background: var(--white);
+  }
+
+  .sw-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 24px 0;
+    text-align: center;
+  }
+
+  .sw-icon-ring {
+    width: 88px; height: 88px;
+    border-radius: 50%;
+    background: var(--navy-50);
+    border: 1.5px solid var(--navy-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 16px 0 20px;
+  }
+
+  .sw-greeting {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--navy-500);
+    margin-bottom: 6px;
+  }
+
+  .sw-name {
+    font-family: var(--font-d);
+    font-size: 28px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+
+  .sw-id {
+    font-size: 11px;
+    color: var(--dust);
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.04em;
+    margin-bottom: 24px;
+  }
+
+  .sw-date-box {
+    background: var(--linen);
+    border-radius: 14px;
+    padding: 14px 20px;
+    margin-bottom: 20px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .sw-date-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--stone);
+    margin-bottom: 4px;
+  }
+
+  .sw-date-value {
+    font-family: var(--font-d);
+    font-size: 20px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+
+  .sw-info-card {
+    width: 100%;
+    background: var(--linen);
+    border-radius: 16px;
+    padding: 4px 0;
+    margin-bottom: 16px;
+  }
+
+  .sw-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--bone);
+  }
+
+  .sw-info-row:last-child { border-bottom: none; }
+
+  .sw-info-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--stone);
+  }
+
+  .sw-info-value {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+    text-align: right;
+  }
+
+  .sw-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 14px;
+    background: var(--navy-50);
+    border-radius: 12px;
+    border: 1px solid var(--navy-100);
+    margin-bottom: 20px;
+    width: 100%;
+    text-align: left;
+  }
+
+  .sw-notice-text {
+    font-size: 12px;
+    color: var(--navy-500);
+    line-height: 1.5;
+  }
+
+  .sw-actions {
+    width: 100%;
+    padding: 0 24px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .btn-sw-confirm {
+    width: 100%;
+    height: 56px;
+    background: var(--navy-500);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-family: var(--font-b);
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn-sw-cancel {
+    width: 100%;
+    height: 44px;
+    background: transparent;
+    color: var(--stone);
+    border: none;
+    font-family: var(--font-b);
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--bone);
+  }
+
+  /* ============================================================
+     SCREEN 7: PLANNING — TURNI GIORNALIERI (MANAGER ONLY)
+     ============================================================ */
+
+  .screen-planning {
+    min-height: 812px;
+    display: flex;
+    flex-direction: column;
+    background: var(--linen);
+    position: relative;
+  }
+
+  /* Manager header */
+  .plan-header {
+    background: var(--white);
+    padding: 8px 20px 12px;
+    border-bottom: 1px solid var(--bone);
+    flex-shrink: 0;
+  }
+
+  .plan-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .plan-title-wrap { flex: 1; }
+
+  .plan-manager-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--navy-500);
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 20px;
+    margin-bottom: 4px;
+  }
+
+  .plan-title {
+    font-family: var(--font-d);
+    font-size: 20px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    line-height: 1.1;
+  }
+
+  .plan-title em { font-style: italic; color: var(--navy-500); }
+
+  /* Date navigation row */
+  .plan-date-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .plan-nav-btn {
+    width: 32px; height: 32px;
+    border: 1px solid var(--bone);
+    border-radius: 8px;
+    background: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--stone);
+    flex-shrink: 0;
+    transition: border-color 0.15s;
+  }
+
+  .plan-nav-btn:hover { border-color: var(--navy-200); color: var(--navy-500); }
+
+  .plan-date-label {
+    font-family: var(--font-d);
+    font-size: 15px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    flex: 1;
+    text-align: center;
+    line-height: 1;
+  }
+
+  .plan-cal-btn {
+    width: 32px; height: 32px;
+    border: 1px solid var(--bone);
+    border-radius: 8px;
+    background: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--navy-500);
+    flex-shrink: 0;
+  }
+
+  /* Summary bar */
+  .plan-summary {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 8px 20px;
+    background: var(--white);
+    border-bottom: 1.5px solid var(--bone);
+    flex-shrink: 0;
+  }
+
+  .plan-summary-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    justify-content: center;
+  }
+
+  .plan-summary-item + .plan-summary-item {
+    border-left: 1px solid var(--bone);
+  }
+
+  .plan-summary-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .plan-summary-number {
+    font-family: var(--font-d);
+    font-size: 22px;
+    font-weight: 300;
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+
+  .plan-summary-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--stone);
+    line-height: 1.2;
+  }
+
+  /* Scrollable shift list */
+  .plan-shifts {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 0 8px;
+    scrollbar-width: none;
+  }
+
+  .plan-shifts::-webkit-scrollbar { display: none; }
+
+  /* Shift section */
+  .plan-shift-section {
+    margin: 0 16px 14px;
+    background: var(--white);
+    border-radius: 14px;
+    border: 1px solid var(--bone);
+    overflow: hidden;
+  }
+
+  .plan-shift-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--linen);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .plan-shift-header::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+  }
+
+  /* Shift accent colors */
+  .shift-mattina .plan-shift-header::before  { background: var(--navy-500); }
+  .shift-pomeriggio .plan-shift-header::before { background: #9B7B44; }
+  .shift-sera .plan-shift-header::before     { background: var(--stone); }
+
+  .plan-shift-name {
+    font-family: var(--font-d);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    flex: 1;
+  }
+
+  .plan-shift-time {
+    font-size: 11px;
+    color: var(--stone);
+    margin-left: 6px;
+  }
+
+  .plan-shift-count {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 20px;
+    margin-left: 8px;
+    flex-shrink: 0;
+  }
+
+  .shift-mattina .plan-shift-count    { background: var(--navy-50);   color: var(--navy-500); }
+  .shift-pomeriggio .plan-shift-count { background: #FDF5E8;           color: #9B7B44; }
+  .shift-sera .plan-shift-count       { background: var(--parchment);  color: var(--stone); }
+
+  /* Employee row */
+  .plan-emp-row {
+    display: flex;
+    align-items: center;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--linen);
+    gap: 10px;
+  }
+
+  .plan-emp-row:last-child { border-bottom: none; }
+
+  .plan-emp-avatar {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: var(--navy-50);
+    color: var(--navy-500);
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    letter-spacing: -0.01em;
+  }
+
+  .plan-emp-info { flex: 1; min-width: 0; }
+
+  .plan-emp-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .plan-emp-role {
+    font-size: 10px;
+    color: var(--dust);
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Status badge: P / A */
+  .plan-status {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    color: white;
+    flex-shrink: 0;
+    letter-spacing: 0;
+  }
+
+  .status-p  { background: var(--success); }   /* Presente — verde */
+  .status-aa { background: var(--error); }     /* Assente  — rosso */
+  .status-at { background: var(--warning); }  /* Atteso   — ambra */
+
+
+  /* ============================================================
+     SEGMENTED CONTROL — TAB NAVIGATION (Screens 07-09)
+     ============================================================ */
+
+  .segment-control {
+    display: flex;
+    gap: 6px;
+    padding: 8px 20px;
+    background: var(--white);
+    border-bottom: 1px solid var(--bone);
+    flex-shrink: 0;
+  }
+
+  .segment-btn {
+    flex: 1;
+    height: 32px;
+    border: 1px solid var(--bone);
+    border-radius: 10px;
+    background: var(--white);
+    color: var(--stone);
+    font-family: var(--font-b);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+
+  .segment-btn.active {
+    background: var(--navy-500);
+    color: white;
+    border-color: var(--navy-500);
+    font-weight: 600;
+  }
+
+  .segment-btn:hover:not(.active) {
+    border-color: var(--navy-200);
+    color: var(--navy-500);
+  }
+
+  /* Calendar popup overlay */
+  .plan-cal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(42,37,32,0.45);
+    z-index: 200;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 110px;
+    border-radius: 44px;
+  }
+
+  .plan-cal-popup {
+    background: var(--white);
+    border-radius: 20px;
+    padding: 18px;
+    width: 300px;
+    box-shadow: 0 8px 32px rgba(42,37,32,0.2);
+  }
+
+  .cal-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .cal-popup-month {
+    font-family: var(--font-d);
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+  }
+
+  .cal-popup-nav {
+    width: 28px; height: 28px;
+    border: 1px solid var(--bone);
+    border-radius: 7px;
+    background: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--stone);
+  }
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+  }
+
+  .cal-dow {
+    text-align: center;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--dust);
+    padding: 4px 0;
+  }
+
+  .cal-day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--stone);
+    cursor: pointer;
+  }
+
+  .cal-day:hover { background: var(--linen); }
+  .cal-day.today-cal { background: var(--navy-500); color: white; font-weight: 700; }
+  .cal-day.has-dot { position: relative; }
+  .cal-day.has-dot::after {
+    content: '';
+    position: absolute;
+    bottom: 2px; left: 50%;
+    transform: translateX(-50%);
+    width: 3px; height: 3px;
+    background: var(--navy-300);
+    border-radius: 50%;
+  }
+  .cal-day.today-cal::after { background: rgba(255,255,255,0.6); }
+  .cal-day.other-month { color: var(--bone); }
+
+  /* 4-item manager tab bar */
+  .tab-bar-manager {
+    height: 82px;
+    padding: 8px 0 0;
+    background: var(--white);
+    border-top: 1px solid var(--bone);
+    display: flex;
+    flex-shrink: 0;
+  }
+
+  /* ============================================================
+     SCREENS 8 & 9: SHARED MANAGER HEADER (WEEK + MONTH)
+     ============================================================ */
+
+  .mgr-header {
+    background: var(--white);
+    padding: 8px 20px 12px;
+    border-bottom: 1px solid var(--bone);
+    flex-shrink: 0;
+  }
+
+  .mgr-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .mgr-title {
+    font-family: var(--font-d);
+    font-size: 20px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    line-height: 1;
+  }
+
+  .mgr-title em { font-style: italic; color: var(--navy-500); }
+
+  .mgr-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  .mgr-nav-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .mgr-nav-btn {
+    width: 30px; height: 30px;
+    border: 1px solid var(--bone);
+    border-radius: 8px;
+    background: var(--white);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--stone); flex-shrink: 0;
+  }
+
+  .mgr-nav-label {
+    font-family: var(--font-d);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--ink);
+    flex: 1;
+    text-align: center;
+    letter-spacing: -0.01em;
+  }
+
+  /* ============================================================
+     SCREEN 8: PIANIFICAZIONE SETTIMANALE
+     ============================================================ */
+
+  .screen-weekly {
+    min-height: 812px;
+    display: flex;
+    flex-direction: column;
+    background: var(--linen);
+  }
+
+  /* Week summary bar */
+  .week-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 20px;
+    background: var(--white);
+    border-bottom: 1.5px solid var(--bone);
+    flex-shrink: 0;
+  }
+
+  .week-sum-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+  }
+
+  .week-sum-num {
+    font-family: var(--font-d);
+    font-size: 20px;
+    font-weight: 300;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+  }
+
+  .week-sum-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--stone);
+  }
+
+  .week-sum-sep {
+    width: 1px; height: 20px;
+    background: var(--bone);
+    flex-shrink: 0;
+  }
+
+  /* Legend row */
+  .week-legend {
+    display: flex;
+    gap: 10px;
+    padding: 6px 20px 4px;
+    background: var(--white);
+    border-bottom: 1px solid var(--linen);
+    flex-shrink: 0;
+  }
+
+  .wl-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--stone);
+  }
+
+  .wl-dot {
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* 7-column week grid */
+  .week-grid-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 8px 8px;
+    scrollbar-width: none;
+  }
+
+  .week-grid-scroll::-webkit-scrollbar { display: none; }
+
+  .week-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+
+  /* Day column */
+  .day-col {
+    display: flex;
+    flex-direction: column;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--white);
+    border: 1px solid var(--bone);
+    cursor: pointer;
+    transition: box-shadow 0.15s;
+  }
+
+  .day-col:hover { box-shadow: 0 2px 8px rgba(42,37,32,0.1); }
+
+  .day-col.today {
+    border-color: var(--navy-500);
+    box-shadow: 0 0 0 1.5px var(--navy-500);
+  }
+
+  .day-col.closed {
+    background: var(--parchment);
+    border-color: var(--bone);
+    opacity: 0.65;
+  }
+
+  .day-col.empty {
+    background: var(--linen);
+    border-color: var(--bone);
+    opacity: 0.5;
+  }
+
+  /* Day header */
+  .day-header {
+    padding: 6px 4px 5px;
+    text-align: center;
+    background: var(--linen);
+    border-bottom: 1px solid var(--bone);
+  }
+
+  .day-col.today .day-header {
+    background: var(--navy-500);
+    border-bottom-color: var(--navy-700);
+  }
+
+  .day-dow {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--stone);
+    line-height: 1;
+    margin-bottom: 2px;
+  }
+
+  .day-col.today .day-dow { color: rgba(255,255,255,0.7); }
+
+  .day-num {
+    font-family: var(--font-d);
+    font-size: 17px;
+    font-weight: 400;
+    line-height: 1;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+  }
+
+  .day-col.today .day-num { color: white; }
+
+  /* Shift tags inside day */
+  .day-body {
+    padding: 5px 4px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    align-items: stretch;
+  }
+
+  .shift-tag {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 4px;
+    border-radius: 4px;
+    gap: 2px;
+  }
+
+  .shift-tag-initial {
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: white;
+    line-height: 1;
+  }
+
+  .shift-tag-count {
+    font-size: 9px;
+    font-weight: 700;
+    color: white;
+    line-height: 1;
+    font-family: var(--font-b);
+  }
+
+  .st-m { background: var(--navy-500); }
+  .st-p { background: #9B7B44; }
+  .st-s { background: var(--stone); }
+
+  /* Closed / empty states */
+  .day-closed-label {
+    padding: 8px 4px;
+    text-align: center;
+    font-size: 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--dust);
+  }
+
+  .day-empty-label {
+    padding: 8px 4px;
+    text-align: center;
+    font-size: 14px;
+    color: var(--bone);
+    font-weight: 300;
+  }
+
+  /* Tap hint */
+  .week-tap-hint {
+    padding: 6px 20px 2px;
+    font-size: 10px;
+    color: var(--dust);
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  /* ============================================================
+     SCREEN 9: PIANIFICAZIONE MENSILE
+     ============================================================ */
+
+  .screen-monthly {
+    min-height: 812px;
+    display: flex;
+    flex-direction: column;
+    background: var(--linen);
+  }
+
+  /* Month summary */
+  .month-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 20px 10px;
+    background: var(--white);
+    border-bottom: 1.5px solid var(--bone);
+    flex-shrink: 0;
+  }
+
+  .month-sum-block {
+    text-align: center;
+    flex: 1;
+  }
+
+  .month-sum-number {
+    font-family: var(--font-d);
+    font-size: 28px;
+    font-weight: 300;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    color: var(--navy-500);
+  }
+
+  .month-sum-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--stone);
+    margin-top: 2px;
+  }
+
+  .month-sum-divider {
+    width: 1px; height: 36px;
+    background: var(--bone);
+    flex-shrink: 0;
+  }
+
+  /* DOW header row */
+  .month-dow-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    padding: 8px 8px 4px;
+    background: var(--white);
+    border-bottom: 1px solid var(--linen);
+    flex-shrink: 0;
+  }
+
+  .month-dow {
+    text-align: center;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dust);
+    padding: 2px 0;
+  }
+
+  /* Calendar body */
+  .month-cal-body {
+    flex: 1;
+    padding: 4px 8px 8px;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .month-cal-body::-webkit-scrollbar { display: none; }
+
+  .month-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+  }
+
+  /* Calendar day cell */
+  .cal-cell {
+    aspect-ratio: 1 / 1.55;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    cursor: pointer;
+    background: var(--white);
+    border: 1px solid var(--bone);
+    transition: all 0.12s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cal-cell:hover { border-color: var(--navy-200); box-shadow: 0 1px 4px rgba(30,58,95,0.1); }
+
+  .cal-cell.today-cell {
+    background: var(--navy-500);
+    border-color: var(--navy-500);
+  }
+
+  .cal-cell.closed-cell {
+    background: var(--parchment);
+    border-color: var(--bone);
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .cal-cell.other-month-cell {
+    background: transparent;
+    border-color: transparent;
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  .cal-cell.high-coverage {
+    background: var(--navy-50);
+    border-color: var(--navy-100);
+  }
+
+  .cal-cell-day {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1;
+    font-family: var(--font-b);
+  }
+
+  .cal-cell.today-cell .cal-cell-day { color: white; }
+  .cal-cell.closed-cell .cal-cell-day { color: var(--dust); }
+  .cal-cell.other-month-cell .cal-cell-day { color: var(--stone); }
+
+  .cal-cell-count {
+    font-family: var(--font-d);
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--navy-500);
+    line-height: 1;
+  }
+
+  .cal-cell.today-cell .cal-cell-count { color: rgba(255,255,255,0.85); }
+  .cal-cell.high-coverage .cal-cell-count { color: var(--navy-700); font-weight: 500; }
+  .cal-cell.closed-cell .cal-cell-count { display: none; }
+  .cal-cell.other-month-cell .cal-cell-count { color: var(--dust); font-size: 11px; }
+
+  /* Month color legend */
+  .month-legend {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 20px 2px;
+    flex-shrink: 0;
+  }
+
+  .month-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--stone);
+  }
+
+  .month-legend-swatch {
+    width: 10px; height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  /* ============================================================
+     SCREEN 8 — MULTI-WEEK SECTIONS
+     ============================================================ */
+
+  .weeks-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 8px 8px;
+    scrollbar-width: none;
+  }
+  .weeks-container::-webkit-scrollbar { display: none; }
+
+  .week-section { margin-bottom: 14px; }
+
+  .week-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px 6px;
+  }
+
+  .week-section-date {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--stone);
+    letter-spacing: 0.01em;
+  }
+
+  .week-section-tag {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  .wtag-prev    { background: var(--parchment); color: var(--stone); }
+  .wtag-current { background: var(--parchment); color: var(--stone); }  /* same as prev — grid itself stands out */
+  .wtag-next    { background: var(--navy-50);   color: var(--navy-500); }
+
+  .week-section-divider {
+    height: 1px;
+    background: var(--bone);
+    margin: 4px 4px 14px;
+  }
+
+  /* ============================================================
+     SCREEN 9 — CELL DIVIDER + SHIFTS MINI
+     ============================================================ */
+
+  .cal-cell-hr {
+    width: 80%;
+    height: 1px;
+    background: var(--bone);
+    margin: 1px auto;
+    flex-shrink: 0;
+  }
+
+  .cal-cell.today-cell .cal-cell-hr  { background: rgba(255,255,255,0.25); }
+  .cal-cell.high-coverage .cal-cell-hr { background: var(--navy-100); }
+
+  .cal-shifts-mini {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0px;
+    line-height: 1.1;
+  }
+
+  .csm-row {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+  }
+
+  .csm-m { font-size: 7px; font-weight: 800; color: var(--navy-500); }
+  .csm-p { font-size: 7px; font-weight: 800; color: #9B7B44; }
+  .csm-s { font-size: 7px; font-weight: 800; color: var(--stone); }
+  .cal-cell.today-cell .csm-m,
+  .cal-cell.today-cell .csm-p,
+  .cal-cell.today-cell .csm-s { color: rgba(255,255,255,0.85); }
+
+  /* ============================================================
+     SCREEN 10 — EMPLOYEE MONTHLY VIEW
+     ============================================================ */
+
+  .screen-emp-month {
+    min-height: 812px;
+    display: flex;
+    flex-direction: column;
+    background: var(--linen);
+  }
+
+  /* Employee profile strip */
+  .emp-month-profile {
+    background: var(--white);
+    border-bottom: 1px solid var(--bone);
+    padding: 10px 20px 12px;
+    flex-shrink: 0;
+  }
+
+  .emp-month-profile-inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .emp-month-avatar {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: var(--navy-500);
+    color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .emp-month-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 1px;
+  }
+
+  .emp-month-meta {
+    font-size: 11px;
+    color: var(--stone);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .emp-month-id {
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    color: var(--dust);
+    letter-spacing: 0.04em;
+  }
+
+  /* Shift legend */
+  .emp-shift-legend {
+    display: flex;
+    gap: 10px;
+    padding: 6px 20px;
+    background: var(--white);
+    border-bottom: 1px solid var(--linen);
+    flex-shrink: 0;
+  }
+
+  .esl-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--stone);
+  }
+
+  .esl-pill {
+    width: 16px; height: 14px;
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 8px; font-weight: 800; color: white;
+    flex-shrink: 0;
+  }
+
+  .esl-m   { background: var(--navy-500); }
+  .esl-p   { background: #9B7B44; }
+  .esl-s   { background: var(--stone); }
+  .esl-sw  { background: var(--success); }
+  .esl-f   { background: var(--gold); }
+  .esl-ill { background: #B07070; }
+
+  /* Calendar grid for employee */
+  .emp-cal-body {
+    flex: 1;
+    padding: 4px 8px 8px;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .emp-cal-body::-webkit-scrollbar { display: none; }
+
+  .emp-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+  }
+
+  .emp-cal-cell {
+    aspect-ratio: 1 / 1.2;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    background: var(--white);
+    border: 1px solid var(--bone);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .emp-cal-cell.ecc-today {
+    background: var(--navy-500);
+    border-color: var(--navy-500);
+  }
+
+  .emp-cal-cell.ecc-off {
+    background: var(--linen);
+    border-color: transparent;
+  }
+
+  .emp-cal-cell.ecc-closed {
+    background: var(--parchment);
+    border-color: transparent;
+    opacity: 0.45;
+  }
+
+  .emp-cal-cell.ecc-other {
+    background: transparent;
+    border-color: transparent;
+    opacity: 0.3;
+  }
+
+  .emp-cell-day {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1;
+    font-family: var(--font-b);
+  }
+
+  .emp-cal-cell.ecc-today .emp-cell-day  { color: white; }
+  .emp-cal-cell.ecc-off .emp-cell-day    { color: var(--dust); }
+  .emp-cal-cell.ecc-closed .emp-cell-day { color: var(--dust); font-size: 9px; }
+  .emp-cal-cell.ecc-other .emp-cell-day  { color: var(--stone); font-size: 10px; }
+
+  /* Shift pill inside employee cell */
+  .emp-shift-pill {
+    width: 18px; height: 13px;
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 8px; font-weight: 800; color: white;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+
+  .esp-m  { background: var(--navy-500); }
+  .esp-p  { background: #9B7B44; }
+  .esp-s  { background: var(--stone); }
+  .esp-sw  { background: var(--success); font-size: 7px; }
+  .esp-f   { background: var(--gold);   }                  /* Ferie/Festività — gold */
+  .esp-ill { background: #B07070;        }                  /* Malattia — muted rose */
+
+  .emp-cal-cell.ecc-today .esp-m,
+  .emp-cal-cell.ecc-today .esp-p,
+  .emp-cal-cell.ecc-today .esp-s { opacity: 0.9; }
+
+  /* Month nav strip */
+  .emp-month-nav {
+    display: flex;
+    align-items: center;
+    padding: 6px 20px 8px;
+    background: var(--white);
+    border-bottom: 1px solid var(--bone);
+    flex-shrink: 0;
+  }
+
+  .emp-month-nav-btn {
+    width: 28px; height: 28px;
+    border: 1px solid var(--bone);
+    border-radius: 7px;
+    background: var(--white);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--stone); flex-shrink: 0;
+  }
+
+  .emp-month-label {
+    font-family: var(--font-d);
+    font-size: 15px;
+    font-weight: 400;
+    color: var(--ink);
+    flex: 1;
+    text-align: center;
+    letter-spacing: -0.01em;
+  }
+
+  /* Stats row */
+  .emp-month-stats {
+    display: flex;
+    gap: 0;
+    padding: 8px 20px;
+    background: var(--white);
+    border-bottom: 1.5px solid var(--bone);
+    flex-shrink: 0;
+  }
+
+  .emp-stat {
+    flex: 1;
+    text-align: center;
+  }
+
+  .emp-stat + .emp-stat {
+    border-left: 1px solid var(--bone);
+  }
+
+  .emp-stat-num {
+    font-family: var(--font-d);
+    font-size: 20px;
+    font-weight: 300;
+    letter-spacing: -0.03em;
+    color: var(--navy-500);
+    line-height: 1;
+    margin-bottom: 2px;
+  }
+
+  .emp-stat-label {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--stone);
+  }
+</style>
+</head>
+<body>
+
+<!-- Page Nav -->
+<nav class="page-nav">
+  <span class="page-nav-logo">Badge <em>System</em></span>
+  <span class="page-nav-sep">|</span>
+  <a href="badge-design-system.html">Design System</a>
+  <a href="#" style="color:var(--linen);">Mobile</a>
+  <a href="badge-dashboard.html">Web Dashboard</a>
+</nav>
+
+<!-- Page Header -->
+<header class="page-header">
+  <p class="page-eyebrow">02 / Mobile Mockups — React Native</p>
+  <h1 class="page-title">Schermate <em>Mobile</em></h1>
+  <p class="page-desc">10 schermate principali dell'app iOS/Android. Base 375×812px (iPhone 14). Flow check-in: QR Scan → Face ID → Conferma. Manager: Turni Giorno · Settimana · Mese. Dipendente: Calendario Personale.</p>
+</header>
+
+<div class="scroll-hint">← Scorri orizzontalmente per vedere tutte le schermate</div>
+
+<!-- Screens -->
+<div class="screens-wrapper">
+
+  <!-- ========== SCREEN 1: QR SCANNER ========== -->
+  <div class="screen-col">
+    <span class="screen-label">01 — QR Scanner</span>
+    <div class="phone">
+      <div class="dynamic-island">
+        <div class="di-camera"></div>
+      </div>
+      <div class="screen-qr">
+        <div class="status-bar">
+          <span class="status-time">9:41</span>
+          <div class="status-icons">
+            <!-- Signal -->
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="white"><rect x="0" y="6" width="3" height="6" rx="1" opacity="0.4"/><rect x="4.5" y="4" width="3" height="8" rx="1" opacity="0.6"/><rect x="9" y="2" width="3" height="10" rx="1" opacity="0.8"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+            <!-- WiFi -->
+            <svg width="16" height="12" viewBox="0 0 24 18" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M1 6C5.4 1.9 10.4 0 12 0s6.6 1.9 11 6" opacity="0.4"/><path d="M4 10c2.2-2.1 5-3.5 8-3.5s5.8 1.4 8 3.5" opacity="0.7"/><path d="M7.5 14c1.2-1.2 2.8-2 4.5-2s3.3.8 4.5 2"/><circle cx="12" cy="17" r="1.5" fill="white" stroke="none"/></svg>
+            <!-- Battery -->
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0" y="1" width="22" height="10" rx="2.5" stroke="white" stroke-opacity="0.35" stroke-width="1.2"/><rect x="1.2" y="2.2" width="17" height="7.6" rx="1.5" fill="white"/><path d="M23 4v4a2 2 0 000-4z" fill="white" fill-opacity="0.4"/></svg>
+          </div>
+        </div>
+
+        <div class="qr-header">
+          <span class="qr-logo">Badge <em>System</em></span>
+          <div class="qr-site-pill">
+            <div class="qr-site-dot"></div>
+            Milano Centro
+          </div>
+        </div>
+
+        <div class="qr-viewfinder">
+          <div class="viewfinder-bg"></div>
+
+          <!-- Camera feed simulation -->
+          <div class="camera-feed">
+            <div class="scan-line"></div>
+            <div class="corner-brackets">
+              <div class="bracket bracket-tl"></div>
+              <div class="bracket bracket-tr"></div>
+              <div class="bracket bracket-bl"></div>
+              <div class="bracket bracket-br"></div>
+            </div>
+            <!-- Simulated QR Code pattern -->
+            <svg style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);opacity:0.2;" width="100" height="100" viewBox="0 0 100 100">
+              <rect x="10" y="10" width="30" height="30" rx="4" fill="none" stroke="white" stroke-width="2"/>
+              <rect x="15" y="15" width="20" height="20" rx="2" fill="white"/>
+              <rect x="60" y="10" width="30" height="30" rx="4" fill="none" stroke="white" stroke-width="2"/>
+              <rect x="65" y="15" width="20" height="20" rx="2" fill="white"/>
+              <rect x="10" y="60" width="30" height="30" rx="4" fill="none" stroke="white" stroke-width="2"/>
+              <rect x="15" y="65" width="20" height="20" rx="2" fill="white"/>
+              <rect x="45" y="10" width="5" height="5" fill="white"/>
+              <rect x="45" y="20" width="5" height="5" fill="white"/>
+              <rect x="45" y="30" width="5" height="5" fill="white"/>
+              <rect x="55" y="45" width="5" height="5" fill="white"/>
+              <rect x="65" y="45" width="5" height="5" fill="white"/>
+              <rect x="75" y="45" width="5" height="5" fill="white"/>
+              <rect x="45" y="55" width="5" height="5" fill="white"/>
+              <rect x="55" y="55" width="5" height="5" fill="white"/>
+              <rect x="45" y="65" width="5" height="5" fill="white"/>
+              <rect x="65" y="65" width="5" height="5" fill="white"/>
+              <rect x="75" y="65" width="5" height="5" fill="white"/>
+              <rect x="55" y="75" width="5" height="5" fill="white"/>
+              <rect x="75" y="75" width="5" height="5" fill="white"/>
+            </svg>
+          </div>
+
+          <div class="qr-instruction">
+            <strong>Inquadra il badge QR</strong>
+            Avvicina la camera al codice per registrare l'entrata
+          </div>
+        </div>
+
+        <div class="qr-actions">
+          <button class="btn-qr-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Check-in Manuale
+          </button>
+          <div class="qr-alt-row">
+            <button class="btn-qr-alt">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Face ID
+            </button>
+            <button class="btn-qr-alt">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              Storico
+            </button>
+          </div>
+        </div>
+
+        <div class="home-indicator"><div class="home-bar"></div></div>
+      </div>
+    </div>
+    <div class="annotation">
+      <p class="annotation-line">Camera viewfinder fullscreen con corner bracket animati. Scan line animata continua.</p>
+    </div>
+  </div>
+
+  <!-- ========== SCREEN 2: FACE ID ========== -->
+  <div class="screen-col">
+    <span class="screen-label">02 — Face ID</span>
+    <div class="phone">
+      <div class="dynamic-island">
+        <div class="di-camera"></div>
+      </div>
+      <div class="screen-faceid">
+        <div class="status-bar" style="color: var(--ink);">
+          <span class="status-time">9:41</span>
+          <div class="status-icons">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="#2A2520"><rect x="0" y="6" width="3" height="6" rx="1" opacity="0.3"/><rect x="4.5" y="4" width="3" height="8" rx="1" opacity="0.5"/><rect x="9" y="2" width="3" height="10" rx="1" opacity="0.7"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0" y="1" width="22" height="10" rx="2.5" stroke="#2A2520" stroke-opacity="0.35" stroke-width="1.2"/><rect x="1.2" y="2.2" width="17" height="7.6" rx="1.5" fill="#2A2520"/><path d="M23 4v4a2 2 0 000-4z" fill="#2A2520" fill-opacity="0.4"/></svg>
+          </div>
+        </div>
+
+        <div style="padding: 4px 24px 0; display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-family:var(--font-d);font-size:18px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;">Badge <em style="font-style:italic;color:var(--navy-500);">System</em></span>
+          <button style="background:none;border:none;cursor:pointer;color:var(--stone);font-size:13px;font-family:var(--font-b);">Cambia utente</button>
+        </div>
+
+        <div class="faceid-body">
+          <!-- Face scan ring -->
+          <div class="face-ring-outer">
+            <div class="face-ring-inner">
+              <div class="face-scan-arc"></div>
+              <!-- Face icon SVG -->
+              <svg width="56" height="56" viewBox="0 0 56 56" fill="none" class="face-icon">
+                <!-- Head outline -->
+                <ellipse cx="28" cy="22" rx="16" ry="18" stroke="#1E3A5F" stroke-width="1.5" fill="#EEF2F7"/>
+                <!-- Eyes -->
+                <circle cx="22" cy="21" r="2.5" fill="#1E3A5F"/>
+                <circle cx="34" cy="21" r="2.5" fill="#1E3A5F"/>
+                <!-- Nose -->
+                <path d="M28 23v4" stroke="#1E3A5F" stroke-width="1.2" stroke-linecap="round"/>
+                <path d="M25.5 27h5" stroke="#1E3A5F" stroke-width="1.2" stroke-linecap="round"/>
+                <!-- Mouth -->
+                <path d="M23 31c1.3 2 8.7 2 10 0" stroke="#1E3A5F" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+                <!-- Scan dots (TrueDepth) -->
+                <circle cx="14" cy="14" r="1" fill="#8FACCC" opacity="0.6"/>
+                <circle cx="22" cy="10" r="1" fill="#8FACCC" opacity="0.6"/>
+                <circle cx="34" cy="10" r="1" fill="#8FACCC" opacity="0.6"/>
+                <circle cx="42" cy="14" r="1" fill="#8FACCC" opacity="0.6"/>
+                <circle cx="44" cy="24" r="1" fill="#8FACCC" opacity="0.6"/>
+                <circle cx="12" cy="24" r="1" fill="#8FACCC" opacity="0.6"/>
+                <!-- Body -->
+                <path d="M10 52c0-10 8-17 18-17s18 7 18 17" stroke="#1E3A5F" stroke-width="1.5" fill="#EEF2F7"/>
+              </svg>
+            </div>
+          </div>
+
+          <h2 class="faceid-title">Verifica identità</h2>
+          <p class="faceid-subtitle">Guarda il sensore Face ID per completare l'autenticazione ed effettuare il check-in.</p>
+
+          <!-- QR data read banner -->
+          <div style="width:100%;background:var(--navy-900);border-radius:12px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5AADFF" stroke-width="2"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><path d="M15 15h.01M15 18h3v3M18 15h3"/></svg>
+            <div style="flex:1;">
+              <p style="font-size:10px;color:rgba(255,255,255,0.4);font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:1px;">QR letto — Punto vendita rilevato</p>
+              <p style="font-size:12px;color:rgba(255,255,255,0.85);font-weight:500;">Milano — Centro · Via Montenapoleone 12</p>
+            </div>
+            <div style="width:18px;height:18px;background:var(--success);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+          </div>
+
+          <!-- User card -->
+          <div class="faceid-user-card">
+            <div class="faceid-avatar">MR</div>
+            <div class="faceid-user-info">
+              <p class="faceid-user-name">Mario Rossi</p>
+              <p class="faceid-user-role">Responsabile Reparto Abbigliamento</p>
+              <p style="font-size:11px;color:var(--dust);margin-top:3px;font-family:'Courier New',monospace;letter-spacing:0.04em;">#EMP-00847</p>
+            </div>
+          </div>
+
+          <!-- Steps -->
+          <div class="faceid-status">
+            <div class="status-dot-step active"></div>
+            <div class="status-dot-step active" style="background:var(--navy-500);width:24px;border-radius:4px;"></div>
+          </div>
+
+          <div class="faceid-footer">
+            <button class="btn-faceid">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Autenticazione in corso…
+            </button>
+            <button class="btn-pin-link">Usa PIN di backup</button>
+          </div>
+        </div>
+
+        <div class="home-indicator" style="color:var(--ink);"><div class="home-bar"></div></div>
+      </div>
+    </div>
+    <div class="annotation">
+      <p class="annotation-line">TrueDepth camera affordance. Ring animato con scan arc + pulse. User card contestuale.</p>
+    </div>
+  </div>
+
+  <!-- ========== SCREEN 3: CHECK-IN SUCCESS ========== -->
+  <div class="screen-col">
+    <span class="screen-label">03 — Conferma Check-in</span>
+    <div class="phone">
+      <div class="dynamic-island">
+        <div class="di-camera"></div>
+      </div>
+      <div class="screen-checkin">
+        <div class="status-bar" style="color:var(--ink);">
+          <span class="status-time">9:42</span>
+          <div class="status-icons">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="#2A2520"><rect x="0" y="6" width="3" height="6" rx="1" opacity="0.3"/><rect x="4.5" y="4" width="3" height="8" rx="1" opacity="0.5"/><rect x="9" y="2" width="3" height="10" rx="1" opacity="0.7"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0" y="1" width="22" height="10" rx="2.5" stroke="#2A2520" stroke-opacity="0.35" stroke-width="1.2"/><rect x="1.2" y="2.2" width="17" height="7.6" rx="1.5" fill="#2A2520"/></svg>
+          </div>
+        </div>
+
+        <div class="checkin-body">
+          <!-- Success ring -->
+          <div class="checkin-success-ring">
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+              <circle cx="24" cy="24" r="22" stroke="#2D7049" stroke-width="2" fill="#EEF6F1"/>
+              <polyline points="14,24 21,31 34,17" stroke="#2D7049" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </div>
+
+          <p class="checkin-greeting">Check-in Registrato</p>
+          <h2 class="checkin-name">Buongiorno,<br>Mario</h2>
+          <p class="checkin-role">Responsabile Reparto Abbigliamento</p>
+          <p style="font-size:11px;color:var(--dust);margin-top:-20px;margin-bottom:24px;font-family:'Courier New',monospace;letter-spacing:0.04em;">#EMP-00847</p>
+
+          <!-- Time display -->
+          <div class="checkin-time-display">
+            <div>
+              <span class="checkin-time-big">09:42</span>
+              <span class="checkin-time-ampm">AM</span>
+            </div>
+            <p class="checkin-date">Martedì, 3 Giugno 2025</p>
+          </div>
+
+          <!-- Detail rows -->
+          <div class="checkin-detail-card">
+            <div class="checkin-detail-row">
+              <span class="checkin-detail-label">Employee ID</span>
+              <span style="font-size:13px;font-weight:500;color:var(--navy-500);font-family:'Courier New',monospace;letter-spacing:0.04em;">#EMP-00847</span>
+            </div>
+            <div class="checkin-detail-row">
+              <span class="checkin-detail-label">Punto Vendita</span>
+              <span class="checkin-detail-value" style="display:flex;align-items:center;gap:5px;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                Milano — Centro
+              </span>
+            </div>
+            <div class="checkin-detail-row">
+              <span class="checkin-detail-label">Turno</span>
+              <span class="checkin-detail-value">Mattina 09:00–17:00</span>
+            </div>
+            <div class="checkin-detail-row">
+              <span class="checkin-detail-label">Metodo</span>
+              <span class="checkin-method-pill">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Face ID
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="checkin-actions">
+          <button class="btn-checkin-done">Fatto</button>
+          <button class="btn-checkin-history">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Vedi storico presenze
+          </button>
+        </div>
+
+        <div class="home-indicator" style="color:var(--ink);"><div class="home-bar"></div></div>
+      </div>
+    </div>
+    <div class="annotation">
+      <p class="annotation-line">Employee ID monospace. Location con pin icon. Nessun riferimento a ritardi.</p>
+    </div>
+  </div>
+
+  <!-- ========== SCREEN 4: HISTORY ========== -->
+  <div class="screen-col">
+    <span class="screen-label">04 — Storico Presenze</span>
+    <div class="phone">
+      <div class="dynamic-island"><div class="di-camera"></div></div>
+      <div class="screen-history">
+        <div class="status-bar" style="color:var(--ink);">
+          <span class="status-time">9:41</span>
+          <div class="status-icons">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="#2A2520"><rect x="0" y="6" width="3" height="6" rx="1" opacity="0.3"/><rect x="4.5" y="4" width="3" height="8" rx="1" opacity="0.5"/><rect x="9" y="2" width="3" height="10" rx="1" opacity="0.7"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0" y="1" width="22" height="10" rx="2.5" stroke="#2A2520" stroke-opacity="0.35" stroke-width="1.2"/><rect x="1.2" y="2.2" width="17" height="7.6" rx="1.5" fill="#2A2520"/></svg>
+          </div>
+        </div>
+
+        <div class="history-header">
+          <h2 class="history-title">Le mie presenze</h2>
+          <div class="filter-pills">
+            <div class="filter-pill active">Questa settimana</div>
+            <div class="filter-pill">Questo mese</div>
+            <div class="filter-pill">Giugno</div>
+            <div class="filter-pill">Maggio</div>
+          </div>
+        </div>
+
+
+        <div class="history-list">
+          <div class="month-divider">Giugno 2025</div>
+
+          <div class="history-item">
+            <div class="history-date-box">
+              <span class="history-date-day">03</span>
+              <span class="history-date-dow">Mar</span>
+            </div>
+            <div class="history-info">
+              <p class="history-times">09:42 — 18:10</p>
+              <p class="history-site">Milano Centro · Face ID</p>
+            </div>
+            <div>
+              <p class="history-duration">8h 28m</p>
+              <p class="history-duration-label">&nbsp;</p>
+            </div>
+          </div>
+
+          <div class="history-item">
+            <div class="history-date-box">
+              <span class="history-date-day">02</span>
+              <span class="history-date-dow">Lun</span>
+            </div>
+            <div class="history-info">
+              <p class="history-times">08:58 — 17:03</p>
+              <p class="history-site">Milano Centro · QR Code</p>
+            </div>
+            <div>
+              <p class="history-duration">8h 05m</p>
+              <p class="history-duration-label">
+                &nbsp;
+              </p>
+            </div>
+          </div>
+
+          <div class="history-item" style="opacity:0.45;">
+            <div class="history-date-box" style="background:var(--error-bg);">
+              <span class="history-date-day" style="color:var(--error);">01</span>
+              <span class="history-date-dow" style="color:var(--error);">Dom</span>
+            </div>
+            <div class="history-info">
+              <p class="history-times" style="color:var(--stone);">Giorno libero</p>
+              <p class="history-site">—</p>
+            </div>
+            <div>
+              <span style="font-size:12px;color:var(--dust);">—</span>
+            </div>
+          </div>
+
+          <div class="history-item">
+            <div class="history-date-box">
+              <span class="history-date-day">31</span>
+              <span class="history-date-dow">Sab</span>
+            </div>
+            <div class="history-info">
+              <p class="history-times">09:01 — 15:30</p>
+              <p class="history-site">Milano Centro · Face ID</p>
+            </div>
+            <div>
+              <p class="history-duration">6h 29m</p>
+              <p class="history-duration-label">
+                &nbsp;
+              </p>
+            </div>
+          </div>
+
+          <div class="history-item">
+            <div class="history-date-box">
+              <span class="history-date-day">30</span>
+              <span class="history-date-dow">Ven</span>
+            </div>
+            <div class="history-info">
+              <p class="history-times">08:52 — 17:08</p>
+              <p class="history-site">Milano Centro · QR Code</p>
+            </div>
+            <div>
+              <p class="history-duration">8h 16m</p>
+              <p class="history-duration-label">
+                &nbsp;
+              </p>
+            </div>
+          </div>
+
+          <div class="history-item">
+            <div class="history-date-box">
+              <span class="history-date-day">29</span>
+              <span class="history-date-dow">Gio</span>
+            </div>
+            <div class="history-info">
+              <p class="history-times">09:00 — 17:00</p>
+              <p class="history-site">Milano Centro · Face ID</p>
+            </div>
+            <div>
+              <p class="history-duration">8h 00m</p>
+              <p class="history-duration-label">
+                &nbsp;
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab Bar — 4 voci dipendente con Planning → Screen 10 -->
+        <div class="tab-bar" style="display:flex;">
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/><rect x="14" y="3" width="7" height="6" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/></svg></div>
+            <span class="tab-label">Scanner</span>
+          </div>
+          <div class="tab-item active">
+            <div class="tab-icon" style="color:var(--navy-500);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <span class="tab-label" style="color:var(--navy-500);font-weight:600;">Storico</span>
+          </div>
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+            <span class="tab-label">Planning</span>
+          </div>
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
+            <span class="tab-label">Profilo</span>
+          </div>
+        </div>
+        <div class="home-indicator" style="color:var(--ink);"><div class="home-bar"></div></div>
+      </div>
+    </div>
+    <div class="annotation">
+      <p class="annotation-line">Rimosso riepilogo settimanale. Tab Planning aggiunto → porta a Screen 10.</p>
+    </div>
+  </div>
+
+  <!-- ========== SCREEN 5: SETTINGS ========== -->
+  <div class="screen-col">
+    <span class="screen-label">05 — Impostazioni</span>
+    <div class="phone">
+      <div class="dynamic-island"><div class="di-camera"></div></div>
+      <div class="screen-settings">
+        <div class="status-bar" style="color:var(--ink);">
+          <span class="status-time">9:41</span>
+          <div class="status-icons">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="#2A2520"><rect x="0" y="6" width="3" height="6" rx="1" opacity="0.3"/><rect x="4.5" y="4" width="3" height="8" rx="1" opacity="0.5"/><rect x="9" y="2" width="3" height="10" rx="1" opacity="0.7"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0" y="1" width="22" height="10" rx="2.5" stroke="#2A2520" stroke-opacity="0.35" stroke-width="1.2"/><rect x="1.2" y="2.2" width="17" height="7.6" rx="1.5" fill="#2A2520"/></svg>
+          </div>
+        </div>
+
+        <div class="settings-header">
+          <h2 class="settings-title">Impostazioni</h2>
+        </div>
+
+        <!-- Profile card -->
+        <div class="settings-profile">
+          <div class="settings-avatar">MR</div>
+          <div style="flex:1;">
+            <p class="settings-name">Mario Rossi</p>
+            <p class="settings-email">mario.rossi@retailitalia.it</p>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">
+              <span style="font-size:11px;background:var(--navy-50);color:var(--navy-500);padding:3px 8px;border-radius:8px;font-weight:600;">Responsabile Reparto</span>
+              <span style="font-size:10px;font-family:'Courier New',monospace;color:var(--dust);letter-spacing:0.04em;">#EMP-00847</span>
+            </div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--bone)" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+
+        <!-- Account settings -->
+        <div class="settings-section">
+          <p class="settings-section-title">Account</p>
+          <div class="settings-row">
+            <div class="settings-row-icon" style="background:var(--navy-50);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--navy-500)" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+            </div>
+            <span class="settings-row-label">Dati personali</span>
+            <svg class="settings-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-icon" style="background:var(--navy-50);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--navy-500)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            </div>
+            <span class="settings-row-label">Password e sicurezza</span>
+            <svg class="settings-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+        </div>
+
+        <!-- Preferenze -->
+        <div class="settings-section">
+          <p class="settings-section-title">Preferenze</p>
+          <div class="settings-row">
+            <div class="settings-row-icon" style="background:#EEF6F1;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <span class="settings-row-label">Face ID</span>
+            <div class="sw on"></div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-icon" style="background:var(--warning-bg);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+            </div>
+            <span class="settings-row-label">Notifiche presenze</span>
+            <div class="sw on"></div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-icon" style="background:var(--parchment);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--stone)" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+            </div>
+            <span class="settings-row-label">Tema scuro</span>
+            <div class="sw"></div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-icon" style="background:var(--navy-50);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--navy-500)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+            </div>
+            <span class="settings-row-label">Lingua</span>
+            <span class="settings-row-value">Italiano</span>
+            <svg class="settings-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+        </div>
+
+        <!-- Azienda -->
+        <div class="settings-section">
+          <p class="settings-section-title">Azienda</p>
+          <div class="settings-row">
+            <div class="settings-row-icon" style="background:var(--parchment);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--stone)" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            </div>
+            <span class="settings-row-label">Retail Italia S.r.l.</span>
+            <span class="settings-row-value">Milano Centro</span>
+            <svg class="settings-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+        </div>
+
+        <!-- Logout -->
+        <button class="settings-logout">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Esci dall'account
+        </button>
+
+        <p class="settings-version">Badge System v2.3.1 · iOS 17.4</p>
+
+        <!-- Tab Bar -->
+        <div class="tab-bar">
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/><rect x="14" y="3" width="7" height="6" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/></svg></div>
+            <span class="tab-label">Scanner</span>
+          </div>
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <span class="tab-label">Storico</span>
+          </div>
+          <div class="tab-item active">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
+            <span class="tab-label">Profilo</span>
+          </div>
+        </div>
+        <div class="home-indicator" style="color:var(--ink);"><div class="home-bar"></div></div>
+      </div>
+    </div>
+    <div class="annotation">
+      <p class="annotation-line">Grouped settings iOS-style. Toggle Face ID prominente. Logout in zona danger.</p>
+    </div>
+  </div>
+
+  <!-- ========== SCREEN 6: SMART WORKING ========== -->
+  <div class="screen-col">
+    <span class="screen-label">06 — Smart Working</span>
+    <div class="phone">
+      <div class="dynamic-island"><div class="di-camera"></div></div>
+      <div class="screen-smartwork">
+        <div class="status-bar" style="color:var(--ink);">
+          <span class="status-time">9:41</span>
+          <div class="status-icons">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="#2A2520"><rect x="0" y="6" width="3" height="6" rx="1" opacity="0.3"/><rect x="4.5" y="4" width="3" height="8" rx="1" opacity="0.5"/><rect x="9" y="2" width="3" height="10" rx="1" opacity="0.7"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0" y="1" width="22" height="10" rx="2.5" stroke="#2A2520" stroke-opacity="0.35" stroke-width="1.2"/><rect x="1.2" y="2.2" width="17" height="7.6" rx="1.5" fill="#2A2520"/></svg>
+          </div>
+        </div>
+
+        <div style="padding: 4px 24px 0; display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-family:var(--font-d);font-size:18px;font-weight:400;color:var(--ink);letter-spacing:-0.02em;">Badge <em style="font-style:italic;color:var(--navy-500);">System</em></span>
+        </div>
+
+        <div class="sw-body">
+
+          <!-- Icon -->
+          <div class="sw-icon-ring">
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+              <!-- Monitor -->
+              <rect x="5" y="8" width="30" height="20" rx="3" stroke="#1E3A5F" stroke-width="1.8" fill="#EEF2F7"/>
+              <!-- Screen content -->
+              <rect x="9" y="12" width="22" height="12" rx="1.5" fill="#C8D5E8" opacity="0.6"/>
+              <!-- Lines on screen -->
+              <line x1="12" y1="15" x2="28" y2="15" stroke="#1E3A5F" stroke-width="1.2" stroke-linecap="round" opacity="0.5"/>
+              <line x1="12" y1="18" x2="24" y2="18" stroke="#1E3A5F" stroke-width="1.2" stroke-linecap="round" opacity="0.5"/>
+              <line x1="12" y1="21" x2="20" y2="21" stroke="#1E3A5F" stroke-width="1.2" stroke-linecap="round" opacity="0.5"/>
+              <!-- Stand -->
+              <line x1="20" y1="28" x2="20" y2="33" stroke="#1E3A5F" stroke-width="1.8" stroke-linecap="round"/>
+              <line x1="14" y1="33" x2="26" y2="33" stroke="#1E3A5F" stroke-width="1.8" stroke-linecap="round"/>
+              <!-- Wifi signal above monitor -->
+              <path d="M17 5.5c1.6-1.2 4.4-1.2 6 0" stroke="#8FACCC" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+              <path d="M18.5 3.5c1-0.8 2-0.8 3 0" stroke="#8FACCC" stroke-width="1.2" stroke-linecap="round" fill="none" opacity="0.6"/>
+            </svg>
+          </div>
+
+          <p class="sw-greeting">Modalità Smart Working</p>
+          <h2 class="sw-name">Buongiorno,<br>Mario</h2>
+          <p class="sw-id">#EMP-00847</p>
+
+          <!-- Date -->
+          <div class="sw-date-box">
+            <p class="sw-date-label">Giornata lavorativa</p>
+            <p class="sw-date-value">Martedì, 3 Giugno 2025</p>
+          </div>
+
+          <!-- Info rows -->
+          <div class="sw-info-card">
+            <div class="sw-info-row">
+              <span class="sw-info-label">Tipologia</span>
+              <span class="sw-info-value">Smart Working</span>
+            </div>
+            <div class="sw-info-row">
+              <span class="sw-info-label">Durata</span>
+              <span class="sw-info-value">8 ore</span>
+            </div>
+            <div class="sw-info-row">
+              <span class="sw-info-label">Sede di riferimento</span>
+              <span class="sw-info-value">Milano — Centro</span>
+            </div>
+          </div>
+
+          <!-- Notice -->
+          <div class="sw-notice">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--navy-500)" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <p class="sw-notice-text">La giornata verrà registrata come Smart Working. Non è previsto tracciamento dell'orario.</p>
+          </div>
+
+        </div>
+
+        <!-- Actions -->
+        <div class="sw-actions">
+          <button class="btn-sw-confirm">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            Conferma Smart Working
+          </button>
+          <button class="btn-sw-cancel">Annulla</button>
+        </div>
+
+        <div class="home-indicator" style="color:var(--ink);"><div class="home-bar"></div></div>
+      </div>
+    </div>
+    <div class="annotation">
+      <p class="annotation-line">Schermata minimale. Nessun orario tracciato. Solo conferma giornata SW con 8h fisse.</p>
+    </div>
+  </div>
+
+
+  <!-- ========== SCREEN 6A: MANAGER PLANNING HUB ========== -->
+  <div class="screen-col">
+    <span class="screen-label">6A — Manager Planning Hub</span>
+    <div class="phone">
+      <div class="dynamic-island"><div class="di-camera"></div></div>
+      <div class="screen-smartwork">
+        <div class="status-bar" style="color:var(--ink);">
+          <span class="status-time">9:41</span>
+          <div class="status-icons">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="#2A2520"><rect x="0" y="6" width="3" height="6" rx="1" opacity="0.3"/><rect x="4.5" y="4" width="3" height="8" rx="1" opacity="0.5"/><rect x="9" y="2" width="3" height="10" rx="1" opacity="0.7"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0" y="1" width="22" height="10" rx="2.5" stroke="#2A2520" stroke-opacity="0.35" stroke-width="1.2"/><rect x="1.2" y="2.2" width="17" height="7.6" rx="1.5" fill="#2A2520"/></svg>
+          </div>
+        </div>
+
+        <div class="sw-body">
+          <!-- Manager Profile Section -->
+          <div style="width:100%;background:var(--linen);border-radius:16px;padding:16px;margin-bottom:24px;text-align:center;">
+            <div style="width:64px;height:64px;background:var(--navy-500);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;margin:0 auto 12px;">MR</div>
+            <p style="font-size:16px;font-weight:600;color:var(--ink);margin-bottom:2px;">Mario Rossi</p>
+            <p style="font-size:12px;color:var(--stone);margin-bottom:8px;">Manager Negozio Milano</p>
+            <p style="font-size:11px;color:var(--navy-500);background:var(--navy-50);padding:4px 10px;border-radius:8px;display:inline-block;font-weight:500;">Milano — Centro</p>
+          </div>
+
+          <!-- Navigation Buttons -->
+          <div style="width:100%;display:flex;flex-direction:column;gap:12px;padding:0 24px;">
+            <button class="btn-sw-confirm" onclick="switchView(10)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              Calendario Personale
+            </button>
+            <button class="btn-sw-confirm" style="background:var(--navy-700);" onclick="switchView(7)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              Planning Negozio
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab Bar — Manager -->
+        <div class="tab-bar-manager" style="display:flex;">
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/><rect x="14" y="3" width="7" height="6" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/></svg></div>
+            <span class="tab-label">Scanner</span>
+          </div>
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <span class="tab-label">Presenze</span>
+          </div>
+          <div class="tab-item active">
+            <div class="tab-icon" style="color:var(--navy-500);">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
+            <span class="tab-label" style="color:var(--navy-500);font-weight:600;">Planning</span>
+          </div>
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
+            <span class="tab-label">Profilo</span>
+          </div>
+        </div>
+
+        <div class="home-indicator" style="color:var(--ink);"><div class="home-bar"></div></div>
+      </div>
+    </div>
+    <div class="annotation">
+      <p class="annotation-line">Manager hub. Mostra dati manager + sede. Due bottoni principali: Calendario Personale (Vista 10) e Planning Negozio (Vista 07).</p>
+    </div>
+  </div>
+
+    <!-- ========== SCREEN 7: PLANNING — TURNI (MANAGER ONLY) ========== -->
+  <div class="screen-col">
+    <span class="screen-label">07 — Turni Giorno <span style="color:var(--navy-200);">· Manager</span></span>
+    <div class="phone">
+      <div class="dynamic-island"><div class="di-camera"></div></div>
+      <div class="screen-planning">
+
+        <!-- Status bar -->
+        <div class="status-bar" style="color:var(--ink);background:var(--white);">
+          <span class="status-time">9:41</span>
+          <div class="status-icons">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="#2A2520"><rect x="0" y="6" width="3" height="6" rx="1" opacity="0.3"/><rect x="4.5" y="4" width="3" height="8" rx="1" opacity="0.5"/><rect x="9" y="2" width="3" height="10" rx="1" opacity="0.7"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0" y="1" width="22" height="10" rx="2.5" stroke="#2A2520" stroke-opacity="0.35" stroke-width="1.2"/><rect x="1.2" y="2.2" width="17" height="7.6" rx="1.5" fill="#2A2520"/></svg>
+          </div>
+        </div>
+
+        <!-- Header -->
+        <div class="plan-header">
+          <!-- Top row: badge + title + avatar -->
+          <div class="plan-header-top">
+            <div class="plan-title-wrap">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                <span class="plan-manager-badge">
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                  Manager
+                </span>
+                <span style="font-size:10px;color:var(--stone);">Milano — Centro</span>
+              </div>
+              <h2 class="plan-title">Turni del <em>Giorno</em></h2>
+            </div>
+            <div style="width:34px;height:34px;border-radius:50%;background:var(--navy-500);color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">MR</div>
+          </div>
+
+          <!-- Date navigation + calendar icon -->
+          <div class="plan-date-nav">
+            <button class="plan-nav-btn">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <span class="plan-date-label">Mar 3 Giugno 2025</span>
+            <button class="plan-nav-btn">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <button class="plan-cal-btn" id="calBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Segmented Control: Giorno/Settimana/Mese -->
+        <div class="segment-control">
+          <button class="segment-btn active" onclick="switchView(7)">Giorno</button>
+          <button class="segment-btn" onclick="switchView(8)">Settimana</button>
+          <button class="segment-btn" onclick="switchView(9)">Mese</button>
+        </div>
+
+        <!-- Summary bar: Presenti (green) | Assenti (red) | Attesi (amber) -->
+        <div class="plan-summary">
+          <div class="plan-summary-item">
+            <div class="plan-summary-dot" style="background:var(--success);"></div>
+            <div>
+              <p class="plan-summary-number" style="color:var(--success);">11</p>
+              <p class="plan-summary-label">Presenti</p>
+            </div>
+          </div>
+          <div class="plan-summary-item">
+            <div class="plan-summary-dot" style="background:var(--error);"></div>
+            <div>
+              <p class="plan-summary-number" style="color:var(--error);">3</p>
+              <p class="plan-summary-label">Assenti</p>
+            </div>
+          </div>
+          <div class="plan-summary-item">
+            <div class="plan-summary-dot" style="background:var(--warning);"></div>
+            <div>
+              <p class="plan-summary-number" style="color:var(--warning);">4</p>
+              <p class="plan-summary-label">Attesi</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shift list (scrollable) -->
+        <div class="plan-shifts">
+
+          <!-- ═══ TURNO MATTINA ═══ -->
+          <div class="plan-shift-section shift-mattina">
+            <div class="plan-shift-header">
+              <span class="plan-shift-name">Mattina</span>
+              <span class="plan-shift-time">08:00 — 14:00</span>
+              <span class="plan-shift-count">7</span>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar">MR</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Mario R.</p>
+                <p class="plan-emp-role">Resp. Abbigliamento</p>
+              </div>
+              <div class="plan-status status-p">P</div>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar">LB</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Laura B.</p>
+                <p class="plan-emp-role">Addetta Vendite</p>
+              </div>
+              <div class="plan-status status-p">P</div>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar">GV</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Giorgio V.</p>
+                <p class="plan-emp-role">Magazziniere</p>
+              </div>
+              <div class="plan-status status-p">P</div>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar" style="background:var(--warning-bg);color:var(--warning);">AF</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Anna F.</p>
+                <p class="plan-emp-role">Responsabile HR</p>
+              </div>
+              <div class="plan-status status-at">A</div>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar" style="background:var(--error-bg);color:var(--error);">SC</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Sara C.</p>
+                <p class="plan-emp-role">Cassiera</p>
+              </div>
+              <div class="plan-status status-aa">A</div>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar">RP</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Roberto P.</p>
+                <p class="plan-emp-role">Manut. Impianti</p>
+              </div>
+              <div class="plan-status status-p">P</div>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar">CM</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Carla M.</p>
+                <p class="plan-emp-role">Visual Merchandiser</p>
+              </div>
+              <div class="plan-status status-p">P</div>
+            </div>
+          </div>
+
+          <!-- ═══ TURNO POMERIGGIO ═══ -->
+          <div class="plan-shift-section shift-pomeriggio">
+            <div class="plan-shift-header">
+              <span class="plan-shift-name">Pomeriggio</span>
+              <span class="plan-shift-time">14:00 — 18:00</span>
+              <span class="plan-shift-count">5</span>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar" style="background:var(--warning-bg);color:var(--warning);">GF</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Giovanni F.</p>
+                <p class="plan-emp-role">Addetto Vendite</p>
+              </div>
+              <div class="plan-status status-at">A</div>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar">FN</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Francesca N.</p>
+                <p class="plan-emp-role">Resp. Turni</p>
+              </div>
+              <div class="plan-status status-p">P</div>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar" style="background:var(--warning-bg);color:var(--warning);">ML</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Marco L.</p>
+                <p class="plan-emp-role">Addetto Cassa</p>
+              </div>
+              <div class="plan-status status-at">A</div>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar" style="background:var(--error-bg);color:var(--error);">VR</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Valentina R.</p>
+                <p class="plan-emp-role">Addetta Vendite</p>
+              </div>
+              <div class="plan-status status-aa">A</div>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar">BT</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Bruno T.</p>
+                <p class="plan-emp-role">Sicurezza</p>
+              </div>
+              <div class="plan-status status-p">P</div>
+            </div>
+          </div>
+
+          <!-- ═══ TURNO SERA ═══ -->
+          <div class="plan-shift-section shift-sera">
+            <div class="plan-shift-header">
+              <span class="plan-shift-name">Sera</span>
+              <span class="plan-shift-time">18:00 — 21:00</span>
+              <span class="plan-shift-count">6</span>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar">ET</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Elena T.</p>
+                <p class="plan-emp-role">Addetta Vendite</p>
+              </div>
+              <div class="plan-status status-p">P</div>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar" style="background:var(--warning-bg);color:var(--warning);">PM</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Paolo M.</p>
+                <p class="plan-emp-role">Addetto Cassa</p>
+              </div>
+              <div class="plan-status status-at">A</div>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar">IR</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Irene R.</p>
+                <p class="plan-emp-role">Addetta Vendite</p>
+              </div>
+              <div class="plan-status status-p">P</div>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar" style="background:var(--error-bg);color:var(--error);">DL</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Davide L.</p>
+                <p class="plan-emp-role">Magazziniere</p>
+              </div>
+              <div class="plan-status status-aa">A</div>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar">CN</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Chiara N.</p>
+                <p class="plan-emp-role">Visual Merchandiser</p>
+              </div>
+              <div class="plan-status status-p">P</div>
+            </div>
+
+            <div class="plan-emp-row">
+              <div class="plan-emp-avatar">MV</div>
+              <div class="plan-emp-info">
+                <p class="plan-emp-name">Matteo V.</p>
+                <p class="plan-emp-role">Sicurezza</p>
+              </div>
+              <div class="plan-status status-p">P</div>
+            </div>
+          </div>
+
+          <div style="height:8px;"></div>
+        </div><!-- /plan-shifts -->
+
+        <!-- Calendar popup overlay (shown on calendar icon tap) -->
+        <div class="plan-cal-overlay" id="calOverlay" style="display:none;">
+          <div class="plan-cal-popup">
+            <div class="cal-popup-header">
+              <button class="cal-popup-nav">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <span class="cal-popup-month">Giugno 2025</span>
+              <button class="cal-popup-nav">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+              </button>
+            </div>
+            <div class="cal-grid">
+              <div class="cal-dow">L</div><div class="cal-dow">M</div><div class="cal-dow">M</div>
+              <div class="cal-dow">G</div><div class="cal-dow">V</div><div class="cal-dow">S</div><div class="cal-dow">D</div>
+              <!-- Week 1 -->
+              <div class="cal-day other-month">26</div><div class="cal-day other-month">27</div>
+              <div class="cal-day other-month">28</div><div class="cal-day other-month">29</div>
+              <div class="cal-day other-month">30</div><div class="cal-day other-month">31</div>
+              <div class="cal-day has-dot">1</div>
+              <!-- Week 2 -->
+              <div class="cal-day has-dot">2</div><div class="cal-day today-cal has-dot">3</div>
+              <div class="cal-day has-dot">4</div><div class="cal-day">5</div>
+              <div class="cal-day has-dot">6</div><div class="cal-day">7</div><div class="cal-day">8</div>
+              <!-- Week 3 -->
+              <div class="cal-day has-dot">9</div><div class="cal-day has-dot">10</div>
+              <div class="cal-day has-dot">11</div><div class="cal-day">12</div>
+              <div class="cal-day has-dot">13</div><div class="cal-day">14</div><div class="cal-day">15</div>
+              <!-- Week 4 -->
+              <div class="cal-day has-dot">16</div><div class="cal-day has-dot">17</div>
+              <div class="cal-day has-dot">18</div><div class="cal-day has-dot">19</div>
+              <div class="cal-day has-dot">20</div><div class="cal-day">21</div><div class="cal-day">22</div>
+              <!-- Week 5 -->
+              <div class="cal-day has-dot">23</div><div class="cal-day has-dot">24</div>
+              <div class="cal-day has-dot">25</div><div class="cal-day has-dot">26</div>
+              <div class="cal-day has-dot">27</div><div class="cal-day">28</div><div class="cal-day">29</div>
+              <!-- Week 6 -->
+              <div class="cal-day has-dot">30</div>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px;">
+              <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--stone);">
+                <div style="width:6px;height:6px;border-radius:50%;background:var(--navy-300);"></div>
+                Turni pianificati
+              </div>
+              <button onclick="document.getElementById('calOverlay').style.display='none'" style="margin-left:auto;font-size:11px;font-family:var(--font-b);font-weight:600;color:var(--navy-500);background:none;border:none;cursor:pointer;">Chiudi</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4-item manager tab bar -->
+        <div class="tab-bar-manager">
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/><rect x="14" y="3" width="7" height="6" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/></svg></div>
+            <span class="tab-label">Scanner</span>
+          </div>
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <span class="tab-label">Presenze</span>
+          </div>
+          <div class="tab-item active">
+            <div class="tab-icon" style="color:var(--navy-500);">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
+            <span class="tab-label" style="color:var(--navy-500);font-weight:600;">Planning</span>
+          </div>
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
+            <span class="tab-label">Profilo</span>
+          </div>
+        </div>
+
+        <div class="home-indicator" style="color:var(--ink);"><div class="home-bar"></div></div>
+      </div>
+    </div>
+    <div class="annotation">
+      <p class="annotation-line">Manager only. 3 turni fissi con lista dipendenti completa. P verde / A rossa / A ambra. Calendario storico via popup.</p>
+    </div>
+  </div>
+
+  <!-- ========== SCREEN 8: PIANIFICAZIONE SETTIMANALE ========== -->
+  <div class="screen-col">
+    <span class="screen-label">08 — Settimana <span style="color:var(--navy-200);">· Manager</span></span>
+    <div class="phone">
+      <div class="dynamic-island"><div class="di-camera"></div></div>
+      <div class="screen-weekly">
+
+        <div class="status-bar" style="color:var(--ink);background:var(--white);">
+          <span class="status-time">9:41</span>
+          <div class="status-icons">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="#2A2520"><rect x="0" y="6" width="3" height="6" rx="1" opacity="0.3"/><rect x="4.5" y="4" width="3" height="8" rx="1" opacity="0.5"/><rect x="9" y="2" width="3" height="10" rx="1" opacity="0.7"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0" y="1" width="22" height="10" rx="2.5" stroke="#2A2520" stroke-opacity="0.35" stroke-width="1.2"/><rect x="1.2" y="2.2" width="17" height="7.6" rx="1.5" fill="#2A2520"/></svg>
+          </div>
+        </div>
+
+        <!-- Header -->
+        <div class="mgr-header">
+          <div class="mgr-header-top">
+            <div style="flex:1;">
+              <div class="mgr-badge-row">
+                <span class="plan-manager-badge">
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                  Manager
+                </span>
+                <span style="font-size:10px;color:var(--stone);">Milano — Centro</span>
+              </div>
+              <h2 class="mgr-title">Vista <em>Settimanale</em></h2>
+            </div>
+            <div style="width:34px;height:34px;border-radius:50%;background:var(--navy-500);color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">MR</div>
+          </div>
+          <div class="mgr-nav-row">
+            <button class="mgr-nav-btn">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <span class="mgr-nav-label">2 — 8 Giugno 2025</span>
+            <button class="mgr-nav-btn">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Legend (compact, stays visible) -->
+        <div class="week-legend" style="border-bottom:1.5px solid var(--bone);">
+          <div class="wl-item"><div class="wl-dot" style="background:var(--navy-500);"></div>M Mattina</div>
+          <div class="wl-item"><div class="wl-dot" style="background:#9B7B44;"></div>P Pomeriggio</div>
+          <div class="wl-item"><div class="wl-dot" style="background:var(--stone);"></div>S Sera</div>
+        </div>
+
+        <!-- 4-week scrollable container -->
+        <div class="weeks-container">
+
+          <!-- ── SETTIMANA PRECEDENTE: 26 Mag – 1 Giu ── -->
+          <div class="week-section">
+            <div class="week-section-header">
+              <span class="week-section-date">26 Mag — 1 Giu</span>
+              <span class="week-section-tag wtag-prev">Precedente</span>
+            </div>
+            <div class="week-grid" style="opacity:0.72;">
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Lun</p><p class="day-num">26</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">7</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">5</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">6</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Mar</p><p class="day-num">27</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">7</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">5</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">5</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Mer</p><p class="day-num">28</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">6</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">4</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">5</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Gio</p><p class="day-num">29</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">7</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">5</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Ven</p><p class="day-num">30</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">8</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">6</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">6</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Sab</p><p class="day-num">31</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">5</span></div>
+                </div>
+              </div>
+              <div class="day-col closed">
+                <div class="day-header"><p class="day-dow">Dom</p><p class="day-num">01</p></div>
+                <div class="day-closed-label">Chiuso</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="week-section-divider"></div>
+
+          <!-- ── SETTIMANA CORRENTE: 2–8 Giu ── -->
+          <div class="week-section">
+            <div class="week-section-header">
+              <span class="week-section-date">2 — 8 Giugno 2025</span>
+              <span class="week-section-tag wtag-current">● Corrente</span>
+            </div>
+            <div class="week-grid">
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Lun</p><p class="day-num">02</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">7</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">5</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">6</span></div>
+                </div>
+              </div>
+              <div class="day-col today">
+                <div class="day-header"><p class="day-dow">Mar</p><p class="day-num">03</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">7</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">5</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">6</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Mer</p><p class="day-num">04</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">6</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">5</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">4</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Gio</p><p class="day-num">05</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">7</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">4</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Ven</p><p class="day-num">06</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">8</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">6</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">6</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Sab</p><p class="day-num">07</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">5</span></div>
+                </div>
+              </div>
+              <div class="day-col closed">
+                <div class="day-header"><p class="day-dow">Dom</p><p class="day-num">08</p></div>
+                <div class="day-closed-label">Chiuso</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="week-section-divider"></div>
+
+          <!-- ── SETTIMANA +1: 9–15 Giu ── -->
+          <div class="week-section">
+            <div class="week-section-header">
+              <span class="week-section-date">9 — 15 Giugno 2025</span>
+              <span class="week-section-tag wtag-next">Prossima</span>
+            </div>
+            <div class="week-grid">
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Lun</p><p class="day-num">09</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">7</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">5</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">6</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Mar</p><p class="day-num">10</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">7</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">5</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">5</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Mer</p><p class="day-num">11</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">6</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">5</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">4</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Gio</p><p class="day-num">12</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">7</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">4</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">3</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Ven</p><p class="day-num">13</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">8</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">6</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">6</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Sab</p><p class="day-num">14</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">5</span></div>
+                </div>
+              </div>
+              <div class="day-col closed">
+                <div class="day-header"><p class="day-dow">Dom</p><p class="day-num">15</p></div>
+                <div class="day-closed-label">Chiuso</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="week-section-divider"></div>
+
+          <!-- ── SETTIMANA +2: 16–22 Giu ── -->
+          <div class="week-section">
+            <div class="week-section-header">
+              <span class="week-section-date">16 — 22 Giugno 2025</span>
+              <span class="week-section-tag wtag-next">Prossima</span>
+            </div>
+            <div class="week-grid">
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Lun</p><p class="day-num">16</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">7</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">5</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">6</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Mar</p><p class="day-num">17</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">7</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">4</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">5</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Mer</p><p class="day-num">18</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">6</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">4</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">4</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Gio</p><p class="day-num">19</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">7</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">5</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Ven</p><p class="day-num">20</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">8</span></div>
+                  <div class="shift-tag st-p"><span class="shift-tag-initial">P</span><span class="shift-tag-count">6</span></div>
+                  <div class="shift-tag st-s"><span class="shift-tag-initial">S</span><span class="shift-tag-count">6</span></div>
+                </div>
+              </div>
+              <div class="day-col">
+                <div class="day-header"><p class="day-dow">Sab</p><p class="day-num">21</p></div>
+                <div class="day-body">
+                  <div class="shift-tag st-m"><span class="shift-tag-initial">M</span><span class="shift-tag-count">5</span></div>
+                </div>
+              </div>
+              <div class="day-col closed">
+                <div class="day-header"><p class="day-dow">Dom</p><p class="day-num">22</p></div>
+                <div class="day-closed-label">Chiuso</div>
+              </div>
+            </div>
+          </div>
+
+          <p class="week-tap-hint" style="margin-top:10px;">Tocca un giorno per i turni dettagliati →</p>
+          <div style="height:8px;"></div>
+        </div>
+
+        <!-- 4-item tab bar -->
+        <div class="tab-bar-manager">
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/><rect x="14" y="3" width="7" height="6" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/></svg></div>
+            <span class="tab-label">Scanner</span>
+          </div>
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <span class="tab-label">Presenze</span>
+          </div>
+          <div class="tab-item active">
+            <div class="tab-icon" style="color:var(--navy-500);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+            <span class="tab-label" style="color:var(--navy-500);font-weight:600;">Planning</span>
+          </div>
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
+            <span class="tab-label">Profilo</span>
+          </div>
+        </div>
+
+        <div class="home-indicator" style="color:var(--ink);"><div class="home-bar"></div></div>
+      </div>
+    </div>
+    <div class="annotation">
+      <p class="annotation-line">7 colonne Lun–Dom. M/P/S con count. Oggi in navy. Chiuso = cella grigia. Tap → vista giornaliera.</p>
+    </div>
+  </div>
+
+  <!-- ========== SCREEN 9: PIANIFICAZIONE MENSILE ========== -->
+  <div class="screen-col">
+    <span class="screen-label">09 — Mese <span style="color:var(--navy-200);">· Manager</span></span>
+    <div class="phone">
+      <div class="dynamic-island"><div class="di-camera"></div></div>
+      <div class="screen-monthly">
+
+        <div class="status-bar" style="color:var(--ink);background:var(--white);">
+          <span class="status-time">9:41</span>
+          <div class="status-icons">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="#2A2520"><rect x="0" y="6" width="3" height="6" rx="1" opacity="0.3"/><rect x="4.5" y="4" width="3" height="8" rx="1" opacity="0.5"/><rect x="9" y="2" width="3" height="10" rx="1" opacity="0.7"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0" y="1" width="22" height="10" rx="2.5" stroke="#2A2520" stroke-opacity="0.35" stroke-width="1.2"/><rect x="1.2" y="2.2" width="17" height="7.6" rx="1.5" fill="#2A2520"/></svg>
+          </div>
+        </div>
+
+        <!-- Header -->
+        <div class="mgr-header">
+          <div class="mgr-header-top">
+            <div style="flex:1;">
+              <div class="mgr-badge-row">
+                <span class="plan-manager-badge">
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                  Manager
+                </span>
+                <span style="font-size:10px;color:var(--stone);">Milano — Centro</span>
+              </div>
+              <h2 class="mgr-title"><em>Giugno</em> 2025</h2>
+            </div>
+            <div style="width:34px;height:34px;border-radius:50%;background:var(--navy-500);color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">MR</div>
+          </div>
+          <div class="mgr-nav-row">
+            <button class="mgr-nav-btn">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <span class="mgr-nav-label" style="font-family:var(--font-d);font-size:15px;color:var(--ink);">Giugno 2025</span>
+            <button class="mgr-nav-btn">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          </div>
+        </div>
+
+
+        <!-- Legend -->
+        <div class="month-legend">
+          <div class="month-legend-item">
+            <div class="month-legend-swatch" style="background:var(--navy-50);border:1px solid var(--navy-100);"></div>
+            Turni pianificati
+          </div>
+          <div class="month-legend-item">
+            <div class="month-legend-swatch" style="background:var(--navy-500);"></div>
+            Oggi
+          </div>
+          <div class="month-legend-item">
+            <div class="month-legend-swatch" style="background:var(--parchment);border:1px solid var(--bone);"></div>
+            Chiuso
+          </div>
+        </div>
+
+        <!-- Day-of-week header -->
+        <div class="month-dow-row">
+          <div class="month-dow">L</div>
+          <div class="month-dow">M</div>
+          <div class="month-dow">M</div>
+          <div class="month-dow">G</div>
+          <div class="month-dow">V</div>
+          <div class="month-dow">S</div>
+          <div class="month-dow">D</div>
+        </div>
+
+        <!-- Calendar grid — Giugno 2025 — cells: day / hr / M# P# S# -->
+        <div class="month-cal-body">
+          <div class="month-cal-grid">
+
+            <!-- Row 0: May padding + Jun 1 (Dom) -->
+            <div class="cal-cell other-month-cell"><span class="cal-cell-day">26</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P5</span></div><div class="csm-row"><span class="csm-s">S6</span></div></div></div>
+            <div class="cal-cell other-month-cell"><span class="cal-cell-day">27</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P5</span></div><div class="csm-row"><span class="csm-s">S5</span></div></div></div>
+            <div class="cal-cell other-month-cell"><span class="cal-cell-day">28</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M6</span><span class="csm-p">P4</span></div><div class="csm-row"><span class="csm-s">S5</span></div></div></div>
+            <div class="cal-cell other-month-cell"><span class="cal-cell-day">29</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P5</span></div></div></div>
+            <div class="cal-cell other-month-cell"><span class="cal-cell-day">30</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M8</span><span class="csm-p">P6</span></div><div class="csm-row"><span class="csm-s">S6</span></div></div></div>
+            <div class="cal-cell other-month-cell"><span class="cal-cell-day">31</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M5</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">1</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M6</span><span class="csm-p">P4</span></div><div class="csm-row"><span class="csm-s">S5</span></div></div></div>
+
+            <!-- Row 1: Jun 2–8 -->
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">2</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P5</span></div><div class="csm-row"><span class="csm-s">S6</span></div></div></div>
+            <div class="cal-cell today-cell"><span class="cal-cell-day">3</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P5</span></div><div class="csm-row"><span class="csm-s">S6</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">4</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M6</span><span class="csm-p">P5</span></div><div class="csm-row"><span class="csm-s">S4</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">5</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P4</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">6</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M8</span><span class="csm-p">P6</span></div><div class="csm-row"><span class="csm-s">S6</span></div></div></div>
+            <div class="cal-cell"><span class="cal-cell-day">7</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M5</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">8</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M6</span><span class="csm-p">P4</span></div></div></div>
+
+            <!-- Row 2: Jun 9–15 -->
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">9</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P5</span></div><div class="csm-row"><span class="csm-s">S6</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">10</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P5</span></div><div class="csm-row"><span class="csm-s">S5</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">11</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M6</span><span class="csm-p">P5</span></div><div class="csm-row"><span class="csm-s">S4</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">12</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P4</span></div><div class="csm-row"><span class="csm-s">S3</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">13</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M8</span><span class="csm-p">P6</span></div><div class="csm-row"><span class="csm-s">S6</span></div></div></div>
+            <div class="cal-cell"><span class="cal-cell-day">14</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M5</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">15</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M6</span><span class="csm-p">P3</span></div></div></div>
+
+            <!-- Row 3: Jun 16–22 -->
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">16</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P5</span></div><div class="csm-row"><span class="csm-s">S6</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">17</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P4</span></div><div class="csm-row"><span class="csm-s">S5</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">18</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M6</span><span class="csm-p">P4</span></div><div class="csm-row"><span class="csm-s">S4</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">19</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P5</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">20</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M8</span><span class="csm-p">P6</span></div><div class="csm-row"><span class="csm-s">S6</span></div></div></div>
+            <div class="cal-cell"><span class="cal-cell-day">21</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M5</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">22</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M6</span><span class="csm-p">P3</span></div></div></div>
+
+            <!-- Row 4: Jun 23–29 -->
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">23</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P5</span></div><div class="csm-row"><span class="csm-s">S6</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">24</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P5</span></div><div class="csm-row"><span class="csm-s">S4</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">25</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M6</span><span class="csm-p">P4</span></div><div class="csm-row"><span class="csm-s">S5</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">26</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P4</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">27</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M8</span><span class="csm-p">P6</span></div><div class="csm-row"><span class="csm-s">S6</span></div></div></div>
+            <div class="cal-cell"><span class="cal-cell-day">28</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M5</span></div></div></div>
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">29</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M6</span><span class="csm-p">P3</span></div></div></div>
+
+            <!-- Row 5: Jun 30 + Jul padding -->
+            <div class="cal-cell high-coverage"><span class="cal-cell-day">30</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P5</span></div><div class="csm-row"><span class="csm-s">S6</span></div></div></div>
+            <div class="cal-cell other-month-cell"><span class="cal-cell-day">1</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P5</span></div></div></div>
+            <div class="cal-cell other-month-cell"><span class="cal-cell-day">2</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M6</span><span class="csm-p">P5</span></div></div></div>
+            <div class="cal-cell other-month-cell"><span class="cal-cell-day">3</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M7</span><span class="csm-p">P4</span></div></div></div>
+            <div class="cal-cell other-month-cell"><span class="cal-cell-day">4</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M8</span><span class="csm-p">P5</span></div></div></div>
+            <div class="cal-cell other-month-cell"><span class="cal-cell-day">5</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M5</span></div></div></div>
+            <div class="cal-cell other-month-cell"><span class="cal-cell-day">6</span><div class="cal-cell-hr"></div><div class="cal-shifts-mini"><div class="csm-row"><span class="csm-m">M6</span><span class="csm-p">P4</span></div></div></div>
+
+          </div><!-- /month-cal-grid -->
+          <div style="height:8px;"></div>
+        </div>
+
+        <!-- 4-item tab bar -->
+        <div class="tab-bar-manager">
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/><rect x="14" y="3" width="7" height="6" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/></svg></div>
+            <span class="tab-label">Scanner</span>
+          </div>
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <span class="tab-label">Presenze</span>
+          </div>
+          <div class="tab-item active">
+            <div class="tab-icon" style="color:var(--navy-500);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+            <span class="tab-label" style="color:var(--navy-500);font-weight:600;">Planning</span>
+          </div>
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
+            <span class="tab-label">Profilo</span>
+          </div>
+        </div>
+
+        <div class="home-indicator" style="color:var(--ink);"><div class="home-bar"></div></div>
+      </div>
+    </div>
+    <div class="annotation">
+      <p class="annotation-line">Griglia mensile. Numero dipendenti per cella. Navy = alta copertura. Grigio = Chiuso. Tap → vista giornaliera.</p>
+    </div>
+  </div>
+
+  <!-- ========== SCREEN 10: CALENDARIO MENSILE DIPENDENTE ========== -->
+  <div class="screen-col">
+    <span class="screen-label">10 — Calendario Personale</span>
+    <div class="phone">
+      <div class="dynamic-island"><div class="di-camera"></div></div>
+      <div class="screen-emp-month">
+
+        <div class="status-bar" style="color:var(--ink);background:var(--white);">
+          <span class="status-time">9:41</span>
+          <div class="status-icons">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="#2A2520"><rect x="0" y="6" width="3" height="6" rx="1" opacity="0.3"/><rect x="4.5" y="4" width="3" height="8" rx="1" opacity="0.5"/><rect x="9" y="2" width="3" height="10" rx="1" opacity="0.7"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0" y="1" width="22" height="10" rx="2.5" stroke="#2A2520" stroke-opacity="0.35" stroke-width="1.2"/><rect x="1.2" y="2.2" width="17" height="7.6" rx="1.5" fill="#2A2520"/></svg>
+          </div>
+        </div>
+
+        <!-- Employee profile -->
+        <div class="emp-month-profile">
+          <div class="emp-month-profile-inner">
+            <div class="emp-month-avatar">MR</div>
+            <div style="flex:1;">
+              <p class="emp-month-name">Mario Rossi</p>
+              <div class="emp-month-meta">
+                <span>Resp. Abbigliamento</span>
+                <span style="color:var(--bone);">·</span>
+                <span class="emp-month-id">#EMP-00847</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Month nav -->
+        <div class="emp-month-nav">
+          <button class="emp-month-nav-btn">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <span class="emp-month-label"><em style="font-style:italic;color:var(--navy-500);">Giugno</em> 2025</span>
+          <button class="emp-month-nav-btn">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+
+        <!-- Stats row -->
+        <div class="emp-month-stats">
+          <div class="emp-stat">
+            <p class="emp-stat-num" style="color:var(--navy-500);">22</p>
+            <p class="emp-stat-label">Giorni lav.</p>
+          </div>
+          <div class="emp-stat">
+            <p class="emp-stat-num" style="color:#9B7B44;">14</p>
+            <p class="emp-stat-label">Mattina</p>
+          </div>
+          <div class="emp-stat">
+            <p class="emp-stat-num" style="color:#9B7B44;">5</p>
+            <p class="emp-stat-label">Pomerig.</p>
+          </div>
+          <div class="emp-stat">
+            <p class="emp-stat-num" style="color:var(--stone);">3</p>
+            <p class="emp-stat-label">Sera</p>
+          </div>
+        </div>
+
+        <!-- Shift legend — 2 righe -->
+        <div class="emp-shift-legend" style="flex-wrap:wrap;gap:6px 10px;padding:6px 20px 4px;">
+          <div class="esl-item"><div class="esl-pill esl-m">M</div>Mattina</div>
+          <div class="esl-item"><div class="esl-pill esl-p">P</div>Pomerig.</div>
+          <div class="esl-item"><div class="esl-pill esl-s">S</div>Sera</div>
+          <div class="esl-item"><div class="esl-pill esl-sw">SW</div>Smart W.</div>
+          <div class="esl-item"><div class="esl-pill esl-f">F</div>Ferie/Fest.</div>
+          <div class="esl-item"><div class="esl-pill esl-ill">M</div>Malattia</div>
+          <div class="esl-item">
+            <div style="width:16px;height:14px;border-radius:3px;background:var(--linen);border:1px solid var(--bone);"></div>
+            Riposo
+          </div>
+        </div>
+
+        <!-- DOW header -->
+        <div class="month-dow-row" style="background:var(--white);border-bottom:1px solid var(--linen);">
+          <div class="month-dow">L</div><div class="month-dow">M</div><div class="month-dow">M</div>
+          <div class="month-dow">G</div><div class="month-dow">V</div><div class="month-dow">S</div>
+          <div class="month-dow">D</div>
+        </div>
+
+        <!-- Employee calendar grid -->
+        <div class="emp-cal-body">
+          <div class="emp-cal-grid">
+
+            <!-- Row 0: May padding + Jun 1 Dom — negozio aperto -->
+            <div class="emp-cal-cell ecc-other"><span class="emp-cell-day">26</span></div>
+            <div class="emp-cal-cell ecc-other"><span class="emp-cell-day">27</span></div>
+            <div class="emp-cal-cell ecc-other"><span class="emp-cell-day">28</span></div>
+            <div class="emp-cal-cell ecc-other"><span class="emp-cell-day">29</span></div>
+            <div class="emp-cal-cell ecc-other"><span class="emp-cell-day">30</span></div>
+            <div class="emp-cal-cell ecc-other"><span class="emp-cell-day">31</span></div>
+            <div class="emp-cal-cell ecc-off"><span class="emp-cell-day">1</span></div>
+
+            <!-- Row 1: Jun 2–8 — Dom 8 lavorativo -->
+            <div class="emp-cal-cell"><span class="emp-cell-day">2</span><div class="emp-shift-pill esp-m">M</div></div>
+            <div class="emp-cal-cell ecc-today"><span class="emp-cell-day">3</span><div class="emp-shift-pill esp-m">M</div></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">4</span><div class="emp-shift-pill esp-p">P</div></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">5</span><div class="emp-shift-pill esp-m">M</div></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">6</span><div class="emp-shift-pill esp-m">M</div></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">7</span><div class="emp-shift-pill esp-m">M</div></div>
+            <div class="emp-cal-cell ecc-off"><span class="emp-cell-day">8</span></div>
+
+            <!-- Row 2: Jun 9–15 — Dom 15 lavorativo -->
+            <div class="emp-cal-cell"><span class="emp-cell-day">9</span><div class="emp-shift-pill esp-sw">SW</div></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">10</span><div class="emp-shift-pill esp-m">M</div></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">11</span><div class="emp-shift-pill esp-ill">M</div></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">12</span><div class="emp-shift-pill esp-ill">M</div></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">13</span><div class="emp-shift-pill esp-m">M</div></div>
+            <div class="emp-cal-cell ecc-off"><span class="emp-cell-day">14</span></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">15</span><div class="emp-shift-pill esp-p">P</div></div>
+
+            <!-- Row 3: Jun 16–22 — Dom 22 riposo -->
+            <div class="emp-cal-cell"><span class="emp-cell-day">16</span><div class="emp-shift-pill esp-m">M</div></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">17</span><div class="emp-shift-pill esp-p">P</div></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">18</span><div class="emp-shift-pill esp-m">M</div></div>
+            <div class="emp-cal-cell ecc-off"><span class="emp-cell-day">19</span></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">20</span><div class="emp-shift-pill esp-s">S</div></div>
+            <div class="emp-cal-cell ecc-off"><span class="emp-cell-day">21</span></div>
+            <div class="emp-cal-cell ecc-off"><span class="emp-cell-day">22</span></div>
+
+            <!-- Row 4: Jun 23–29 — Dom 29 con turno -->
+            <div class="emp-cal-cell"><span class="emp-cell-day">23</span><div class="emp-shift-pill esp-f">F</div></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">24</span><div class="emp-shift-pill esp-f">F</div></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">25</span><div class="emp-shift-pill esp-f">F</div></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">26</span><div class="emp-shift-pill esp-f">F</div></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">27</span><div class="emp-shift-pill esp-f">F</div></div>
+            <div class="emp-cal-cell ecc-off"><span class="emp-cell-day">28</span></div>
+            <div class="emp-cal-cell"><span class="emp-cell-day">29</span><div class="emp-shift-pill esp-m">M</div></div>
+
+            <!-- Row 5: Jun 30 + Jul padding -->
+            <div class="emp-cal-cell"><span class="emp-cell-day">30</span><div class="emp-shift-pill esp-m">M</div></div>
+            <div class="emp-cal-cell ecc-other"><span class="emp-cell-day">1</span></div>
+            <div class="emp-cal-cell ecc-other"><span class="emp-cell-day">2</span></div>
+            <div class="emp-cal-cell ecc-other"><span class="emp-cell-day">3</span></div>
+            <div class="emp-cal-cell ecc-other"><span class="emp-cell-day">4</span></div>
+            <div class="emp-cal-cell ecc-other"><span class="emp-cell-day">5</span></div>
+            <div class="emp-cal-cell ecc-other"><span class="emp-cell-day">6</span></div>
+
+          </div>
+          <div style="height:8px;"></div>
+        </div>
+
+        <!-- 4-item employee tab bar — Planning attivo -->
+        <div class="tab-bar" style="display:flex;">
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="3" y="15" width="7" height="6" rx="1.5"/><rect x="14" y="3" width="7" height="6" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/></svg></div>
+            <span class="tab-label">Scanner</span>
+          </div>
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <span class="tab-label">Storico</span>
+          </div>
+          <div class="tab-item active">
+            <div class="tab-icon" style="color:var(--navy-500);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+            <span class="tab-label" style="color:var(--navy-500);font-weight:600;">Planning</span>
+          </div>
+          <div class="tab-item">
+            <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
+            <span class="tab-label">Profilo</span>
+          </div>
+        </div>
+
+        <div class="home-indicator" style="color:var(--ink);"><div class="home-bar"></div></div>
+      </div>
+    </div>
+    <div class="annotation">
+      <p class="annotation-line">M/P/S/SW/Ferie/Malattia per giorno. Dom lavorativa. Tab Planning attivo. Legenda completa 7 stati.</p>
+    </div>
+  </div>
+
+</div><!-- /screens-wrapper -->
+
+<script>
+  const calBtn = document.getElementById('calBtn');
+  const calOverlay = document.getElementById('calOverlay');
+  if (calBtn && calOverlay) {
+    calBtn.addEventListener('click', () => {
+      calOverlay.style.display = calOverlay.style.display === 'none' ? 'flex' : 'none';
+    });
+  }
+</script>
+<script>
+function switchView(viewNumber) {
+  // Mock function — in real app, questo navigherebbe tra le viste
+  const viewNames = {
+    7: 'Turni Giorno',
+    8: 'Turni Settimana',
+    9: 'Turni Mese',
+    10: 'Calendario Personale'
+  };
+  console.log('Navigating to View ' + viewNumber + ': ' + viewNames[viewNumber]);
+  // In produzione: router.push(`/view/${viewNumber}`)
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planning - Badge System</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #001233;
+      --primary-light: #1a2949;
+      --secondary: #f5a623;
+      --success: #27ae60;
+      --error: #e74c3c;
+      --warning: #f39c12;
+      --text-dark: #2c3e50;
+      --text-light: #7f8c8d;
+      --bg-light: #f8f9fa;
+      --border-light: #e0e0e0;
+
+      /* Shift Colors */
+      --shift-mattina: #4A90E2;
+      --shift-mattina-bg: #E8F1FF;
+      --shift-pomeriggio: #F5A623;
+      --shift-pomeriggio-bg: #FFF0E6;
+      --shift-sera: #9B59B6;
+      --shift-sera-bg: #F3E8FF;
+      --shift-riposo: #999999;
+      --shift-riposo-bg: #F5F5F5;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      color: var(--text-dark);
+      background-color: #fff;
+      line-height: 1.6;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+      color: white;
+      padding: 2rem;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .header-content {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .header-title h1 {
+      font-family: 'Cormorant', serif;
+      font-size: 2rem;
+      font-weight: 700;
+    }
+
+    .store-badge {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      font-size: 0.9rem;
+    }
+
+    .header-nav {
+      display: flex;
+      gap: 2rem;
+    }
+
+    /* Navigation Bar */
+    .nav-container {
+      background: white;
+      border-bottom: 1px solid var(--border-light);
+      padding: 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .nav-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      padding: 0 2rem;
+    }
+
+    .date-navigator {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 0;
+    }
+
+    .nav-arrow {
+      background: var(--primary);
+      color: white;
+      border: none;
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .nav-arrow:hover {
+      background: var(--primary-light);
+      transform: scale(1.05);
+    }
+
+    .date-range {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-dark);
+      min-width: 300px;
+      text-align: center;
+    }
+
+    .view-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-left: auto;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      padding: 1rem 1.5rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-light);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover {
+      color: var(--primary);
+    }
+
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    /* Main Container */
+    .main-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    /* View Containers */
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+      animation: fadeIn 0.3s ease-in;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* SETTIMANA VIEW - Weekly Grid */
+    .settimana-view {
+      overflow-x: auto;
+    }
+
+    .weekly-grid {
+      display: grid;
+      grid-template-columns: 180px repeat(7, 1fr);
+      gap: 1px;
+      background: var(--border-light);
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      overflow: hidden;
+      min-width: 100%;
+    }
+
+    .weekly-header-cell {
+      background: var(--primary);
+      color: white;
+      padding: 1rem;
+      text-align: center;
+      font-weight: 600;
+      border-right: 1px solid rgba(0,0,0,0.2);
+    }
+
+    .weekly-day-name {
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    .weekly-day-num {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-top: 0.25rem;
+    }
+
+    .weekly-employee-cell {
+      background: var(--bg-light);
+      padding: 1rem;
+      font-weight: 600;
+      border-right: 1px solid var(--border-light);
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .weekly-shift-cell {
+      background: white;
+      padding: 1rem;
+      border-right: 1px solid var(--border-light);
+      border-bottom: 1px solid var(--border-light);
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      min-height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .weekly-shift-cell:hover {
+      background: var(--shift-mattina-bg);
+    }
+
+    .weekly-summary-label {
+      background: var(--primary);
+      color: white;
+      padding: 0.75rem;
+      font-weight: 700;
+      border-right: 1px solid var(--border-light);
+      border-bottom: 1px solid var(--border-light);
+      text-align: center;
+      font-size: 0.95rem;
+    }
+
+    .weekly-summary-cell {
+      background: var(--bg-light);
+      padding: 0.75rem;
+      border-right: 1px solid var(--border-light);
+      border-bottom: 1px solid var(--border-light);
+      text-align: center;
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--text-dark);
+    }
+
+    .shift-badge {
+      display: inline-block;
+      background: var(--shift-mattina);
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .shift-badge:hover {
+      transform: scale(1.1);
+      box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+    }
+
+    .shift-badge.pomeriggio {
+      background: var(--shift-pomeriggio);
+    }
+
+    .shift-badge.pomeriggio:hover {
+      box-shadow: 0 4px 12px rgba(245, 166, 35, 0.3);
+    }
+
+    .shift-badge.sera {
+      background: var(--shift-sera);
+    }
+
+    .shift-badge.sera:hover {
+      box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+    }
+
+    .shift-badge.riposo {
+      background: var(--shift-riposo);
+    }
+
+    /* MESE VIEW - Monthly Grid (same as weekly, but 30 days) */
+    .mese-view {
+      overflow-x: auto;
+    }
+
+    .monthly-grid {
+      display: grid;
+      grid-template-columns: 180px repeat(30, 1fr);
+      gap: 1px;
+      background: var(--border-light);
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      overflow: hidden;
+      min-width: 100%;
+    }
+
+    .monthly-header-cell {
+      background: var(--primary);
+      color: white;
+      padding: 0.75rem 0.5rem;
+      text-align: center;
+      font-weight: 600;
+      border-right: 1px solid rgba(0,0,0,0.2);
+      font-size: 0.85rem;
+    }
+
+    .monthly-day-name {
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .monthly-day-num {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-top: 0.1rem;
+    }
+
+    .monthly-employee-cell {
+      background: var(--bg-light);
+      padding: 1rem;
+      font-weight: 600;
+      border-right: 1px solid var(--border-light);
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .monthly-shift-cell {
+      background: white;
+      padding: 0.5rem;
+      border-right: 1px solid var(--border-light);
+      border-bottom: 1px solid var(--border-light);
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 600;
+      font-size: 0.85rem;
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .monthly-shift-cell:hover {
+      background: var(--shift-mattina-bg);
+    }
+
+    .monthly-summary-label {
+      background: var(--primary);
+      color: white;
+      padding: 0.5rem;
+      font-weight: 700;
+      border-right: 1px solid var(--border-light);
+      border-bottom: 1px solid var(--border-light);
+      text-align: center;
+      font-size: 0.85rem;
+    }
+
+    .monthly-summary-cell {
+      background: var(--bg-light);
+      padding: 0.5rem;
+      border-right: 1px solid var(--border-light);
+      border-bottom: 1px solid var(--border-light);
+      text-align: center;
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: var(--text-dark);
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Action Buttons */
+    .actions-container {
+      display: flex;
+      gap: 1rem;
+      margin-top: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn:hover {
+      background: var(--primary-light);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 18, 51, 0.2);
+    }
+
+    .btn-secondary {
+      background: var(--shift-mattina);
+    }
+
+    .btn-secondary:hover {
+      background: #3a7bc8;
+      box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+    }
+
+    .dropdown {
+      position: relative;
+    }
+
+    .dropdown-menu {
+      display: none;
+      position: absolute;
+      background: white;
+      border: 1px solid var(--border-light);
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      min-width: 250px;
+      z-index: 1000;
+      top: 100%;
+      left: 0;
+    }
+
+    .dropdown.active .dropdown-menu {
+      display: block;
+    }
+
+    .dropdown-item {
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border-light);
+      transition: background 0.2s;
+      color: var(--text-dark);
+      font-size: 0.9rem;
+    }
+
+    .dropdown-item:last-child {
+      border-bottom: none;
+    }
+
+    .dropdown-item:hover {
+      background: var(--shift-mattina-bg);
+    }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      max-width: 500px;
+      width: 90%;
+      padding: 2rem;
+      animation: slideUp 0.3s ease-out;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .modal-header {
+      margin-bottom: 1.5rem;
+    }
+
+    .modal-header h2 {
+      font-family: 'Cormorant', serif;
+      font-size: 1.8rem;
+      color: var(--primary);
+      margin-bottom: 0.5rem;
+    }
+
+    .modal-body {
+      margin-bottom: 1.5rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .form-label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: var(--text-dark);
+    }
+
+    .form-select,
+    .form-input {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid var(--border-light);
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-family: 'DM Sans', sans-serif;
+      transition: border-color 0.2s;
+    }
+
+    .form-select:focus,
+    .form-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(0, 18, 51, 0.1);
+    }
+
+    .shift-type-selector {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.75rem;
+    }
+
+    .shift-type-btn {
+      padding: 0.75rem;
+      border: 2px solid var(--border-light);
+      border-radius: 6px;
+      background: white;
+      font-weight: 700;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .shift-type-btn.mattina {
+      color: var(--shift-mattina);
+    }
+
+    .shift-type-btn.pomeriggio {
+      color: var(--shift-pomeriggio);
+    }
+
+    .shift-type-btn.sera {
+      color: var(--shift-sera);
+    }
+
+    .shift-type-btn.riposo {
+      color: var(--shift-riposo);
+    }
+
+    .shift-type-btn:hover {
+      border-color: var(--primary);
+    }
+
+    .shift-type-btn.active {
+      background: var(--shift-mattina);
+      color: white;
+      border-color: var(--shift-mattina);
+    }
+
+    .shift-type-btn.active.pomeriggio {
+      background: var(--shift-pomeriggio);
+      border-color: var(--shift-pomeriggio);
+    }
+
+    .shift-type-btn.active.sera {
+      background: var(--shift-sera);
+      border-color: var(--shift-sera);
+    }
+
+    .shift-type-btn.active.riposo {
+      background: var(--shift-riposo);
+      border-color: var(--shift-riposo);
+    }
+
+    .shift-info {
+      background: var(--shift-mattina-bg);
+      border-left: 3px solid var(--shift-mattina);
+      padding: 1rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+
+    .shift-info.pomeriggio {
+      background: var(--shift-pomeriggio-bg);
+      border-left-color: var(--shift-pomeriggio);
+    }
+
+    .shift-info.sera {
+      background: var(--shift-sera-bg);
+      border-left-color: var(--shift-sera);
+    }
+
+    .warning-box {
+      background: #fff3cd;
+      border-left: 3px solid var(--warning);
+      padding: 1rem;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      color: #856404;
+    }
+
+    .modal-footer {
+      display: flex;
+      gap: 1rem;
+      justify-content: flex-end;
+    }
+
+    .modal-footer .btn {
+      padding: 0.75rem 1.5rem;
+    }
+
+    .btn-danger {
+      background: var(--error);
+    }
+
+    .btn-danger:hover {
+      background: #c0392b;
+    }
+
+    .btn-secondary-outline {
+      background: transparent;
+      color: var(--text-dark);
+      border: 1px solid var(--border-light);
+    }
+
+    .btn-secondary-outline:hover {
+      background: var(--bg-light);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .header {
+        padding: 1rem;
+      }
+
+      .header-top {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+
+      .header-title h1 {
+        font-size: 1.5rem;
+      }
+
+      .nav-content {
+        flex-direction: column;
+        gap: 1rem;
+        padding: 0 1rem;
+      }
+
+      .view-tabs {
+        gap: 0.5rem;
+      }
+
+      .tab-btn {
+        padding: 0.75rem 1rem;
+        font-size: 0.85rem;
+      }
+
+      .weekly-grid {
+        grid-template-columns: 100px repeat(7, 1fr);
+      }
+
+      .weekly-employee-cell,
+      .weekly-shift-cell {
+        padding: 0.5rem;
+        min-height: 60px;
+        font-size: 0.85rem;
+      }
+
+      .shift-badge {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.8rem;
+      }
+    }
+
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-content">
+    <div class="header-top">
+      <div class="header-title">
+        <h1>🏪 Shift Management</h1>
+        <span class="store-badge">Badge System</span>
+      </div>
+    </div>
+    <p style="font-size: 1.1rem; font-weight: 500;">Store: <strong>Centro Commerciale</strong></p>
+  </div>
+</div>
+
+<!-- Navigation -->
+<div class="nav-container">
+  <div class="nav-content">
+    <div class="date-navigator">
+      <button class="nav-arrow" onclick="previousPeriod()">◀</button>
+      <div class="date-range" id="dateRange">Giugno 2026</div>
+      <button class="nav-arrow" onclick="nextPeriod()">▶</button>
+    </div>
+
+    <div class="view-tabs">
+      <button class="tab-btn active" onclick="switchView('settimana')">SETTIMANA</button>
+      <button class="tab-btn" onclick="switchView('mese')">MESE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main Content -->
+<div class="main-container">
+
+  <!-- SETTIMANA VIEW -->
+  <div id="settimana-view" class="view settimana-view active">
+    <div class="weekly-grid">
+      <div class="weekly-header-cell" style="border-right: none;"></div>
+
+      <div class="weekly-header-cell">
+        <div class="weekly-day-name">Lunedì</div>
+        <div class="weekly-day-num">27</div>
+      </div>
+      <div class="weekly-header-cell">
+        <div class="weekly-day-name">Martedì</div>
+        <div class="weekly-day-num">28</div>
+      </div>
+      <div class="weekly-header-cell">
+        <div class="weekly-day-name">Mercoledì</div>
+        <div class="weekly-day-num">29</div>
+      </div>
+      <div class="weekly-header-cell">
+        <div class="weekly-day-name">Giovedì</div>
+        <div class="weekly-day-num">30</div>
+      </div>
+      <div class="weekly-header-cell">
+        <div class="weekly-day-name">Venerdì</div>
+        <div class="weekly-day-num">1</div>
+      </div>
+      <div class="weekly-header-cell">
+        <div class="weekly-day-name">Sabato</div>
+        <div class="weekly-day-num">2</div>
+      </div>
+      <div class="weekly-header-cell">
+        <div class="weekly-day-name">Domenica</div>
+        <div class="weekly-day-num">3</div>
+      </div>
+
+      <!-- Marco -->
+      <div class="weekly-employee-cell">Marco Rossi</div>
+      <div class="weekly-shift-cell" onclick="openModal('1', '2026-05-27', 'M')"><span class="shift-badge mattina">M</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('1', '2026-05-28', 'P')"><span class="shift-badge pomeriggio">P</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('1', '2026-05-29', 'R')"><span class="shift-badge riposo">R</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('1', '2026-05-30', 'S')"><span class="shift-badge sera">S</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('1', '2026-06-01', 'P')"><span class="shift-badge pomeriggio">P</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('1', '2026-06-02', 'R')"><span class="shift-badge riposo">R</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('1', '2026-06-03', 'M')"><span class="shift-badge mattina">M</span></div>
+
+      <!-- Anna -->
+      <div class="weekly-employee-cell">Anna Bianchi</div>
+      <div class="weekly-shift-cell" onclick="openModal('2', '2026-05-27', 'P')"><span class="shift-badge pomeriggio">P</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('2', '2026-05-28', 'S')"><span class="shift-badge sera">S</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('2', '2026-05-29', 'P')"><span class="shift-badge pomeriggio">P</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('2', '2026-05-30', 'R')"><span class="shift-badge riposo">R</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('2', '2026-06-01', 'M')"><span class="shift-badge mattina">M</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('2', '2026-06-02', 'M')"><span class="shift-badge mattina">M</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('2', '2026-06-03', 'P')"><span class="shift-badge pomeriggio">P</span></div>
+
+      <!-- Luigi -->
+      <div class="weekly-employee-cell">Luigi Verdi</div>
+      <div class="weekly-shift-cell" onclick="openModal('3', '2026-05-27', 'R')"><span class="shift-badge riposo">R</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('3', '2026-05-28', 'M')"><span class="shift-badge mattina">M</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('3', '2026-05-29', 'P')"><span class="shift-badge pomeriggio">P</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('3', '2026-05-30', 'P')"><span class="shift-badge pomeriggio">P</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('3', '2026-06-01', 'S')"><span class="shift-badge sera">S</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('3', '2026-06-02', 'P')"><span class="shift-badge pomeriggio">P</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('3', '2026-06-03', 'R')"><span class="shift-badge riposo">R</span></div>
+
+      <!-- Sara -->
+      <div class="weekly-employee-cell">Sara Gialli</div>
+      <div class="weekly-shift-cell" onclick="openModal('4', '2026-05-27', 'M')"><span class="shift-badge mattina">M</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('4', '2026-05-28', 'R')"><span class="shift-badge riposo">R</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('4', '2026-05-29', 'S')"><span class="shift-badge sera">S</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('4', '2026-05-30', 'P')"><span class="shift-badge pomeriggio">P</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('4', '2026-06-01', 'P')"><span class="shift-badge pomeriggio">P</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('4', '2026-06-02', 'M')"><span class="shift-badge mattina">M</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('4', '2026-06-03', 'S')"><span class="shift-badge sera">S</span></div>
+
+      <!-- Luca -->
+      <div class="weekly-employee-cell">Luca Neri</div>
+      <div class="weekly-shift-cell" onclick="openModal('5', '2026-05-27', 'P')"><span class="shift-badge pomeriggio">P</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('5', '2026-05-28', 'P')"><span class="shift-badge pomeriggio">P</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('5', '2026-05-29', 'M')"><span class="shift-badge mattina">M</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('5', '2026-05-30', 'S')"><span class="shift-badge sera">S</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('5', '2026-06-01', 'R')"><span class="shift-badge riposo">R</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('5', '2026-06-02', 'P')"><span class="shift-badge pomeriggio">P</span></div>
+      <div class="weekly-shift-cell" onclick="openModal('5', '2026-06-03', 'M')"><span class="shift-badge mattina">M</span></div>
+
+      <!-- RIEPILOGO: Mattina -->
+      <div class="weekly-summary-label">M</div>
+      <div class="weekly-summary-cell">1</div>
+      <div class="weekly-summary-cell">1</div>
+      <div class="weekly-summary-cell">1</div>
+      <div class="weekly-summary-cell">0</div>
+      <div class="weekly-summary-cell">1</div>
+      <div class="weekly-summary-cell">1</div>
+      <div class="weekly-summary-cell">2</div>
+
+      <!-- RIEPILOGO: Pomeriggio -->
+      <div class="weekly-summary-label">P</div>
+      <div class="weekly-summary-cell">2</div>
+      <div class="weekly-summary-cell">2</div>
+      <div class="weekly-summary-cell">3</div>
+      <div class="weekly-summary-cell">2</div>
+      <div class="weekly-summary-cell">2</div>
+      <div class="weekly-summary-cell">1</div>
+      <div class="weekly-summary-cell">1</div>
+
+      <!-- RIEPILOGO: Sera -->
+      <div class="weekly-summary-label">S</div>
+      <div class="weekly-summary-cell">0</div>
+      <div class="weekly-summary-cell">1</div>
+      <div class="weekly-summary-cell">1</div>
+      <div class="weekly-summary-cell">2</div>
+      <div class="weekly-summary-cell">1</div>
+      <div class="weekly-summary-cell">1</div>
+      <div class="weekly-summary-cell">0</div>
+
+      <!-- RIEPILOGO: Riposo -->
+      <div class="weekly-summary-label">R</div>
+      <div class="weekly-summary-cell">2</div>
+      <div class="weekly-summary-cell">1</div>
+      <div class="weekly-summary-cell">0</div>
+      <div class="weekly-summary-cell">1</div>
+      <div class="weekly-summary-cell">1</div>
+      <div class="weekly-summary-cell">2</div>
+      <div class="weekly-summary-cell">2</div>
+    </div>
+
+    <div class="actions-container">
+      <button class="btn" onclick="openModal(null, null, null)">+ Crea Turno Nuovo</button>
+      <div class="dropdown">
+        <button class="btn btn-secondary" onclick="toggleDropdown()">📋 Copia Settimana ▼</button>
+        <div class="dropdown-menu">
+          <div class="dropdown-item" onclick="copySetting(1); closeDropdown();">Copia a settimana prossima</div>
+          <div class="dropdown-item" onclick="copySetting(2); closeDropdown();">Copia alle prossime 2 settimane</div>
+          <div class="dropdown-item" onclick="copySetting(4); closeDropdown();">Copia al mese prossimo</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MESE VIEW -->
+  <div id="mese-view" class="view mese-view">
+    <div class="monthly-grid">
+      <div class="monthly-header-cell" style="border-right: none;"></div>
+
+      <!-- Days 1-30 -->
+      <div class="monthly-header-cell"><div class="monthly-day-name">Gio</div><div class="monthly-day-num">1</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Ven</div><div class="monthly-day-num">2</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Sab</div><div class="monthly-day-num">3</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Dom</div><div class="monthly-day-num">4</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Lun</div><div class="monthly-day-num">5</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Mar</div><div class="monthly-day-num">6</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Mer</div><div class="monthly-day-num">7</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Gio</div><div class="monthly-day-num">8</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Ven</div><div class="monthly-day-num">9</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Sab</div><div class="monthly-day-num">10</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Dom</div><div class="monthly-day-num">11</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Lun</div><div class="monthly-day-num">12</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Mar</div><div class="monthly-day-num">13</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Mer</div><div class="monthly-day-num">14</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Gio</div><div class="monthly-day-num">15</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Ven</div><div class="monthly-day-num">16</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Sab</div><div class="monthly-day-num">17</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Dom</div><div class="monthly-day-num">18</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Lun</div><div class="monthly-day-num">19</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Mar</div><div class="monthly-day-num">20</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Mer</div><div class="monthly-day-num">21</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Gio</div><div class="monthly-day-num">22</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Ven</div><div class="monthly-day-num">23</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Sab</div><div class="monthly-day-num">24</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Dom</div><div class="monthly-day-num">25</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Lun</div><div class="monthly-day-num">26</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Mar</div><div class="monthly-day-num">27</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Mer</div><div class="monthly-day-num">28</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Gio</div><div class="monthly-day-num">29</div></div>
+      <div class="monthly-header-cell"><div class="monthly-day-name">Ven</div><div class="monthly-day-num">30</div></div>
+
+      <!-- Marco Rossi -->
+      <div class="monthly-employee-cell">Marco Rossi</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('1', '2026-06-01', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('1', '2026-06-02', 'P')">P</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('1', '2026-06-03', 'R')">R</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('1', '2026-06-04', 'S')">S</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('1', '2026-06-05', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('1', '2026-06-06', 'M')">M</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('1', '2026-06-07', 'R')">R</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('1', '2026-06-08', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('1', '2026-06-09', 'P')">P</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('1', '2026-06-10', 'R')">R</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('1', '2026-06-11', 'S')">S</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('1', '2026-06-12', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('1', '2026-06-13', 'M')">M</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('1', '2026-06-14', 'R')">R</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('1', '2026-06-15', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('1', '2026-06-16', 'M')">M</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('1', '2026-06-17', 'S')">S</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('1', '2026-06-18', 'R')">R</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('1', '2026-06-19', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('1', '2026-06-20', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('1', '2026-06-21', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('1', '2026-06-22', 'M')">M</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('1', '2026-06-23', 'S')">S</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('1', '2026-06-24', 'R')">R</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('1', '2026-06-25', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('1', '2026-06-26', 'M')">M</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('1', '2026-06-27', 'R')">R</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('1', '2026-06-28', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('1', '2026-06-29', 'S')">S</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('1', '2026-06-30', 'M')">M</div>
+
+      <!-- Anna Bianchi -->
+      <div class="monthly-employee-cell">Anna Bianchi</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('2', '2026-06-01', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('2', '2026-06-02', 'S')">S</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('2', '2026-06-03', 'P')">P</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('2', '2026-06-04', 'R')">R</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('2', '2026-06-05', 'M')">M</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('2', '2026-06-06', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('2', '2026-06-07', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('2', '2026-06-08', 'S')">S</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('2', '2026-06-09', 'P')">P</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('2', '2026-06-10', 'R')">R</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('2', '2026-06-11', 'M')">M</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('2', '2026-06-12', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('2', '2026-06-13', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('2', '2026-06-14', 'S')">S</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('2', '2026-06-15', 'P')">P</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('2', '2026-06-16', 'R')">R</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('2', '2026-06-17', 'M')">M</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('2', '2026-06-18', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('2', '2026-06-19', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('2', '2026-06-20', 'S')">S</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('2', '2026-06-21', 'R')">R</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('2', '2026-06-22', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('2', '2026-06-23', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('2', '2026-06-24', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('2', '2026-06-25', 'S')">S</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('2', '2026-06-26', 'R')">R</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('2', '2026-06-27', 'M')">M</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('2', '2026-06-28', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('2', '2026-06-29', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('2', '2026-06-30', 'S')">S</div>
+
+      <!-- Luigi Verdi -->
+      <div class="monthly-employee-cell">Luigi Verdi</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('3', '2026-06-01', 'R')">R</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('3', '2026-06-02', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('3', '2026-06-03', 'P')">P</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('3', '2026-06-04', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('3', '2026-06-05', 'S')">S</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('3', '2026-06-06', 'M')">M</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('3', '2026-06-07', 'R')">R</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('3', '2026-06-08', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('3', '2026-06-09', 'P')">P</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('3', '2026-06-10', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('3', '2026-06-11', 'S')">S</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('3', '2026-06-12', 'M')">M</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('3', '2026-06-13', 'R')">R</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('3', '2026-06-14', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('3', '2026-06-15', 'P')">P</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('3', '2026-06-16', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('3', '2026-06-17', 'S')">S</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('3', '2026-06-18', 'M')">M</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('3', '2026-06-19', 'R')">R</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('3', '2026-06-20', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('3', '2026-06-21', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('3', '2026-06-22', 'S')">S</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('3', '2026-06-23', 'R')">R</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('3', '2026-06-24', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('3', '2026-06-25', 'P')">P</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('3', '2026-06-26', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('3', '2026-06-27', 'S')">S</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('3', '2026-06-28', 'M')">M</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('3', '2026-06-29', 'R')">R</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('3', '2026-06-30', 'M')">M</div>
+
+      <!-- Sara Gialli -->
+      <div class="monthly-employee-cell">Sara Gialli</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('4', '2026-06-01', 'M')">M</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('4', '2026-06-02', 'R')">R</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('4', '2026-06-03', 'S')">S</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('4', '2026-06-04', 'P')">P</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('4', '2026-06-05', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('4', '2026-06-06', 'M')">M</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('4', '2026-06-07', 'R')">R</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('4', '2026-06-08', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('4', '2026-06-09', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('4', '2026-06-10', 'S')">S</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('4', '2026-06-11', 'R')">R</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('4', '2026-06-12', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('4', '2026-06-13', 'P')">P</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('4', '2026-06-14', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('4', '2026-06-15', 'S')">S</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('4', '2026-06-16', 'M')">M</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('4', '2026-06-17', 'R')">R</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('4', '2026-06-18', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('4', '2026-06-19', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('4', '2026-06-20', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('4', '2026-06-21', 'S')">S</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('4', '2026-06-22', 'M')">M</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('4', '2026-06-23', 'R')">R</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('4', '2026-06-24', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('4', '2026-06-25', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('4', '2026-06-26', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('4', '2026-06-27', 'S')">S</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('4', '2026-06-28', 'M')">M</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('4', '2026-06-29', 'R')">R</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('4', '2026-06-30', 'P')">P</div>
+
+      <!-- Luca Neri -->
+      <div class="monthly-employee-cell">Luca Neri</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('5', '2026-06-01', 'P')">P</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('5', '2026-06-02', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('5', '2026-06-03', 'M')">M</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('5', '2026-06-04', 'S')">S</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('5', '2026-06-05', 'R')">R</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('5', '2026-06-06', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('5', '2026-06-07', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('5', '2026-06-08', 'P')">P</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('5', '2026-06-09', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('5', '2026-06-10', 'M')">M</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('5', '2026-06-11', 'S')">S</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('5', '2026-06-12', 'R')">R</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('5', '2026-06-13', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('5', '2026-06-14', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('5', '2026-06-15', 'P')">P</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('5', '2026-06-16', 'S')">S</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('5', '2026-06-17', 'M')">M</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('5', '2026-06-18', 'R')">R</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('5', '2026-06-19', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('5', '2026-06-20', 'M')">M</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('5', '2026-06-21', 'S')">S</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('5', '2026-06-22', 'P')">P</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('5', '2026-06-23', 'R')">R</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('5', '2026-06-24', 'M')">M</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('5', '2026-06-25', 'P')">P</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('5', '2026-06-26', 'P')">P</div>
+      <div class="monthly-shift-cell mattina" onclick="openModal('5', '2026-06-27', 'M')">M</div>
+      <div class="monthly-shift-cell sera" onclick="openModal('5', '2026-06-28', 'S')">S</div>
+      <div class="monthly-shift-cell riposo" onclick="openModal('5', '2026-06-29', 'R')">R</div>
+      <div class="monthly-shift-cell pomeriggio" onclick="openModal('5', '2026-06-30', 'P')">P</div>
+
+      <!-- RIEPILOGO: Mattina -->
+      <div class="monthly-summary-label">M</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+
+      <!-- RIEPILOGO: Pomeriggio -->
+      <div class="monthly-summary-label">P</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+
+      <!-- RIEPILOGO: Sera -->
+      <div class="monthly-summary-label">S</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">2</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+
+      <!-- RIEPILOGO: Riposo -->
+      <div class="monthly-summary-label">R</div>
+      <div class="monthly-summary-cell">0</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">0</div>
+      <div class="monthly-summary-cell">0</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">0</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">0</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">0</div>
+      <div class="monthly-summary-cell">0</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">0</div>
+      <div class="monthly-summary-cell">0</div>
+      <div class="monthly-summary-cell">0</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">0</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">0</div>
+      <div class="monthly-summary-cell">1</div>
+      <div class="monthly-summary-cell">1</div>
+    </div>
+
+    <div class="actions-container">
+      <button class="btn" onclick="openModal(null, null, null)">+ Crea Turno Nuovo</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2 id="modalTitle">Crea Turno</h2>
+    </div>
+
+    <div class="modal-body">
+      <form id="shiftForm">
+        <div class="form-group">
+          <label class="form-label">Dipendente</label>
+          <select class="form-select" id="employeeSelect">
+            <option value="">-- Seleziona dipendente --</option>
+            <option value="1">Marco Rossi</option>
+            <option value="2">Anna Bianchi</option>
+            <option value="3">Luigi Verdi</option>
+            <option value="4">Sara Gialli</option>
+            <option value="5">Luca Neri</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Data</label>
+          <input type="date" class="form-input" id="dateInput">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Tipo Turno</label>
+          <div class="shift-type-selector">
+            <button type="button" class="shift-type-btn mattina" onclick="selectShiftType('M')" id="btn-M">M</button>
+            <button type="button" class="shift-type-btn pomeriggio" onclick="selectShiftType('P')" id="btn-P">P</button>
+            <button type="button" class="shift-type-btn sera" onclick="selectShiftType('S')" id="btn-S">S</button>
+            <button type="button" class="shift-type-btn riposo" onclick="selectShiftType('R')" id="btn-R">R</button>
+          </div>
+        </div>
+
+        <div id="shiftInfo" class="shift-info mattina" style="display:none;">
+          <strong>M = Mattina (08:00 - 13:00)</strong>
+          <p style="margin-top: 0.5rem; font-size: 0.85rem;">5 ore di lavoro</p>
+        </div>
+
+        <div id="warningBox" class="warning-box" style="display:none;"></div>
+      </form>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary-outline" onclick="closeModal()">Annulla</button>
+      <button class="btn" onclick="saveShift()">Salva Turno</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let selectedShiftType = 'M';
+
+  function switchView(view) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(view + '-view').classList.add('active');
+    event.target.classList.add('active');
+  }
+
+  function openModal(employeeId, date, shiftType) {
+    document.getElementById('modalOverlay').classList.add('active');
+    document.getElementById('employeeSelect').value = employeeId || '';
+    document.getElementById('dateInput').value = date || '';
+    selectedShiftType = shiftType || 'M';
+    updateShiftButtons();
+    updateShiftInfo();
+  }
+
+  function closeModal(event) {
+    if (event && event.target !== document.getElementById('modalOverlay')) return;
+    document.getElementById('modalOverlay').classList.remove('active');
+  }
+
+  function selectShiftType(type) {
+    selectedShiftType = type;
+    updateShiftButtons();
+    updateShiftInfo();
+  }
+
+  function updateShiftButtons() {
+    ['M', 'P', 'S', 'R'].forEach(type => {
+      const btn = document.getElementById('btn-' + type);
+      if (selectedShiftType === type) {
+        btn.classList.add('active', type.toLowerCase());
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+
+  function updateShiftInfo() {
+    const infoBox = document.getElementById('shiftInfo');
+    const shifts = {
+      'M': 'M = Mattina (08:00 - 13:00)<br><p style="margin-top: 0.5rem; font-size: 0.85rem;">5 ore di lavoro</p>',
+      'P': 'P = Pomeriggio (13:00 - 18:00)<br><p style="margin-top: 0.5rem; font-size: 0.85rem;">5 ore di lavoro</p>',
+      'S': 'S = Sera (18:00 - 23:00)<br><p style="margin-top: 0.5rem; font-size: 0.85rem;">5 ore di lavoro</p>',
+      'R': 'R = Riposo<br><p style="margin-top: 0.5rem; font-size: 0.85rem;">Nessuna ora di lavoro</p>'
+    };
+    infoBox.innerHTML = '<strong>' + shifts[selectedShiftType] + '</strong>';
+    infoBox.style.display = 'block';
+    infoBox.className = 'shift-info ' + (selectedShiftType === 'M' ? 'mattina' : selectedShiftType === 'P' ? 'pomeriggio' : selectedShiftType === 'S' ? 'sera' : '');
+  }
+
+  function saveShift() {
+    const employee = document.getElementById('employeeSelect').value;
+    const date = document.getElementById('dateInput').value;
+    if (employee && date) {
+      alert('Turno salvato: ' + selectedShiftType + ' per dipendente ' + employee + ' il ' + date);
+      closeModal();
+    } else {
+      alert('Per favore seleziona dipendente e data');
+    }
+  }
+
+  function previousPeriod() {
+    alert('Navigazione alla settimana/mese precedente');
+  }
+
+  function nextPeriod() {
+    alert('Navigazione alla settimana/mese successiva');
+  }
+
+  function toggleDropdown() {
+    document.querySelector('.dropdown').classList.toggle('active');
+  }
+
+  function closeDropdown() {
+    document.querySelector('.dropdown').classList.remove('active');
+  }
+
+  function copySetting(weeks) {
+    alert('Copia della pianificazione per ' + weeks + ' settimana/e');
+  }
+</script>
+
+</body>
+</html>
+
+        <div id="warningBox" class="warning-box" style="display:none;">
