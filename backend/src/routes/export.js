@@ -15,6 +15,23 @@ const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
 });
 
+// Helper: resolve employee/site ID from name OR UUID
+async function resolveEmployeeId(nameOrId) {
+  if (!nameOrId) return undefined;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (uuidRegex.test(nameOrId)) return nameOrId;
+  const result = await pool.query('SELECT id FROM employees WHERE name = $1 LIMIT 1', [nameOrId]);
+  return result.rows[0]?.id;
+}
+
+async function resolveSiteId(nameOrId) {
+  if (!nameOrId) return undefined;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (uuidRegex.test(nameOrId)) return nameOrId;
+  const result = await pool.query('SELECT id FROM sites WHERE name = $1 LIMIT 1', [nameOrId]);
+  return result.rows[0]?.id;
+}
+
 /**
  * Escape CSV field to prevent formula injection
  * @param {*} field - Value to escape
@@ -39,21 +56,25 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
   const clientId = req.user.client_id;
 
   try {
+    // Resolve IDs from names if needed (MVP: accept both UUID and name)
+    const resolvedSiteId = site_id ? await resolveSiteId(site_id) : undefined;
+    const resolvedEmployeeId = employee_id ? await resolveEmployeeId(employee_id) : undefined;
+
     // Build WHERE clause (MVP: no client_id filtering)
     const whereClauses = [];
     const params = [];
     let paramCount = 0;
 
-    if (site_id) {
+    if (resolvedSiteId) {
       paramCount++;
       whereClauses.push(`c.site_id = $${paramCount}::uuid`);
-      params.push(site_id);
+      params.push(resolvedSiteId);
     }
 
-    if (employee_id) {
+    if (resolvedEmployeeId) {
       paramCount++;
       whereClauses.push(`c.employee_id = $${paramCount}::uuid`);
-      params.push(employee_id);
+      params.push(resolvedEmployeeId);
     }
 
     if (date_from) {
