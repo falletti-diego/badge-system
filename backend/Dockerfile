@@ -29,6 +29,9 @@ USER nodejs
 # Expose application port
 EXPOSE 3000
 
+# Disable HTTPS for MVP (use HTTP only)
+ENV USE_HTTPS=false
+
 # Health check — ensures container is healthy
 # Checks /health endpoint every 30s, allows 5s startup grace period
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
