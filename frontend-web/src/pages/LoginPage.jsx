@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Container, Box, TextField, Button, Typography, Alert, CircularProgress } from '@mui/material';
 import authService from '../services/authService';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    console.log('📝 LoginPage mounted');
+  }, []);
   const [email, setEmail] = useState('demo@badge.it');
   const [password, setPassword] = useState('demo123');
   const [loading, setLoading] = useState(false);

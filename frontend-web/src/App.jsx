@@ -70,9 +70,12 @@ const theme = createTheme({
 
 function App() {
   useEffect(() => {
-    // Initialize mock token on app load
+    console.log('📦 App mounted, initializing...');
     setMockToken('test-token-mvp-12345');
+    console.log('🔑 Mock token set');
   }, []);
+
+  console.log('🎨 App rendering with Router and Theme');
 
   return (
     <ThemeProvider theme={theme}>
