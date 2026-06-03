@@ -33,11 +33,11 @@ const PostCheckinSchema = z.object({
 
 const GetCheckinsSchema = z.object({
   query: z.object({
-    client_id: z.string().uuid('client_id must be a valid UUID').optional(),
-    site_id: z.string().uuid('site_id must be a valid UUID').optional(),
-    employee_id: z.string().uuid('employee_id must be a valid UUID').optional(),
-    date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_from must be YYYY-MM-DD').optional(),
-    date_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_to must be YYYY-MM-DD').optional(),
+    client_id: z.preprocess(val => val === '' ? undefined : val, z.string().uuid('client_id must be a valid UUID').optional()),
+    site_id: z.preprocess(val => val === '' ? undefined : val, z.string().uuid('site_id must be a valid UUID').optional()),
+    employee_id: z.preprocess(val => val === '' ? undefined : val, z.string().uuid('employee_id must be a valid UUID').optional()),
+    date_from: z.preprocess(val => val === '' ? undefined : val, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_from must be YYYY-MM-DD').optional()),
+    date_to: z.preprocess(val => val === '' ? undefined : val, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_to must be YYYY-MM-DD').optional()),
     limit: z.coerce
       .number()
       .int('limit must be an integer')
@@ -102,11 +102,11 @@ const PutCheckinSchema = z.object({
 
 const GetExportCsvSchema = z.object({
   query: z.object({
-    client_id: z.string().uuid('client_id must be a valid UUID').optional(),
-    site_id: z.string().uuid('site_id must be a valid UUID').optional(),
-    employee_id: z.string().uuid('employee_id must be a valid UUID').optional(),
-    date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_from must be YYYY-MM-DD').optional(),
-    date_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_to must be YYYY-MM-DD').optional(),
+    client_id: z.preprocess(val => val === '' ? undefined : val, z.string().uuid('client_id must be a valid UUID').optional()),
+    site_id: z.preprocess(val => val === '' ? undefined : val, z.string().uuid('site_id must be a valid UUID').optional()),
+    employee_id: z.preprocess(val => val === '' ? undefined : val, z.string().uuid('employee_id must be a valid UUID').optional()),
+    date_from: z.preprocess(val => val === '' ? undefined : val, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_from must be YYYY-MM-DD').optional()),
+    date_to: z.preprocess(val => val === '' ? undefined : val, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_to must be YYYY-MM-DD').optional()),
   })
     .refine(
       (data) => {
@@ -129,10 +129,10 @@ const GetExportCsvSchema = z.object({
 
 const GetStatsSchema = z.object({
   query: z.object({
-    site_id: z.string().uuid('site_id must be a valid UUID').optional(),
-    employee_id: z.string().uuid('employee_id must be a valid UUID').optional(),
-    date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_from must be YYYY-MM-DD').optional(),
-    date_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_to must be YYYY-MM-DD').optional(),
+    site_id: z.preprocess(val => val === '' ? undefined : val, z.string().uuid('site_id must be a valid UUID').optional()),
+    employee_id: z.preprocess(val => val === '' ? undefined : val, z.string().uuid('employee_id must be a valid UUID').optional()),
+    date_from: z.preprocess(val => val === '' ? undefined : val, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_from must be YYYY-MM-DD').optional()),
+    date_to: z.preprocess(val => val === '' ? undefined : val, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_to must be YYYY-MM-DD').optional()),
   })
     .refine(
       (data) => {
