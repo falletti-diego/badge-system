@@ -4,14 +4,17 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Container, Box, Alert } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
+import { Container, Box, Alert, AppBar, Toolbar, Button } from '@mui/material';
 import { usePresences } from '../hooks/usePresences';
 import KpiCards from '../components/KpiCards';
 import FilterBar from '../components/FilterBar';
 import PresencesTable from '../components/PresencesTable';
 import ExportButton from '../components/ExportButton';
+import authService from '../../../services/authService';
 
 const DashboardPage = () => {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState({
     site_id: null,
     employee_id: null,
@@ -20,6 +23,11 @@ const DashboardPage = () => {
     limit: 50,
     offset: 0,
   });
+
+  const handleLogout = async () => {
+    await authService.logout();
+    navigate('/login');
+  };
 
   // Memoize filters to prevent infinite refetch loops
   const memoizedFilters = useMemo(() => filters, [
@@ -65,6 +73,26 @@ const DashboardPage = () => {
 
   return (
     <div className="min-h-screen bg-linen">
+      {/* Navbar */}
+      <AppBar position="static" sx={{ backgroundColor: '#1E3A5F' }}>
+        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
+          <h1 style={{ color: 'white', fontSize: '20px', fontWeight: 600 }}>Badge System</h1>
+          <Button
+            color="inherit"
+            onClick={handleLogout}
+            sx={{
+              textTransform: 'none',
+              fontSize: '14px',
+              '&:hover': {
+                backgroundColor: 'rgba(255,255,255,0.1)',
+              },
+            }}
+          >
+            Logout
+          </Button>
+        </Toolbar>
+      </AppBar>
+
       <Container maxWidth="lg" sx={{ paddingTop: '40px', paddingBottom: '40px' }}>
         {/* Page Header */}
         <div className="mb-8">

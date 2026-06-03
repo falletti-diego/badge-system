@@ -1,6 +1,6 @@
 /**
  * Validation Schemas (Zod)
- * Centralized request validation for all checkin endpoints
+ * Centralized request validation for all API endpoints
  */
 
 const { z } = require('zod');
@@ -8,6 +8,17 @@ const pino = require('pino');
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
+});
+
+// =====================================================
+// AUTH - POST /api/auth/login
+// =====================================================
+
+const LoginSchema = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email format'),
+    password: z.string().min(1, 'Password is required'),
+  }),
 });
 
 // =====================================================
@@ -211,6 +222,7 @@ function createValidationMiddleware(schema) {
 }
 
 module.exports = {
+  LoginSchema,
   PostCheckinSchema,
   GetCheckinsSchema,
   PutCheckinSchema,
