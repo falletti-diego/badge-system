@@ -296,6 +296,92 @@
 - ✅ No performance regressions (polling optimization, memoization, state consolidation)
 - ✅ Commit 8bf90bb pushed to GitHub → GitHub Actions CI/CD pipeline triggered
 
+### Session 7: HTTPS + CORS Configuration (3 Giugno 2026 — 17:20-17:45)
+**Outcome:** Mixed Content & CORS errors solved (partially), RDS auth issue pending ⏸️
+**Status:** Infrastructure ✅ | Frontend Deploy ✅ | Backend Connection 🚨 (paused for break)
+
+#### Problema Identificato
+- **Mixed Content Error:** Frontend HTTPS (Netlify) → HTTP backend (EC2)
+  - Previous attempts: Self-signed certs ❌ → Nginx reverse proxy ❌ → CloudFlare Tunnel ❌
+  - Solution: Disable HTTPS in Dockerfile, use HTTP-only MVP (✅ pragmatic decision)
+- **CORS Errors:** `No 'Access-Control-Allow-Origin'` header → Frontend blocked from API calls
+  - 21 CORS preflight failures in browser console
+
+#### Azioni Completate
+
+**1. DNS Configuration (Register.it)**
+- ✅ Created subdomain: `api.dataxiom.it`
+- ✅ A record: `api.dataxiom.it → 34.245.145.143` (EC2 public IP)
+- ✅ Verified DNS propagation (`nslookup api.dataxiom.it`)
+
+**2. Nginx Reverse Proxy + Let's Encrypt**
+- ✅ Installed Nginx + Certbot on EC2
+- ✅ Configured Nginx as reverse proxy (HTTP → HTTPS)
+- ✅ Obtained Let's Encrypt certificate for `api.dataxiom.it` (valid until 2026-09-01)
+- ✅ Test: `curl https://api.dataxiom.it/health` → 200 OK ✅
+- ✅ Certificate auto-renewal configured (systemd timer)
+
+**3. CORS Headers Configuration**
+- ✅ Added CORS headers to Nginx (`Access-Control-Allow-*`)
+- ✅ Configured preflight OPTIONS request handling
+- ✅ Test: OPTIONS request → 200 with CORS headers ✅
+- ✅ Commit 851e3a0: Updated config.js to use `https://api.dataxiom.it`
+- ✅ Netlify deployment triggered (auto-deploy from git push)
+
+**4. Backend Container Restart**
+- ❌ Container crash loop: `ECONNREFUSED` (database connection failed)
+- ❌ Password authentication failed for RDS user `postgres`
+- ⏸️ Root cause: RDS credentials in .env may be outdated (password mismatch)
+
+#### Decisioni Prese
+
+**CORS Solution:** Nginx reverse proxy headers (instead of backend CORS middleware)
+- ✅ Rationale: Faster implementation, no backend rebuild required, handles preflight OPTIONS
+- ✅ Headers added: Origin, Methods, Headers, Credentials
+- ✅ No performance impact (Nginx header overhead negligible)
+
+**HTTPS Strategy:** Let's Encrypt with auto-renewal
+- ✅ Rationale: Free, production-ready, industry standard
+- ✅ Advantage: Eliminates all browser security warnings
+- ✅ Cost: €0 (automated via Certbot)
+- ✅ Upgrade from MVP: HTTP-only → Proper HTTPS in production
+
+#### Blocchi / Issues Pendenti
+
+1. **RDS Password Mismatch** 🚨
+   - Backend can reach RDS on port 5432 ✅
+   - But: `password authentication failed for user "postgres"` ❌
+   - Hypothesis: .env password outdated or incorrect character encoding
+   - **Next Steps (after break):**
+     - Option A: Use mock data in frontend (MVP hack, 5 min)
+     - Option B: Reset RDS password via AWS Console (10 min)
+     - Option C: Recreate RDS with new credentials (20 min)
+   - **Recommendation:** Option A for today (fast MVP demo), Option B tomorrow (production ready)
+
+2. **Redis Installation** ✅
+   - Redis now running on EC2 (required by backend container)
+   - Configured as system service (auto-start on reboot)
+
+#### Architecture State
+
+```
+Client (Browser)
+  ↓ HTTPS
+Netlify (dataxiom-badge.netlify.app)
+  ↓ https://api.dataxiom.it [CORS-enabled]
+Nginx (EC2, port 443)
+  ↓ HTTP proxy_pass
+Backend Container (http://localhost:3000) 🚨 Not running (auth issue)
+  ↓
+RDS PostgreSQL (badge-system-db.cvs80y0my080.eu-west-1.rds.amazonaws.com)
+```
+
+#### Summary
+- ✅ Infrastructure: HTTPS working, CORS configured, Let's Encrypt active
+- ✅ Frontend: Deployed, pointing to correct endpoint
+- ⏸️ Backend: Crash loop due to RDS auth — requires password reset or mock data
+- ⏳ Next Session: Resolve RDS auth + test full dashboard flow
+
 ---
 
 ## 7.5 REAL-TIME DEPLOYMENT LOG (Session 6 — Current)
