@@ -45,9 +45,11 @@ apiClient.interceptors.response.use(
     const message = error.response?.data?.message || error.message;
 
     if (status === 401) {
-      // Unauthorized: clear token and redirect to login
+      // Unauthorized: clear token and redirect to login (avoid redirect loop)
       localStorage.removeItem('auth_token');
-      window.location.href = '/login';
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     } else if (status === 403) {
       // Forbidden
       console.error('Access denied:', message);

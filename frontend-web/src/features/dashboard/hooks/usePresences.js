@@ -3,7 +3,7 @@
  * Manages check-ins and stats data fetching with polling
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import apiClient from '../../../services/apiClient';
 
 export const usePresences = (filters = {}) => {
@@ -15,6 +15,7 @@ export const usePresences = (filters = {}) => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const filtersRef = useRef(filters);
 
   /**
    * Fetch presences (check-ins list)
@@ -63,16 +64,27 @@ export const usePresences = (filters = {}) => {
     refetch();
   }, [refetch]);
 
+  // Keep filters ref in sync for polling
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
   /**
-   * Polling: Update stats every 30 seconds
+   * Polling: Update stats every 30 seconds using current filters ref
    */
   useEffect(() => {
-    const interval = setInterval(() => {
-      fetchStats();
-    }, 30000); // 30 seconds
+    const pollStats = async () => {
+      try {
+        const response = await apiClient.get('/api/checkins/stats', { params: filtersRef.current });
+        setStats(response.data.data || {});
+      } catch (err) {
+        console.error('Error polling stats:', err);
+      }
+    };
 
+    const interval = setInterval(pollStats, 30000); // 30 seconds
     return () => clearInterval(interval);
-  }, [fetchStats]);
+  }, []);
 
   return {
     data,

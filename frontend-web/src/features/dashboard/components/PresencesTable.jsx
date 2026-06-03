@@ -4,11 +4,10 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button, Box } from '@mui/material';
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button, Box, Chip } from '@mui/material';
 
-const PresencesTable = ({ data = { rows: [], total: 0 }, loading = false, onPaginationChange = () => {} }) => {
+const PresencesTable = ({ data = { rows: [], total: 0 }, loading = false, currentOffset = 0, pageSize = 50, onPaginationChange = () => {} }) => {
   const [sorting, setSorting] = useState({ column: 'timestamp', direction: 'desc' });
-  const [pagination, setPagination] = useState({ offset: 0, limit: 50 });
 
   // Sort data
   const sortedData = useMemo(() => {
@@ -44,21 +43,19 @@ const PresencesTable = ({ data = { rows: [], total: 0 }, loading = false, onPagi
   };
 
   const handleNextPage = () => {
-    const newOffset = pagination.offset + pagination.limit;
+    const newOffset = currentOffset + pageSize;
     if (newOffset < data.total) {
-      setPagination((prev) => ({ ...prev, offset: newOffset }));
-      onPaginationChange({ offset: newOffset, limit: pagination.limit });
+      onPaginationChange(newOffset);
     }
   };
 
   const handlePrevPage = () => {
-    const newOffset = Math.max(0, pagination.offset - pagination.limit);
-    setPagination((prev) => ({ ...prev, offset: newOffset }));
-    onPaginationChange({ offset: newOffset, limit: pagination.limit });
+    const newOffset = Math.max(0, currentOffset - pageSize);
+    onPaginationChange(newOffset);
   };
 
-  const currentPage = Math.floor(pagination.offset / pagination.limit) + 1;
-  const totalPages = Math.ceil(data.total / pagination.limit);
+  const currentPage = Math.floor(currentOffset / pageSize) + 1;
+  const totalPages = Math.ceil(data.total / pageSize);
 
   const columns = [
     { key: 'employee_name', label: 'Employee Name', sortable: true },
@@ -114,9 +111,9 @@ const PresencesTable = ({ data = { rows: [], total: 0 }, loading = false, onPagi
             </TableRow>
           </TableHead>
           <TableBody>
-            {sortedData.map((row, idx) => (
+            {sortedData.map((row) => (
               <TableRow
-                key={row.id || idx}
+                key={row.id}
                 sx={{
                   '&:hover': { backgroundColor: '#FAFAF8' },
                   borderBottom: '1px solid #EDE9E2',
@@ -131,7 +128,8 @@ const PresencesTable = ({ data = { rows: [], total: 0 }, loading = false, onPagi
                   {row.timestamp ? new Date(row.timestamp).toLocaleString() : '—'}
                 </TableCell>
                 <TableCell>
-                  <span
+                  <Box
+                    component="span"
                     sx={{
                       px: 2,
                       py: 0.5,
@@ -140,15 +138,11 @@ const PresencesTable = ({ data = { rows: [], total: 0 }, loading = false, onPagi
                       fontWeight: 500,
                       backgroundColor: row.type === 'IN' ? '#EEF6F1' : '#FEF6EC',
                       color: row.type === 'IN' ? '#2D7049' : '#B45309',
+                      display: 'inline-block',
                     }}
-                    className={`px-2 py-1 rounded text-sm font-medium ${
-                      row.type === 'IN'
-                        ? 'bg-green-50 text-green-700'
-                        : 'bg-orange-50 text-orange-700'
-                    }`}
                   >
                     {row.type || '—'}
-                  </span>
+                  </Box>
                 </TableCell>
                 <TableCell sx={{ color: '#999999', display: { xs: 'none', md: 'table-cell' } }}>
                   {row.modified_at ? new Date(row.modified_at).toLocaleString() : '—'}
@@ -169,7 +163,7 @@ const PresencesTable = ({ data = { rows: [], total: 0 }, loading = false, onPagi
             size="small"
             variant="outlined"
             onClick={handlePrevPage}
-            disabled={pagination.offset === 0}
+            disabled={currentOffset === 0}
             sx={{ borderColor: '#1E3A5F', color: '#1E3A5F' }}
           >
             ← Prev
@@ -178,7 +172,7 @@ const PresencesTable = ({ data = { rows: [], total: 0 }, loading = false, onPagi
             size="small"
             variant="outlined"
             onClick={handleNextPage}
-            disabled={pagination.offset + pagination.limit >= data.total}
+            disabled={currentOffset + pageSize >= data.total}
             sx={{ borderColor: '#1E3A5F', color: '#1E3A5F' }}
           >
             Next →

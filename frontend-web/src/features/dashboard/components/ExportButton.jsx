@@ -16,8 +16,11 @@ const ExportButton = ({ filters = {} }) => {
       setLoading(true);
       setError('');
 
+      // Exclude pagination params from export (export all matching records)
+      const { limit, offset, ...exportFilters } = filters;
+
       const response = await apiClient.get('/api/export/csv', {
-        params: filters,
+        params: exportFilters,
         responseType: 'blob',
       });
 

@@ -26,10 +26,14 @@ const FilterBar = ({ onFilter = () => {}, onClear = () => {} }) => {
   };
 
   const handleApplyFilters = () => {
-    // Validation
+    // Validation: Compare dates as strings to avoid timezone issues
     if (filters.date_from && filters.date_to) {
-      const from = new Date(filters.date_from);
-      const to = new Date(filters.date_to);
+      // Parse date strings (YYYY-MM-DD format from input type="date")
+      const [fromY, fromM, fromD] = filters.date_from.split('-');
+      const [toY, toM, toD] = filters.date_to.split('-');
+
+      const from = new Date(parseInt(fromY), parseInt(fromM) - 1, parseInt(fromD));
+      const to = new Date(parseInt(toY), parseInt(toM) - 1, parseInt(toD));
 
       if (from > to) {
         setError('Start date must be before end date');
@@ -37,7 +41,7 @@ const FilterBar = ({ onFilter = () => {}, onClear = () => {} }) => {
       }
 
       const diffMs = to - from;
-      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
       if (diffDays > 90) {
         setError('Date range cannot exceed 90 days');
         return;

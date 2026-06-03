@@ -3,7 +3,7 @@
  * Displays presences, KPI cards, filters, and export functionality
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Container, Box, Alert } from '@mui/material';
 import { usePresences } from '../hooks/usePresences';
 import KpiCards from '../components/KpiCards';
@@ -21,7 +21,17 @@ const DashboardPage = () => {
     offset: 0,
   });
 
-  const { data, stats, loading, error, refetch } = usePresences(filters);
+  // Memoize filters to prevent infinite refetch loops
+  const memoizedFilters = useMemo(() => filters, [
+    filters.site_id,
+    filters.employee_id,
+    filters.date_from,
+    filters.date_to,
+    filters.limit,
+    filters.offset,
+  ]);
+
+  const { data, stats, loading, error, refetch } = usePresences(memoizedFilters);
 
   const handleFilterChange = (newFilters) => {
     setFilters((prev) => ({
@@ -42,11 +52,10 @@ const DashboardPage = () => {
     });
   };
 
-  const handlePaginationChange = (pagination) => {
+  const handlePaginationChange = (newOffset) => {
     setFilters((prev) => ({
       ...prev,
-      offset: pagination.offset,
-      limit: pagination.limit,
+      offset: newOffset,
     }));
   };
 
@@ -94,6 +103,8 @@ const DashboardPage = () => {
         <PresencesTable
           data={data}
           loading={loading}
+          currentOffset={filters.offset}
+          pageSize={filters.limit}
           onPaginationChange={handlePaginationChange}
         />
       </Container>
