@@ -36,10 +36,12 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Security middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(',') || 'http://localhost:3000',
-  credentials: process.env.CORS_CREDENTIALS === 'true',
-}));
+// CORS handled by Nginx reverse proxy (production)
+// Disable Express CORS middleware to avoid header conflicts
+// app.use(cors({
+//   origin: process.env.CORS_ORIGIN?.split(',') || 'http://localhost:3000',
+//   credentials: process.env.CORS_CREDENTIALS === 'true',
+// }));
 
 // Body parser middleware
 app.use(express.json());
