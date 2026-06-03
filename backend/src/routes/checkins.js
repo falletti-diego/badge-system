@@ -128,10 +128,10 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
   const clientId = req.user.client_id;
 
   try {
-    // Build WHERE clause dynamically
-    const whereClauses = ['c.client_id = $1::uuid'];
-    const params = [clientId];
-    let paramCount = 1;
+    // Build WHERE clause dynamically (MVP: no client_id filtering)
+    const whereClauses = [];
+    const params = [];
+    let paramCount = 0;
 
     if (site_id) {
       paramCount++;
@@ -166,7 +166,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
     params.push(offset);
     const offsetParam = paramCount;
 
-    const whereClause = whereClauses.join(' AND ');
+    const whereClause = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
     // Query data with employee and site details
     const query = `
@@ -185,7 +185,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
       FROM checkins c
       LEFT JOIN employees e ON c.employee_id = e.id
       LEFT JOIN sites s ON c.site_id = s.id
-      WHERE ${whereClause}
+      ${whereClause}
       ORDER BY c.timestamp DESC
       LIMIT $${limitParam} OFFSET $${offsetParam}
     `;
@@ -195,7 +195,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
     // Get total count (without pagination)
     const countQuery = `
       SELECT COUNT(*) as total FROM checkins c
-      WHERE ${whereClause}
+      ${whereClause}
     `;
     const countParams = params.slice(0, paramCount - 2);
     const countResult = await pool.query(countQuery, countParams);
@@ -232,10 +232,10 @@ router.get('/stats', requireAuth, createValidationMiddleware(GetStatsSchema), as
   const clientId = req.user.client_id;
 
   try {
-    // Build WHERE clause
-    const whereClauses = ['c.client_id = $1::uuid'];
-    const params = [clientId];
-    let paramCount = 1;
+    // Build WHERE clause (MVP: no client_id filtering, use mock user)
+    const whereClauses = [];
+    const params = [];
+    let paramCount = 0;
 
     if (site_id) {
       paramCount++;
@@ -261,7 +261,7 @@ router.get('/stats', requireAuth, createValidationMiddleware(GetStatsSchema), as
       params.push(date_to);
     }
 
-    const whereClause = whereClauses.join(' AND ');
+    const whereClause = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
     // Query statistics
     const statsQuery = `
@@ -271,7 +271,7 @@ router.get('/stats', requireAuth, createValidationMiddleware(GetStatsSchema), as
         COUNT(CASE WHEN type = 'IN' THEN 1 END) as checkins_in,
         COUNT(CASE WHEN type = 'OUT' THEN 1 END) as checkins_out
       FROM checkins c
-      WHERE ${whereClause}
+      ${whereClause}
     `;
 
     const statsResult = await pool.query(statsQuery, params);
