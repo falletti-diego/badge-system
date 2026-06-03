@@ -68,7 +68,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
       params.push(date_to);
     }
 
-    const whereClause = whereClauses.join(' AND ');
+    const whereClause = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
     // Query data from database FIRST (before headers)
     const query = `
@@ -83,7 +83,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
       FROM checkins c
       LEFT JOIN employees e ON c.employee_id = e.id
       LEFT JOIN sites s ON c.site_id = s.id
-      WHERE ${whereClause}
+      ${whereClause}
       ORDER BY c.timestamp DESC
     `;
 
