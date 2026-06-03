@@ -39,10 +39,10 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
   const clientId = req.user.client_id;
 
   try {
-    // Build WHERE clause
-    const whereClauses = ['c.client_id = $1::uuid'];
-    const params = [clientId];
-    let paramCount = 1;
+    // Build WHERE clause (MVP: no client_id filtering)
+    const whereClauses = [];
+    const params = [];
+    let paramCount = 0;
 
     if (site_id) {
       paramCount++;
