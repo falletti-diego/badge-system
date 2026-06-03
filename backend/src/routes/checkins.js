@@ -8,7 +8,7 @@
 const express = require('express');
 const pino = require('pino');
 const { pool } = require('../db/pool');
-const { createValidationMiddleware, PostCheckinSchema, GetCheckinsSchema, PutCheckinSchema } = require('../middleware/validation');
+const { createValidationMiddleware, PostCheckinSchema, GetCheckinsSchema, PutCheckinSchema, GetStatsSchema } = require('../middleware/validation');
 const { logAudit } = require('../middleware/audit');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
@@ -216,6 +216,86 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
         offset,
         total,
         hasMore: offset + limit < total,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =====================================================
+// GET /api/checkins/stats — Dashboard KPI statistics
+// =====================================================
+
+router.get('/stats', requireAuth, createValidationMiddleware(GetStatsSchema), async (req, res, next) => {
+  const { site_id, employee_id, date_from, date_to } = req.validated.query;
+  const clientId = req.user.client_id;
+
+  try {
+    // Build WHERE clause
+    const whereClauses = ['c.client_id = $1::uuid'];
+    const params = [clientId];
+    let paramCount = 1;
+
+    if (site_id) {
+      paramCount++;
+      whereClauses.push(`c.site_id = $${paramCount}::uuid`);
+      params.push(site_id);
+    }
+
+    if (employee_id) {
+      paramCount++;
+      whereClauses.push(`c.employee_id = $${paramCount}::uuid`);
+      params.push(employee_id);
+    }
+
+    if (date_from) {
+      paramCount++;
+      whereClauses.push(`c.timestamp >= $${paramCount}::date`);
+      params.push(date_from);
+    }
+
+    if (date_to) {
+      paramCount++;
+      whereClauses.push(`c.timestamp < $${paramCount}::date + INTERVAL '1 day'`);
+      params.push(date_to);
+    }
+
+    const whereClause = whereClauses.join(' AND ');
+
+    // Query statistics
+    const statsQuery = `
+      SELECT
+        COUNT(*) as total_checkins,
+        COUNT(DISTINCT employee_id) as unique_employees,
+        COUNT(CASE WHEN type = 'IN' THEN 1 END) as checkins_in,
+        COUNT(CASE WHEN type = 'OUT' THEN 1 END) as checkins_out
+      FROM checkins c
+      WHERE ${whereClause}
+    `;
+
+    const statsResult = await pool.query(statsQuery, params);
+    const stats = statsResult.rows[0];
+
+    logger.info({
+      action: 'get_stats',
+      client_id: clientId,
+      filters: { site_id, employee_id, date_from, date_to },
+      total_checkins: stats.total_checkins,
+    });
+
+    res.json({
+      data: {
+        total_checkins: parseInt(stats.total_checkins, 10),
+        unique_employees: parseInt(stats.unique_employees, 10),
+        checkin_types: {
+          IN: parseInt(stats.checkins_in, 10),
+          OUT: parseInt(stats.checkins_out, 10),
+        },
+        date_range: {
+          from: date_from || 'all-time',
+          to: date_to || 'all-time',
+        },
       },
     });
   } catch (err) {

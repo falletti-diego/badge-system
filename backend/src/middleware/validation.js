@@ -124,7 +124,33 @@ const GetExportCsvSchema = z.object({
 });
 
 // =====================================================
-// 5. GET /api/employees — List employees with pagination
+// 5. GET /api/stats — Dashboard KPI stats
+// =====================================================
+
+const GetStatsSchema = z.object({
+  query: z.object({
+    site_id: z.string().uuid('site_id must be a valid UUID').optional(),
+    employee_id: z.string().uuid('employee_id must be a valid UUID').optional(),
+    date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_from must be YYYY-MM-DD').optional(),
+    date_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_to must be YYYY-MM-DD').optional(),
+  })
+    .refine(
+      (data) => {
+        if (!data.date_from || !data.date_to) return true;
+        const from = new Date(data.date_from);
+        const to = new Date(data.date_to);
+        const diffDays = (to - from) / (1000 * 60 * 60 * 24);
+        return diffDays <= 90;
+      },
+      {
+        message: 'Date range cannot exceed 90 days',
+        path: ['date_to'],
+      }
+    ),
+});
+
+// =====================================================
+// 6. GET /api/employees — List employees with pagination
 // =====================================================
 
 const GetEmployeesSchema = z.object({
@@ -189,6 +215,7 @@ module.exports = {
   GetCheckinsSchema,
   PutCheckinSchema,
   GetExportCsvSchema,
+  GetStatsSchema,
   GetEmployeesSchema,
   createValidationMiddleware,
 };
