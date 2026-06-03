@@ -1,0 +1,22 @@
+[build]
+base = "frontend-web"
+publish = "dist"
+command = "npm run build"
+
+[env.production]
+command = "npm run build:prod"
+
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200
+
+[[headers]]
+for = "/*"
+[headers.values]
+"Cache-Control" = "max-age=0,no-cache,no-store,must-revalidate"
+
+[[headers]]
+for = "/assets/*"
+[headers.values]
+"Cache-Control" = "max-age=31536000,immutable"
