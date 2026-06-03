@@ -169,7 +169,7 @@ if (require.main === module) {
       const keyPath = path.join(__dirname, '..', 'key.pem');
       const certExists = fs.existsSync(certPath);
       const keyExists = fs.existsSync(keyPath);
-      const useHttps = certExists && keyExists;
+      const useHttps = process.env.USE_HTTPS === 'true' && certExists && keyExists;
 
       logger.info({
         message: 'Certificate check',
