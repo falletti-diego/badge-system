@@ -114,6 +114,11 @@ const authService = {
       (response) => response,
       (error) => {
         if (error.response?.status === 401) {
+          console.error('❌ 401 UNAUTHORIZED!', {
+            path: error.config?.url,
+            token: this.getToken() ? 'EXISTS' : 'MISSING',
+            response: error.response?.data,
+          });
           // Token expired or invalid
           this.logout();
           window.location.href = '/login';
