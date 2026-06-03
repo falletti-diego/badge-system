@@ -53,6 +53,16 @@ function verifyToken(token) {
  */
 function requireAuth(req, res, next) {
   try {
+    // MVP: Skip auth if DISABLE_AUTH=true
+    if (process.env.DISABLE_AUTH === 'true') {
+      req.user = {
+        user_id: 'mvp-user-1',
+        client_id: 'client-1',
+        role: 'admin',
+      };
+      return next();
+    }
+
     const authHeader = req.get('Authorization');
     const token = extractToken(authHeader);
 
