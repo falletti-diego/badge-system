@@ -1,0 +1,232 @@
+/**
+ * Global Styles & Tailwind CSS
+ * Design system tokens and utility classes
+ */
+
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* Google Fonts Import */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+/* Root Color Variables (Design System) */
+:root {
+  /* Neutral Colors */
+  --color-linen: #f5f2ed;
+  --color-parchment: #ede9e2;
+  --color-bone: #d9d4cb;
+  --color-dust: #a89f94;
+  --color-stone: #6b625a;
+  --color-ink: #2a2520;
+
+  /* Primary Navy */
+  --color-navy-50: #eef2f7;
+  --color-navy-100: #c8d5e8;
+  --color-navy-200: #8faccc;
+  --color-navy-300: #5680aa;
+  --color-navy-500: #1e3a5f;
+  --color-navy-700: #132543;
+  --color-navy-900: #0a1628;
+
+  /* Accent Colors */
+  --color-green-600: #2d7049;
+  --color-orange-600: #b45309;
+  --color-red-600: #c0392b;
+  --color-blue-600: #1e3a5f;
+
+  /* Spacing (8px grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.15);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.2);
+
+  /* Typography */
+  --font-serif: 'Cormorant', serif;
+  --font-sans: 'DM Sans', sans-serif;
+}
+
+/* Base Styles */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  background-color: var(--color-linen);
+  color: var(--color-ink);
+  line-height: 1.6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Typography Classes */
+.text-display {
+  font-family: var(--font-serif);
+  font-size: 2.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.text-heading {
+  font-family: var(--font-serif);
+  font-weight: 700;
+}
+
+.text-h1 {
+  @apply text-heading text-4xl;
+}
+
+.text-h2 {
+  @apply text-heading text-3xl;
+}
+
+.text-h3 {
+  @apply text-heading text-2xl;
+}
+
+.text-body {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.text-label {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Tailwind Extensions */
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-navy-500 text-white rounded-md font-medium hover:bg-navy-700 transition-colors;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 border border-navy-500 text-navy-500 rounded-md font-medium hover:bg-navy-50 transition-colors;
+  }
+
+  .card {
+    @apply bg-white rounded-md border border-parchment shadow-sm;
+  }
+
+  .badge-success {
+    @apply inline-block px-3 py-1 bg-green-50 text-green-700 rounded-full text-sm font-medium;
+  }
+
+  .badge-warning {
+    @apply inline-block px-3 py-1 bg-orange-50 text-orange-700 rounded-full text-sm font-medium;
+  }
+
+  .badge-error {
+    @apply inline-block px-3 py-1 bg-red-50 text-red-700 rounded-full text-sm font-medium;
+  }
+}
+
+/* Custom Color Utilities for Tailwind */
+@layer utilities {
+  .bg-linen {
+    @apply bg-[#f5f2ed];
+  }
+
+  .bg-parchment {
+    @apply bg-[#ede9e2];
+  }
+
+  .bg-bone {
+    @apply bg-[#d9d4cb];
+  }
+
+  .bg-ink {
+    @apply bg-[#2a2520];
+  }
+
+  .text-ink {
+    @apply text-[#2a2520];
+  }
+
+  .text-dust {
+    @apply text-[#a89f94];
+  }
+
+  .border-parchment {
+    @apply border-[#ede9e2];
+  }
+
+  .font-cormorant {
+    @apply font-serif;
+  }
+
+  .font-dm-sans {
+    @apply font-sans;
+  }
+}
+
+/* Loading Skeleton */
+.skeleton {
+  @apply bg-parchment animate-pulse rounded;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-linen);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-dust);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-stone);
+}
+
+/* Print Styles */
+@media print {
+  body {
+    background-color: white;
+  }
+
+  .no-print {
+    display: none;
+  }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
