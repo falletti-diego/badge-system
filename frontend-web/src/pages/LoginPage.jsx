@@ -10,7 +10,7 @@ export default function LoginPage() {
     console.log('📝 LoginPage mounted');
   }, []);
   const [email, setEmail] = useState('demo@badge.it');
-  const [password, setPassword] = useState('demo123');
+  const [password, setPassword] = useState('DemoPass2026!Badge');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
@@ -191,7 +191,7 @@ export default function LoginPage() {
             Email: <code>demo@badge.it</code>
           </Typography>
           <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block' }}>
-            Password: <code>demo123</code>
+            Password: <code>DemoPass2026!Badge</code>
           </Typography>
         </Box>
       </Box>

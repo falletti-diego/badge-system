@@ -21,7 +21,7 @@ const TOKEN_EXPIRY = '7d'; // 7 days for MVP
 // MVP: Hardcoded demo credentials
 const DEMO_USER = {
   email: 'demo@badge.it',
-  password: 'demo123',
+  password: 'DemoPass2026!Badge',
   id: 'user-mvp-demo',
   role: 'admin',
   client_id: 'client-1',
