@@ -33,7 +33,7 @@ const PostCheckinSchema = z.object({
 
 const GetCheckinsSchema = z.object({
   query: z.object({
-    client_id: z.string().uuid('client_id must be a valid UUID').nonempty(),
+    client_id: z.string().uuid('client_id must be a valid UUID').optional(),
     site_id: z.string().uuid('site_id must be a valid UUID').optional(),
     employee_id: z.string().uuid('employee_id must be a valid UUID').optional(),
     date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_from must be YYYY-MM-DD').optional(),
@@ -102,7 +102,7 @@ const PutCheckinSchema = z.object({
 
 const GetExportCsvSchema = z.object({
   query: z.object({
-    client_id: z.string().uuid('client_id must be a valid UUID').nonempty(),
+    client_id: z.string().uuid('client_id must be a valid UUID').optional(),
     site_id: z.string().uuid('site_id must be a valid UUID').optional(),
     employee_id: z.string().uuid('employee_id must be a valid UUID').optional(),
     date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_from must be YYYY-MM-DD').optional(),
