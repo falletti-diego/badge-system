@@ -213,20 +213,12 @@ router.get('/:siteId', requireAuth, createValidationMiddleware(GetShiftsSchema),
 
     const shiftsData = shiftsResult.rows[0]?.shifts_data || {};
 
-    // 4. Fetch employees assigned to this site
-    // Include: employees from this site + employees from other sites assigned to this site
+    // 4. Fetch employees assigned to this site only
     const employeesResult = await pool.query(
       `SELECT DISTINCT e.id, e.name, e.email
        FROM employees e
        WHERE e.client_id = $1::uuid
-       AND (
-         $2::uuid = ANY(e.assigned_sites)  -- Employee assigned to this site
-         OR EXISTS (
-           SELECT 1 FROM sites s
-           WHERE s.id = $2::uuid
-           AND s.client_id = e.client_id
-         )
-       )
+       AND $2::uuid = ANY(e.assigned_sites)
        ORDER BY e.name ASC`,
       [clientId, siteId]
     );

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import authService from '../../../services/authService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -24,7 +25,7 @@ export const useShifts = (siteId, month, year) => {
       setError(null);
 
       try {
-        const token = localStorage.getItem('auth_token');
+        const token = authService.getToken();
         if (!token) {
           throw new Error('No authentication token found');
         }
