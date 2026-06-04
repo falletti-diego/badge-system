@@ -9,8 +9,8 @@ export default function LoginPage() {
   useEffect(() => {
     console.log('📝 LoginPage mounted');
   }, []);
-  const [email, setEmail] = useState('demo@badge.it');
-  const [password, setPassword] = useState('DemoPass2026!Badge');
+  const [email, setEmail] = useState('pippo@badge.local');
+  const [password, setPassword] = useState('pippo01');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
@@ -185,13 +185,16 @@ export default function LoginPage() {
           }}
         >
           <Typography variant="caption" sx={{ color: '#1E40AF', fontWeight: 600 }}>
-            MVP Demo Credentials:
+            MVP Test Accounts (5 accounts):
           </Typography>
-          <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block', mt: 0.5 }}>
-            Email: <code>demo@badge.it</code>
+          <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block', mt: 0.5, fontSize: '11px' }}>
+            Admin: <code>pippo@badge.local</code> / <code>pippo01</code>
           </Typography>
-          <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block' }}>
-            Password: <code>DemoPass2026!Badge</code>
+          <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block', fontSize: '11px' }}>
+            Manager: <code>pino@badge.local</code> / <code>pino01</code> | <code>diego@badge.local</code> / <code>diego01</code>
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block', fontSize: '11px' }}>
+            Employee: <code>maria@badge.local</code> / <code>maria01</code> | <code>lucia@badge.local</code> / <code>lucia01</code>
           </Typography>
         </Box>
       </Box>
