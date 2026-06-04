@@ -93,6 +93,11 @@ function requireAuth(req, res, next) {
       exp: decoded.exp,
     };
 
+    // Include employee_id if present (for employee role users)
+    if (decoded.employee_id) {
+      req.user.employee_id = decoded.employee_id;
+    }
+
     logger.debug({
       action: 'auth_verified',
       user_id: req.user.user_id,

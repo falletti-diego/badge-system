@@ -60,6 +60,15 @@ const DEMO_USERS = [
     role: 'employee',
     client_id: 'client-1',
   },
+  {
+    email: 'luca.verdi@employee.it',
+    password: 'Luca1975',
+    id: 'user-mvp-luca-verdi',
+    name: 'Luca Verdi',
+    role: 'employee',
+    client_id: 'client-1',
+    employee_id: '550e8400-e29b-41d4-a716-446655440102', // Database employee ID
+  },
 ];
 
 /**
@@ -98,17 +107,18 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       });
     }
 
-    // Generate JWT token
-    const token = jwt.sign(
-      {
-        user_id: user.id,
-        email: user.email,
-        role: user.role,
-        client_id: user.client_id,
-      },
-      JWT_SECRET,
-      { expiresIn: TOKEN_EXPIRY }
-    );
+    // Generate JWT token (include employee_id if employee role)
+    const tokenPayload = {
+      user_id: user.id,
+      email: user.email,
+      role: user.role,
+      client_id: user.client_id,
+    };
+    if (user.employee_id) {
+      tokenPayload.employee_id = user.employee_id;
+    }
+
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
 
     logger.info({
       action: 'user_login',
@@ -116,18 +126,24 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       name: user.name,
       user_id: user.id,
       role: user.role,
+      employee_id: user.employee_id || null,
       timestamp: new Date().toISOString(),
     });
+
+    const userResponse = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    };
+    if (user.employee_id) {
+      userResponse.employee_id = user.employee_id;
+    }
 
     res.json({
       data: {
         token,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-        },
+        user: userResponse,
       },
     });
   } catch (err) {

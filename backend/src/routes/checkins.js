@@ -146,16 +146,25 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
 router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), async (req, res, next) => {
   const { site_id, employee_id, date_from, date_to, limit, offset } = req.validated.query;
   const clientId = req.user.client_id;
+  const userRole = req.user.role;
+  const userEmployeeId = req.user.employee_id;
 
   try {
     // Resolve IDs from names if needed (MVP: accept both UUID and name)
     const resolvedSiteId = site_id ? await resolveSiteId(site_id) : undefined;
     const resolvedEmployeeId = employee_id ? await resolveEmployeeId(employee_id) : undefined;
 
-    // Build WHERE clause dynamically (MVP: no client_id filtering)
+    // Build WHERE clause dynamically
     const whereClauses = [];
     const params = [];
     let paramCount = 0;
+
+    // IMPORTANT: If user is an employee, they can only see their own checkins
+    if (userRole === 'employee' && userEmployeeId) {
+      paramCount++;
+      whereClauses.push(`c.employee_id = $${paramCount}::uuid`);
+      params.push(userEmployeeId);
+    }
 
     if (resolvedSiteId) {
       paramCount++;
@@ -254,16 +263,25 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
 router.get('/stats', requireAuth, createValidationMiddleware(GetStatsSchema), async (req, res, next) => {
   const { site_id, employee_id, date_from, date_to } = req.validated.query;
   const clientId = req.user.client_id;
+  const userRole = req.user.role;
+  const userEmployeeId = req.user.employee_id;
 
   try {
     // Resolve IDs from names if needed (MVP: accept both UUID and name)
     const resolvedSiteId = site_id ? await resolveSiteId(site_id) : undefined;
     const resolvedEmployeeId = employee_id ? await resolveEmployeeId(employee_id) : undefined;
 
-    // Build WHERE clause (MVP: no client_id filtering, use mock user)
+    // Build WHERE clause
     const whereClauses = [];
     const params = [];
     let paramCount = 0;
+
+    // IMPORTANT: If user is an employee, they can only see their own stats
+    if (userRole === 'employee' && userEmployeeId) {
+      paramCount++;
+      whereClauses.push(`c.employee_id = $${paramCount}::uuid`);
+      params.push(userEmployeeId);
+    }
 
     if (resolvedSiteId) {
       paramCount++;
