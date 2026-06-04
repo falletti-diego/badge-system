@@ -1,13 +1,76 @@
-# Badge System — Project Discussion: Role-Based Data Filtering (2026-06-04)
+# Badge System — Project Discussion (2026-06-04)
 
 **Updated:** 4 Giugno 2026  
-**Session:** Role-Based Data Filtering Implementation  
-**Status:** ✅ COMPLETE & DEPLOYED  
+**Session:** FASE 3.3 Planning Page + Role-Based Data Filtering  
+**Status:** ✅ ALL COMPLETE & PRODUCTION READY  
 **Lead:** Diego Falletti + Claude Haiku 4.5
 
 ---
 
-## 📌 Session Overview
+# 🎉 PHASE COMPLETE: FASE 3.3 — Planning Page (Shift Management)
+
+**Date:** 4 Giugno 2026  
+**Status:** ✅ PRODUCTION READY & TESTED  
+**Commits:** f654757 (demo accounts), f933d50 (shift count fix)
+
+## Features Deployed
+
+### Manager Interface — `/planning`
+- ✅ Editable matrix: 4 employees × 30 days (Torino Store)
+- ✅ Shift dropdown: Mattino (m), Pomeriggio (p), Sera (s), Riposo (R)
+- ✅ Color-coded UI with emoji indicators
+- ✅ Auto-save on shift change
+- ✅ Save/Reset buttons with change tracking
+- ✅ Month/Year navigation
+- ✅ KPI Cards: Dipendenti (4), Turni Assegnati (14/120), Giorni (30)
+- ✅ CSV Export
+- ✅ Real API: POST /api/shifts/:siteId
+
+### Employee Interface — `/planning/my-schedule`
+- ✅ Read-only list view of personal shifts
+- ✅ 6 shifts visible for Alice Neri (1-6 giugno)
+- ✅ Shift types with colors: 🌅 Mattino (blue), ☀️ Pomeriggio (orange), 🌙 Sera (purple), ❌ Riposo (gray)
+- ✅ Month/Year navigation
+- ✅ Real API: GET /api/shifts/my-schedule
+
+### Demo Accounts Added
+```
+alice.neri@employee.it / Alice1975     → 6 shifts (Torino Store)
+carlo.rossi@employee.it / Carlo1975    → 1 shift (Torino Store)
+paolo.sordo@employee.it / Paolo1975    → 1 shift (Torino Store)
+```
+
+## Bugs Fixed
+
+### 1. Database Credentials Crisis (20:36 UTC)
+- **Issue:** Container had wrong RDS password
+- **Root Cause:** GitHub Secrets not updated from deployment
+- **Fix:** Updated RDS_PASSWORD secret to "Badge2026Simple"
+- **Result:** All 500 errors resolved, API fully functional
+
+### 2. Shift Count Bug (20:50 UTC)
+- **Issue:** KPI card showed "40/120" instead of "14/120"
+- **Root Cause:** Used Object.values(shifts) instead of iterating employees
+- **Fix:** Changed to (data.employees || []).reduce(...) with getShiftCount()
+- **Commit:** f933d50
+- **Result:** Accurate count display
+
+## Production Verification
+
+| Test | Result | Status |
+|------|--------|--------|
+| Manager login (Diego) | ✅ Pass | Login works, JWT token issued |
+| View planning grid | ✅ Pass | 4 employees × 30 days visible |
+| Edit shifts | ✅ Pass | Dropdown changes work smoothly |
+| Save shifts | ✅ Pass | POST API call succeeds, data persists |
+| Employee login (Alice) | ✅ Pass | Login works with new demo account |
+| View my-schedule | ✅ Pass | 6 shifts displayed correctly |
+| Shift count | ✅ Pass | Shows 14/120 (correct) |
+| Frontend auto-deploy | ✅ Pass | Netlify deploy completed |
+
+---
+
+## 📌 Session Overview (Role-Based Filtering)
 
 ### Objective
 Implement multi-level role-based data filtering to ensure users see only data relevant to their role and responsibilities:
