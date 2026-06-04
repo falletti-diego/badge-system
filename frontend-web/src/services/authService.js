@@ -4,6 +4,7 @@ const API_URL = window.API_CONFIG?.API_URL || import.meta.env.VITE_API_URL || 'h
 const TOKEN_KEY = 'badge_auth_token';
 const USER_KEY = 'badge_user';
 const EMPLOYEE_ID_KEY = 'badge_employee_id';
+const SITE_ID_KEY = 'badge_site_id';
 
 /**
  * Authentication Service
@@ -33,6 +34,12 @@ const authService = {
           localStorage.setItem(EMPLOYEE_ID_KEY, user.employee_id);
         } else {
           localStorage.removeItem(EMPLOYEE_ID_KEY);
+        }
+        // Store site_id if present (for manager role users assigned to specific store)
+        if (user.site_id) {
+          localStorage.setItem(SITE_ID_KEY, user.site_id);
+        } else {
+          localStorage.removeItem(SITE_ID_KEY);
         }
       }
 
@@ -73,6 +80,7 @@ const authService = {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(EMPLOYEE_ID_KEY);
+    localStorage.removeItem(SITE_ID_KEY);
   },
 
   /**
@@ -106,6 +114,14 @@ const authService = {
    */
   getEmployeeId() {
     return localStorage.getItem(EMPLOYEE_ID_KEY);
+  },
+
+  /**
+   * Get site ID from localStorage (for manager role users assigned to store)
+   * @returns {string|null} Site ID or null if not found
+   */
+  getSiteId() {
+    return localStorage.getItem(SITE_ID_KEY);
   },
 
   /**

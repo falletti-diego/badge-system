@@ -191,7 +191,7 @@ export default function LoginPage() {
             Admin: <code>pippo@badge.local</code> / <code>pippo01</code>
           </Typography>
           <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block', fontSize: '11px' }}>
-            Manager: <code>pino@badge.local</code> / <code>pino01</code> | <code>diego@badge.local</code> / <code>diego01</code>
+            Manager: <code>pino@badge.local</code> / <code>pino01</code> (all stores) | <code>diego@badge.local</code> / <code>Diego1975</code> (⭐ Torino only)
           </Typography>
           <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block', fontSize: '11px' }}>
             Employee: <code>maria@badge.local</code> / <code>maria01</code> | <code>lucia@badge.local</code> / <code>lucia01</code>

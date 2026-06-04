@@ -16,12 +16,14 @@ import authService from '../../../services/authService';
 const DashboardPage = () => {
   const navigate = useNavigate();
 
-  // Get employee ID if user is an employee (auto-filter)
+  // Get user context for auto-filtering
   const userEmployeeId = authService.getEmployeeId();
+  const userSiteId = authService.getSiteId();
+  const userRole = authService.getUserRole();
   const isEmployee = authService.isEmployee();
 
   const [filters, setFilters] = useState({
-    site_id: null,
+    site_id: userSiteId ? userSiteId : null, // Auto-filter for managers with assigned store
     employee_id: isEmployee ? userEmployeeId : null, // Auto-filter for employees
     date_from: null,
     date_to: null,
