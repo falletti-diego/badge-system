@@ -224,6 +224,9 @@ const PostShiftsSchema = z.object({
           errorMap: () => ({ message: 'shift must be one of: m (mattino), p (pomeriggio), s (sera), R (riposo)' }),
         })
       )
+    ).refine(
+      data => Object.keys(data).length > 0,
+      { message: 'shifts_data must contain at least one employee' }
     ),
   }),
   params: z.object({

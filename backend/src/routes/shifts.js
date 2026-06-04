@@ -21,10 +21,161 @@ const logger = pino({
 });
 
 // =====================================================
+// GET /api/shifts/my-schedule — Employee's own shifts
+// =====================================================
+// Employee can only see their own shifts
+// Returns: shifts_data for logged-in employee
+// IMPORTANT: This route must come BEFORE /:siteId to match first
+
+router.get('/my-schedule/:dummy?', requireAuth, createValidationMiddleware(GetShiftsSchema), async (req, res, next) => {
+  const { month, year } = req.validated.query;
+  const userRole = req.user.role;
+  const userEmployeeId = req.user.employee_id;
+
+  try {
+    // 1. Only employees can access their own schedule
+    if (userRole !== 'employee' || !userEmployeeId) {
+      throw new ForbiddenError('Only employees can view their personal schedule', 'EMPLOYEE_ONLY');
+    }
+
+    // 2. Get employee's assigned sites to find their shifts
+    const employeeResult = await pool.query(
+      'SELECT id, assigned_sites FROM employees WHERE id = $1::uuid',
+      [userEmployeeId]
+    );
+
+    if (employeeResult.rows.length === 0) {
+      throw new NotFoundError('Employee not found', 'EMPLOYEE_NOT_FOUND');
+    }
+
+    const assignedSites = employeeResult.rows[0].assigned_sites;
+
+    // 3. For each assigned site, fetch shifts containing this employee
+    let employeeShifts = {};
+    if (assignedSites && assignedSites.length > 0) {
+      const shiftsResult = await pool.query(
+        `SELECT shifts_data FROM shifts
+         WHERE site_id = ANY($1::uuid[])
+         AND month = $2 AND year = $3`,
+        [assignedSites, month, year]
+      );
+
+      // Merge all shifts_data and extract only this employee's shifts
+      shiftsResult.rows.forEach(row => {
+        if (row.shifts_data[userEmployeeId]) {
+          employeeShifts = { ...employeeShifts, ...row.shifts_data[userEmployeeId] };
+        }
+      });
+    }
+
+    logger.info({
+      message: 'Employee schedule fetched',
+      employee_id: userEmployeeId,
+      month,
+      year,
+      shift_count: Object.keys(employeeShifts).length,
+    });
+
+    res.json({
+      data: {
+        shifts_data: employeeShifts,
+        metadata: { month, year, shift_count: Object.keys(employeeShifts).length },
+      },
+      message: 'Your shift schedule retrieved successfully',
+    });
+
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =====================================================
+// GET /api/shifts/:siteId/export — Export planning
+// =====================================================
+// Manager can export shifts to PDF or CSV
+// Query params: format=pdf|csv
+// IMPORTANT: This route must come BEFORE /:siteId to match first
+
+router.get('/:siteId/export', requireAuth, createValidationMiddleware(ExportShiftsSchema), async (req, res, next) => {
+  const { siteId } = req.params;
+  const { month, year, format } = req.validated.query;
+  const clientId = req.user.client_id;
+  const userRole = req.user.role;
+  const userSiteId = req.user.site_id;
+
+  try {
+    // 1. Verify site belongs to client
+    const siteResult = await pool.query(
+      'SELECT id, name FROM sites WHERE id = $1::uuid AND client_id = $2::uuid',
+      [siteId, clientId]
+    );
+
+    if (siteResult.rows.length === 0) {
+      throw new NotFoundError('Site not found', 'SITE_NOT_FOUND');
+    }
+
+    // 2. Authorization check
+    if (userRole === 'manager') {
+      if (!userSiteId || userSiteId !== siteId) {
+        throw new ForbiddenError('You can only export your assigned store', 'NOT_ASSIGNED_TO_SITE');
+      }
+    }
+
+    // 3. Fetch shifts data
+    const shiftsResult = await pool.query(
+      `SELECT shifts_data FROM shifts
+       WHERE site_id = $1::uuid AND month = $2 AND year = $3`,
+      [siteId, month, year]
+    );
+
+    const shiftsData = shiftsResult.rows[0]?.shifts_data || {};
+
+    // 4. Fetch employees for context
+    const employeesResult = await pool.query(
+      `SELECT id, name FROM employees WHERE client_id = $1::uuid
+       ORDER BY name ASC`,
+      [clientId]
+    );
+
+    const employeeMap = {};
+    employeesResult.rows.forEach(emp => {
+      employeeMap[emp.id] = emp.name;
+    });
+
+    // For MVP, just return the data as JSON
+    // PDF/CSV generation will be done in Task #6
+    logger.info({
+      message: 'Shifts planning exported',
+      site_id: siteId,
+      month,
+      year,
+      format,
+      user_id: req.user.user_id,
+    });
+
+    res.json({
+      data: {
+        shifts_data: shiftsData,
+        employees: employeeMap,
+        site_name: siteResult.rows[0].name,
+        month,
+        year,
+        format,
+      },
+      message: `Shifts planning exported as ${format.toUpperCase()} (generation in progress)`,
+    });
+
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =====================================================
 // GET /api/shifts/:siteId — Fetch shift planning
 // =====================================================
 // Manager or Admin can fetch planning for their assigned store
 // Returns: shifts_data, employees list, site details
+// IMPORTANT: This generic route must come AFTER specific routes
 
 router.get('/:siteId', requireAuth, createValidationMiddleware(GetShiftsSchema), async (req, res, next) => {
   const { siteId } = req.params;
@@ -131,8 +282,10 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
     }
 
     // 2. Authorization check
-    if (userRole === 'manager' && userSiteId && userSiteId !== siteId) {
-      throw new ForbiddenError('You can only update your assigned store', 'NOT_ASSIGNED_TO_SITE');
+    if (userRole === 'manager') {
+      if (!userSiteId || userSiteId !== siteId) {
+        throw new ForbiddenError('You can only update your assigned store', 'NOT_ASSIGNED_TO_SITE');
+      }
     }
 
     // 3. Use transaction for atomic insert/update + audit
@@ -148,10 +301,10 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
       let shiftsRecord;
 
       if (existingResult.rows.length > 0) {
-        // UPDATE existing record
+        // UPDATE existing record (merge shifts_data, don't replace)
         const updateResult = await client.query(
           `UPDATE shifts
-           SET shifts_data = $1, updated_by = $2, updated_at = NOW()
+           SET shifts_data = shifts_data || $1, updated_by = $2, updated_at = NOW()
            WHERE site_id = $3::uuid AND month = $4 AND year = $5
            RETURNING id, shifts_data, updated_at`,
           [shifts_data, userId, siteId, month, year]
@@ -198,155 +351,6 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
         updated_at: result.updated_at,
       },
       message: 'Shifts planning saved successfully',
-    });
-
-  } catch (err) {
-    next(err);
-  }
-});
-
-// =====================================================
-// GET /api/shifts/my-schedule — Employee's own shifts
-// =====================================================
-// Employee can only see their own shifts
-// Returns: shifts_data for logged-in employee
-
-router.get('/my-schedule/:dummy?', requireAuth, createValidationMiddleware(GetShiftsSchema), async (req, res, next) => {
-  const { month, year } = req.validated.query;
-  const userRole = req.user.role;
-  const userEmployeeId = req.user.employee_id;
-
-  // Note: :dummy? allows matching /my-schedule even though it looks like /:siteId
-  // This route must come BEFORE /:siteId to match first
-
-  try {
-    // 1. Only employees can access their own schedule
-    if (userRole !== 'employee' || !userEmployeeId) {
-      throw new ForbiddenError('Only employees can view their personal schedule', 'EMPLOYEE_ONLY');
-    }
-
-    // 2. Get employee's assigned sites to find their shifts
-    const employeeResult = await pool.query(
-      'SELECT id, assigned_sites FROM employees WHERE id = $1::uuid',
-      [userEmployeeId]
-    );
-
-    if (employeeResult.rows.length === 0) {
-      throw new NotFoundError('Employee not found', 'EMPLOYEE_NOT_FOUND');
-    }
-
-    const assignedSites = employeeResult.rows[0].assigned_sites;
-
-    // 3. For each assigned site, fetch shifts containing this employee
-    let employeeShifts = {};
-    if (assignedSites && assignedSites.length > 0) {
-      const shiftsResult = await pool.query(
-        `SELECT shifts_data FROM shifts
-         WHERE site_id = ANY($1::uuid[])
-         AND month = $2 AND year = $3`,
-        [assignedSites, month, year]
-      );
-
-      // Merge all shifts_data and extract only this employee's shifts
-      shiftsResult.rows.forEach(row => {
-        if (row.shifts_data[userEmployeeId]) {
-          employeeShifts = { ...employeeShifts, ...row.shifts_data[userEmployeeId] };
-        }
-      });
-    }
-
-    logger.info({
-      message: 'Employee schedule fetched',
-      employee_id: userEmployeeId,
-      month,
-      year,
-      shift_count: Object.keys(employeeShifts).length,
-    });
-
-    res.json({
-      data: {
-        shifts_data: employeeShifts,
-        metadata: { month, year, shift_count: Object.keys(employeeShifts).length },
-      },
-      message: 'Your shift schedule retrieved successfully',
-    });
-
-  } catch (err) {
-    next(err);
-  }
-});
-
-// =====================================================
-// GET /api/shifts/:siteId/export — Export planning
-// =====================================================
-// Manager can export shifts to PDF or CSV
-// Query params: format=pdf|csv
-
-router.get('/:siteId/export', requireAuth, createValidationMiddleware(ExportShiftsSchema), async (req, res, next) => {
-  const { siteId } = req.params;
-  const { month, year, format } = req.validated.query;
-  const clientId = req.user.client_id;
-  const userRole = req.user.role;
-  const userSiteId = req.user.site_id;
-
-  try {
-    // 1. Verify site belongs to client
-    const siteResult = await pool.query(
-      'SELECT id, name FROM sites WHERE id = $1::uuid AND client_id = $2::uuid',
-      [siteId, clientId]
-    );
-
-    if (siteResult.rows.length === 0) {
-      throw new NotFoundError('Site not found', 'SITE_NOT_FOUND');
-    }
-
-    // 2. Authorization check
-    if (userRole === 'manager' && userSiteId && userSiteId !== siteId) {
-      throw new ForbiddenError('You can only export your assigned store', 'NOT_ASSIGNED_TO_SITE');
-    }
-
-    // 3. Fetch shifts data
-    const shiftsResult = await pool.query(
-      `SELECT shifts_data FROM shifts
-       WHERE site_id = $1::uuid AND month = $2 AND year = $3`,
-      [siteId, month, year]
-    );
-
-    const shiftsData = shiftsResult.rows[0]?.shifts_data || {};
-
-    // 4. Fetch employees for context
-    const employeesResult = await pool.query(
-      `SELECT id, name FROM employees WHERE client_id = $1::uuid
-       ORDER BY name ASC`,
-      [clientId]
-    );
-
-    const employeeMap = {};
-    employeesResult.rows.forEach(emp => {
-      employeeMap[emp.id] = emp.name;
-    });
-
-    // For MVP, just return the data as JSON
-    // PDF/CSV generation will be done in Task #6
-    logger.info({
-      message: 'Shifts planning exported',
-      site_id: siteId,
-      month,
-      year,
-      format,
-      user_id: req.user.user_id,
-    });
-
-    res.json({
-      data: {
-        shifts_data: shiftsData,
-        employees: employeeMap,
-        site_name: siteResult.rows[0].name,
-        month,
-        year,
-        format,
-      },
-      message: `Shifts planning exported as ${format.toUpperCase()} (generation in progress)`,
     });
 
   } catch (err) {
