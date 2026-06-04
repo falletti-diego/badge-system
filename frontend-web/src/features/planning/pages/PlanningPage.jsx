@@ -270,10 +270,7 @@ export const PlanningPage = () => {
               <CardContent>
                 <Typography color="textSecondary">Turni Assegnati</Typography>
                 <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                  {Object.values(shifts || {}).reduce(
-                    (sum, emp) => sum + Object.keys(emp).length,
-                    0
-                  )}/{(data.employees?.length || 0) * daysInMonth}
+                  {(data.employees || []).reduce((sum, emp) => sum + getShiftCount(emp.id), 0)}/{(data.employees?.length || 0) * daysInMonth}
                 </Typography>
               </CardContent>
             </Card>
