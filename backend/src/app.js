@@ -19,6 +19,7 @@ const { cacheMiddleware } = require('./middleware/cache');
 const authRouter = require('./routes/auth');
 const employeesRouter = require('./routes/employees');
 const checkinsRouter = require('./routes/checkins');
+const shiftsRouter = require('./routes/shifts');
 const exportRouter = require('./routes/export');
 
 // Load environment variables
@@ -86,6 +87,7 @@ app.use('/api/', cacheMiddleware());
 app.use('/api/auth', authRouter);
 app.use('/api/employees', employeesRouter);
 app.use('/api/checkins', checkinsRouter);
+app.use('/api/shifts', shiftsRouter);
 app.use('/api/export/csv', exportRouter);
 
 // Error handling middleware

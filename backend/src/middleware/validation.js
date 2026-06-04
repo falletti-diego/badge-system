@@ -181,6 +181,83 @@ const GetEmployeesSchema = z.object({
 });
 
 // =====================================================
+// 7. GET /api/shifts/:siteId — Fetch shift planning
+// =====================================================
+
+const GetShiftsSchema = z.object({
+  query: z.object({
+    month: z.coerce
+      .number()
+      .int('month must be an integer')
+      .min(1, 'month must be between 1 and 12')
+      .max(12, 'month must be between 1 and 12')
+      .default(new Date().getMonth() + 1),
+    year: z.coerce
+      .number()
+      .int('year must be an integer')
+      .min(2020, 'year must be 2020 or later')
+      .default(new Date().getFullYear()),
+  }),
+  params: z.object({
+    siteId: z.string().uuid('Invalid siteId: must be valid UUID').optional(),
+  }),
+});
+
+// =====================================================
+// 8. POST /api/shifts/:siteId — Save shift planning
+// =====================================================
+
+const PostShiftsSchema = z.object({
+  body: z.object({
+    month: z.number()
+      .int('month must be an integer')
+      .min(1, 'month must be between 1 and 12')
+      .max(12, 'month must be between 1 and 12'),
+    year: z.number()
+      .int('year must be an integer')
+      .min(2020, 'year must be 2020 or later'),
+    shifts_data: z.record(
+      z.string().uuid('employee_id must be valid UUID'),
+      z.record(
+        z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD'),
+        z.enum(['m', 'p', 's', 'R'], {
+          errorMap: () => ({ message: 'shift must be one of: m (mattino), p (pomeriggio), s (sera), R (riposo)' }),
+        })
+      )
+    ),
+  }),
+  params: z.object({
+    siteId: z.string().uuid('Invalid siteId: must be valid UUID'),
+  }),
+});
+
+// =====================================================
+// 9. GET /api/shifts/:siteId/export — Export planning
+// =====================================================
+
+const ExportShiftsSchema = z.object({
+  query: z.object({
+    month: z.coerce
+      .number()
+      .int('month must be an integer')
+      .min(1, 'month must be between 1 and 12')
+      .max(12, 'month must be between 1 and 12')
+      .default(new Date().getMonth() + 1),
+    year: z.coerce
+      .number()
+      .int('year must be an integer')
+      .min(2020, 'year must be 2020 or later')
+      .default(new Date().getFullYear()),
+    format: z.enum(['pdf', 'csv'], {
+      errorMap: () => ({ message: 'format must be either "pdf" or "csv"' }),
+    }).default('csv'),
+  }),
+  params: z.object({
+    siteId: z.string().uuid('Invalid siteId: must be valid UUID'),
+  }),
+});
+
+// =====================================================
 // Validation Middleware Factory
 // =====================================================
 
@@ -229,5 +306,8 @@ module.exports = {
   GetExportCsvSchema,
   GetStatsSchema,
   GetEmployeesSchema,
+  GetShiftsSchema,
+  PostShiftsSchema,
+  ExportShiftsSchema,
   createValidationMiddleware,
 };
