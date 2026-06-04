@@ -18,14 +18,49 @@ const logger = pino({
 const JWT_SECRET = process.env.JWT_SECRET || 'test-secret-mvp';
 const TOKEN_EXPIRY = '7d'; // 7 days for MVP
 
-// MVP: Hardcoded demo credentials
-const DEMO_USER = {
-  email: 'demo@badge.it',
-  password: 'DemoPass2026!Badge',
-  id: 'user-mvp-demo',
-  role: 'admin',
-  client_id: 'client-1',
-};
+// MVP: Hardcoded demo credentials (5 test accounts)
+const DEMO_USERS = [
+  {
+    email: 'pippo',
+    password: 'pippo01',
+    id: 'user-mvp-pippo',
+    name: 'Pippo',
+    role: 'admin',
+    client_id: 'client-1',
+  },
+  {
+    email: 'pino',
+    password: 'pino01',
+    id: 'user-mvp-pino',
+    name: 'Pino',
+    role: 'manager',
+    client_id: 'client-1',
+  },
+  {
+    email: 'diego',
+    password: 'diego01',
+    id: 'user-mvp-diego',
+    name: 'Diego',
+    role: 'manager',
+    client_id: 'client-1',
+  },
+  {
+    email: 'maria',
+    password: 'maria01',
+    id: 'user-mvp-maria',
+    name: 'Maria',
+    role: 'employee',
+    client_id: 'client-1',
+  },
+  {
+    email: 'lucia',
+    password: 'lucia01',
+    id: 'user-mvp-lucia',
+    name: 'Lucia',
+    role: 'employee',
+    client_id: 'client-1',
+  },
+];
 
 /**
  * POST /api/auth/login
@@ -53,8 +88,10 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
   const { email, password } = req.validated.body;
 
   try {
-    // MVP: Check against hardcoded demo credentials
-    if (email !== DEMO_USER.email || password !== DEMO_USER.password) {
+    // MVP: Check against hardcoded demo credentials (5 test accounts)
+    const user = DEMO_USERS.find((u) => u.email === email && u.password === password);
+
+    if (!user) {
       throw new ValidationError('Email or password is incorrect', {
         field: 'credentials',
         code: 'INVALID_CREDENTIALS',
@@ -64,10 +101,10 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
     // Generate JWT token
     const token = jwt.sign(
       {
-        user_id: DEMO_USER.id,
-        email: DEMO_USER.email,
-        role: DEMO_USER.role,
-        client_id: DEMO_USER.client_id,
+        user_id: user.id,
+        email: user.email,
+        role: user.role,
+        client_id: user.client_id,
       },
       JWT_SECRET,
       { expiresIn: TOKEN_EXPIRY }
@@ -76,7 +113,9 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
     logger.info({
       action: 'user_login',
       email,
-      user_id: DEMO_USER.id,
+      name: user.name,
+      user_id: user.id,
+      role: user.role,
       timestamp: new Date().toISOString(),
     });
 
@@ -84,9 +123,10 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       data: {
         token,
         user: {
-          id: DEMO_USER.id,
-          email: DEMO_USER.email,
-          role: DEMO_USER.role,
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
         },
       },
     });
