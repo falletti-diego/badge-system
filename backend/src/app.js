@@ -63,12 +63,30 @@ app.use((req, res, next) => {
 });
 
 // Health check endpoint (for Docker HEALTHCHECK)
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    environment: NODE_ENV,
-  });
+app.get('/health', async (req, res) => {
+  try {
+    // Quick DB connectivity test
+    await pool.query('SELECT 1');
+    res.status(200).json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      environment: NODE_ENV,
+      database: 'connected',
+    });
+  } catch (err) {
+    logger.error({
+      action: 'health_check_failed',
+      error: err.message,
+      db_host: process.env.DB_HOST,
+    });
+    res.status(503).json({
+      status: 'degraded',
+      timestamp: new Date().toISOString(),
+      environment: NODE_ENV,
+      database: 'disconnected',
+      error: err.message,
+    });
+  }
 });
 
 // API routes
