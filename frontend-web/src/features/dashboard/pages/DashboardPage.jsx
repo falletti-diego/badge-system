@@ -82,21 +82,58 @@ const DashboardPage = () => {
     <div className="min-h-screen bg-linen">
       {/* Navbar */}
       <AppBar position="static" sx={{ backgroundColor: '#1E3A5F' }}>
-        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
+        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h1 style={{ color: 'white', fontSize: '20px', fontWeight: 600 }}>Badge System</h1>
-          <Button
-            color="inherit"
-            onClick={handleLogout}
-            sx={{
-              textTransform: 'none',
-              fontSize: '14px',
-              '&:hover': {
-                backgroundColor: 'rgba(255,255,255,0.1)',
-              },
-            }}
-          >
-            Logout
-          </Button>
+
+          <Box sx={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            {/* Planning Link - Show for managers and admins */}
+            {(userRole === 'manager' || userRole === 'admin') && (
+              <Button
+                color="inherit"
+                onClick={() => navigate('/planning')}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '14px',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                  },
+                }}
+              >
+                📅 Planning
+              </Button>
+            )}
+
+            {/* Employee Schedule Link - Show for employees */}
+            {userRole === 'employee' && (
+              <Button
+                color="inherit"
+                onClick={() => navigate('/planning/my-schedule')}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '14px',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                  },
+                }}
+              >
+                📆 I Miei Turni
+              </Button>
+            )}
+
+            <Button
+              color="inherit"
+              onClick={handleLogout}
+              sx={{
+                textTransform: 'none',
+                fontSize: '14px',
+                '&:hover': {
+                  backgroundColor: 'rgba(255,255,255,0.1)',
+                },
+              }}
+            >
+              Logout
+            </Button>
+          </Box>
         </Toolbar>
       </AppBar>
 
