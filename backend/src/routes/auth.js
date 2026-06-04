@@ -70,6 +70,33 @@ const DEMO_USERS = [
     client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
     employee_id: '550e8400-e29b-41d4-a716-446655440102', // Database employee ID
   },
+  {
+    email: 'alice.neri@employee.it',
+    password: 'Alice1975',
+    id: 'user-mvp-alice-neri',
+    name: 'Alice Neri',
+    role: 'employee',
+    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
+    employee_id: '550e8400-e29b-41d4-a716-446655440103', // Torino Store employee
+  },
+  {
+    email: 'carlo.rossi@employee.it',
+    password: 'Carlo1975',
+    id: 'user-mvp-carlo-rossi',
+    name: 'Carlo Rossi',
+    role: 'employee',
+    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
+    employee_id: '550e8400-e29b-41d4-a716-446655440104', // Torino Store employee
+  },
+  {
+    email: 'paolo.sordo@employee.it',
+    password: 'Paolo1975',
+    id: 'user-mvp-paolo-sordo',
+    name: 'Paolo Sordo',
+    role: 'employee',
+    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
+    employee_id: '550e8400-e29b-41d4-a716-446655440116', // Torino Store employee
+  },
 ];
 
 /**
