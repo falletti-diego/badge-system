@@ -209,12 +209,12 @@ if (require.main === module) {
         db_port: process.env.DB_PORT,
       });
 
-      // Test database connection before starting (with retry logic)
-      logger.info('Testing database connection with retry logic (5 attempts, 2-30s backoff)...');
-      await testConnection();
-
       // Initialize Redis (optional, gracefully continues if not available)
       await initializeRedis();
+
+      // Skip testConnection() on startup - health endpoint will test DB on demand
+      // This prevents startup timeout if RDS is slow
+      logger.info('Skipping database connection test on startup (health endpoint will test on demand)');
 
       // Check if HTTPS certificates exist
       const certPath = path.join(__dirname, '..', 'cert.pem');
