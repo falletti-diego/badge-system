@@ -9,8 +9,7 @@
 const express = require('express');
 const pino = require('pino');
 const { pool } = require('../db/pool');
-const { createValidationMiddleware, GetShiftsSchema, PostShiftsSchema, ExportShiftsSchema } = require('../middleware/validation');
-const { logAudit } = require('../middleware/audit');
+const { createValidationMiddleware, GetShiftsSchema, GetMyScheduleSchema, PostShiftsSchema, ExportShiftsSchema } = require('../middleware/validation');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
 const { NotFoundError, ForbiddenError, ValidationError } = require('../utils/errors');
@@ -27,7 +26,7 @@ const logger = pino({
 // Returns: shifts_data for logged-in employee
 // IMPORTANT: This route must come BEFORE /:siteId to match first
 
-router.get('/my-schedule/:dummy?', requireAuth, createValidationMiddleware(GetShiftsSchema), async (req, res, next) => {
+router.get('/my-schedule/:dummy?', requireAuth, createValidationMiddleware(GetMyScheduleSchema), async (req, res, next) => {
   const { month, year } = req.validated.query;
   const userRole = req.user.role;
   const userEmployeeId = req.user.employee_id;
@@ -199,8 +198,10 @@ router.get('/:siteId', requireAuth, createValidationMiddleware(GetShiftsSchema),
 
     // 2. Authorization: Manager must be assigned to this site (store managers only)
     // Admins (no site_id) can access all stores
-    if (userRole === 'manager' && userSiteId && userSiteId !== siteId) {
-      throw new ForbiddenError('You can only access your assigned store', 'NOT_ASSIGNED_TO_SITE');
+    if (userRole === 'manager') {
+      if (!userSiteId || userSiteId !== siteId) {
+        throw new ForbiddenError('You can only access your assigned store', 'NOT_ASSIGNED_TO_SITE');
+      }
     }
 
     // 3. Fetch existing shifts for this site + month/year
@@ -323,9 +324,18 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
         shiftsRecord = insertResult.rows[0];
       }
 
-      // Audit logging for shifts (Phase 2: implement dedicated audit table for shifts)
-      // For MVP: skip audit logging - logAudit was designed for check-ins, not shifts
-      // await logAudit(client, { ... })
+      // NOTE: Audit logging skipped for MVP shifts (Phase 2 deliverable)
+      // Reason: audit_log table lacks client_id column (designed for check-ins only)
+      // Phase 2: Add client_id to audit_log schema, then uncomment:
+      // await logAudit(client, {
+      //   action: oldValue ? 'shifts_updated' : 'shifts_created',
+      //   entity: 'shift',
+      //   entityId: shiftsRecord.id,
+      //   clientId: clientId,
+      //   oldValue,
+      //   newValue: shifts_data,
+      //   userId: userId || 'system',
+      // });
 
       return shiftsRecord;
     });
