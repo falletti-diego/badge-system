@@ -3,6 +3,7 @@ import axios from 'axios';
 const API_URL = window.API_CONFIG?.API_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const TOKEN_KEY = 'badge_auth_token';
 const USER_KEY = 'badge_user';
+const EMPLOYEE_ID_KEY = 'badge_employee_id';
 
 /**
  * Authentication Service
@@ -27,6 +28,12 @@ const authService = {
         // Store token in localStorage
         localStorage.setItem(TOKEN_KEY, token);
         localStorage.setItem(USER_KEY, JSON.stringify(user));
+        // Store employee_id if present (for employee role users)
+        if (user.employee_id) {
+          localStorage.setItem(EMPLOYEE_ID_KEY, user.employee_id);
+        } else {
+          localStorage.removeItem(EMPLOYEE_ID_KEY);
+        }
       }
 
       return response.data;
@@ -65,6 +72,7 @@ const authService = {
     // Clear localStorage
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(EMPLOYEE_ID_KEY);
   },
 
   /**
@@ -90,6 +98,31 @@ const authService = {
    */
   isAuthenticated() {
     return !!this.getToken();
+  },
+
+  /**
+   * Get employee ID from localStorage (for employee role users)
+   * @returns {string|null} Employee ID or null if not found
+   */
+  getEmployeeId() {
+    return localStorage.getItem(EMPLOYEE_ID_KEY);
+  },
+
+  /**
+   * Get user role from localStorage
+   * @returns {string|null} User role (admin, manager, employee) or null if not found
+   */
+  getUserRole() {
+    const user = this.getUser();
+    return user?.role || null;
+  },
+
+  /**
+   * Check if user is an employee
+   * @returns {boolean} True if user role is 'employee'
+   */
+  isEmployee() {
+    return this.getUserRole() === 'employee';
   },
 
   /**

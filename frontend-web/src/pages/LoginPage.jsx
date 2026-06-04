@@ -185,7 +185,7 @@ export default function LoginPage() {
           }}
         >
           <Typography variant="caption" sx={{ color: '#1E40AF', fontWeight: 600 }}>
-            MVP Test Accounts (5 accounts):
+            MVP Test Accounts (6 accounts - Employees see only their data):
           </Typography>
           <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block', mt: 0.5, fontSize: '11px' }}>
             Admin: <code>pippo@badge.local</code> / <code>pippo01</code>
@@ -195,6 +195,9 @@ export default function LoginPage() {
           </Typography>
           <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block', fontSize: '11px' }}>
             Employee: <code>maria@badge.local</code> / <code>maria01</code> | <code>lucia@badge.local</code> / <code>lucia01</code>
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#C2255C', display: 'block', fontSize: '11px', fontWeight: 600 }}>
+            Employee (DB): <code>luca.verdi@employee.it</code> / <code>Luca1975</code> (⭐ sees only Luca Verdi data)
           </Typography>
         </Box>
       </Box>
