@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Container, Box, Alert, AppBar, Toolbar, Button } from '@mui/material';
 import { usePresences } from '../hooks/usePresences';
 import KpiCards from '../components/KpiCards';
@@ -88,19 +88,27 @@ const DashboardPage = () => {
           <Box sx={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             {/* Planning Link - Show for managers and admins */}
             {(userRole === 'manager' || userRole === 'admin') && (
-              <Button
-                color="inherit"
-                onClick={() => navigate('/planning')}
-                sx={{
-                  textTransform: 'none',
+              <Link
+                to="/planning"
+                style={{
+                  color: 'white',
+                  textDecoration: 'none',
                   fontSize: '14px',
-                  '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.1)',
-                  },
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.2s',
+                  display: 'inline-block',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
                 📅 Planning
-              </Button>
+              </Link>
             )}
 
             {/* Employee Schedule Link - Show for employees */}

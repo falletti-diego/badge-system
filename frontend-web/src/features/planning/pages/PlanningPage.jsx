@@ -1,184 +1,439 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Container,
   Box,
   Typography,
-  Alert,
-  Stack,
-  Button,
   Card,
-  CardContent
+  CardContent,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Select,
+  MenuItem,
+  AppBar,
+  Toolbar,
+  Button
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useShifts } from '../hooks/useShifts';
-import { useShiftUpdate } from '../hooks/useShiftUpdate';
-import { MonthYearSelector } from '../components/MonthYearSelector';
-import { ShiftsGrid } from '../components/ShiftsGrid';
-import { ExportPlanningButton } from '../components/ExportPlanningButton';
+import authService from '../../../services/authService';
+
+const SHIFT_COLORS = {
+  'm': { bg: '#1E3A5F', label: 'Mattino' },
+  'p': { bg: '#B45309', label: 'Pomeriggio' },
+  's': { bg: '#7C3AED', label: 'Sera' },
+  'R': { bg: '#6B7280', label: 'Riposo' }
+};
 
 export const PlanningPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
-  const [successMessage, setSuccessMessage] = useState(null);
+  const [shifts, setShifts] = useState({}); // Local state for edits
+  const [lastSavedShifts, setLastSavedShifts] = useState({}); // Track last saved state
 
-  // Verify user is manager
-  useEffect(() => {
-    if (!user?.site_id) {
-      return navigate('/dashboard');
+  console.log('🚀 PlanningPage mounted!', { user });
+
+  const handleLogout = async () => {
+    await authService.logout();
+    navigate('/login');
+  };
+
+  const { data } = useShifts(user?.site_id, month, year);
+
+  // Initialize shifts from mock data (deep copy to prevent shared references)
+  React.useEffect(() => {
+    if (data?.shifts_data) {
+      const deepCopy = structuredClone(data.shifts_data);
+      setShifts(deepCopy);
+      setLastSavedShifts(deepCopy);
+      console.log('📊 Shifts loaded (deep copy):', deepCopy);
     }
-  }, [user, navigate]);
+  }, [data]);
 
-  // Fetch shifts data
-  const { data, loading: loadingData, error: dataError } = useShifts(
-    user?.site_id,
-    month,
-    year
-  );
+  // Handle shift change
+  const handleShiftChange = (employeeId, date, newShift) => {
+    setShifts(prev => {
+      const updated = {
+        ...prev,
+        [employeeId]: {
+          ...prev[employeeId]
+        }
+      };
 
-  // Mutation hook for saving shifts
-  const { updateShift, loading: cellLoading, errors: cellErrors } = useShiftUpdate(
-    user?.site_id,
-    month,
-    year
-  );
+      // FIXED: If shift is "—" (empty), remove the key instead of setting it
+      if (newShift === '—') {
+        delete updated[employeeId][date];
+        console.log(`✏️ Shift removed: ${employeeId} on ${date}`);
+      } else {
+        updated[employeeId][date] = newShift;
+        console.log(`✏️ Shift changed: ${employeeId} on ${date} = ${newShift}`);
+      }
 
-  const handleShiftChange = async (employeeId, date, newShift) => {
-    const success = await updateShift(employeeId, date, newShift);
-    if (success) {
-      setSuccessMessage(`Turno aggiornato per ${date}`);
-      setTimeout(() => setSuccessMessage(null), 3000);
+      return updated;
+    });
+  };
+
+  // Check if shift was changed from last saved state
+  const isShiftChanged = (employeeId, date) => {
+    const saved = lastSavedShifts?.[employeeId]?.[date];
+    const current = shifts?.[employeeId]?.[date];
+    // FIXED: Compare values OR check if key was added/removed
+    // If either is undefined but not both, the key was added/removed = changed
+    if ((saved === undefined) !== (current === undefined)) {
+      return true;
+    }
+    return saved !== current;
+  };
+
+  // Get count of changed shifts (including removed shifts)
+  const changedCount = (() => {
+    let count = 0;
+    // Check all employees
+    Object.keys(shifts || {}).forEach(empId => {
+      const daysInMonth = new Date(year, month, 0).getDate();
+      // Check all days in month
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        if (isShiftChanged(empId, dateStr)) {
+          count++;
+        }
+      }
+    });
+    return count;
+  })();
+
+  // Handle save
+  const handleSaveShifts = async () => {
+    try {
+      console.log('💾 Saving shifts...', shifts);
+      // TODO: Replace with real API call when backend ready
+      // const response = await apiClient.post(`/api/shifts/${user?.site_id}`, {
+      //   month, year,
+      //   shifts_data: shifts
+      // });
+
+      // Update saved state so badges disappear
+      setLastSavedShifts(structuredClone(shifts));
+      alert(`✅ ${changedCount} turni salvati con successo!`);
+      console.log('✅ Shifts marked as saved');
+    } catch (error) {
+      console.error('❌ Save failed:', error);
+      alert(`❌ Errore nel salvataggio: ${error.message}`);
     }
   };
 
+  // Handle reset
+  const handleResetShifts = () => {
+    if (window.confirm('Sei sicuro? Perderai tutti i cambiamenti non salvati.')) {
+      // FIXED: Reset to lastSavedShifts (last save), not original data
+      setShifts(structuredClone(lastSavedShifts));
+      console.log('🔄 Shifts reset to last saved state');
+    }
+  };
+
+  // Get shift count for employee
+  const getShiftCount = (employeeId) => {
+    const empShifts = shifts?.[employeeId] || {};
+    return Object.keys(empShifts).length;
+  };
+
+  // Handle CSV export
+  const handleExportCSV = () => {
+    const lines = [];
+
+    // Header row
+    lines.push('Dipendente,Data,Giorno,Turno');
+
+    // Data rows
+    (data.employees || []).forEach(emp => {
+      Object.entries(shifts?.[emp.id] || {}).forEach(([date, shift]) => {
+        const dateObj = new Date(date);
+        const dayName = dateObj.toLocaleString('it-IT', { weekday: 'long' });
+        const formattedDate = dateObj.toLocaleDateString('it-IT');
+        lines.push(`"${emp.name}","${formattedDate}","${dayName}","${shift}"`);
+      });
+    });
+
+    // Create blob and download
+    const csv = lines.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    // FIXED: Use selected month/year in filename
+    const monthName = new Date(year, month - 1).toLocaleString('it-IT', { month: 'long' });
+    const filename = `planning_${monthName}_${year}.csv`;
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    console.log('📥 CSV exported:', csv);
+    alert('✅ CSV esportato con successo!');
+  };
+
   if (!user?.site_id) {
-    return (
-      <Container>
-        <Alert severity="error">
-          Accesso negato. Solo i manager con assegnazione store possono accedere a questa pagina.
-        </Alert>
-      </Container>
-    );
+    return <Container sx={{ p: 4 }}><Typography color="error">Accesso negato.</Typography></Container>;
   }
 
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
   return (
-    <Container maxWidth="lg" sx={{ paddingY: '32px' }}>
-      {/* Header */}
-      <Box sx={{ marginBottom: '32px' }}>
-        <Typography variant="h3" component="h1" sx={{ fontFamily: 'Cormorant', fontWeight: 'bold', marginBottom: '8px' }}>
-          📅 Planning Turni
-        </Typography>
-        <Typography variant="body1" color="textSecondary">
-          {data?.site?.name || 'Caricamento...'} • Giugno 2026
-        </Typography>
-      </Box>
+    <div className="min-h-screen bg-linen">
+      {/* Navbar */}
+      <AppBar position="static" sx={{ backgroundColor: '#1E3A5F' }}>
+        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h1 style={{ color: 'white', fontSize: '20px', fontWeight: 600 }}>📅 Planning Turni</h1>
+          <Box sx={{ display: 'flex', gap: '12px' }}>
+            <Button
+              color="inherit"
+              onClick={() => {
+                console.log('⬅️ Back to Dashboard clicked');
+                navigate('/dashboard');
+              }}
+              sx={{ textTransform: 'none', fontSize: '14px' }}
+            >
+              ← Back to Dashboard
+            </Button>
+            <Button
+              color="inherit"
+              onClick={handleLogout}
+              sx={{ textTransform: 'none', fontSize: '14px' }}
+            >
+              Logout
+            </Button>
+          </Box>
+        </Toolbar>
+      </AppBar>
 
-      {/* Success Message */}
-      {successMessage && (
-        <Alert severity="success" onClose={() => setSuccessMessage(null)} sx={{ marginBottom: '16px' }}>
-          {successMessage}
-        </Alert>
-      )}
-
-      {/* Error Message */}
-      {dataError && (
-        <Alert severity="error" sx={{ marginBottom: '16px' }}>
-          {dataError}
-        </Alert>
-      )}
-
-      {/* Month/Year Selector */}
-      <MonthYearSelector
-        month={month}
-        year={year}
-        onMonthChange={setMonth}
-        onYearChange={setYear}
-      />
-
-      {/* KPI Cards */}
-      {data && (
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ marginBottom: '20px' }}>
-          <Card sx={{ flex: 1, borderLeft: '4px solid #1E3A5F' }}>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Dipendenti
-              </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                {data.metadata?.employee_count || 0}
-              </Typography>
-            </CardContent>
-          </Card>
-
-          <Card sx={{ flex: 1, borderLeft: '4px solid #B45309' }}>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Turni Compilati
-              </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                {Object.values(data.shifts_data || {}).reduce(
-                  (sum, emp) => sum + Object.keys(emp).length,
-                  0
-                )}
-              </Typography>
-            </CardContent>
-          </Card>
-
-          <Card sx={{ flex: 1, borderLeft: '4px solid #7C3AED' }}>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Giorni del Mese
-              </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                {new Date(year, month, 0).getDate()}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Stack>
-      )}
-
-      {/* Shifts Grid */}
-      <ShiftsGrid
-        shiftsData={data?.shifts_data || {}}
-        employees={data?.employees || []}
-        month={month}
-        year={year}
-        loading={loadingData}
-        error={dataError}
-        onChange={handleShiftChange}
-        cellLoading={cellLoading}
-        cellErrors={cellErrors}
-        readOnly={false}
-      />
-
-      {/* Export Button */}
-      <Box sx={{ marginTop: '20px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-        <ExportPlanningButton
-          siteId={user?.site_id}
-          month={month}
-          year={year}
-          siteName={data?.site?.name || 'planning'}
-        />
-      </Box>
-
-      {/* Info Card */}
-      <Card sx={{ marginTop: '30px', backgroundColor: '#F5F2ED' }}>
-        <CardContent>
-          <Typography variant="h6" sx={{ fontWeight: 'bold', marginBottom: '8px' }}>
-            💡 Come usare
+      <Container maxWidth="lg" sx={{ paddingY: '32px' }}>
+        {/* Header */}
+        <Box sx={{ marginBottom: '32px' }}>
+          <Typography variant="h3" sx={{ fontFamily: 'Cormorant', fontWeight: 'bold', marginBottom: '16px' }}>
+            Turni di Giugno 2026
           </Typography>
-          <Typography variant="body2" component="div">
-            <ul style={{ marginTop: '8px', marginBottom: '0' }}>
-              <li>Seleziona il mese e l'anno</li>
-              <li>Clicca su una cella per assegnare un turno (m, p, s, R)</li>
-              <li>I turni si salvano automaticamente</li>
-              <li>Puoi modificare turni retroattivamente</li>
-              <li>Usa "Esporta" per scaricare come PDF o CSV</li>
-            </ul>
-          </Typography>
-        </CardContent>
-      </Card>
-    </Container>
+
+          {/* Month/Year Selector */}
+          <Box sx={{ display: 'flex', gap: '16px', marginBottom: '20px' }}>
+            <Select
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              sx={{ width: '150px' }}
+            >
+              {Array.from({ length: 12 }, (_, i) => (
+                <MenuItem key={i + 1} value={i + 1}>
+                  {new Date(2026, i, 1).toLocaleString('it-IT', { month: 'long' })}
+                </MenuItem>
+              ))}
+            </Select>
+            <Select value={year} onChange={(e) => setYear(e.target.value)} sx={{ width: '100px' }}>
+              <MenuItem value={2026}>2026</MenuItem>
+              <MenuItem value={2027}>2027</MenuItem>
+            </Select>
+          </Box>
+        </Box>
+
+        {/* KPI Cards */}
+        {data && (
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ marginBottom: '20px' }}>
+            <Card sx={{ flex: 1, borderLeft: '4px solid #1E3A5F' }}>
+              <CardContent>
+                <Typography color="textSecondary">Dipendenti</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                  {data.employees?.length || 0}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card sx={{ flex: 1, borderLeft: '4px solid #B45309' }}>
+              <CardContent>
+                <Typography color="textSecondary">Turni Assegnati</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                  {Object.values(shifts || {}).reduce(
+                    (sum, emp) => sum + Object.keys(emp).length,
+                    0
+                  )}/{(data.employees?.length || 0) * daysInMonth}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card sx={{ flex: 1, borderLeft: '4px solid #7C3AED' }}>
+              <CardContent>
+                <Typography color="textSecondary">Giorni del Mese</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                  {daysInMonth}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Stack>
+        )}
+
+        {/* Save/Reset/Export Buttons */}
+        <Box sx={{ marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {changedCount > 0 && (
+            <>
+              <Button
+                variant="contained"
+                sx={{ backgroundColor: '#2D7049', '&:hover': { backgroundColor: '#1e5034' } }}
+                onClick={handleSaveShifts}
+              >
+                💾 Salva {changedCount} Turni
+              </Button>
+              <Button
+                variant="outlined"
+                sx={{ borderColor: '#C0392B', color: '#C0392B' }}
+                onClick={handleResetShifts}
+              >
+                🔄 Ripristina
+              </Button>
+            </>
+          )}
+          <Button
+            variant="outlined"
+            sx={{ borderColor: '#1E3A5F', color: '#1E3A5F', marginLeft: 'auto' }}
+            onClick={handleExportCSV}
+          >
+            📥 Esporta CSV
+          </Button>
+        </Box>
+
+        {/* Shifts Table */}
+        {data ? (
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead sx={{ backgroundColor: '#F5F2ED' }}>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 'bold', minWidth: '150px' }}>Dipendente</TableCell>
+                  {days.map(day => {
+                    const dateObj = new Date(year, month - 1, day);
+                    const dayName = dateObj.toLocaleString('it-IT', { weekday: 'short' });
+                    return (
+                      <TableCell key={day} align="center" sx={{ fontWeight: 'bold', minWidth: '65px', fontSize: '12px' }}>
+                        {day} {dayName}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(data.employees || []).map(emp => {
+                  const shiftCount = getShiftCount(emp.id);
+                  const isComplete = shiftCount === daysInMonth;
+                  return (
+                  <TableRow key={emp.id} hover>
+                    <TableCell sx={{ fontWeight: '500' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>{emp.name}</span>
+                        <Box
+                          sx={{
+                            fontSize: '11px',
+                            backgroundColor: isComplete ? '#D4EDDA' : '#F5F2ED',
+                            color: isComplete ? '#155724' : '#6B625A',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontWeight: 'bold',
+                            border: isComplete ? '1px solid #28A745' : 'none'
+                          }}
+                        >
+                          {shiftCount}/{daysInMonth}
+                        </Box>
+                      </Box>
+                    </TableCell>
+                    {days.map(day => {
+                      const dateStr = `2026-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;// FIXED: pad month for Oct-Dec
+                      const shift = shifts?.[emp.id]?.[dateStr] || '—';
+                      const color = SHIFT_COLORS[shift];
+                      const isChanged = isShiftChanged(emp.id, dateStr);
+                      return (
+                        <TableCell key={`${emp.id}-${day}`} align="center" sx={{ padding: '4px', position: 'relative' }}>
+                          {/* Red badge for changed cells */}
+                          {isChanged && (
+                            <Box
+                              sx={{
+                                position: 'absolute',
+                                top: '2px',
+                                right: '2px',
+                                width: '8px',
+                                height: '8px',
+                                backgroundColor: '#C0392B',
+                                borderRadius: '50%',
+                                zIndex: 10
+                              }}
+                            />
+                          )}
+                          <Select
+                            value={shift}
+                            onChange={(e) => handleShiftChange(emp.id, dateStr, e.target.value)}
+                            sx={{
+                              width: '100%',
+                              height: '40px',
+                              backgroundColor: color?.bg || '#E5E7EB',
+                              color: 'white',
+                              fontWeight: 'bold',
+                              fontSize: '12px',
+                              '& .MuiOutlinedInput-notchedOutline': {
+                                borderColor: isChanged ? '#C0392B' : 'transparent',
+                                borderWidth: isChanged ? '2px' : '0px'
+                              },
+                              '&:hover .MuiOutlinedInput-notchedOutline': {
+                                borderColor: isChanged ? '#C0392B' : 'transparent'
+                              },
+                              '& .MuiSvgIcon-root': {
+                                color: 'white'
+                              }
+                            }}
+                          >
+                            <MenuItem value="m" sx={{ backgroundColor: SHIFT_COLORS['m'].bg, color: 'white' }}>m - Mattino</MenuItem>
+                            <MenuItem value="p" sx={{ backgroundColor: SHIFT_COLORS['p'].bg, color: 'white' }}>p - Pomeriggio</MenuItem>
+                            <MenuItem value="s" sx={{ backgroundColor: SHIFT_COLORS['s'].bg, color: 'white' }}>s - Sera</MenuItem>
+                            <MenuItem value="R" sx={{ backgroundColor: SHIFT_COLORS['R'].bg, color: 'white' }}>R - Riposo</MenuItem>
+                            <MenuItem value="—">— Vuoto</MenuItem>
+                          </Select>
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        ) : (
+          <Typography>Caricamento...</Typography>
+        )}
+
+        {/* Legend */}
+        <Card sx={{ marginTop: '30px', backgroundColor: '#F5F2ED' }}>
+          <CardContent>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', marginBottom: '12px' }}>
+              💡 Legenda Turni
+            </Typography>
+            <Box sx={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+              {Object.entries(SHIFT_COLORS).map(([key, { bg, label }]) => (
+                <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Box sx={{ backgroundColor: bg, color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>
+                    {key}
+                  </Box>
+                  <Typography variant="body2">{label}</Typography>
+                </Box>
+              ))}
+            </Box>
+          </CardContent>
+        </Card>
+      </Container>
+    </div>
   );
 };

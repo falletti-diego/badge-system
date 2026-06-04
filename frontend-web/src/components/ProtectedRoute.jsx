@@ -1,4 +1,5 @@
 import { Navigate } from 'react-router-dom';
+import { Box, CircularProgress } from '@mui/material';
 import authService from '../services/authService';
 import { useAuth } from '../hooks/useAuth';
 
@@ -11,13 +12,27 @@ import { useAuth } from '../hooks/useAuth';
  */
 export default function ProtectedRoute({ children, requiredRole = null }) {
   const isAuthenticated = authService.isAuthenticated();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  // Wait for user data to load before checking role
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole && user?.role !== requiredRole) {
+  // FIXED: Check user exists before checking role (prevent dashboard access for unauthenticated users)
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (requiredRole && user.role !== requiredRole) {
     return <Navigate to="/dashboard" replace />;
   }
 

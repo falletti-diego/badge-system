@@ -18,6 +18,7 @@ export const useAuth = () => {
       };
       setUser(enhancedUser);
     }
+    // Always set loading to false after attempting to load user
     setLoading(false);
   }, []);
 
