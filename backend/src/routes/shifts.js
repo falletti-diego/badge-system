@@ -323,15 +323,15 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
         shiftsRecord = insertResult.rows[0];
       }
 
-      // Log audit trail
+      // Log audit trail (use camelCase for logAudit params)
       await logAudit(client, {
         action: existingResult.rows.length > 0 ? 'shift_updated' : 'shift_created',
         entity: 'shift',
-        entity_id: shiftsRecord.id,
-        client_id: clientId,
-        old_value: oldValue,
-        new_value: shifts_data,
-        user_id: userId,
+        entityId: shiftsRecord.id,
+        clientId: clientId,
+        oldValue: oldValue,
+        newValue: shifts_data,
+        userId: userId,
       });
 
       return shiftsRecord;
