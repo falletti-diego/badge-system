@@ -276,6 +276,20 @@ Admin (Dataxiom):
 
 ---
 
+---
+
+## 📋 Session Protocol
+
+**TASKS.md** is the single source of truth for project progress.
+
+- **Start of session:** Read TASKS.md to orient. Check the TODO sections for what's next.
+- **During session:** No need to update TASKS.md mid-session.
+- **End of session:** Update TASKS.md — mark completed tasks `[x]`, add a row to the Session Log, adjust priorities if needed. Then commit.
+
+If asked to "resume", read TASKS.md + recent `git log --oneline -10` instead of asking for context.
+
+---
+
 **Last Updated:** 28 Maggio 2026  
 **Approved By:** Diego Falletti  
 **Status:** APPROVED ✅ — Ready for Development
