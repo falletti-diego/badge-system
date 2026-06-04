@@ -37,8 +37,8 @@ EXPOSE 3000
 ENV USE_HTTPS=false
 
 # Health check — ensures container is healthy
-# Checks /health endpoint every 30s, allows 60s startup grace period for RDS connection
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+# Checks /health endpoint every 30s, allows 90s startup grace period for RDS cold start
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
 
 # Use dumb-init to handle signals properly (prevents zombie processes)

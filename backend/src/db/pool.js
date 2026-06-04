@@ -17,11 +17,11 @@ const dbConfig = {
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  min: parseInt(process.env.DB_POOL_MIN || '1', 10),
-  max: parseInt(process.env.DB_POOL_MAX || '5', 10),
+  min: parseInt(process.env.DB_POOL_MIN || '5', 10),
+  max: parseInt(process.env.DB_POOL_MAX || '20', 10),
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 30000, // Increased from 10s to 30s for AWS RDS cold start
-  statement_timeout: 60000, // Increased from 30s to 60s
+  connectionTimeoutMillis: 60000, // Increased for RDS cold starts
+  statement_timeout: 120000, // Increased for slow queries
   application_name: 'badge-system-api',
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 };
