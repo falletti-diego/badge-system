@@ -22,6 +22,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useShifts } from '../hooks/useShifts';
+import { useShiftUpdate } from '../hooks/useShiftUpdate';
 import authService from '../../../services/authService';
 
 const SHIFT_COLORS = {
@@ -38,6 +39,8 @@ export const PlanningPage = () => {
   const [year, setYear] = useState(new Date().getFullYear());
   const [shifts, setShifts] = useState({}); // Local state for edits
   const [lastSavedShifts, setLastSavedShifts] = useState({}); // Track last saved state
+  const [isSaving, setIsSaving] = useState(false); // Track save loading state
+  const [saveError, setSaveError] = useState(null); // Track save errors
 
   console.log('🚀 PlanningPage mounted!', { user });
 
@@ -46,7 +49,8 @@ export const PlanningPage = () => {
     navigate('/login');
   };
 
-  const { data } = useShifts(user?.site_id, month, year);
+  const { data, loading, error } = useShifts(user?.site_id, month, year);
+  const { saveShifts } = useShiftUpdate(user?.site_id, month, year);
 
   // Initialize shifts from mock data (deep copy to prevent shared references)
   React.useEffect(() => {
@@ -113,20 +117,24 @@ export const PlanningPage = () => {
   // Handle save
   const handleSaveShifts = async () => {
     try {
+      setIsSaving(true);
+      setSaveError(null);
       console.log('💾 Saving shifts...', shifts);
-      // TODO: Replace with real API call when backend ready
-      // const response = await apiClient.post(`/api/shifts/${user?.site_id}`, {
-      //   month, year,
-      //   shifts_data: shifts
-      // });
+
+      // Call real API
+      const result = await saveShifts(shifts);
 
       // Update saved state so badges disappear
       setLastSavedShifts(structuredClone(shifts));
       alert(`✅ ${changedCount} turni salvati con successo!`);
-      console.log('✅ Shifts marked as saved');
+      console.log('✅ Shifts saved to API:', result);
+
     } catch (error) {
       console.error('❌ Save failed:', error);
-      alert(`❌ Errore nel salvataggio: ${error.message}`);
+      setSaveError(error.message || 'Errore nel salvataggio');
+      alert(`❌ ${error.message || 'Errore nel salvataggio'}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -287,13 +295,15 @@ export const PlanningPage = () => {
             <>
               <Button
                 variant="contained"
+                disabled={isSaving}
                 sx={{ backgroundColor: '#2D7049', '&:hover': { backgroundColor: '#1e5034' } }}
                 onClick={handleSaveShifts}
               >
-                💾 Salva {changedCount} Turni
+                {isSaving ? '⏳ Salvataggio...' : `💾 Salva ${changedCount} Turni`}
               </Button>
               <Button
                 variant="outlined"
+                disabled={isSaving}
                 sx={{ borderColor: '#C0392B', color: '#C0392B' }}
                 onClick={handleResetShifts}
               >

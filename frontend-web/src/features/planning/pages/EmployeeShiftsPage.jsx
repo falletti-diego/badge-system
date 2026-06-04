@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Container,
   Box,
@@ -14,10 +14,14 @@ import {
   Chip,
   AppBar,
   Toolbar,
-  Button
+  Button,
+  Select,
+  MenuItem,
+  CircularProgress
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
+import { useMySchedule } from '../hooks/useMySchedule';
 import authService from '../../../services/authService';
 
 const SHIFT_ICONS = {
@@ -32,7 +36,6 @@ export const EmployeeShiftsPage = () => {
   const { user } = useAuth();
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
-  const [shifts, setShifts] = useState({});
 
   console.log('🚀 EmployeeShiftsPage mounted!', { user });
 
@@ -41,23 +44,8 @@ export const EmployeeShiftsPage = () => {
     navigate('/login');
   };
 
-  // FIXED: Generate mock shifts for selected month/year (not hardcoded June)
-  useEffect(() => {
-    if (user?.employee_id) {
-      const daysInMonth = new Date(year, month, 0).getDate();
-      const mockShifts = {};
-      const shiftPattern = ['m', 'p', 's', 'R'];
-
-      // Generate 7-10 shifts for the selected month
-      for (let day = 1; day <= Math.min(10, daysInMonth); day++) {
-        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        mockShifts[dateStr] = shiftPattern[(day - 1) % 4];
-      }
-
-      setShifts(mockShifts);
-      console.log(`📊 Employee shifts loaded for ${month}/${year}:`, mockShifts);
-    }
-  }, [user?.employee_id, month, year]);
+  // Fetch employee's schedule from API
+  const { data, loading, error } = useMySchedule(month, year);
 
   if (!user?.employee_id) {
     return (
@@ -79,7 +67,9 @@ export const EmployeeShiftsPage = () => {
     );
   }
 
-  const shiftsArray = Object.entries(shifts)
+  // Extract shifts from API response
+  const shiftsData = data?.shifts_data || {};
+  const shiftsArray = Object.entries(shiftsData)
     .map(([date, shift]) => ({ date, shift }))
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
@@ -125,32 +115,68 @@ export const EmployeeShiftsPage = () => {
           </Typography>
         </Box>
 
-        {/* Summary Cards */}
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ marginBottom: '20px' }}>
-          <Card sx={{ flex: 1, borderLeft: '4px solid #2D7049' }}>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Turni Assegnati
-              </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                {shiftsArray.length}/{daysInMonth}
-              </Typography>
-            </CardContent>
-          </Card>
+        {/* Month/Year Selector */}
+        <Box sx={{ display: 'flex', gap: '16px', marginBottom: '20px' }}>
+          <Select
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            sx={{ width: '150px' }}
+          >
+            {Array.from({ length: 12 }, (_, i) => (
+              <MenuItem key={i + 1} value={i + 1}>
+                {new Date(2026, i, 1).toLocaleString('it-IT', { month: 'long' })}
+              </MenuItem>
+            ))}
+          </Select>
+          <Select value={year} onChange={(e) => setYear(e.target.value)} sx={{ width: '100px' }}>
+            <MenuItem value={2026}>2026</MenuItem>
+            <MenuItem value={2027}>2027</MenuItem>
+          </Select>
+        </Box>
 
-          <Card sx={{ flex: 1, borderLeft: '4px solid #B45309' }}>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Giorni Liberi
-              </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                {Math.max(0, daysInMonth - shiftsArray.length)}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Stack>
+        {/* Loading State */}
+        {loading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
+            <CircularProgress />
+          </Box>
+        )}
 
-        {/* Shifts List */}
+        {/* Error State */}
+        {error && (
+          <Alert severity="error" sx={{ marginBottom: '20px' }}>
+            {error.message}
+          </Alert>
+        )}
+
+        {/* Summary Cards (only show if not loading) */}
+        {!loading && (
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ marginBottom: '20px' }}>
+            <Card sx={{ flex: 1, borderLeft: '4px solid #2D7049' }}>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Turni Assegnati
+                </Typography>
+                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                  {shiftsArray.length}/{daysInMonth}
+                </Typography>
+              </CardContent>
+            </Card>
+
+            <Card sx={{ flex: 1, borderLeft: '4px solid #B45309' }}>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Giorni Liberi
+                </Typography>
+                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+                  {Math.max(0, daysInMonth - shiftsArray.length)}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Stack>
+        )}
+
+        {/* Shifts List (only show if not loading) */}
+        {!loading && (
         {shiftsArray.length === 0 ? (
           <Card sx={{ backgroundColor: '#F5F2ED' }}>
             <CardContent sx={{ textAlign: 'center', padding: '40px' }}>

@@ -4,22 +4,22 @@ import axios from 'axios';
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 /**
- * useShifts — Fetch shift planning from backend API
- * GET /api/shifts/:siteId?month=X&year=Y
- * Returns: { shifts_data, employees[], site, metadata }
+ * useMySchedule — Fetch employee's own shift schedule from backend API
+ * GET /api/shifts/my-schedule?month=X&year=Y
+ * Returns: { shifts_data: {date: shift}, metadata }
  */
-export const useShifts = (siteId, month, year) => {
+export const useMySchedule = (month, year) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!siteId || !month || !year) {
-      console.warn('⚠️ useShifts: Missing siteId, month, or year');
+    if (!month || !year) {
+      console.warn('⚠️ useMySchedule: Missing month or year');
       return;
     }
 
-    const fetchShifts = async () => {
+    const fetchSchedule = async () => {
       setLoading(true);
       setError(null);
 
@@ -30,7 +30,7 @@ export const useShifts = (siteId, month, year) => {
         }
 
         const response = await axios.get(
-          `${API_BASE_URL}/api/shifts/${siteId}`,
+          `${API_BASE_URL}/api/shifts/my-schedule`,
           {
             params: { month, year },
             headers: {
@@ -41,13 +41,13 @@ export const useShifts = (siteId, month, year) => {
         );
 
         setData(response.data.data);
-        console.log(`📊 Shifts fetched from API for ${month}/${year}:`, response.data.data);
+        console.log(`📊 My schedule fetched from API for ${month}/${year}:`, response.data.data);
 
       } catch (err) {
-        const errorMsg = err.response?.data?.message || err.message || 'Failed to fetch shifts';
+        const errorMsg = err.response?.data?.message || err.message || 'Failed to fetch schedule';
         const statusCode = err.response?.status;
 
-        console.error(`❌ Error fetching shifts (${statusCode}):`, errorMsg);
+        console.error(`❌ Error fetching schedule (${statusCode}):`, errorMsg);
         setError({
           message: errorMsg,
           statusCode,
@@ -60,8 +60,8 @@ export const useShifts = (siteId, month, year) => {
       }
     };
 
-    fetchShifts();
-  }, [siteId, month, year]);
+    fetchSchedule();
+  }, [month, year]);
 
   return { data, loading, error };
 };
