@@ -22,8 +22,9 @@ RUN npm ci --only=production && npm cache clean --force
 # Copy application source code
 COPY src ./src
 
-# Copy scripts (migrations, setup, etc.)
+# Copy scripts and migrations
 COPY scripts ./scripts
+COPY migrations ./migrations
 
 # Create non-root user for security (principle of least privilege)
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
