@@ -32,24 +32,39 @@ async function applySchema() {
     const client = await pool.connect();
     logger.info('✓ Connected to RDS');
 
-    // Read schema file
-    const schemaPath = path.join(__dirname, '../src/db/schema.sql');
-    const schema = fs.readFileSync(schemaPath, 'utf8');
+    // Read migration file (pure SQL, no psql commands)
+    const migrationPath = path.join(__dirname, '../migrations/001_create_shifts_table.sql');
+    const migration = fs.readFileSync(migrationPath, 'utf8');
 
     if (verifyOnly) {
       logger.info('Running in VERIFY-ONLY mode (no changes)');
       // Just test connection
       const result = await client.query('SELECT version()');
       logger.info(`✓ PostgreSQL version: ${result.rows[0].version.split(',')[0]}`);
+
+      // Check if shifts table exists
+      const shiftsCheck = await client.query(`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.tables
+          WHERE table_name = 'shifts' AND table_schema = 'public'
+        ) as exists;
+      `);
+
+      if (shiftsCheck.rows[0].exists) {
+        logger.info('✓ Shifts table already exists');
+      } else {
+        logger.info('⚠ Shifts table does NOT exist (migration needed)');
+      }
+
       client.release();
       return;
     }
 
-    logger.info('Executing schema...');
+    logger.info('Executing migration (adding shifts table)...');
 
-    // Execute schema (this will DROP DATABASE and recreate)
-    await client.query(schema);
-    logger.info('✓ Schema applied successfully');
+    // Execute migration (pure SQL, safe to run)
+    await client.query(migration);
+    logger.info('✓ Migration applied successfully');
 
     // Verify tables were created
     const tablesResult = await client.query(`
