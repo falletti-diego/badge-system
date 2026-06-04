@@ -21,7 +21,7 @@ const TOKEN_EXPIRY = '7d'; // 7 days for MVP
 // MVP: Hardcoded demo credentials (5 test accounts)
 const DEMO_USERS = [
   {
-    email: 'pippo',
+    email: 'pippo@badge.local',
     password: 'pippo01',
     id: 'user-mvp-pippo',
     name: 'Pippo',
@@ -29,7 +29,7 @@ const DEMO_USERS = [
     client_id: 'client-1',
   },
   {
-    email: 'pino',
+    email: 'pino@badge.local',
     password: 'pino01',
     id: 'user-mvp-pino',
     name: 'Pino',
@@ -37,7 +37,7 @@ const DEMO_USERS = [
     client_id: 'client-1',
   },
   {
-    email: 'diego',
+    email: 'diego@badge.local',
     password: 'diego01',
     id: 'user-mvp-diego',
     name: 'Diego',
@@ -45,7 +45,7 @@ const DEMO_USERS = [
     client_id: 'client-1',
   },
   {
-    email: 'maria',
+    email: 'maria@badge.local',
     password: 'maria01',
     id: 'user-mvp-maria',
     name: 'Maria',
@@ -53,7 +53,7 @@ const DEMO_USERS = [
     client_id: 'client-1',
   },
   {
-    email: 'lucia',
+    email: 'lucia@badge.local',
     password: 'lucia01',
     id: 'user-mvp-lucia',
     name: 'Lucia',
