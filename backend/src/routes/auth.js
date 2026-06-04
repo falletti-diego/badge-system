@@ -38,11 +38,12 @@ const DEMO_USERS = [
   },
   {
     email: 'diego@badge.local',
-    password: 'diego01',
+    password: 'Diego1975',
     id: 'user-mvp-diego',
     name: 'Diego',
     role: 'manager',
     client_id: 'client-1',
+    site_id: '550e8400-e29b-41d4-a716-446655440012', // Torino Store
   },
   {
     email: 'maria@badge.local',
@@ -107,7 +108,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       });
     }
 
-    // Generate JWT token (include employee_id if employee role)
+    // Generate JWT token (include employee_id and site_id if present)
     const tokenPayload = {
       user_id: user.id,
       email: user.email,
@@ -116,6 +117,9 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
     };
     if (user.employee_id) {
       tokenPayload.employee_id = user.employee_id;
+    }
+    if (user.site_id) {
+      tokenPayload.site_id = user.site_id;
     }
 
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
@@ -127,6 +131,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       user_id: user.id,
       role: user.role,
       employee_id: user.employee_id || null,
+      site_id: user.site_id || null,
       timestamp: new Date().toISOString(),
     });
 
@@ -138,6 +143,9 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
     };
     if (user.employee_id) {
       userResponse.employee_id = user.employee_id;
+    }
+    if (user.site_id) {
+      userResponse.site_id = user.site_id;
     }
 
     res.json({

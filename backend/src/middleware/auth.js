@@ -98,6 +98,11 @@ function requireAuth(req, res, next) {
       req.user.employee_id = decoded.employee_id;
     }
 
+    // Include site_id if present (for manager role users assigned to specific store)
+    if (decoded.site_id) {
+      req.user.site_id = decoded.site_id;
+    }
+
     logger.debug({
       action: 'auth_verified',
       user_id: req.user.user_id,

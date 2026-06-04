@@ -148,6 +148,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
   const clientId = req.user.client_id;
   const userRole = req.user.role;
   const userEmployeeId = req.user.employee_id;
+  const userSiteId = req.user.site_id;
 
   try {
     // Resolve IDs from names if needed (MVP: accept both UUID and name)
@@ -164,6 +165,13 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
       paramCount++;
       whereClauses.push(`c.employee_id = $${paramCount}::uuid`);
       params.push(userEmployeeId);
+    }
+
+    // IMPORTANT: If user is a manager assigned to a specific store, filter by that store
+    if (userRole === 'manager' && userSiteId) {
+      paramCount++;
+      whereClauses.push(`c.site_id = $${paramCount}::uuid`);
+      params.push(userSiteId);
     }
 
     if (resolvedSiteId) {
@@ -265,6 +273,7 @@ router.get('/stats', requireAuth, createValidationMiddleware(GetStatsSchema), as
   const clientId = req.user.client_id;
   const userRole = req.user.role;
   const userEmployeeId = req.user.employee_id;
+  const userSiteId = req.user.site_id;
 
   try {
     // Resolve IDs from names if needed (MVP: accept both UUID and name)
@@ -281,6 +290,13 @@ router.get('/stats', requireAuth, createValidationMiddleware(GetStatsSchema), as
       paramCount++;
       whereClauses.push(`c.employee_id = $${paramCount}::uuid`);
       params.push(userEmployeeId);
+    }
+
+    // IMPORTANT: If user is a manager assigned to a specific store, filter by that store
+    if (userRole === 'manager' && userSiteId) {
+      paramCount++;
+      whereClauses.push(`c.site_id = $${paramCount}::uuid`);
+      params.push(userSiteId);
     }
 
     if (resolvedSiteId) {
