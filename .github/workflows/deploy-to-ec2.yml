@@ -56,8 +56,17 @@ jobs:
             echo ""
             echo "🛑 Step 3: Stop and remove existing container..."
             docker stop ${{ env.CONTAINER_NAME }} 2>/dev/null || true
+            sleep 2
             docker rm ${{ env.CONTAINER_NAME }} 2>/dev/null || true
-            echo "✅ Old container removed"
+
+            # Extra cleanup: kill any process on port 3000
+            echo "Checking for any remaining processes on port 3000..."
+            if sudo lsof -i :${{ env.CONTAINER_PORT }} 2>/dev/null | grep LISTEN; then
+              echo "Found process on port, killing it..."
+              sudo fuser -k ${{ env.CONTAINER_PORT }}/tcp 2>/dev/null || true
+              sleep 2
+            fi
+            echo "✅ Old container removed and port cleaned"
 
             echo ""
             echo "🚀 Step 4: Run new container..."
