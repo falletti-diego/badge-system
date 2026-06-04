@@ -60,22 +60,21 @@ jobs:
             docker rm ${{ env.CONTAINER_NAME }} 2>/dev/null || true
             sleep 1
 
-            # Aggressive cleanup: kill processes AND prune Docker networks
+            # Aggressive cleanup: networks, sockets, AND docker daemon restart
             echo "Cleaning up Docker networks and residual sockets..."
             docker network prune -f 2>/dev/null || true
+            docker container prune -f 2>/dev/null || true
 
             # Kill any remaining processes on port 3000
             echo "Checking for any remaining processes on port 3000..."
-            if sudo lsof -i :${{ env.CONTAINER_PORT }} 2>/dev/null | grep LISTEN; then
-              echo "Found process on port, killing it..."
-              sudo fuser -k ${{ env.CONTAINER_PORT }}/tcp 2>/dev/null || true
-              sleep 1
-            fi
+            sudo lsof -i :${{ env.CONTAINER_PORT }} 2>/dev/null || echo "No processes found"
 
-            # Extra wait for TIME_WAIT socket release
-            echo "Waiting for socket cleanup (TIME_WAIT release)..."
+            # Last resort: restart Docker daemon to clear all iptables rules
+            echo "Restarting Docker daemon to clear iptables state..."
+            sudo systemctl restart docker 2>/dev/null || sudo /etc/init.d/docker restart 2>/dev/null || true
             sleep 5
-            echo "✅ Old container removed and port cleaned"
+
+            echo "✅ Old container removed, port cleaned, docker restarted"
 
             echo ""
             echo "🚀 Step 4: Run new container..."
