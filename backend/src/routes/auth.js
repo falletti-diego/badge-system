@@ -26,7 +26,7 @@ const DEMO_USERS = [
     id: 'user-mvp-pippo',
     name: 'Pippo',
     role: 'admin',
-    client_id: 'client-1',
+    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
   },
   {
     email: 'pino@badge.local',
@@ -34,7 +34,7 @@ const DEMO_USERS = [
     id: 'user-mvp-pino',
     name: 'Pino',
     role: 'manager',
-    client_id: 'client-1',
+    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
   },
   {
     email: 'diego@badge.local',
@@ -42,7 +42,7 @@ const DEMO_USERS = [
     id: 'user-mvp-diego',
     name: 'Diego',
     role: 'manager',
-    client_id: 'client-1',
+    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
     site_id: '550e8400-e29b-41d4-a716-446655440012', // Torino Store
   },
   {
@@ -51,7 +51,7 @@ const DEMO_USERS = [
     id: 'user-mvp-maria',
     name: 'Maria',
     role: 'employee',
-    client_id: 'client-1',
+    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
   },
   {
     email: 'lucia@badge.local',
@@ -59,7 +59,7 @@ const DEMO_USERS = [
     id: 'user-mvp-lucia',
     name: 'Lucia',
     role: 'employee',
-    client_id: 'client-1',
+    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
   },
   {
     email: 'luca.verdi@employee.it',
@@ -67,7 +67,7 @@ const DEMO_USERS = [
     id: 'user-mvp-luca-verdi',
     name: 'Luca Verdi',
     role: 'employee',
-    client_id: 'client-1',
+    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
     employee_id: '550e8400-e29b-41d4-a716-446655440102', // Database employee ID
   },
 ];
