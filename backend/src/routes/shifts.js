@@ -302,21 +302,23 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
 
       if (existingResult.rows.length > 0) {
         // UPDATE existing record (merge shifts_data, don't replace)
+        // Note: created_by/updated_by are UUID columns, but MVP users are strings like "user-mvp-diego"
+        // Pass NULL for now (Phase 2: will use Auth0 UUIDs)
         const updateResult = await client.query(
           `UPDATE shifts
-           SET shifts_data = shifts_data || $1, updated_by = $2, updated_at = NOW()
-           WHERE site_id = $3::uuid AND month = $4 AND year = $5
+           SET shifts_data = shifts_data || $1, updated_at = NOW()
+           WHERE site_id = $2::uuid AND month = $3 AND year = $4
            RETURNING id, shifts_data, updated_at`,
-          [shifts_data, userId, siteId, month, year]
+          [shifts_data, siteId, month, year]
         );
         shiftsRecord = updateResult.rows[0];
       } else {
         // INSERT new record
         const insertResult = await client.query(
-          `INSERT INTO shifts (client_id, site_id, month, year, shifts_data, created_by, updated_by, created_at, updated_at)
-           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $6, NOW(), NOW())
+          `INSERT INTO shifts (client_id, site_id, month, year, shifts_data, created_at, updated_at)
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5, NOW(), NOW())
            RETURNING id, shifts_data, created_at as updated_at`,
-          [clientId, siteId, month, year, shifts_data, userId]
+          [clientId, siteId, month, year, shifts_data]
         );
         shiftsRecord = insertResult.rows[0];
       }
