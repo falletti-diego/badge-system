@@ -10,6 +10,8 @@ import { setMockToken } from './services/apiClient';
 import DashboardPage from './features/dashboard/pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import { PlanningPage } from './features/planning/pages/PlanningPage';
+import { EmployeeShiftsPage } from './features/planning/pages/EmployeeShiftsPage';
 
 // Create Material-UI theme with design system colors
 const theme = createTheme({
@@ -99,6 +101,24 @@ function App() {
             element={
               <ProtectedRoute>
                 <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Planning Routes */}
+          <Route
+            path="/planning"
+            element={
+              <ProtectedRoute requiredRole="manager">
+                <PlanningPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/planning/my-schedule"
+            element={
+              <ProtectedRoute requiredRole="employee">
+                <EmployeeShiftsPage />
               </ProtectedRoute>
             }
           />
