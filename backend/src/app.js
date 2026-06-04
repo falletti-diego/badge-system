@@ -74,31 +74,18 @@ app.get('/health', async (req, res) => {
   };
 
   try {
-    // Test DB connectivity with 15s timeout (retry up to 2 times)
-    let lastError;
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const startTime = Date.now();
-        const queryPromise = pool.query('SELECT NOW()');
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('DB query timeout (15s)')), 15000)
-        );
+    // Test DB connectivity with 10s timeout
+    const startTime = Date.now();
+    const queryPromise = pool.query('SELECT NOW()');
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('DB query timeout (10s)')), 10000)
+    );
 
-        await Promise.race([queryPromise, timeoutPromise]);
-        const queryTime = Date.now() - startTime;
+    await Promise.race([queryPromise, timeoutPromise]);
+    const queryTime = Date.now() - startTime;
 
-        diagnostics.db_query_time_ms = queryTime;
-        res.status(200).json(diagnostics);
-        return;
-      } catch (err) {
-        lastError = err;
-        if (attempt < 2) {
-          await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry
-        }
-      }
-    }
-
-    throw lastError; // All retries failed
+    diagnostics.db_query_time_ms = queryTime;
+    res.status(200).json(diagnostics);
   } catch (err) {
     const errorCode = err.code || 'UNKNOWN';
     const isTimeout = err.message.includes('timeout');
