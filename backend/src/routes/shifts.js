@@ -151,7 +151,7 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
         // UPDATE existing record
         const updateResult = await client.query(
           `UPDATE shifts
-           SET shifts_data = $1, updated_by = $2::uuid, updated_at = NOW()
+           SET shifts_data = $1, updated_by = $2, updated_at = NOW()
            WHERE site_id = $3::uuid AND month = $4 AND year = $5
            RETURNING id, shifts_data, updated_at`,
           [shifts_data, userId, siteId, month, year]
@@ -161,7 +161,7 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
         // INSERT new record
         const insertResult = await client.query(
           `INSERT INTO shifts (client_id, site_id, month, year, shifts_data, created_by, updated_by, created_at, updated_at)
-           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6::uuid, $6::uuid, NOW(), NOW())
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $6, NOW(), NOW())
            RETURNING id, shifts_data, created_at as updated_at`,
           [clientId, siteId, month, year, shifts_data, userId]
         );
