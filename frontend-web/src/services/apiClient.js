@@ -24,7 +24,7 @@ const apiClient = axios.create({
  */
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('auth_token') || 'test-token-mvp-12345';
+    const token = localStorage.getItem('badge_auth_token') || localStorage.getItem('auth_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -46,6 +46,7 @@ apiClient.interceptors.response.use(
 
     if (status === 401) {
       // Unauthorized: clear token and redirect to login (avoid redirect loop)
+      localStorage.removeItem('badge_auth_token');
       localStorage.removeItem('auth_token');
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
@@ -68,12 +69,13 @@ export default apiClient;
  * Helper function to set mock token
  */
 export const setMockToken = (token = 'test-token-mvp-12345') => {
-  localStorage.setItem('auth_token', token);
+  localStorage.setItem('badge_auth_token', token);
 };
 
 /**
  * Helper function to clear token
  */
 export const clearToken = () => {
+  localStorage.removeItem('badge_auth_token');
   localStorage.removeItem('auth_token');
 };
