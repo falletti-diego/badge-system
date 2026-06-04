@@ -240,6 +240,28 @@ INSERT INTO audit_log (id, action, entity, entity_id, old_value, new_value, user
   ('750e8400-e29b-41d4-a716-446655440020', 'UPDATE', 'site', '550e8400-e29b-41d4-a716-446655440010', '{"location":"Via Torino, 50 - Milano"}', '{"location":"Via Torino, 50 - Milano (Updated)"}', '550e8400-e29b-41d4-a716-446655440100');
 
 -- ============================================
+-- TABLE: Shifts (Planning/Scheduling)
+-- ============================================
+CREATE TABLE shifts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  month INTEGER NOT NULL CHECK (month >= 1 AND month <= 12),
+  year INTEGER NOT NULL CHECK (year >= 2020),
+  shifts_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_by UUID REFERENCES employees(id) ON DELETE SET NULL,
+  updated_by UUID REFERENCES employees(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(client_id, site_id, month, year)
+);
+
+-- Indexes for common queries
+CREATE INDEX idx_shifts_client_id ON shifts(client_id);
+CREATE INDEX idx_shifts_site_id ON shifts(site_id);
+CREATE INDEX idx_shifts_client_site_month ON shifts(client_id, site_id, month, year);
+
+-- ============================================
 -- VERIFICATION QUERIES
 -- ============================================
 -- Uncomment to verify schema creation
@@ -250,3 +272,4 @@ INSERT INTO audit_log (id, action, entity, entity_id, old_value, new_value, user
 -- SELECT COUNT(*) as employee_count FROM employees;
 -- SELECT COUNT(*) as checkin_count FROM checkins;
 -- SELECT COUNT(*) as audit_count FROM audit_log;
+-- SELECT COUNT(*) as shifts_count FROM shifts;
