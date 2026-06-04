@@ -64,28 +64,49 @@ app.use((req, res, next) => {
 
 // Health check endpoint (for Docker HEALTHCHECK)
 app.get('/health', async (req, res) => {
+  const diagnostics = {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    environment: NODE_ENV,
+    database: 'connected',
+    db_host: process.env.DB_HOST,
+    db_port: process.env.DB_PORT,
+  };
+
   try {
-    // Quick DB connectivity test
-    await pool.query('SELECT 1');
-    res.status(200).json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      environment: NODE_ENV,
-      database: 'connected',
-    });
+    // Test DB connectivity with 10s timeout
+    const startTime = Date.now();
+    const queryPromise = pool.query('SELECT NOW()');
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('DB query timeout (10s)')), 10000)
+    );
+
+    await Promise.race([queryPromise, timeoutPromise]);
+    const queryTime = Date.now() - startTime;
+
+    diagnostics.db_query_time_ms = queryTime;
+    res.status(200).json(diagnostics);
   } catch (err) {
+    const errorCode = err.code || 'UNKNOWN';
+    const isTimeout = err.message.includes('timeout');
+    const isConnection = errorCode === 'ECONNREFUSED' || errorCode === 'ENOTFOUND' || errorCode === 'ETIMEDOUT';
+
+    diagnostics.database = 'disconnected';
+    diagnostics.error = err.message;
+    diagnostics.error_code = errorCode;
+    diagnostics.error_type = isTimeout ? 'TIMEOUT' : isConnection ? 'CONNECTION' : 'UNKNOWN';
+
     logger.error({
       action: 'health_check_failed',
       error: err.message,
+      error_code: errorCode,
+      error_type: diagnostics.error_type,
       db_host: process.env.DB_HOST,
+      db_port: process.env.DB_PORT,
+      stack: err.stack,
     });
-    res.status(503).json({
-      status: 'degraded',
-      timestamp: new Date().toISOString(),
-      environment: NODE_ENV,
-      database: 'disconnected',
-      error: err.message,
-    });
+
+    res.status(503).json(diagnostics);
   }
 });
 
@@ -180,7 +201,16 @@ app.use((req, res) => {
 if (require.main === module) {
   (async () => {
     try {
-      // Test database connection before starting
+      logger.info({
+        message: 'Badge System API starting',
+        environment: NODE_ENV,
+        port: PORT,
+        db_host: process.env.DB_HOST,
+        db_port: process.env.DB_PORT,
+      });
+
+      // Test database connection before starting (with retry logic)
+      logger.info('Testing database connection with retry logic (5 attempts, 2-30s backoff)...');
       await testConnection();
 
       // Initialize Redis (optional, gracefully continues if not available)

@@ -17,11 +17,11 @@ const dbConfig = {
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  min: parseInt(process.env.DB_POOL_MIN || '2', 10),
-  max: parseInt(process.env.DB_POOL_MAX || '10', 10),
+  min: parseInt(process.env.DB_POOL_MIN || '1', 10),
+  max: parseInt(process.env.DB_POOL_MAX || '5', 10),
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-  statement_timeout: 30000, // 30s query timeout
+  connectionTimeoutMillis: 30000, // Increased from 10s to 30s for AWS RDS cold start
+  statement_timeout: 60000, // Increased from 30s to 60s
   application_name: 'badge-system-api',
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 };
@@ -55,38 +55,65 @@ pool.on('remove', () => {
 });
 
 /**
- * Test database connection on startup
+ * Test database connection with retry logic (exponential backoff)
+ * Helps with AWS RDS cold starts which can take 10-20s
  */
-async function testConnection() {
-  try {
-    const client = await pool.connect();
+async function testConnection(maxRetries = 5, initialDelayMs = 2000) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const result = await client.query('SELECT NOW()');
       logger.info({
-        message: 'Database connection successful',
-        timestamp: result.rows[0].now,
+        message: 'Testing database connection',
+        attempt,
+        maxRetries,
       });
-      return true;
+
+      const client = await pool.connect();
+      try {
+        const result = await client.query('SELECT NOW()');
+        logger.info({
+          message: 'Database connection successful',
+          timestamp: result.rows[0].now,
+          attempt,
+        });
+        return true;
+      } catch (err) {
+        logger.error({
+          message: 'Database query failed',
+          error: err.message || err.toString(),
+          code: err.code,
+          attempt,
+        });
+        throw err;
+      } finally {
+        client.release();
+      }
     } catch (err) {
-      logger.error({
-        message: 'Database query failed',
-        error: err.message || err.toString(),
+      const isLastAttempt = attempt === maxRetries;
+      const delayMs = initialDelayMs * Math.pow(2, attempt - 1); // exponential backoff
+
+      if (isLastAttempt) {
+        logger.error({
+          message: 'Database connection failed after all retries',
+          error: err.message || err.toString(),
+          code: err.code,
+          attempt,
+          maxRetries,
+          stack: err.stack,
+        });
+        throw err;
+      }
+
+      logger.warn({
+        message: 'Database connection failed, will retry',
+        error: err.message,
         code: err.code,
-        details: err,
+        attempt,
+        nextRetryInMs: delayMs,
       });
-      throw err;
-    } finally {
-      client.release();
+
+      // Wait before retrying (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, delayMs));
     }
-  } catch (err) {
-    logger.error({
-      message: 'Database connection pool failed',
-      error: err.message || err.toString(),
-      code: err.code,
-      stack: err.stack,
-      details: JSON.stringify(err, null, 2),
-    });
-    throw err;
   }
 }
 

@@ -102,20 +102,36 @@ jobs:
             echo "✅ Container running: ${CONTAINER_ID}"
 
             echo ""
-            echo "⏳ Step 5: Wait for container to start..."
-            sleep 5
+            echo "⏳ Step 5: Wait for container to initialize (20s for RDS cold start)..."
+            sleep 20
 
             echo ""
-            echo "🏥 Step 6: Test health endpoint..."
-            HEALTH_RESPONSE=$(curl -s http://localhost:${{ env.CONTAINER_PORT }}/health || echo '{}')
-            echo "Health response: ${HEALTH_RESPONSE}"
+            echo "🏥 Step 6: Test health endpoint with retry loop..."
+            MAX_HEALTH_ATTEMPTS=10
+            HEALTH_OK=false
+            for attempt in $(seq 1 $MAX_HEALTH_ATTEMPTS); do
+              echo "Health check attempt $attempt/$MAX_HEALTH_ATTEMPTS..."
+              HEALTH_RESPONSE=$(curl -s http://localhost:${{ env.CONTAINER_PORT }}/health || echo '{}')
+              echo "Response: ${HEALTH_RESPONSE}"
 
-            if echo "${HEALTH_RESPONSE}" | grep -q '"status":"ok"'; then
-              echo "✅ Health endpoint working!"
-            else
-              echo "⚠️  Health endpoint not responding yet, but container is running"
-              echo "Logs:"
-              docker logs ${{ env.CONTAINER_NAME }}
+              if echo "${HEALTH_RESPONSE}" | grep -q '"status":"ok"'; then
+                echo "✅ Health endpoint working!"
+                HEALTH_OK=true
+                break
+              fi
+
+              if [ $attempt -lt $MAX_HEALTH_ATTEMPTS ]; then
+                echo "⏳ Health check failed, waiting 5s before retry..."
+                sleep 5
+              fi
+            done
+
+            if [ "$HEALTH_OK" = false ]; then
+              echo "⚠️  Health endpoint not responding after $MAX_HEALTH_ATTEMPTS attempts"
+              echo "Checking container status..."
+              docker ps -a | grep ${{ env.CONTAINER_NAME }}
+              echo "Recent logs:"
+              docker logs --tail 50 ${{ env.CONTAINER_NAME }}
             fi
 
             echo ""
