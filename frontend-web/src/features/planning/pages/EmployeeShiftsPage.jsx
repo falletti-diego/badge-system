@@ -177,7 +177,7 @@ export const EmployeeShiftsPage = () => {
 
         {/* Shifts List (only show if not loading) */}
         {!loading && (
-        {shiftsArray.length === 0 ? (
+          shiftsArray.length === 0 ? (
           <Card sx={{ backgroundColor: '#F5F2ED' }}>
             <CardContent sx={{ textAlign: 'center', padding: '40px' }}>
               <Typography variant="body1" color="textSecondary">
