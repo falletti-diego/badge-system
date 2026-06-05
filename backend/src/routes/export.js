@@ -9,6 +9,7 @@ const { stringify } = require('csv-stringify');
 const { pool } = require('../db/pool');
 const { createValidationMiddleware, GetExportCsvSchema } = require('../middleware/validation');
 const { requireAuth } = require('../middleware/auth');
+const { ForbiddenError } = require('../utils/errors');
 
 const router = express.Router();
 const logger = pino({
@@ -54,11 +55,20 @@ function escapeCsvField(field) {
 router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), async (req, res, next) => {
   const { site_id, employee_id, date_from, date_to } = req.validated.query;
   const clientId = req.user.client_id;
+  const userRole = req.user.role;
 
   try {
     // Resolve IDs from names if needed (MVP: accept both UUID and name)
     const resolvedSiteId = site_id ? await resolveSiteId(site_id) : undefined;
-    const resolvedEmployeeId = employee_id ? await resolveEmployeeId(employee_id) : undefined;
+    let resolvedEmployeeId = employee_id ? await resolveEmployeeId(employee_id) : undefined;
+
+    // Employees can only export their own data — force filter regardless of query params
+    if (userRole === 'employee') {
+      if (!req.user.employee_id) {
+        return next(new ForbiddenError('Employee access requires employee_id'));
+      }
+      resolvedEmployeeId = req.user.employee_id;
+    }
 
     // Build WHERE clause (MVP: no client_id filtering)
     const whereClauses = [];

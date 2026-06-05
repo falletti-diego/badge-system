@@ -196,8 +196,10 @@ router.get('/:siteId', requireAuth, createValidationMiddleware(GetShiftsSchema),
 
     const site = siteResult.rows[0];
 
-    // 2. Authorization: Manager must be assigned to this site (store managers only)
-    // Admins (no site_id) can access all stores
+    // 2. Authorization: employees use /my-schedule; managers must own this site
+    if (userRole === 'employee') {
+      throw new ForbiddenError('Employees cannot access shift planning. Use /api/shifts/my-schedule', 'EMPLOYEE_NOT_ALLOWED');
+    }
     if (userRole === 'manager') {
       if (!userSiteId || userSiteId !== siteId) {
         throw new ForbiddenError('You can only access your assigned store', 'NOT_ASSIGNED_TO_SITE');
