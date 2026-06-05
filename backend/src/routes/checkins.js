@@ -379,10 +379,12 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
 
   try {
     const result = await withTransaction(async (client) => {
-      // 1. Find check-in and verify ownership
+      // 1. Find check-in and verify ownership via employee.client_id
       const checkinResult = await client.query(
-        `SELECT id, employee_id, site_id, client_id, type, timestamp
-         FROM checkins WHERE id = $1::uuid AND client_id = $2::uuid`,
+        `SELECT c.id, c.employee_id, c.site_id, c.type, c.timestamp
+         FROM checkins c
+         JOIN employees e ON c.employee_id = e.id
+         WHERE c.id = $1::uuid AND e.client_id = $2::uuid`,
         [id, clientId]
       );
 
@@ -391,6 +393,12 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
       }
 
       const checkin = checkinResult.rows[0];
+
+      // 2a. Manager can only edit check-ins for their own site
+      const userSiteId = req.user.site_id;
+      if (req.user.role === 'manager' && userSiteId && checkin.site_id !== userSiteId) {
+        throw new NotFoundError('Check-in not found or not assigned to your organization', 'CHECKIN_NOT_FOUND');
+      }
 
       // 2. Verify within 7-day correction window
       const now = new Date();
@@ -446,7 +454,7 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
         action: 'checkin_corrected',
         entity: 'checkin',
         entityId: id,
-        clientId: checkin.client_id,
+        clientId: clientId,
         oldValue: oldValues,
         newValue: { ...newValues, modified_by: correctorName },
         userId: req.user.user_id,
