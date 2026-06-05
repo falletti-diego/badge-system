@@ -43,8 +43,6 @@ export const PlanningPage = () => {
   const [isSaving, setIsSaving] = useState(false); // Track save loading state
   const [saveError, setSaveError] = useState(null); // Track save errors
 
-  console.log('🚀 PlanningPage mounted!', { user });
-
   const handleLogout = async () => {
     await authService.logout();
     navigate('/login');
@@ -59,7 +57,6 @@ export const PlanningPage = () => {
       const deepCopy = structuredClone(data.shifts_data);
       setShifts(deepCopy);
       setLastSavedShifts(deepCopy);
-      console.log('📊 Shifts loaded (deep copy):', deepCopy);
     }
   }, [data]);
 
@@ -76,10 +73,8 @@ export const PlanningPage = () => {
       // FIXED: If shift is "—" (empty), remove the key instead of setting it
       if (newShift === '—') {
         delete updated[employeeId][date];
-        console.log(`✏️ Shift removed: ${employeeId} on ${date}`);
       } else {
         updated[employeeId][date] = newShift;
-        console.log(`✏️ Shift changed: ${employeeId} on ${date} = ${newShift}`);
       }
 
       return updated;
@@ -120,7 +115,6 @@ export const PlanningPage = () => {
     try {
       setIsSaving(true);
       setSaveError(null);
-      console.log('💾 Saving shifts...', shifts);
 
       // Call real API
       const result = await saveShifts(shifts);
@@ -128,7 +122,6 @@ export const PlanningPage = () => {
       // Update saved state so badges disappear
       setLastSavedShifts(structuredClone(shifts));
       alert(`✅ ${changedCount} turni salvati con successo!`);
-      console.log('✅ Shifts saved to API:', result);
 
     } catch (error) {
       console.error('❌ Save failed:', error);
@@ -144,7 +137,6 @@ export const PlanningPage = () => {
     if (window.confirm('Sei sicuro? Perderai tutti i cambiamenti non salvati.')) {
       // FIXED: Reset to lastSavedShifts (last save), not original data
       setShifts(structuredClone(lastSavedShifts));
-      console.log('🔄 Shifts reset to last saved state');
     }
   };
 
@@ -189,7 +181,6 @@ export const PlanningPage = () => {
     link.click();
     document.body.removeChild(link);
 
-    console.log('📥 CSV exported:', csv);
     alert('✅ CSV esportato con successo!');
   };
 
@@ -217,10 +208,7 @@ export const PlanningPage = () => {
           <Box sx={{ display: 'flex', gap: '12px' }}>
             <Button
               color="inherit"
-              onClick={() => {
-                console.log('⬅️ Back to Dashboard clicked');
-                navigate('/dashboard');
-              }}
+              onClick={() => navigate('/dashboard')}
               sx={{ textTransform: 'none', fontSize: '14px' }}
             >
               ← Back to Dashboard

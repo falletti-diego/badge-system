@@ -41,7 +41,6 @@ export const useShifts = (siteId, month, year) => {
         );
 
         setData(response.data.data);
-        console.log(`📊 Shifts fetched from API for ${month}/${year}:`, response.data.data);
 
       } catch (err) {
         const errorMsg = err.response?.data?.message || err.message || 'Failed to fetch shifts';

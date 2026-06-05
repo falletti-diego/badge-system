@@ -47,8 +47,6 @@ export const useShiftUpdate = (siteId, month, year) => {
         }
       );
 
-      console.log(`✅ Shifts saved to API (${Object.keys(shiftsData).length} employees):`, response.data.data);
-
       return {
         success: true,
         id: response.data.data.id,

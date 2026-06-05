@@ -16,7 +16,6 @@ export const useMySchedule = (month, year) => {
 
   useEffect(() => {
     if (!month || !year) {
-      console.warn('⚠️ useMySchedule: Missing month or year');
       return;
     }
 
@@ -42,7 +41,6 @@ export const useMySchedule = (month, year) => {
         );
 
         setData(response.data.data);
-        console.log(`📊 My schedule fetched from API for ${month}/${year}:`, response.data.data);
 
       } catch (err) {
         const errorMsg = err.response?.data?.message || err.message || 'Failed to fetch schedule';

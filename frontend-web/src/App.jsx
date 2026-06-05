@@ -70,8 +70,6 @@ const theme = createTheme({
 });
 
 function App() {
-  console.log('🎨 App rendering with Router and Theme');
-
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />

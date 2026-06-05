@@ -1,14 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Container, Box, TextField, Button, Typography, Alert, CircularProgress } from '@mui/material';
 import authService from '../services/authService';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-
-  useEffect(() => {
-    console.log('📝 LoginPage mounted');
-  }, []);
   const [email, setEmail] = useState('pippo@badge.local');
   const [password, setPassword] = useState('pippo01');
   const [loading, setLoading] = useState(false);
@@ -30,7 +26,6 @@ export default function LoginPage() {
     setError(null);
     setValidationErrors({});
 
-    // Validate form
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
@@ -40,14 +35,12 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await authService.login(email, password);
-      // Token is stored in localStorage by authService
-      // Redirect to dashboard
+      await authService.login(email, password);
       navigate('/dashboard');
     } catch (err) {
       setError(
-        err.response?.data?.message || 
-        err.message || 
+        err.response?.data?.message ||
+        err.message ||
         'Login failed. Please try again.'
       );
     } finally {
@@ -102,7 +95,6 @@ export default function LoginPage() {
             </Alert>
           )}
 
-          {/* Email Input */}
           <TextField
             label="Email"
             type="email"
@@ -123,7 +115,6 @@ export default function LoginPage() {
             size="medium"
           />
 
-          {/* Password Input */}
           <TextField
             label="Password"
             type="password"
@@ -143,7 +134,6 @@ export default function LoginPage() {
             size="medium"
           />
 
-          {/* Submit Button */}
           <Button
             type="submit"
             variant="contained"
@@ -157,12 +147,8 @@ export default function LoginPage() {
               fontWeight: 600,
               textTransform: 'none',
               borderRadius: '6px',
-              '&:hover': {
-                backgroundColor: '#142a47',
-              },
-              '&:disabled': {
-                backgroundColor: '#CBD5E1',
-              },
+              '&:hover': { backgroundColor: '#142a47' },
+              '&:disabled': { backgroundColor: '#CBD5E1' },
             }}
           >
             {loading ? (
