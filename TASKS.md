@@ -1,8 +1,8 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-05 (Session: QR Code Management complete)  
-**Production:** https://dataxiom-badge.netlify.app · API: http://34.245.145.143:3000
+**Last Updated:** 2026-06-05 (Session: Mobile App Part 1 — SDK 54, Login, QR Scanner, Face ID)  
+**Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
 
@@ -97,14 +97,14 @@ Employee gets notified when manager changes their shift.
 ### FASE 4 — Mobile App: React Native (~25-35h)
 The primary check-in interface for employees.
 
-- [ ] **4.1** React Native project scaffold (Expo or bare)
-- [ ] **4.2** Login screen (email + password → JWT)
-- [ ] **4.3** QR code scanner (`react-native-camera` + `react-native-qrcode`)
-- [ ] **4.4** Face ID authentication (`react-native-face-api` or `expo-local-authentication`)
-- [ ] **4.5** Check-in flow: scan QR → Face ID → POST /api/checkins → confirmation screen
-- [ ] **4.6** My Schedule screen (read-only, calls `GET /api/shifts/my-schedule`)
-- [ ] **4.7** My Presences screen (list of own check-ins)
-- [ ] **4.8** Offline detection + user-friendly error ("No connection — try again")
+- [x] **4.1** React Native project scaffold (Expo SDK 54)
+- [x] **4.2** Login screen (email + password → JWT → AsyncStorage)
+- [x] **4.3** QR code scanner (CameraView + expo-camera barcode scanning)
+- [x] **4.4** Face ID authentication (`expo-local-authentication`)
+- [x] **4.5** Check-in flow: scan QR → Face ID → POST /api/checkins → confirmation screen
+- [x] **4.6** My Schedule screen (read-only, calls `GET /api/shifts/my-schedule`)
+- [x] **4.7** My Presences screen (list of own check-ins)
+- [x] **4.8** Offline detection + user-friendly error (NetInfo)
 - [ ] **4.9** App icon, splash screen, push to TestFlight / Play Store internal track
 
 ### FASE 5 — QR Code Management ✅
@@ -178,6 +178,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-05 | Corrections Page | 3.4.1–3.4.9 | CorrectionsPage, PUT checkins, audit fix |
 | 2026-06-05 | Notifications | 3.5.1–3.5.7 | NotificationBell, polling, redis startup fix |
 | 2026-06-05 | QR Code Management | 5.1–5.4 | GET /api/sites, SitesPage, PNG download, migration 004 |
+| 2026-06-05 | Mobile App (Part 1) | 4.1–4.8 | Expo SDK 54, login flow, QR scanner (CameraView), Face ID, flow fixes |
 
 ---
 
