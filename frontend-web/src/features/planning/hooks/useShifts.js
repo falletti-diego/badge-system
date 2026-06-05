@@ -16,7 +16,6 @@ export const useShifts = (siteId, month, year) => {
 
   useEffect(() => {
     if (!siteId || !month || !year) {
-      console.warn('⚠️ useShifts: Missing siteId, month, or year');
       return;
     }
 
