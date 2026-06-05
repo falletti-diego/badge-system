@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import authService from '../services/authService';
 
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -18,6 +19,13 @@ export default function RootNavigator() {
 
   useEffect(() => {
     authService.isAuthenticated().then(setIsAuthenticated);
+
+    const interval = setInterval(async () => {
+      const hasToken = await AsyncStorage.getItem('badge_auth_token');
+      setIsAuthenticated(!!hasToken);
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
   if (isAuthenticated === null) {

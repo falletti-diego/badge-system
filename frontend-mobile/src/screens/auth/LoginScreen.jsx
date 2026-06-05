@@ -19,11 +19,9 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     try {
       await authService.login(email.trim(), password);
-      navigation.reset({ index: 0, routes: [{ name: 'CheckIn' }] });
     } catch (err) {
       const msg = err.response?.data?.message || 'Email o password non corretti';
       Alert.alert('Accesso negato', msg);
-    } finally {
       setLoading(false);
     }
   };
