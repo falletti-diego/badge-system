@@ -9,7 +9,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   Paper,
@@ -327,105 +326,150 @@ export const PlanningPage = () => {
           </Box>
         )}
         {data ? (
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead sx={{ backgroundColor: '#F5F2ED' }}>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold', minWidth: '150px' }}>Dipendente</TableCell>
-                  {days.map(day => {
-                    const dateObj = new Date(year, month - 1, day);
-                    const dayName = dateObj.toLocaleString('it-IT', { weekday: 'short' });
-                    return (
-                      <TableCell key={day} align="center" sx={{ fontWeight: 'bold', minWidth: '65px', fontSize: '12px' }}>
-                        {day} {dayName}
-                      </TableCell>
-                    );
-                  })}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(data.employees || []).map(emp => {
-                  const shiftCount = getShiftCount(emp.id);
-                  const isComplete = shiftCount === daysInMonth;
-                  return (
-                  <TableRow key={emp.id} hover>
-                    <TableCell sx={{ fontWeight: '500' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span>{emp.name}</span>
-                        <Box
-                          sx={{
-                            fontSize: '11px',
-                            backgroundColor: isComplete ? '#D4EDDA' : '#F5F2ED',
-                            color: isComplete ? '#155724' : '#6B625A',
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            fontWeight: 'bold',
-                            border: isComplete ? '1px solid #28A745' : 'none'
-                          }}
-                        >
-                          {shiftCount}/{daysInMonth}
-                        </Box>
-                      </Box>
+          <Paper sx={{ overflow: 'hidden' }}>
+            <Box sx={{ overflowX: 'auto' }}>
+              <Table size="small" sx={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+                <TableHead>
+                  <TableRow sx={{ backgroundColor: '#1E3A5F' }}>
+                    <TableCell
+                      sx={{
+                        color: '#FFFFFF',
+                        fontWeight: 'bold',
+                        whiteSpace: 'nowrap',
+                        width: '210px',
+                        minWidth: '210px',
+                        position: 'sticky',
+                        left: 0,
+                        backgroundColor: '#1E3A5F',
+                        zIndex: 3,
+                        boxShadow: '4px 0 6px -2px rgba(0,0,0,0.18)'
+                      }}
+                    >
+                      Dipendente
                     </TableCell>
                     {days.map(day => {
-                      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                      const shift = shifts?.[emp.id]?.[dateStr] || '—';
-                      const color = SHIFT_COLORS[shift];
-                      const isChanged = isShiftChanged(emp.id, dateStr);
+                      const dateObj = new Date(year, month - 1, day);
+                      const dayName = dateObj.toLocaleString('it-IT', { weekday: 'short' });
+                      const isWeekend = [0, 6].includes(dateObj.getDay());
                       return (
-                        <TableCell key={`${emp.id}-${day}`} align="center" sx={{ padding: '4px', position: 'relative' }}>
-                          {/* Red badge for changed cells */}
-                          {isChanged && (
-                            <Box
-                              sx={{
-                                position: 'absolute',
-                                top: '2px',
-                                right: '2px',
-                                width: '8px',
-                                height: '8px',
-                                backgroundColor: '#C0392B',
-                                borderRadius: '50%',
-                                zIndex: 10
-                              }}
-                            />
-                          )}
-                          <Select
-                            value={shift}
-                            onChange={(e) => handleShiftChange(emp.id, dateStr, e.target.value)}
-                            sx={{
-                              width: '100%',
-                              height: '40px',
-                              backgroundColor: color?.bg || '#E5E7EB',
-                              color: 'white',
-                              fontWeight: 'bold',
-                              fontSize: '12px',
-                              '& .MuiOutlinedInput-notchedOutline': {
-                                borderColor: isChanged ? '#C0392B' : 'transparent',
-                                borderWidth: isChanged ? '2px' : '0px'
-                              },
-                              '&:hover .MuiOutlinedInput-notchedOutline': {
-                                borderColor: isChanged ? '#C0392B' : 'transparent'
-                              },
-                              '& .MuiSvgIcon-root': {
-                                color: 'white'
-                              }
-                            }}
-                          >
-                            <MenuItem value="m" sx={{ backgroundColor: SHIFT_COLORS['m'].bg, color: 'white' }}>m - Mattino</MenuItem>
-                            <MenuItem value="p" sx={{ backgroundColor: SHIFT_COLORS['p'].bg, color: 'white' }}>p - Pomeriggio</MenuItem>
-                            <MenuItem value="s" sx={{ backgroundColor: SHIFT_COLORS['s'].bg, color: 'white' }}>s - Sera</MenuItem>
-                            <MenuItem value="R" sx={{ backgroundColor: SHIFT_COLORS['R'].bg, color: 'white' }}>R - Riposo</MenuItem>
-                            <MenuItem value="—">— Vuoto</MenuItem>
-                          </Select>
+                        <TableCell
+                          key={day}
+                          align="center"
+                          sx={{
+                            color: isWeekend ? '#A5C0DC' : '#FFFFFF',
+                            fontWeight: 'bold',
+                            minWidth: '58px',
+                            fontSize: '11px',
+                            padding: '6px 2px',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {day} {dayName}
                         </TableCell>
                       );
                     })}
                   </TableRow>
-                );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {(data.employees || []).map((emp, rowIdx) => {
+                    const shiftCount = getShiftCount(emp.id);
+                    const isComplete = shiftCount === daysInMonth;
+                    const rowBg = rowIdx % 2 === 0 ? '#FFFFFF' : '#FAFAF8';
+                    return (
+                      <TableRow key={emp.id} sx={{ '&:hover td': { backgroundColor: '#EEF2F7' } }}>
+                        <TableCell
+                          sx={{
+                            position: 'sticky',
+                            left: 0,
+                            backgroundColor: rowBg,
+                            zIndex: 2,
+                            boxShadow: '4px 0 6px -2px rgba(0,0,0,0.18)',
+                            whiteSpace: 'nowrap',
+                            padding: '8px 12px'
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }}>
+                            <span style={{ fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap' }}>
+                              {emp.name}
+                            </span>
+                            <Box
+                              sx={{
+                                fontSize: '11px',
+                                backgroundColor: isComplete ? '#D4EDDA' : '#F5F2ED',
+                                color: isComplete ? '#155724' : '#6B625A',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontWeight: 'bold',
+                                border: isComplete ? '1px solid #28A745' : 'none',
+                                flexShrink: 0
+                              }}
+                            >
+                              {shiftCount}/{daysInMonth}
+                            </Box>
+                          </Box>
+                        </TableCell>
+                        {days.map(day => {
+                          const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                          const shift = shifts?.[emp.id]?.[dateStr] || '—';
+                          const color = SHIFT_COLORS[shift];
+                          const isChanged = isShiftChanged(emp.id, dateStr);
+                          return (
+                            <TableCell
+                              key={`${emp.id}-${day}`}
+                              align="center"
+                              sx={{ padding: '4px 2px', position: 'relative', backgroundColor: rowBg }}
+                            >
+                              {isChanged && (
+                                <Box
+                                  sx={{
+                                    position: 'absolute',
+                                    top: '2px',
+                                    right: '2px',
+                                    width: '7px',
+                                    height: '7px',
+                                    backgroundColor: '#C0392B',
+                                    borderRadius: '50%',
+                                    zIndex: 10
+                                  }}
+                                />
+                              )}
+                              <Select
+                                value={shift}
+                                onChange={(e) => handleShiftChange(emp.id, dateStr, e.target.value)}
+                                sx={{
+                                  width: '52px',
+                                  height: '36px',
+                                  backgroundColor: color?.bg || '#E5E7EB',
+                                  color: 'white',
+                                  fontWeight: 'bold',
+                                  fontSize: '12px',
+                                  '& .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: isChanged ? '#C0392B' : 'transparent',
+                                    borderWidth: isChanged ? '2px' : '0px'
+                                  },
+                                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: isChanged ? '#C0392B' : 'transparent'
+                                  },
+                                  '& .MuiSvgIcon-root': { display: 'none' },
+                                  '& .MuiSelect-select': { padding: '0 8px', textAlign: 'center' }
+                                }}
+                              >
+                                <MenuItem value="m" sx={{ backgroundColor: SHIFT_COLORS['m'].bg, color: 'white' }}>m - Mattino</MenuItem>
+                                <MenuItem value="p" sx={{ backgroundColor: SHIFT_COLORS['p'].bg, color: 'white' }}>p - Pomeriggio</MenuItem>
+                                <MenuItem value="s" sx={{ backgroundColor: SHIFT_COLORS['s'].bg, color: 'white' }}>s - Sera</MenuItem>
+                                <MenuItem value="R" sx={{ backgroundColor: SHIFT_COLORS['R'].bg, color: 'white' }}>R - Riposo</MenuItem>
+                                <MenuItem value="—">—</MenuItem>
+                              </Select>
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </Box>
+          </Paper>
         ) : (
           <Typography>Caricamento...</Typography>
         )}

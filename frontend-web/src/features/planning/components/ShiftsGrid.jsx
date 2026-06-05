@@ -3,7 +3,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   Paper,
@@ -55,20 +54,24 @@ export const ShiftsGrid = ({
     return <Alert severity="error">{error}</Alert>;
   }
 
+  const STICKY_SHADOW = '4px 0 6px -2px rgba(0,0,0,0.15)';
+
   return (
-    <TableContainer component={Paper} sx={{ overflowX: 'auto', marginTop: '20px' }}>
-      <Table size="small" sx={{ backgroundColor: '#F5F2ED' }}>
+    <Paper sx={{ marginTop: '20px', overflow: 'hidden' }}>
+      <Box sx={{ overflowX: 'auto' }}>
+      <Table size="small" sx={{ backgroundColor: '#F5F2ED', borderCollapse: 'separate', borderSpacing: 0 }}>
         <TableHead>
           <TableRow sx={{ backgroundColor: '#1E3A5F' }}>
             <TableCell
               sx={{
                 color: '#FFFFFF',
                 fontWeight: 'bold',
-                minWidth: '150px',
+                minWidth: '160px',
                 position: 'sticky',
                 left: 0,
                 backgroundColor: '#1E3A5F',
-                zIndex: 2
+                zIndex: 3,
+                boxShadow: STICKY_SHADOW
               }}
             >
               Dipendente
@@ -100,16 +103,20 @@ export const ShiftsGrid = ({
         </TableHead>
 
         <TableBody>
-          {sortedEmployees.map(employee => (
-            <TableRow key={employee.id} sx={{ '&:hover': { backgroundColor: '#FFFFFF' } }}>
+          {sortedEmployees.map((employee, rowIdx) => {
+            const rowBg = rowIdx % 2 === 0 ? '#FFFFFF' : '#FAFAF8';
+            return (
+            <TableRow key={employee.id} sx={{ '&:hover td': { backgroundColor: '#EEF2F7' } }}>
               <TableCell
                 sx={{
-                  fontWeight: '500',
+                  fontWeight: '600',
+                  fontSize: '0.82rem',
                   position: 'sticky',
                   left: 0,
-                  backgroundColor: '#FFFFFF',
-                  zIndex: 1,
-                  borderRight: '1px solid #DDD'
+                  backgroundColor: rowBg,
+                  zIndex: 2,
+                  boxShadow: STICKY_SHADOW,
+                  whiteSpace: 'nowrap'
                 }}
               >
                 {employee.name}
@@ -143,9 +150,10 @@ export const ShiftsGrid = ({
                 );
               })}
             </TableRow>
-          ))}
+          );})}
         </TableBody>
       </Table>
-    </TableContainer>
+      </Box>
+    </Paper>
   );
 };

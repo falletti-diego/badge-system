@@ -73,13 +73,17 @@ export const EmployeeShiftsPage = () => {
     );
   }
 
-  // Extract shifts from API response
   const shiftsData = data?.shifts_data || {};
-  const shiftsArray = Object.entries(shiftsData)
-    .map(([date, shift]) => ({ date, shift }))
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
-
   const daysInMonth = new Date(year, month, 0).getDate();
+
+  // Generate ALL days of the month — shift is null when not yet assigned
+  const shiftsArray = Array.from({ length: daysInMonth }, (_, i) => {
+    const day = i + 1;
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return { date: dateStr, shift: shiftsData[dateStr] || null };
+  });
+
+  const assignedCount = shiftsArray.filter(({ shift }) => shift !== null).length;
   const monthLabel = new Date(year, month - 1, 1).toLocaleString('it-IT', {
     month: 'long',
     year: 'numeric'
@@ -163,7 +167,7 @@ export const EmployeeShiftsPage = () => {
                   Turni Assegnati
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                  {shiftsArray.length}/{daysInMonth}
+                  {assignedCount}/{daysInMonth}
                 </Typography>
               </CardContent>
             </Card>
@@ -174,33 +178,26 @@ export const EmployeeShiftsPage = () => {
                   Giorni Liberi
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                  {Math.max(0, daysInMonth - shiftsArray.length)}
+                  {daysInMonth - assignedCount}
                 </Typography>
               </CardContent>
             </Card>
           </Stack>
         )}
 
-        {/* Shifts List (only show if not loading) */}
-        {!loading && (shiftsArray.length === 0 ? (
-          <Card sx={{ backgroundColor: '#F5F2ED' }}>
-            <CardContent sx={{ textAlign: 'center', padding: '40px' }}>
-              <Typography variant="body1" color="textSecondary">
-                Nessun turno assegnato per {monthLabel}
-              </Typography>
-            </CardContent>
-          </Card>
-        ) : (
+        {/* Shifts List — all days shown, unassigned days appear as "—" */}
+        {!loading && (
           <Card>
             <Box sx={{ p: 0 }}>
               {shiftsArray.map(({ date, shift }, idx) => {
-                const shiftInfo = SHIFT_ICONS[shift] || { label: shift, color: '#999999' };
-                const dateObj = new Date(date);
-                const dateStr = dateObj.toLocaleDateString('it-IT', {
+                const shiftInfo = shift ? SHIFT_ICONS[shift] : null;
+                const dateObj = new Date(date + 'T00:00:00');
+                const dateLabel = dateObj.toLocaleDateString('it-IT', {
                   weekday: 'long',
                   day: 'numeric',
                   month: 'long'
                 });
+                const isWeekend = [0, 6].includes(dateObj.getDay());
 
                 return (
                   <Box
@@ -209,36 +206,55 @@ export const EmployeeShiftsPage = () => {
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      padding: '14px 16px',
+                      padding: '12px 16px',
                       borderBottom: idx < shiftsArray.length - 1 ? '1px solid #E5E7EB' : 'none',
-                      '&:hover': {
-                        backgroundColor: '#F9F8F6'
-                      }
+                      backgroundColor: isWeekend ? '#FAFAF8' : 'transparent',
+                      '&:hover': { backgroundColor: '#F9F8F6' }
                     }}
                   >
-                    <Typography variant="body1" sx={{ fontWeight: '500', color: '#2A2520' }}>
-                      {dateStr}
-                    </Typography>
-                    <Box
+                    <Typography
+                      variant="body2"
                       sx={{
-                        backgroundColor: shiftInfo.color,
-                        color: '#FFFFFF',
-                        padding: '4px 12px',
-                        borderRadius: '4px',
-                        fontSize: '13px',
-                        fontWeight: '600',
-                        minWidth: '80px',
-                        textAlign: 'center'
+                        fontWeight: isWeekend ? '400' : '500',
+                        color: isWeekend ? '#9CA3AF' : '#2A2520',
+                        textTransform: 'capitalize'
                       }}
                     >
-                      {shiftInfo.label}
-                    </Box>
+                      {dateLabel}
+                    </Typography>
+                    {shiftInfo ? (
+                      <Box
+                        sx={{
+                          backgroundColor: shiftInfo.color,
+                          color: '#FFFFFF',
+                          padding: '3px 12px',
+                          borderRadius: '4px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          minWidth: '90px',
+                          textAlign: 'center'
+                        }}
+                      >
+                        {shiftInfo.label}
+                      </Box>
+                    ) : (
+                      <Box
+                        sx={{
+                          color: '#D1D5DB',
+                          fontSize: '13px',
+                          minWidth: '90px',
+                          textAlign: 'center'
+                        }}
+                      >
+                        —
+                      </Box>
+                    )}
                   </Box>
                 );
               })}
             </Box>
           </Card>
-        ))}
+        )}
 
         {/* Info Card */}
         <Card sx={{ marginTop: '30px', backgroundColor: '#F5F2ED' }}>
