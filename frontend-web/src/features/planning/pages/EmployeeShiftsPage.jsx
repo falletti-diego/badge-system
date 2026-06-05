@@ -33,11 +33,9 @@ const SHIFT_ICONS = {
 
 export const EmployeeShiftsPage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: userLoading } = useAuth();
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
-
-  console.log('🚀 EmployeeShiftsPage mounted!', { user });
 
   const handleLogout = async () => {
     await authService.logout();
@@ -46,6 +44,14 @@ export const EmployeeShiftsPage = () => {
 
   // Fetch employee's schedule from API
   const { data, loading, error } = useMySchedule(month, year);
+
+  if (userLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   if (!user?.employee_id) {
     return (
