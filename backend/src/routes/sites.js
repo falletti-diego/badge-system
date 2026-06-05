@@ -7,7 +7,7 @@ const express = require('express');
 const pino = require('pino');
 const { pool } = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
-const { NotFoundError, ForbiddenError } = require('../utils/errors');
+const { ForbiddenError } = require('../utils/errors');
 
 const router = express.Router();
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });

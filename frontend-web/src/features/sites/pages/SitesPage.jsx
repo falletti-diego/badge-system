@@ -21,9 +21,9 @@ import apiClient from '../../../services/apiClient';
 
 export const SitesPage = () => {
   const navigate = useNavigate();
-  const { user, loading: userLoading } = useAuth();
+  const { loading: userLoading } = useAuth();
   const [sites, setSites] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const fetchSites = useCallback(async () => {
@@ -39,9 +39,12 @@ export const SitesPage = () => {
     }
   }, []);
 
+  // Wait for auth to resolve before fetching — avoids unauthenticated request on mount
   useEffect(() => {
-    fetchSites();
-  }, [fetchSites]);
+    if (!userLoading) {
+      fetchSites();
+    }
+  }, [userLoading, fetchSites]);
 
   const handleLogout = async () => {
     await authService.logout();
