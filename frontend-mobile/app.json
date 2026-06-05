@@ -22,7 +22,9 @@
     },
     "android": {
       "package": "it.dataxiom.badge",
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA"
+      ]
     },
     "plugins": [
       "expo-barcode-scanner",
@@ -31,7 +33,9 @@
         {
           "faceIDPermission": "Autorizza Badge System a usare Face ID per il check-in"
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-font"
     ]
   }
 }
