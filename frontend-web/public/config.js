@@ -1,7 +1,6 @@
 // Runtime configuration - loaded before the app starts
-// Empty string = same origin. /api/* is proxied to EC2:
-//   Production (Netlify): via netlify.toml [[redirects]]
-//   Development (Vite): via proxy in vite.config.js
+// Production: direct HTTPS to api.dataxiom.it (valid Let's Encrypt cert)
+// Development (Vite): overridden to '' so vite proxy handles /api/* to localhost:3000
 window.API_CONFIG = {
-  API_URL: ''
+  API_URL: 'https://api.dataxiom.it'
 };
