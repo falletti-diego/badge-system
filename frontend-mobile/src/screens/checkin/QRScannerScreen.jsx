@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/apiClient';
+import authService from '../../services/authService';
 
 const QR_PREFIX = 'badge://checkin';
 
@@ -32,7 +34,13 @@ export default function QRScannerScreen({ navigation }) {
 
       if (!siteId || !clientId) throw new Error('QR incompleto');
 
+      const user = await authService.getUser();
+      const employeeId = user?.id;
+
+      if (!employeeId) throw new Error('Employee ID non trovato');
+
       const response = await apiClient.post('/api/checkins', {
+        employee_id: employeeId,
         site_id: siteId,
         client_id: clientId,
         type: 'IN',
