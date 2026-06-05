@@ -2,6 +2,85 @@
 
 ---
 
+# 🛠️ SESSION 2026-06-05 (parte 2) — FASE 3.4, 3.5, 5 + HTTPS + Prep FASE 4
+
+**Status:** ✅ Production deployed  
+**Commits:** 694cdb4, c0cddb8, b372489, 497f1a2, 7d393a0, 4713bb0, 402949d, 878c0eb, 07ac5ce, bef5324, ed45266, 0dcad1b, c963e11, 7f9b01e
+
+## FASE 3.4 — Corrections Page
+
+- `CorrectionsPage.jsx` — lista check-in con modal di modifica (timestamp, tipo IN/OUT, nota)
+- Finestra di correzione: 7 giorni (backend + frontend)
+- Audit trail visibile in UI: "Corretto da X il Y"
+- Rotta `/corrections` (manager + admin), link "✏️ Correzioni" in navbar Dashboard
+- Backend: colonne `correction_note`, `modified_by_name` su `checkins`; `audit.js` fixato (schema senza `client_id`, UUID-safe)
+
+## FASE 3.5 — Notifiche Turni
+
+- `GET /api/notifications` — polling endpoint; record creato quando manager salva turno
+- `NotificationBell.jsx` — icona campanella + badge contatore non letti + popover last 10
+- `useNotifications.js` — poll ogni 30s quando employee è loggato
+- Migration 003: tabella `notifications` su RDS
+- Fix: `redis.js` reconnectStrategy cap a 3 retry (impediva startup server)
+
+## FASE 5 — QR Code Management
+
+- `GET /api/sites` — admin: tutte le sedi, manager: solo la propria, employee: 403
+- Formato QR: `badge://checkin?site_id=<uuid>&client_id=<uuid>&v=1`
+- `SitesPage.jsx` — QR renderizzato con `react-qr-code` + download PNG via SVG→canvas
+- Migration 004: aggiornati 5 record `qr_code_content` da `QR_BADGE_*` a formato reale su RDS
+- Rotta `/admin/sites` (admin only), link "🏪 Sedi & QR" in navbar Dashboard
+
+## RBAC Security Fixes
+
+Due gap scoperti durante role matrix test:
+1. `shifts.js GET /:siteId` — employee riceveva HTTP 200 e vedeva turni di tutti → aggiunto `ForbiddenError` per `role=employee`
+2. `export.js GET /` — employee scaricava CSV di tutti i dipendenti → force-filter su `req.user.employee_id`
+
+Test matrix completo (admin/manager/employee) — tutti i 3 ruoli verificati su tutti gli endpoint.
+
+## Infrastruttura HTTPS — api.dataxiom.it
+
+- Record DNS `api.dataxiom.it → 34.245.145.143` già esistente
+- Nginx + Let's Encrypt su EC2 già configurato (da sessione precedente)
+- CORS_ORIGIN aggiornato su EC2: aggiunto `https://dataxiom-badge.netlify.app`
+- Container ricreato con `--env-file /home/ubuntu/badge-api/.env` (prima le env vars erano baked-in al run)
+- `config.js` aggiornato: `API_URL: 'https://api.dataxiom.it'` (non più stringa vuota + proxy)
+
+## Consolidamento API URL
+
+Problema: 4 file avevano propria logica di risoluzione URL con `||` (bypassa stringa vuota).  
+Fix: tutti i file HTTP ora importano `apiClient.js` (unico punto, usa `??`).  
+File refactorizzati: `authService.js`, `useShifts.js`, `useShiftUpdate.js`, `useMySchedule.js`.  
+Proxy `_redirects`, `netlify.toml`, `vite.config.js` aggiornati da IP HTTP a `https://api.dataxiom.it`.
+
+## Code Review (pre-FASE 4)
+
+Subagent ha segnalato 4 "critical" — tutti REFUTED dopo verifica:
+- `requiredRole` vs `requiredRoles`: ProtectedRoute gestisce entrambi con `??`
+- `useShifts(user?.site_id)`: guard interno `!siteId` presente
+- `useMySchedule` prima di auth: ProtectedRoute già garantisce autenticazione
+- `fetchSites` infinite loop: `useCallback([], [])` stabile, nessun loop
+
+3 fix reali applicati: IP hardcoded in `_redirects`, `netlify.toml`, `vite.config.js` → sostituiti con dominio HTTPS.
+
+## Stato Produzione
+
+| URL | Stato |
+|-----|-------|
+| https://dataxiom-badge.netlify.app | ✅ Live |
+| https://api.dataxiom.it | ✅ Live, HTTPS valido, DB connesso |
+
+## Prossimo: FASE 4 — Mobile App (Expo + iPhone)
+
+Decisioni prese:
+- **Framework:** Expo (non bare React Native)
+- **Test device:** iPhone fisico (TestFlight)
+- **Backend:** `https://api.dataxiom.it` — già HTTPS, ready per iOS
+- **Distribuzione MVP:** solo iOS
+
+---
+
 # 🛠️ SESSION 2026-06-05 — Bug Fixes + UI Polish + Deploy Procedure
 
 **Status:** ✅ Production deployed (bundle `index-CrpQZBFD.js`)  
