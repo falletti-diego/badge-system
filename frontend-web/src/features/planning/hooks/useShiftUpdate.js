@@ -2,7 +2,7 @@ import { useState } from 'react';
 import axios from 'axios';
 import authService from '../../../services/authService';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE_URL = window.API_CONFIG?.API_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 /**
  * useShiftUpdate — Save shift planning to backend API

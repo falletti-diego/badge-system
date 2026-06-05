@@ -17,7 +17,8 @@ import {
   MenuItem,
   AppBar,
   Toolbar,
-  Button
+  Button,
+  CircularProgress,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
@@ -34,7 +35,7 @@ const SHIFT_COLORS = {
 
 export const PlanningPage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: userLoading } = useAuth();
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
   const [shifts, setShifts] = useState({}); // Local state for edits
@@ -192,8 +193,16 @@ export const PlanningPage = () => {
     alert('✅ CSV esportato con successo!');
   };
 
+  if (userLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   if (!user?.site_id) {
-    return <Container sx={{ p: 4 }}><Typography color="error">Accesso negato.</Typography></Container>;
+    return <Container sx={{ p: 4 }}><Typography color="error">Accesso negato: nessun negozio assegnato.</Typography></Container>;
   }
 
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -360,7 +369,7 @@ export const PlanningPage = () => {
                       </Box>
                     </TableCell>
                     {days.map(day => {
-                      const dateStr = `2026-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;// FIXED: pad month for Oct-Dec
+                      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                       const shift = shifts?.[emp.id]?.[dateStr] || '—';
                       const color = SHIFT_COLORS[shift];
                       const isChanged = isShiftChanged(emp.id, dateStr);

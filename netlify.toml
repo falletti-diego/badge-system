@@ -4,10 +4,7 @@ publish = "dist"
 command = "npm run build"
 
 [build.environment]
-VITE_API_URL = "http://34.245.145.143:3000"
-
-[env.production]
-command = "npm run build:prod"
+VITE_API_URL = "https://api.dataxiom.it"
 
 [[redirects]]
 from = "/*"
