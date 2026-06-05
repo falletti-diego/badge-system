@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Badge System",
+    "slug": "badge-system",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1E3A5F"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "it.dataxiom.badge",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Utilizzato per scansionare il QR code della sede",
+        "NSFaceIDUsageDescription": "Utilizzato per autenticare il check-in",
+        "NSPhotoLibraryUsageDescription": "Non utilizzato"
+      }
+    },
+    "android": {
+      "package": "it.dataxiom.badge",
+      "permissions": ["CAMERA"]
+    },
+    "plugins": [
+      "expo-barcode-scanner",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Autorizza Badge System a usare Face ID per il check-in"
+        }
+      ]
+    ]
+  }
+}
