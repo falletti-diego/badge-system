@@ -5,7 +5,8 @@
 
 import axios from 'axios';
 
-const API_BASE_URL = window.API_CONFIG?.API_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// ?? (not ||) so that empty string '' is preserved as "same-origin" for Netlify proxy
+const API_BASE_URL = window.API_CONFIG?.API_URL ?? import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT || '30000', 10);
 
 /**
