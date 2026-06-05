@@ -6,7 +6,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
-import { setMockToken } from './services/apiClient';
 import DashboardPage from './features/dashboard/pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -71,12 +70,6 @@ const theme = createTheme({
 });
 
 function App() {
-  useEffect(() => {
-    console.log('📦 App mounted, initializing...');
-    setMockToken('test-token-mvp-12345');
-    console.log('🔑 Mock token set');
-  }, []);
-
   console.log('🎨 App rendering with Router and Theme');
 
   return (
@@ -109,7 +102,7 @@ function App() {
           <Route
             path="/planning"
             element={
-              <ProtectedRoute requiredRole="manager">
+              <ProtectedRoute requiredRoles={['manager', 'admin']}>
                 <PlanningPage />
               </ProtectedRoute>
             }

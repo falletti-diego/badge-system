@@ -8,7 +8,7 @@ set -euo pipefail
 FRONTEND_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../frontend-web" && pwd)"
 NETLIFY_SITE="dataxiom-badge.netlify.app"
 FRONTEND_URL="https://${NETLIFY_SITE}"
-API_URL="http://34.245.145.143:3000"
+API_URL="https://api.dataxiom.it"
 DEMO_EMAIL="pino@badge.local"
 DEMO_PASS="pino01"
 

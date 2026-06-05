@@ -10,11 +10,10 @@ import { useAuth } from '../hooks/useAuth';
  * Usage:
  * <Route path="/planning" element={<ProtectedRoute requiredRole="manager"><PlanningPage /></ProtectedRoute>} />
  */
-export default function ProtectedRoute({ children, requiredRole = null }) {
+export default function ProtectedRoute({ children, requiredRole = null, requiredRoles = null }) {
   const isAuthenticated = authService.isAuthenticated();
   const { user, loading } = useAuth();
 
-  // Wait for user data to load before checking role
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
@@ -23,16 +22,13 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />;
   }
 
-  // FIXED: Check user exists before checking role (prevent dashboard access for unauthenticated users)
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (requiredRole && user.role !== requiredRole) {
+  // Support both requiredRole (string) and requiredRoles (array)
+  const allowed = requiredRoles ?? (requiredRole ? [requiredRole] : null);
+  if (allowed && !allowed.includes(user.role)) {
     return <Navigate to="/dashboard" replace />;
   }
 
