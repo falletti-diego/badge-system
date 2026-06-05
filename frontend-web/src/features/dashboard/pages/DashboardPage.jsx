@@ -101,6 +101,21 @@ const DashboardPage = () => {
               </Button>
             )}
 
+            {/* Corrections Button - Show for managers and admins */}
+            {(userRole === 'manager' || userRole === 'admin') && (
+              <Button
+                color="inherit"
+                onClick={() => navigate('/corrections')}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '14px',
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
+                }}
+              >
+                ✏️ Correzioni
+              </Button>
+            )}
+
             {/* Employee Schedule Link - Show for employees */}
             {userRole === 'employee' && (
               <Button

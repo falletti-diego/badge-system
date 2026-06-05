@@ -11,6 +11,7 @@ import LoginPage from './pages/LoginPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { PlanningPage } from './features/planning/pages/PlanningPage';
 import { EmployeeShiftsPage } from './features/planning/pages/EmployeeShiftsPage';
+import { CorrectionsPage } from './features/corrections/pages/CorrectionsPage';
 
 // Create Material-UI theme with design system colors
 const theme = createTheme({
@@ -110,6 +111,16 @@ function App() {
             element={
               <ProtectedRoute requiredRole="employee">
                 <EmployeeShiftsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Corrections Route */}
+          <Route
+            path="/corrections"
+            element={
+              <ProtectedRoute requiredRoles={['manager', 'admin']}>
+                <CorrectionsPage />
               </ProtectedRoute>
             }
           />
