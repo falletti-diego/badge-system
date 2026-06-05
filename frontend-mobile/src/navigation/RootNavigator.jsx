@@ -38,18 +38,16 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!isAuthenticated ? (
-          <Stack.Screen name="Login" component={LoginScreen} />
-        ) : (
-          <>
-            <Stack.Screen name="CheckIn" component={CheckInScreen} />
-            <Stack.Screen name="QRScanner" component={QRScannerScreen} />
-            <Stack.Screen name="Success" component={SuccessScreen} />
-            <Stack.Screen name="MySchedule" component={MyScheduleScreen} />
-            <Stack.Screen name="MyPresences" component={MyPresencesScreen} />
-          </>
-        )}
+      <Stack.Navigator
+        screenOptions={{ headerShown: false }}
+        initialRouteName={isAuthenticated ? 'CheckIn' : 'Login'}
+      >
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="CheckIn" component={CheckInScreen} />
+        <Stack.Screen name="QRScanner" component={QRScannerScreen} />
+        <Stack.Screen name="Success" component={SuccessScreen} />
+        <Stack.Screen name="MySchedule" component={MyScheduleScreen} />
+        <Stack.Screen name="MyPresences" component={MyPresencesScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
