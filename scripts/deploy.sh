@@ -62,12 +62,14 @@ if [[ "$SKIP_DEPLOY" == false ]]; then
   if git diff --quiet && git diff --staged --quiet; then
     warn "No uncommitted changes — pushing current HEAD to trigger Netlify rebuild"
   fi
-  info "Pushing main → GitHub (Netlify auto-deploys on push)"
+  info "Deploying directly to Netlify (site: dataxiom-badge)..."
+  cd "$FRONTEND_DIR"
+  netlify deploy --build --prod --site 29a79b49-5571-4249-8c2b-d0813de4bf17 2>&1 | tail -5
+  pass "Netlify deploy complete"
+  cd "$(dirname "$FRONTEND_DIR")"
+  info "Pushing to GitHub..."
   git push origin main
-  pass "Push complete"
-
-  info "Waiting 45s for Netlify to build and deploy..."
-  sleep 45
+  pass "Git push complete"
 else
   warn "Skipping deploy (--skip-deploy)"
 fi
