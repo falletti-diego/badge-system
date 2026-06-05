@@ -436,6 +436,7 @@ export const PlanningPage = () => {
                               <Select
                                 value={shift}
                                 onChange={(e) => handleShiftChange(emp.id, dateStr, e.target.value)}
+                                renderValue={(val) => (val && val !== '—') ? val.toUpperCase() : '—'}
                                 sx={{
                                   width: '52px',
                                   height: '36px',
@@ -451,7 +452,7 @@ export const PlanningPage = () => {
                                     borderColor: isChanged ? '#C0392B' : 'transparent'
                                   },
                                   '& .MuiSvgIcon-root': { display: 'none' },
-                                  '& .MuiSelect-select': { padding: '0 8px', textAlign: 'center' }
+                                  '& .MuiSelect-select': { padding: '0 !important', display: 'flex', alignItems: 'center', justifyContent: 'center' }
                                 }}
                               >
                                 <MenuItem value="m" sx={{ backgroundColor: SHIFT_COLORS['m'].bg, color: 'white' }}>m - Mattino</MenuItem>
