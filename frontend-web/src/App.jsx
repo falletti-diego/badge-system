@@ -75,7 +75,7 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <Router>
         <Routes>
           {/* Auth Routes */}
           <Route path="/login" element={<LoginPage />} />

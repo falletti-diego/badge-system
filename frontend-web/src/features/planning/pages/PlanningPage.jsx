@@ -327,6 +327,17 @@ export const PlanningPage = () => {
         </Box>
 
         {/* Shifts Table */}
+        {error && (
+          <Box sx={{ p: 3, backgroundColor: '#FEE2E2', borderRadius: 2, mb: 2 }}>
+            <Typography color="error" fontWeight="bold">Errore nel caricamento turni</Typography>
+            <Typography color="error" variant="body2">{error.message || String(error)}</Typography>
+          </Box>
+        )}
+        {loading && !data && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+            <CircularProgress />
+          </Box>
+        )}
         {data ? (
           <TableContainer component={Paper}>
             <Table>
