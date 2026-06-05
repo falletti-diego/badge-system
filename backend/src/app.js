@@ -22,6 +22,7 @@ const checkinsRouter = require('./routes/checkins');
 const shiftsRouter = require('./routes/shifts');
 const exportRouter = require('./routes/export');
 const notificationsRouter = require('./routes/notifications');
+const sitesRouter = require('./routes/sites');
 
 // Load environment variables
 dotenv.config();
@@ -133,6 +134,7 @@ app.use('/api/checkins', checkinsRouter);
 app.use('/api/shifts', shiftsRouter);
 app.use('/api/export/csv', exportRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/sites', sitesRouter);
 
 // Error handling middleware
 app.use((err, req, res, _next) => {

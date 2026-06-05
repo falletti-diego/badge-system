@@ -116,6 +116,21 @@ const DashboardPage = () => {
               </Button>
             )}
 
+            {/* Sites & QR Code - Admin only */}
+            {userRole === 'admin' && (
+              <Button
+                color="inherit"
+                onClick={() => navigate('/admin/sites')}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '14px',
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
+                }}
+              >
+                🏪 Sedi & QR
+              </Button>
+            )}
+
             {/* Employee Schedule Link - Show for employees */}
             {userRole === 'employee' && (
               <Button
