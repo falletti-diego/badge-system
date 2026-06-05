@@ -1,8 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
-import authService from '../../../services/authService';
-
-const API_BASE_URL = window.API_CONFIG?.API_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import apiClient from '../../../services/apiClient';
 
 /**
  * useMySchedule — Fetch employee's own shift schedule from backend API
@@ -24,21 +21,9 @@ export const useMySchedule = (month, year) => {
       setError(null);
 
       try {
-        const token = authService.getToken();
-        if (!token) {
-          throw new Error('No authentication token found');
-        }
-
-        const response = await axios.get(
-          `${API_BASE_URL}/api/shifts/my-schedule`,
-          {
-            params: { month, year },
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+        const response = await apiClient.get('/api/shifts/my-schedule', {
+          params: { month, year },
+        });
 
         setData(response.data.data);
 

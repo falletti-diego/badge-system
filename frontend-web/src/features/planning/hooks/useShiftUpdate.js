@@ -1,8 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
-import authService from '../../../services/authService';
-
-const API_BASE_URL = window.API_CONFIG?.API_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import apiClient from '../../../services/apiClient';
 
 /**
  * useShiftUpdate — Save shift planning to backend API
@@ -27,25 +24,11 @@ export const useShiftUpdate = (siteId, month, year) => {
     setErrors(prev => ({ ...prev, all: null }));
 
     try {
-      const token = authService.getToken();
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-
-      const response = await axios.post(
-        `${API_BASE_URL}/api/shifts/${siteId}`,
-        {
-          month,
-          year,
-          shifts_data: shiftsData,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const response = await apiClient.post(`/api/shifts/${siteId}`, {
+        month,
+        year,
+        shifts_data: shiftsData,
+      });
 
       return {
         success: true,

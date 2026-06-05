@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_URL = window.API_CONFIG?.API_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import apiClient from './apiClient';
 const TOKEN_KEY = 'badge_auth_token';
 const USER_KEY = 'badge_user';
 const EMPLOYEE_ID_KEY = 'badge_employee_id';
@@ -19,7 +17,7 @@ const authService = {
    */
   async login(email, password) {
     try {
-      const response = await axios.post(`${API_URL}/api/auth/login`, {
+      const response = await apiClient.post('/api/auth/login', {
         email,
         password,
       });
@@ -61,15 +59,7 @@ const authService = {
     // Optional: Call backend logout endpoint for audit logging
     if (token) {
       try {
-        await axios.post(
-          `${API_URL}/api/auth/logout`,
-          {},
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        await apiClient.post('/api/auth/logout', {});
       } catch (error) {
         console.warn('Logout endpoint call failed:', error);
         // Continue with local cleanup even if endpoint fails
@@ -141,44 +131,7 @@ const authService = {
     return this.getUserRole() === 'employee';
   },
 
-  /**
-   * Set Authorization header for all future axios requests
-   * Call this after successful login or on app initialization
-   */
-  setupInterceptors() {
-    // Add Authorization header to all requests
-    axios.interceptors.request.use(
-      (config) => {
-        const token = this.getToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error) => Promise.reject(error)
-    );
-
-    // Handle 401 responses (token expired or invalid)
-    axios.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          console.error('❌ 401 UNAUTHORIZED!', {
-            path: error.config?.url,
-            token: this.getToken() ? 'EXISTS' : 'MISSING',
-            response: error.response?.data,
-          });
-          // Token expired or invalid
-          this.logout();
-          window.location.href = '/login';
-        }
-        return Promise.reject(error);
-      }
-    );
-  },
 };
-
-// Setup interceptors on module load
-authService.setupInterceptors();
+// Interceptors are handled by apiClient — no setup needed here
 
 export default authService;
