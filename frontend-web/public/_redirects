@@ -1,6 +1,6 @@
-# API proxy: forward /api/* to EC2 backend (avoids HTTPS→HTTP mixed content)
+# API proxy: forward /api/* to EC2 backend (fallback; config.js normally sets URL directly)
 # Must come before the SPA catch-all
-/api/*  http://34.245.145.143:3000/api/:splat  200
+/api/*  https://api.dataxiom.it/api/:splat  200
 
 # SPA catch-all: all other routes → React app
 /*  /index.html  200

@@ -8,7 +8,7 @@ command = "npm run build"
 # MUST come before the SPA catch-all below
 [[redirects]]
 from = "/api/*"
-to = "http://34.245.145.143:3000/api/:splat"
+to = "https://api.dataxiom.it/api/:splat"
 status = 200
 force = true
 
