@@ -138,6 +138,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
     // Generate JWT token (include employee_id and site_id if present)
     const tokenPayload = {
       user_id: user.id,
+      name: user.name,
       email: user.email,
       role: user.role,
       client_id: user.client_id,

@@ -220,6 +220,8 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
         c.created_at,
         c.modified_at,
         c.modified_by,
+        c.modified_by_name,
+        c.correction_note,
         e.name as employee_name,
         e.email as employee_email,
         s.name as site_name
@@ -366,13 +368,14 @@ router.get('/stats', requireAuth, createValidationMiddleware(GetStatsSchema), as
 });
 
 // =====================================================
-// PUT /api/checkins/:id — Correct check-in (within 15 min)
+// PUT /api/checkins/:id — Correct check-in (within 7 days)
 // =====================================================
 
 router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), async (req, res, next) => {
   const { id } = req.validated.params;
-  const { type: newType } = req.validated.body;
+  const { type: newType, timestamp: newTimestamp, correction_note } = req.validated.body;
   const clientId = req.user.client_id;
+  const correctorName = req.user.name || req.user.email || req.user.user_id;
 
   try {
     const result = await withTransaction(async (client) => {
@@ -388,61 +391,76 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
       }
 
       const checkin = checkinResult.rows[0];
-      const oldType = checkin.type;
 
-      // 2. Verify within 15-minute window
+      // 2. Verify within 7-day correction window
       const now = new Date();
-      const createdAt = new Date(checkin.timestamp);
-      const diffMinutes = (now - createdAt) / (1000 * 60);
+      const checkinDate = new Date(checkin.timestamp);
+      const diffDays = (now - checkinDate) / (1000 * 60 * 60 * 24);
 
-      if (diffMinutes > 15) {
+      if (diffDays > 7) {
         throw new ValidationError(
-          `Cannot modify check-in: outside 15-minute correction window (${Math.floor(diffMinutes)} minutes old)`,
+          `Cannot modify check-in: outside 7-day correction window (${Math.floor(diffDays)} days old)`,
           { field: 'checkin_id', code: 'CORRECTION_WINDOW_EXPIRED' }
         );
       }
 
-      // 3. Skip update if type is unchanged
-      if (oldType === newType) {
-        return checkin;
+      // 3. Build dynamic SET clause — only update provided fields
+      const oldValues = { type: checkin.type, timestamp: checkin.timestamp };
+      const setClauses = ['modified_at = NOW()', 'modified_by_name = $1'];
+      const updateParams = [correctorName];
+      let paramIdx = 2;
+
+      if (newType !== undefined && newType !== checkin.type) {
+        setClauses.push(`type = $${paramIdx++}`);
+        updateParams.push(newType);
       }
 
-      // 4. Update check-in
+      if (newTimestamp !== undefined) {
+        setClauses.push(`timestamp = $${paramIdx++}`);
+        updateParams.push(new Date(newTimestamp));
+      }
+
+      if (correction_note !== undefined) {
+        setClauses.push(`correction_note = $${paramIdx++}`);
+        updateParams.push(correction_note);
+      }
+
+      updateParams.push(id); // last param: WHERE id = $N
+      const whereParam = paramIdx;
+
       const updateResult = await client.query(
         `UPDATE checkins
-         SET type = $1, modified_at = NOW(), modified_by = $2
-         WHERE id = $3::uuid
-         RETURNING id, employee_id, site_id, type, timestamp, modified_at, modified_by`,
-        [newType, req.user.user_id, id]
+         SET ${setClauses.join(', ')}
+         WHERE id = $${whereParam}::uuid
+         RETURNING id, employee_id, site_id, type, timestamp, modified_at, modified_by_name, correction_note`,
+        updateParams
       );
 
       const updated = updateResult.rows[0];
 
-      // 5. Log audit trail
+      // 4. Log audit trail
+      const newValues = { type: updated.type, timestamp: updated.timestamp };
+      if (correction_note) newValues.correction_note = correction_note;
+
       await logAudit(client, {
         action: 'checkin_corrected',
         entity: 'checkin',
         entityId: id,
         clientId: checkin.client_id,
-        oldValue: {
-          type: oldType,
-        },
-        newValue: {
-          type: newType,
-          modified_at: updated.modified_at,
-        },
+        oldValue: oldValues,
+        newValue: { ...newValues, modified_by: correctorName },
         userId: req.user.user_id,
       });
 
-      return { updated, oldType };
+      return { updated, oldValues };
     });
 
-    const { updated, oldType } = result;
+    const { updated, oldValues } = result;
 
     logger.info({
       action: 'checkin_corrected',
       checkin_id: updated.id,
-      old_type: oldType,
+      corrector: correctorName,
     });
 
     // Invalidate cache for this client's checkins

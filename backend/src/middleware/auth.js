@@ -86,6 +86,7 @@ function requireAuth(req, res, next) {
     // Attach user info to request
     req.user = {
       user_id: decoded.user_id,
+      name: decoded.name || null,
       auth0_sub: decoded.auth0_sub,
       client_id: decoded.client_id,
       role: decoded.role,

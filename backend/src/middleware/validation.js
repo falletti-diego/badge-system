@@ -103,8 +103,21 @@ const PutCheckinSchema = z.object({
   body: z.object({
     type: z.enum(['IN', 'OUT'], {
       errorMap: () => ({ message: 'type must be either "IN" or "OUT"' }),
-    }),
-  }),
+    }).optional(),
+    timestamp: z.preprocess(
+      val => val === '' ? undefined : val,
+      z.string()
+        .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/, 'timestamp must be ISO datetime (YYYY-MM-DDTHH:MM...)')
+        .optional()
+    ),
+    correction_note: z.preprocess(
+      val => val === '' ? undefined : val,
+      z.string().max(500, 'correction_note must be at most 500 characters').optional()
+    ),
+  }).refine(
+    data => data.type !== undefined || data.timestamp !== undefined || data.correction_note !== undefined,
+    { message: 'At least one field (type, timestamp, or correction_note) is required' }
+  ),
 });
 
 // =====================================================
