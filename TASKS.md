@@ -79,14 +79,16 @@ Manager corrects a check-in (wrong time, missed punch, wrong direction).
 - [x] **3.4.8** Backend: `PUT /api/checkins/:id` — 7-day window, dynamic SET, ownership via JOIN
 - [x] **3.4.9** Backend: `audit.js` fixed (no client_id, UUID-safe user_id, non-fatal)
 
-### FASE 3.5 — Web Dashboard: Notifications (~2-3h)
+### FASE 3.5 — Web Dashboard: Notifications ✅
 Employee gets notified when manager changes their shift.
 
-- [ ] **3.5.1** `GET /api/notifications` polling endpoint (backend)
-- [ ] **3.5.2** Notification record created when shift is saved (backend)
-- [ ] **3.5.3** `NotificationBell.jsx` component: icon + unread count badge
-- [ ] **3.5.4** Notification list dropdown (last 10, mark as read)
-- [ ] **3.5.5** Poll every 30s when employee is logged in
+- [x] **3.5.1** `GET /api/notifications` polling endpoint (backend)
+- [x] **3.5.2** Notification record created when shift is saved (backend, best-effort outside transaction)
+- [x] **3.5.3** `NotificationBell.jsx` component: icon + unread count badge (MUI Badge + Popover)
+- [x] **3.5.4** Notification list dropdown (last 10, mark all read)
+- [x] **3.5.5** `useNotifications.js` poll every 30s when employee is logged in
+- [x] **3.5.6** Migration 003: notifications table on RDS
+- [x] **3.5.7** fix: redis reconnectStrategy — cap at 3 retries to unblock server startup
 
 ---
 
@@ -174,6 +176,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-04 | Role Filtering + Planning | 3.2.5, 3.3.1–3.3.9 | RBAC, shift matrix, employee view |
 | 2026-06-04 | Deploy Tooling + CORS | 2.13, 3.x.1, 3.x.2 | deploy.sh, /deploy skill, CORS fix |
 | 2026-06-05 | Corrections Page | 3.4.1–3.4.9 | CorrectionsPage, PUT checkins, audit fix |
+| 2026-06-05 | Notifications | 3.5.1–3.5.7 | NotificationBell, polling, redis startup fix |
 
 ---
 
