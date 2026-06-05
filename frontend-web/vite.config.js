@@ -8,9 +8,9 @@ export default defineConfig({
     strictPort: false,
     proxy: {
       '/api': {
-        target: 'https://api.dataxiom.it',
+        target: 'http://34.245.145.143:3000',
         changeOrigin: true,
-        secure: true,
+        secure: false,
       },
     },
   },
