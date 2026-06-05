@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-04 (Session: Deploy tooling + CORS fix)  
+**Last Updated:** 2026-06-05 (Session: Corrections Page complete)  
 **Production:** https://dataxiom-badge.netlify.app · API: http://34.245.145.143:3000
 
 ---
@@ -66,15 +66,18 @@
 
 ## 🔲 TODO — NEXT PRIORITY
 
-### FASE 3.4 — Web Dashboard: Corrections Page (~3-4h)
+### FASE 3.4 — Web Dashboard: Corrections Page ✅
 Manager corrects a check-in (wrong time, missed punch, wrong direction).
 
-- [ ] **3.4.1** `CorrectionsPage.jsx` — searchable list of check-ins with "Edit" button
-- [ ] **3.4.2** Edit modal: change timestamp, type (IN/OUT), add correction note
-- [ ] **3.4.3** 7-day edit window enforced (backend already has `PUT /api/checkins/:id`)
-- [ ] **3.4.4** Audit trail visible in UI: show "Modified by X on Y" on corrected entries
-- [ ] **3.4.5** Route `/corrections` in `App.jsx` (manager + admin only)
-- [ ] **3.4.6** Link in Dashboard navbar
+- [x] **3.4.1** `CorrectionsPage.jsx` — searchable list of check-ins with "Edit" button
+- [x] **3.4.2** Edit modal: change timestamp, type (IN/OUT), add correction note
+- [x] **3.4.3** 7-day edit window enforced (backend + frontend; `CORRECTION_WINDOW_EXPIRED` error)
+- [x] **3.4.4** Audit trail visible in UI: show "Corretto da X il Y" on corrected entries
+- [x] **3.4.5** Route `/corrections` in `App.jsx` (manager + admin only)
+- [x] **3.4.6** Link "✏️ Correzioni" in Dashboard navbar
+- [x] **3.4.7** Backend: `correction_note TEXT` + `modified_by_name TEXT` columns on checkins
+- [x] **3.4.8** Backend: `PUT /api/checkins/:id` — 7-day window, dynamic SET, ownership via JOIN
+- [x] **3.4.9** Backend: `audit.js` fixed (no client_id, UUID-safe user_id, non-fatal)
 
 ### FASE 3.5 — Web Dashboard: Notifications (~2-3h)
 Employee gets notified when manager changes their shift.
@@ -170,6 +173,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-03 | Auth + Dashboard | 3.1.1–3.1.5, 3.2.1–3.2.7 | Login, dashboard, CSV, HTTPS |
 | 2026-06-04 | Role Filtering + Planning | 3.2.5, 3.3.1–3.3.9 | RBAC, shift matrix, employee view |
 | 2026-06-04 | Deploy Tooling + CORS | 2.13, 3.x.1, 3.x.2 | deploy.sh, /deploy skill, CORS fix |
+| 2026-06-05 | Corrections Page | 3.4.1–3.4.9 | CorrectionsPage, PUT checkins, audit fix |
 
 ---
 
@@ -180,7 +184,7 @@ Go-live with first paying customer (pilota).
 - [x] Auth + role-based access working
 - [x] Presences tracking (check-ins) working
 - [x] Shift planning (manager + employee views)
-- [ ] **Corrections page** (3.4)
+- [x] **Corrections page** (3.4)
 - [ ] **Mobile app** (4.1–4.9) — critical path
 - [ ] **QR code management** (5.1–5.5) — critical path
 - [ ] **Production hardening** (6.1–6.8)

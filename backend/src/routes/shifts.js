@@ -281,22 +281,18 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
       }
     }
 
-    // 3. Use transaction for atomic insert/update + audit
-    const result = await withTransaction(async (client) => {
-      // Check if shifts record already exists
+    // 3. Use transaction for atomic insert/update
+    const { shiftsRecord, oldValue } = await withTransaction(async (client) => {
       const existingResult = await client.query(
         `SELECT id, shifts_data FROM shifts
          WHERE site_id = $1::uuid AND month = $2 AND year = $3`,
         [siteId, month, year]
       );
 
-      const oldValue = existingResult.rows[0]?.shifts_data || null;
-      let shiftsRecord;
+      const existingShiftsData = existingResult.rows[0]?.shifts_data || null;
+      let record;
 
       if (existingResult.rows.length > 0) {
-        // UPDATE existing record (merge shifts_data, don't replace)
-        // Note: created_by/updated_by are UUID columns, but MVP users are strings like "user-mvp-diego"
-        // Pass NULL for now (Phase 2: will use Auth0 UUIDs)
         const updateResult = await client.query(
           `UPDATE shifts
            SET shifts_data = shifts_data || $1, updated_at = NOW()
@@ -304,33 +300,44 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
            RETURNING id, shifts_data, updated_at`,
           [shifts_data, siteId, month, year]
         );
-        shiftsRecord = updateResult.rows[0];
+        record = updateResult.rows[0];
       } else {
-        // INSERT new record
         const insertResult = await client.query(
           `INSERT INTO shifts (client_id, site_id, month, year, shifts_data, created_at, updated_at)
            VALUES ($1::uuid, $2::uuid, $3, $4, $5, NOW(), NOW())
            RETURNING id, shifts_data, created_at as updated_at`,
           [clientId, siteId, month, year, shifts_data]
         );
-        shiftsRecord = insertResult.rows[0];
+        record = insertResult.rows[0];
       }
 
-      // NOTE: Audit logging skipped for MVP shifts (Phase 2 deliverable)
-      // Reason: audit_log table lacks client_id column (designed for check-ins only)
-      // Phase 2: Add client_id to audit_log schema, then uncomment:
-      // await logAudit(client, {
-      //   action: oldValue ? 'shifts_updated' : 'shifts_created',
-      //   entity: 'shift',
-      //   entityId: shiftsRecord.id,
-      //   clientId: clientId,
-      //   oldValue,
-      //   newValue: shifts_data,
-      //   userId: userId || 'system',
-      // });
-
-      return shiftsRecord;
+      return { shiftsRecord: record, oldValue: existingShiftsData };
     });
+
+    // 4. Create notifications for employees whose shifts changed (best-effort, outside transaction)
+    const SHIFT_LABELS = { m: 'Mattino', p: 'Pomeriggio', s: 'Sera', R: 'Riposo' };
+    for (const [empId, dates] of Object.entries(shifts_data)) {
+      for (const [date, newShift] of Object.entries(dates)) {
+        const oldShift = oldValue?.[empId]?.[date];
+        if (oldShift === newShift) continue; // unchanged
+
+        const dateFormatted = new Date(date + 'T00:00:00').toLocaleDateString('it-IT', {
+          weekday: 'long', day: 'numeric', month: 'long',
+        });
+        const shiftLabel = SHIFT_LABELS[newShift] || newShift;
+        const message = `Turno aggiornato: ${dateFormatted} → ${shiftLabel}`;
+
+        try {
+          await pool.query(
+            `INSERT INTO notifications (employee_id, client_id, type, message, shift_date, new_shift, site_id)
+             VALUES ($1::uuid, $2::uuid, 'shift_updated', $3, $4, $5, $6::uuid)`,
+            [empId, clientId, message, date, newShift, siteId]
+          );
+        } catch (notifErr) {
+          logger.warn({ action: 'notification_create_error', error: notifErr.message, empId, date });
+        }
+      }
+    }
 
     logger.info({
       message: 'Shifts planning saved',
@@ -343,9 +350,9 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
 
     res.json({
       data: {
-        id: result.id,
-        shifts_data: result.shifts_data,
-        updated_at: result.updated_at,
+        id: shiftsRecord.id,
+        shifts_data: shiftsRecord.shifts_data,
+        updated_at: shiftsRecord.updated_at,
       },
       message: 'Shifts planning saved successfully',
     });

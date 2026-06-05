@@ -23,6 +23,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useMySchedule } from '../hooks/useMySchedule';
 import authService from '../../../services/authService';
+import { NotificationBell } from '../../notifications/components/NotificationBell';
 
 const SHIFT_ICONS = {
   'm': { emoji: '🌅', label: 'Mattino', color: '#1E3A5F' },
@@ -95,13 +96,14 @@ export const EmployeeShiftsPage = () => {
       <AppBar position="static" sx={{ backgroundColor: '#1E3A5F' }}>
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
           <h1 style={{ color: 'white', fontSize: '20px', fontWeight: 600 }}>📆 I Miei Turni</h1>
-          <Box sx={{ display: 'flex', gap: '12px' }}>
+          <Box sx={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <NotificationBell enabled={true} />
             <Button
               color="inherit"
               onClick={() => navigate('/dashboard')}
               sx={{ textTransform: 'none', fontSize: '14px' }}
             >
-              ← Back to Dashboard
+              ← Dashboard
             </Button>
             <Button
               color="inherit"
