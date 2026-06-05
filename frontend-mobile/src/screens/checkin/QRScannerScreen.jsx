@@ -1,30 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { BarCodeScanner } from 'expo-barcode-scanner';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiClient from '../../services/apiClient';
 
 const QR_PREFIX = 'badge://checkin';
 
 export default function QRScannerScreen({ navigation }) {
-  const [hasPermission, setHasPermission] = useState(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    BarCodeScanner.requestPermissionsAsync().then(({ status }) => {
-      setHasPermission(status === 'granted');
-    });
-  }, []);
 
   const handleBarCodeScanned = async ({ data }) => {
     if (scanned || loading) return;
 
     if (!data.startsWith(QR_PREFIX)) {
+      setScanned(true);
       Alert.alert('QR non valido', 'Questo QR code non appartiene a Badge System.', [
         { text: 'Riprova', onPress: () => setScanned(false) },
       ]);
-      setScanned(true);
       return;
     }
 
@@ -59,7 +53,7 @@ export default function QRScannerScreen({ navigation }) {
     }
   };
 
-  if (hasPermission === null) {
+  if (!permission) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#1E3A5F" />
@@ -68,12 +62,21 @@ export default function QRScannerScreen({ navigation }) {
     );
   }
 
-  if (hasPermission === false) {
+  if (!permission.granted) {
     return (
       <SafeAreaView style={styles.centered}>
         <Text style={styles.errorText}>Permesso fotocamera negato</Text>
-        <Text style={styles.text}>Vai in Impostazioni → Badge System → Fotocamera per abilitarla.</Text>
-        <TouchableOpacity style={styles.button} onPress={() => navigation.goBack()}>
+        <Text style={styles.text}>
+          {permission.canAskAgain
+            ? 'È necessario il permesso per scansionare il QR code.'
+            : 'Vai in Impostazioni → Badge System → Fotocamera per abilitarla.'}
+        </Text>
+        {permission.canAskAgain && (
+          <TouchableOpacity style={styles.button} onPress={requestPermission}>
+            <Text style={styles.buttonText}>Concedi permesso</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity style={[styles.button, { marginTop: 12, backgroundColor: '#6B7280' }]} onPress={() => navigation.goBack()}>
           <Text style={styles.buttonText}>Torna indietro</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -82,9 +85,10 @@ export default function QRScannerScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <BarCodeScanner
-        onBarCodeScanned={handleBarCodeScanned}
+      <CameraView
         style={StyleSheet.absoluteFillObject}
+        onBarcodeScanned={handleBarCodeScanned}
+        barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
       />
 
       <SafeAreaView style={styles.overlay}>
