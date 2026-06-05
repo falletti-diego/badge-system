@@ -30,11 +30,12 @@ async function initializeRedis() {
     redisClient = redis.createClient({
       url: REDIS_URL,
       socket: {
+        // Stop retrying after 3 attempts so connect() rejects and startup continues
         reconnectStrategy: (retries) => {
-          const delay = Math.min(retries * 50, 500);
-          return delay;
+          if (retries >= 3) return new Error('Redis unavailable after 3 attempts');
+          return Math.min(retries * 500, 2000);
         },
-        connectTimeout: 10000,
+        connectTimeout: 5000,
       },
     });
 
