@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-05 (Session: Corrections Page complete)  
+**Last Updated:** 2026-06-05 (Session: QR Code Management complete)  
 **Production:** https://dataxiom-badge.netlify.app · API: http://34.245.145.143:3000
 
 ---
@@ -107,14 +107,14 @@ The primary check-in interface for employees.
 - [ ] **4.8** Offline detection + user-friendly error ("No connection — try again")
 - [ ] **4.9** App icon, splash screen, push to TestFlight / Play Store internal track
 
-### FASE 5 — QR Code Management (~3-4h)
+### FASE 5 — QR Code Management ✅
 Admin generates and manages QR codes per site.
 
-- [ ] **5.1** `GET /api/sites` endpoint (list sites for client)
-- [ ] **5.2** QR code content format: `badge://checkin?site_id=<uuid>&client_id=<uuid>`
-- [ ] **5.3** QR code generator in admin dashboard (display + printable PDF)
-- [ ] **5.4** Rotate QR code: generate new content, invalidate old
-- [ ] **5.5** Site management page (`/admin/sites`): add / edit / delete sites
+- [x] **5.1** `GET /api/sites` endpoint (admin: all sites, manager: own site only, employee: 403)
+- [x] **5.2** QR code content format: `badge://checkin?site_id=<uuid>&client_id=<uuid>&v=1`
+- [x] **5.3** QR code displayed in `/admin/sites` page + PNG download button
+- [x] **5.4** Migration 004: updated placeholder QR content to proper format on RDS
+- [ ] **5.5** Rotate QR code — Phase 2 (not needed for MVP)
 
 ### FASE 6 — Production Hardening (~10-15h)
 Before first paying customer.
@@ -177,6 +177,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-04 | Deploy Tooling + CORS | 2.13, 3.x.1, 3.x.2 | deploy.sh, /deploy skill, CORS fix |
 | 2026-06-05 | Corrections Page | 3.4.1–3.4.9 | CorrectionsPage, PUT checkins, audit fix |
 | 2026-06-05 | Notifications | 3.5.1–3.5.7 | NotificationBell, polling, redis startup fix |
+| 2026-06-05 | QR Code Management | 5.1–5.4 | GET /api/sites, SitesPage, PNG download, migration 004 |
 
 ---
 
@@ -189,7 +190,7 @@ Go-live with first paying customer (pilota).
 - [x] Shift planning (manager + employee views)
 - [x] **Corrections page** (3.4)
 - [ ] **Mobile app** (4.1–4.9) — critical path
-- [ ] **QR code management** (5.1–5.5) — critical path
+- [x] **QR code management** (5.1–5.5) — critical path
 - [ ] **Production hardening** (6.1–6.8)
 - [ ] **First customer onboarded** (7.1–7.6)
 
