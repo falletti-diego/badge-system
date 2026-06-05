@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, ActivityIndicator, AppState } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import authService from '../services/authService';
 
@@ -16,15 +16,16 @@ const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
+  const navigationRef = useRef(null);
 
   useEffect(() => {
-    authService.isAuthenticated().then(setIsAuthenticated);
-
-    const interval = setInterval(async () => {
+    const checkAuth = async () => {
       const hasToken = await AsyncStorage.getItem('badge_auth_token');
       setIsAuthenticated(!!hasToken);
-    }, 1000);
+    };
 
+    checkAuth();
+    const interval = setInterval(checkAuth, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -37,7 +38,7 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         screenOptions={{ headerShown: false }}
         initialRouteName={isAuthenticated ? 'CheckIn' : 'Login'}
