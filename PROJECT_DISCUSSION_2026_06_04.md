@@ -1,3 +1,71 @@
+# Badge System — Project Discussion (aggiornato 2026-06-05)
+
+---
+
+# 🛠️ SESSION 2026-06-05 — Bug Fixes + UI Polish + Deploy Procedure
+
+**Status:** ✅ Production deployed (bundle `index-CrpQZBFD.js`)  
+**Commits:** ec6b63a, 257f0fc, 1ad656e, ad4f9e0
+
+## Bug Fixes
+
+### 1. Employee shifts view — turni non visibili per Alice (ec6b63a)
+- **Root cause A:** `useMySchedule.js` mancava `window.API_CONFIG?.API_URL` — su localhost chiamava Vite proxy verso vecchio IP EC2 invece di `api.dataxiom.it`. Stesso bug già fixato in `useShifts.js`, non propagato.
+- **Root cause B:** `EmployeeShiftsPage.jsx` mancava guard `if (userLoading)` prima del check `!user?.employee_id` — stessa race condition già fixata in `PlanningPage.jsx`, non propagata.
+- **Regola appresa:** quando si fixa un bug in un file, cercare subito tutti i file con lo stesso pattern e fixarli nello stesso commit.
+
+### 2. Vite proxy puntava a vecchio IP HTTP (257f0fc)
+- `vite.config.js` proxy target era `http://34.245.145.143:3000` (vecchio IP, HTTP diretto)
+- Cambiato a `https://api.dataxiom.it` — localhost ora usa lo stesso endpoint di produzione
+- **Effetto:** zero divergenze local/production da ora in poi
+
+### 3. Debug console.log rimossi (1ad656e)
+- 13 `console.log` rimossi da 7 file (App, main, LoginPage, PlanningPage, useShifts, useShiftUpdate, useMySchedule)
+- `PlanningPage` loggava l'intero oggetto `shifts` su ogni click (dati sensibili esposti in DevTools)
+- Bundle ora ha solo `console.error` (errori reali) e `console.warn` (401 handling)
+
+## UI Improvements (ad4f9e0)
+
+### Employee Shifts Page (`/planning/my-schedule`)
+- Tutti i giorni del mese visibili (prima: solo giorni con turno assegnato)
+- Giorni senza turno mostrano `—` grigio
+- Weekend visivamente dimmed (grigio chiaro)
+- KPI card "Turni Assegnati" conta solo giorni con turno reale (es. 26/30)
+
+### Planning Page (`/planning` — Manager)
+- Colonna nomi fissa durante scroll orizzontale (sticky fix: separato `Box overflowX:auto` da `Paper`)
+- Nomi dipendenti sempre su riga singola (`whiteSpace: nowrap`)
+- Date header su riga singola: `1 Lun`, `2 Mar`, ecc.
+- Righe alternate bianco/grigio per leggibilità
+- Ombra sul bordo destro colonna sticky
+
+## Procedura Deploy Netlify (CONSOLIDATA)
+
+```bash
+# 1. Build locale
+cd frontend-web
+npm run build         # Deve finire con "✓ built in X"
+
+# 2. Deploy su Netlify con site ID esplicito
+netlify deploy --prod --dir dist --site 29a79b49-5571-4249-8c2b-d0813de4bf17
+
+# 3. Commit e push GitHub
+cd ..
+git add <files>
+git commit -m "..."
+git push origin main
+```
+
+**Perché CLI e non git push:** In precedenza `frontend-web/` era collegata al sito Netlify sbagliato (`dataxiom` — landing page aziendale). Ogni push aggiornava il sito sbagliato silenziosamente. CLI con site ID esplicito = deploy sempre corretto.
+
+**Verifica post-deploy:**
+```bash
+curl -s "https://dataxiom-badge.netlify.app" | grep -o 'assets/index-[^"]*\.js'
+# Confrontare hash con build precedente
+```
+
+---
+
 # Badge System — Project Discussion (2026-06-04)
 
 **Updated:** 4 Giugno 2026  
