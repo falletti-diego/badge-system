@@ -7,6 +7,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import NetInfo from '@react-native-community/netinfo';
 import authService from '../../services/authService';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { TIMING } from '../../config/endpoints';
 
 export default function CheckInScreen({ navigation }) {
   const [user, setUser] = useState(null);
@@ -21,7 +22,7 @@ export default function CheckInScreen({ navigation }) {
       .finally(() => setLoading(false));
 
     LocalAuthentication.hasHardwareAsync().then(setFaceIdAvailable);
-    const tick = setInterval(() => setTime(new Date()), 1000);
+    const tick = setInterval(() => setTime(new Date()), TIMING.CLOCK_TICK);
     return () => clearInterval(tick);
   }, []);
 

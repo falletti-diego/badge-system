@@ -64,4 +64,11 @@ export const DEMO_ACCOUNTS = {
   password: 'Alice1975',
 };
 
-export default { API_BASE, ENDPOINTS, SHIFTS_CONFIG, CHECKINS_CONFIG, DEMO_ACCOUNTS };
+// Timing configuration (in milliseconds)
+export const TIMING = {
+  API_TIMEOUT: 15000,           // API request timeout
+  CLOCK_TICK: 1000,              // Clock update frequency
+  SUCCESS_AUTO_RETURN: 5000,     // Auto-return delay on success screen
+};
+
+export default { API_BASE, ENDPOINTS, SHIFTS_CONFIG, CHECKINS_CONFIG, DEMO_ACCOUNTS, TIMING };

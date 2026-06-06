@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { TIMING } from '../../config/endpoints';
 
 export default function SuccessScreen({ navigation, route }) {
   const { checkIn } = route.params ?? {};
@@ -8,7 +9,7 @@ export default function SuccessScreen({ navigation, route }) {
   useEffect(() => {
     const timer = setTimeout(() => {
       navigation.replace('CheckIn');
-    }, 5000);
+    }, TIMING.SUCCESS_AUTO_RETURN);
     return () => clearTimeout(timer);
   }, [navigation]);
 
