@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet,
+  View, Text, FlatList, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiClient from '../../services/apiClient';
 import { ENDPOINTS } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import SkeletonLoader from '../../components/SkeletonLoader';
 
 const TYPE_COLORS = { IN: '#166534', OUT: '#7C3AED' };
 const TYPE_ICONS = { IN: '→', OUT: '←' };
@@ -14,14 +15,37 @@ export default function MyPresencesScreen({ navigation }) {
   const [checkins, setCheckins] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const abortControllerRef = useRef(null);
 
-  useEffect(() => {
+  const fetchCheckins = async () => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+
     setLoading(true);
     setError(null);
-    apiClient.get(ENDPOINTS.CHECKINS_LIST, { params: { limit: 50 } })
-      .then(r => setCheckins(r.data.data ?? []))
-      .catch(e => setError(e.response?.data?.message || 'Errore caricamento presenze'))
-      .finally(() => setLoading(false));
+
+    try {
+      const response = await apiClient.get(ENDPOINTS.CHECKINS_LIST, {
+        params: { limit: 50 },
+        signal: abortControllerRef.current.signal,
+      });
+      if (!abortControllerRef.current?.signal.aborted) {
+        setCheckins(response.data.data ?? []);
+      }
+    } catch (err) {
+      if (!abortControllerRef.current?.signal.aborted) {
+        setError(err.response?.data?.message || 'Errore caricamento presenze');
+      }
+    } finally {
+      if (!abortControllerRef.current?.signal.aborted) {
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchCheckins();
+    return () => abortControllerRef.current?.abort();
   }, []);
 
   return (
@@ -34,18 +58,29 @@ export default function MyPresencesScreen({ navigation }) {
         <View style={{ width: 80 }} />
       </View>
 
-      {loading && <LoadingSpinner color="#1E3A5F" />}
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {loading && !error && <SkeletonLoader count={5} />}
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={fetchCheckins}
+          >
+            <Text style={styles.retryButtonText}>Riprova</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {!loading && checkins.length === 0 && !error && (
         <Text style={styles.emptyText}>Nessuna presenza registrata.</Text>
       )}
 
-      <FlatList
-        data={checkins}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => {
+      {!loading && checkins.length > 0 && (
+        <FlatList
+          data={checkins}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.list}
+          renderItem={({ item }) => {
           const ts = new Date(item.timestamp);
           const dateStr = ts.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
           const timeStr = ts.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
@@ -71,7 +106,8 @@ export default function MyPresencesScreen({ navigation }) {
             </View>
           );
         }}
-      />
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -105,5 +141,10 @@ const styles = StyleSheet.create({
   },
   correctedText: { fontSize: 14 },
   emptyText: { textAlign: 'center', color: '#6B7280', marginTop: 60, fontSize: 16 },
-  errorText: { color: '#C0392B', textAlign: 'center', margin: 24 },
+  errorContainer: { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 32 },
+  errorText: { color: '#C0392B', textAlign: 'center', fontSize: 16, marginBottom: 16 },
+  retryButton: {
+    backgroundColor: '#2563EB', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 12,
+  },
+  retryButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
 });

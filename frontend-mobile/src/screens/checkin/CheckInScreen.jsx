@@ -6,14 +6,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as LocalAuthentication from 'expo-local-authentication';
 import NetInfo from '@react-native-community/netinfo';
 import authService from '../../services/authService';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 export default function CheckInScreen({ navigation }) {
   const [user, setUser] = useState(null);
+  const [userLoading, setUserLoading] = useState(true);
   const [time, setTime] = useState(new Date());
   const [faceIdAvailable, setFaceIdAvailable] = useState(false);
 
   useEffect(() => {
-    authService.getUser().then(setUser);
+    setUserLoading(true);
+    authService.getUser()
+      .then(setUser)
+      .finally(() => setUserLoading(false));
+
     LocalAuthentication.hasHardwareAsync().then(setFaceIdAvailable);
     const tick = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(tick);
@@ -57,9 +63,11 @@ export default function CheckInScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.greeting}>Ciao, {user?.name?.split(' ')[0] ?? ''}! 👋</Text>
-        <TouchableOpacity onPress={handleLogout}>
-          <Text style={styles.logoutText}>Esci</Text>
+        <Text style={styles.greeting}>
+          Ciao, {userLoading ? '' : (user?.name?.split(' ')[0] ?? '')}! 👋
+        </Text>
+        <TouchableOpacity onPress={handleLogout} disabled={userLoading}>
+          <Text style={[styles.logoutText, userLoading && styles.logoutDisabled]}>Esci</Text>
         </TouchableOpacity>
       </View>
 
@@ -108,6 +116,7 @@ const styles = StyleSheet.create({
   },
   greeting: { fontSize: 18, fontWeight: '600', color: '#FFFFFF' },
   logoutText: { color: '#93C5FD', fontSize: 14 },
+  logoutDisabled: { opacity: 0.5 },
   clockContainer: {
     backgroundColor: '#1E3A5F', alignItems: 'center',
     paddingBottom: 40, paddingTop: 24,
