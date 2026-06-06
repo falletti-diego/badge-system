@@ -1,9 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from './apiClient';
-import { ENDPOINTS } from '../config/endpoints';
+import { ENDPOINTS, STORAGE_KEYS } from '../config/endpoints';
 
-const TOKEN_KEY = 'badge_auth_token';
-const USER_KEY = 'badge_user';
+const { AUTH_TOKEN: TOKEN_KEY, USER_DATA: USER_KEY } = STORAGE_KEYS;
 
 const authService = {
   async login(email, password) {

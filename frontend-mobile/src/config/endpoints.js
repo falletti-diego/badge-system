@@ -71,4 +71,10 @@ export const TIMING = {
   SUCCESS_AUTO_RETURN: 5000,     // Auto-return delay on success screen
 };
 
-export default { API_BASE, ENDPOINTS, SHIFTS_CONFIG, CHECKINS_CONFIG, DEMO_ACCOUNTS, TIMING };
+// Storage keys for AsyncStorage persistence
+export const STORAGE_KEYS = {
+  AUTH_TOKEN: 'badge_auth_token',
+  USER_DATA: 'badge_user',
+};
+
+export default { API_BASE, ENDPOINTS, SHIFTS_CONFIG, CHECKINS_CONFIG, DEMO_ACCOUNTS, TIMING, STORAGE_KEYS };
