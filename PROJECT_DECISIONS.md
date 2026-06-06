@@ -148,23 +148,31 @@
   - ✅ All files reviewed (12 files, ~1,200 LOC)
   - Commits: c6a7ae4, f8e98a1, 0b8f651, 98ad7b0
 
-- 🚧 **FASE 4.2:** Mobile App Device Testing (in queue)
-  - ⏳ Physical device testing (iOS/Android)
-  - ⏳ QR Code scanner verification
-  - ⏳ Face ID authentication flow
-  - ⏳ Navigation + screen transitions
-  - ⏳ Loading states on slow networks
-  - Est. time: 2-3h
+- ✅ **FASE 4.2:** Mobile App Device Testing Plan (6 Giugno 2026) ✅ READY FOR TESTING
+  - ✅ FASE4.2_DEVICE_TESTING_PLAN.md created (17KB, 50+ test scenarios)
+    - 13 comprehensive test sections covering all screens
+    - Login, Check-in, QR Scanner, Success, MySchedule, MyPresences flows
+    - Error handling, performance, accessibility, navigation tests
+    - Pre-testing checklist + results template
+  - ✅ FASE4.2_BUILD_INSTRUCTIONS.md created (10KB, complete guide)
+    - Pre-build environment verification (8 checks)
+    - 3 build options: EAS Build (recommended), Local Build, Emulator
+    - Step-by-step deployment for Android APK & iOS IPA
+    - Device requirements, troubleshooting guide (7 scenarios)
+  - ✅ Code readiness verified (100% pass on all checks)
+  - ✅ 2 commits pushed (2150682, 9bf0e3c)
+  - Est. time for actual testing: 2-4h on real devices
 
-- ⏳ **FASE 4.3:** Integration Testing (E2E flows)
-  - Login → CheckIn → Dashboard verification
-  - Real-time check-in sync (< 30 sec)
-  - Offline handling
+- 🚧 **FASE 4.3:** Integration Testing (E2E flows) (in queue)
+  - Full login → check-in → dashboard verification
+  - Real-time check-in sync (< 30 sec target)
+  - Multi-device concurrent testing
+  - Data consistency verification
 
-- ⏳ **FASE 4.4:** Mobile App Polish
-  - Error messages localization
-  - Settings screen
-  - Offline queue (Phase 2)
+- ⏳ **FASE 4.4:** Mobile App Polish (after 4.3)
+  - Error messages localization (i18n)
+  - Settings screen (if required)
+  - Offline queue implementation (Phase 2)
 
 ---
 
