@@ -4,12 +4,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiClient from '../../services/apiClient';
-import { ENDPOINTS } from '../../config/endpoints';
+import { ENDPOINTS, SHIFTS_CONFIG } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
 
-const SHIFT_LABELS = { m: 'Mattino', p: 'Pomeriggio', s: 'Sera', R: 'Riposo' };
-const SHIFT_COLORS = { m: '#1E3A5F', p: '#B45309', s: '#7C3AED', R: '#6B7280' };
-const SHIFT_ICONS = { m: '🌅', p: '☀️', s: '🌙', R: '❌' };
+const { LABELS: SHIFT_LABELS, COLORS: SHIFT_COLORS, ICONS: SHIFT_ICONS } = SHIFTS_CONFIG;
 
 function getDaysInMonth(month, year) {
   const days = [];

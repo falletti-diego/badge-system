@@ -4,12 +4,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiClient from '../../services/apiClient';
-import { ENDPOINTS } from '../../config/endpoints';
+import { ENDPOINTS, CHECKINS_CONFIG } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SkeletonLoader from '../../components/SkeletonLoader';
 
-const TYPE_COLORS = { IN: '#166534', OUT: '#7C3AED' };
-const TYPE_ICONS = { IN: '→', OUT: '←' };
+const { TYPE_COLORS, TYPE_ICONS } = CHECKINS_CONFIG;
+const { LIMIT: CHECKINS_LIMIT } = CHECKINS_CONFIG.DEFAULTS;
 
 export default function MyPresencesScreen({ navigation }) {
   const [checkins, setCheckins] = useState([]);
@@ -26,7 +26,7 @@ export default function MyPresencesScreen({ navigation }) {
 
     try {
       const response = await apiClient.get(ENDPOINTS.CHECKINS_LIST, {
-        params: { limit: 50 },
+        params: { limit: CHECKINS_LIMIT },
         signal: abortControllerRef.current.signal,
       });
       if (!abortControllerRef.current?.signal.aborted) {

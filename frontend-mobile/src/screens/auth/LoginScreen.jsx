@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import authService from '../../services/authService';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { DEMO_ACCOUNTS } from '../../config/endpoints';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -76,7 +77,7 @@ export default function LoginScreen({ navigation }) {
         </View>
 
         <Text style={styles.demoHint}>
-          Demo: alice.neri@employee.it / Alice1975
+          Demo: {DEMO_ACCOUNTS.email} / {DEMO_ACCOUNTS.password}
         </Text>
       </KeyboardAvoidingView>
     </SafeAreaView>
