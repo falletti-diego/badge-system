@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
+  KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import authService from '../../services/authService';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -68,7 +69,7 @@ export default function LoginScreen({ navigation }) {
             disabled={loading}
           >
             {loading
-              ? <ActivityIndicator color="#FFFFFF" />
+              ? <LoadingSpinner size="small" color="#FFFFFF" />
               : <Text style={styles.buttonText}>Accedi</Text>
             }
           </TouchableOpacity>

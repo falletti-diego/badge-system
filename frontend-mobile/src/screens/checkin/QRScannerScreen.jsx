@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/apiClient';
 import authService from '../../services/authService';
+import { ENDPOINTS } from '../../config/endpoints';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 const QR_PREFIX = 'badge://checkin';
 
@@ -39,7 +41,7 @@ export default function QRScannerScreen({ navigation }) {
 
       if (!employeeId) throw new Error('Employee ID non trovato');
 
-      const response = await apiClient.post('/api/checkins', {
+      const response = await apiClient.post(ENDPOINTS.CHECKINS_POST, {
         employee_id: employeeId,
         site_id: siteId,
         client_id: clientId,
@@ -64,7 +66,7 @@ export default function QRScannerScreen({ navigation }) {
   if (!permission) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#1E3A5F" />
+        <LoadingSpinner color="#1E3A5F" />
         <Text style={styles.text}>Richiesta permesso fotocamera...</Text>
       </View>
     );

@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator,
+  View, Text, FlatList, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiClient from '../../services/apiClient';
+import { ENDPOINTS } from '../../config/endpoints';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 const SHIFT_LABELS = { m: 'Mattino', p: 'Pomeriggio', s: 'Sera', R: 'Riposo' };
 const SHIFT_COLORS = { m: '#1E3A5F', p: '#B45309', s: '#7C3AED', R: '#6B7280' };
@@ -25,14 +27,36 @@ export default function MyScheduleScreen({ navigation }) {
   const [shiftsData, setShiftsData] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const abortControllerRef = useRef(null);
 
   useEffect(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+
     setLoading(true);
     setError(null);
-    apiClient.get('/api/shifts/my-schedule', { params: { month, year } })
-      .then(r => setShiftsData(r.data.data?.shifts_data ?? {}))
-      .catch(e => setError(e.response?.data?.message || 'Errore caricamento turni'))
-      .finally(() => setLoading(false));
+
+    apiClient.get(ENDPOINTS.SHIFTS_MY_SCHEDULE, {
+      params: { month, year },
+      signal: abortControllerRef.current.signal,
+    })
+      .then(r => {
+        if (!abortControllerRef.current?.signal.aborted) {
+          setShiftsData(r.data.data?.shifts_data ?? {});
+        }
+      })
+      .catch(e => {
+        if (!abortControllerRef.current?.signal.aborted) {
+          setError(e.response?.data?.message || 'Errore caricamento turni');
+        }
+      })
+      .finally(() => {
+        if (!abortControllerRef.current?.signal.aborted) {
+          setLoading(false);
+        }
+      });
+
+    return () => abortControllerRef.current?.abort();
   }, [month, year]);
 
   const days = getDaysInMonth(month, year);
@@ -79,7 +103,7 @@ export default function MyScheduleScreen({ navigation }) {
         </View>
       </View>
 
-      {loading && <ActivityIndicator size="large" color="#1E3A5F" style={{ marginTop: 40 }} />}
+      {loading && <LoadingSpinner color="#1E3A5F" />}
       {error && <Text style={styles.errorText}>{error}</Text>}
 
       {!loading && (

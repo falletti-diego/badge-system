@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator,
+  View, Text, FlatList, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiClient from '../../services/apiClient';
+import { ENDPOINTS } from '../../config/endpoints';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 const TYPE_COLORS = { IN: '#166534', OUT: '#7C3AED' };
 const TYPE_ICONS = { IN: '→', OUT: '←' };
@@ -16,7 +18,7 @@ export default function MyPresencesScreen({ navigation }) {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    apiClient.get('/api/checkins', { params: { limit: 50 } })
+    apiClient.get(ENDPOINTS.CHECKINS_LIST, { params: { limit: 50 } })
       .then(r => setCheckins(r.data.data ?? []))
       .catch(e => setError(e.response?.data?.message || 'Errore caricamento presenze'))
       .finally(() => setLoading(false));
@@ -32,7 +34,7 @@ export default function MyPresencesScreen({ navigation }) {
         <View style={{ width: 80 }} />
       </View>
 
-      {loading && <ActivityIndicator size="large" color="#1E3A5F" style={{ marginTop: 40 }} />}
+      {loading && <LoadingSpinner color="#1E3A5F" />}
       {error && <Text style={styles.errorText}>{error}</Text>}
 
       {!loading && checkins.length === 0 && !error && (
