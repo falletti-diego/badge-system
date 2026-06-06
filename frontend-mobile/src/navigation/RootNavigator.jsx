@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import authService from '../services/authService';
 
 import LoginScreen from '../screens/auth/LoginScreen';
 import CheckInScreen from '../screens/checkin/CheckInScreen';
@@ -15,21 +14,17 @@ import MyPresencesScreen from '../screens/presences/MyPresencesScreen';
 const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
-  const [isAuthenticated, setIsAuthenticated] = useState(null);
-  const navigationRef = useRef(null);
+  const [initialRoute, setInitialRoute] = useState(null);
 
   useEffect(() => {
     const checkAuth = async () => {
       const hasToken = await AsyncStorage.getItem('badge_auth_token');
-      setIsAuthenticated(!!hasToken);
+      setInitialRoute(hasToken ? 'CheckIn' : 'Login');
     };
-
     checkAuth();
-    const interval = setInterval(checkAuth, 1000);
-    return () => clearInterval(interval);
   }, []);
 
-  if (isAuthenticated === null) {
+  if (initialRoute === null) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1E3A5F' }}>
         <ActivityIndicator size="large" color="#FFFFFF" />
@@ -38,10 +33,10 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer>
       <Stack.Navigator
         screenOptions={{ headerShown: false }}
-        initialRouteName={isAuthenticated ? 'CheckIn' : 'Login'}
+        initialRouteName={initialRoute}
       >
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="CheckIn" component={CheckInScreen} />

@@ -19,7 +19,13 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     try {
       await authService.login(email.trim(), password);
-      navigation.navigate('CheckIn');
+      try {
+        navigation.navigate('CheckIn');
+      } catch (navErr) {
+        console.warn('Navigation failed:', navErr);
+        Alert.alert('Errore', 'Navigazione fallita. Riprova.');
+        setLoading(false);
+      }
     } catch (err) {
       const msg = err.response?.data?.message || 'Email o password non corretti';
       Alert.alert('Accesso negato', msg);

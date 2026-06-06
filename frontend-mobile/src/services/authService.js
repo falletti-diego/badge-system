@@ -29,8 +29,14 @@ const authService = {
   },
 
   async getUser() {
-    const raw = await AsyncStorage.getItem(USER_KEY);
-    return raw ? JSON.parse(raw) : null;
+    try {
+      const raw = await AsyncStorage.getItem(USER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      console.warn('Failed to parse user data from AsyncStorage:', err);
+      await AsyncStorage.removeItem(USER_KEY);
+      return null;
+    }
   },
 
   async isAuthenticated() {
