@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../config/endpoints';
 
 import LoginScreen from '../screens/auth/LoginScreen';
 import CheckInScreen from '../screens/checkin/CheckInScreen';
@@ -18,7 +19,7 @@ export default function RootNavigator() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const hasToken = await AsyncStorage.getItem('badge_auth_token');
+      const hasToken = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
       setInitialRoute(hasToken ? 'CheckIn' : 'Login');
     };
     checkAuth();
