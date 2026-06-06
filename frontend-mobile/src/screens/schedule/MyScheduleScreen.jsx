@@ -29,7 +29,7 @@ export default function MyScheduleScreen({ navigation }) {
   const [error, setError] = useState(null);
   const abortControllerRef = useRef(null);
 
-  useEffect(() => {
+  const fetchSchedule = (m = month, y = year) => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = new AbortController();
 
@@ -37,7 +37,7 @@ export default function MyScheduleScreen({ navigation }) {
     setError(null);
 
     apiClient.get(ENDPOINTS.SHIFTS_MY_SCHEDULE, {
-      params: { month, year },
+      params: { month: m, year: y },
       signal: abortControllerRef.current.signal,
     })
       .then(r => {
@@ -55,7 +55,10 @@ export default function MyScheduleScreen({ navigation }) {
           setLoading(false);
         }
       });
+  };
 
+  useEffect(() => {
+    fetchSchedule(month, year);
     return () => abortControllerRef.current?.abort();
   }, [month, year]);
 
@@ -104,7 +107,17 @@ export default function MyScheduleScreen({ navigation }) {
       </View>
 
       {loading && <LoadingSpinner color="#1E3A5F" />}
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => fetchSchedule(month, year)}
+          >
+            <Text style={styles.retryButtonText}>Riprova</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {!loading && (
         <FlatList
@@ -185,5 +198,10 @@ const styles = StyleSheet.create({
   shiftIcon: { fontSize: 18 },
   shiftLabel: { fontSize: 15, fontWeight: '600' },
   noShift: { flex: 1, textAlign: 'center', color: '#D1D5DB', fontSize: 20, fontWeight: '300' },
-  errorText: { color: '#C0392B', textAlign: 'center', margin: 24 },
+  errorContainer: { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 32 },
+  errorText: { color: '#C0392B', textAlign: 'center', fontSize: 16, marginBottom: 16 },
+  retryButton: {
+    backgroundColor: '#2563EB', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 12,
+  },
+  retryButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
 });

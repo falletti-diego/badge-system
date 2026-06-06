@@ -10,15 +10,15 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 
 export default function CheckInScreen({ navigation }) {
   const [user, setUser] = useState(null);
-  const [userLoading, setUserLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [time, setTime] = useState(new Date());
   const [faceIdAvailable, setFaceIdAvailable] = useState(false);
 
   useEffect(() => {
-    setUserLoading(true);
+    setLoading(true);
     authService.getUser()
       .then(setUser)
-      .finally(() => setUserLoading(false));
+      .finally(() => setLoading(false));
 
     LocalAuthentication.hasHardwareAsync().then(setFaceIdAvailable);
     const tick = setInterval(() => setTime(new Date()), 1000);
@@ -64,10 +64,10 @@ export default function CheckInScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.greeting}>
-          Ciao, {userLoading ? '' : (user?.name?.split(' ')[0] ?? '')}! 👋
+          Ciao, {loading ? '' : (user?.name?.split(' ')[0] ?? '')}! 👋
         </Text>
-        <TouchableOpacity onPress={handleLogout} disabled={userLoading}>
-          <Text style={[styles.logoutText, userLoading && styles.logoutDisabled]}>Esci</Text>
+        <TouchableOpacity onPress={handleLogout} disabled={loading}>
+          <Text style={[styles.logoutText, loading && styles.logoutDisabled]}>Esci</Text>
         </TouchableOpacity>
       </View>
 
