@@ -43,21 +43,12 @@ ENV USE_HTTPS=false
 ENV AWS_REGION=eu-west-1
 ENV SSM_PARAM_PATH=/badge/production
 
-# Health check — validates:
-#   (a) critical env vars loaded from SSM are present in the process environment
-#   (b) /health endpoint returns HTTP 200 (implies DB connection is alive)
-#
-# If bootstrap failed (missing SSM params), the container never reaches this
-# check — it exits with a clear error message in the logs instead.
-HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
-  CMD node -e " \
-    const http = require('http'); \
-    const missing = ['DB_HOST','JWT_SECRET'].filter(v => !process.env[v]); \
-    if (missing.length) { process.stderr.write('Missing vars: ' + missing.join(', ') + '\n'); process.exit(1); } \
-    http.get('http://localhost:3000/health', r => { \
-      process.exit(r.statusCode === 200 ? 0 : 1); \
-    }).on('error', () => process.exit(1)); \
-  "
+# Health check — verifies /health returns HTTP 200.
+# Env var validation is handled at startup by entrypoint.sh (fail-fast).
+# Docker HEALTHCHECK runs via docker exec and does NOT inherit the process env
+# of PID 1, so checking process.env vars here would always fail.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
 
 # Entrypoint: fetch SSM params → validate → drop to nodejs → exec dumb-init → app
 # CMD is passed as "$@" to su-exec nodejs dumb-init -- "$@"
