@@ -10,6 +10,10 @@
   },
   "main": "src/app.js",
   "type": "commonjs",
+  "jest": {
+    "testEnvironment": "node",
+    "setupFiles": ["./jest.setup.js"]
+  },
   "scripts": {
     "start": "NODE_ENV=production node src/app.js",
     "dev": "nodemon src/app.js",
