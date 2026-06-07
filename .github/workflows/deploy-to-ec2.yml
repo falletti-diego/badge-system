@@ -92,6 +92,9 @@ jobs:
 
             echo ""
             echo "🚀 Step 4: Run new container..."
+            # Secrets (DB_PASSWORD, JWT_SECRET, etc.) are fetched at bootstrap from
+            # AWS SSM Parameter Store (/badge/production/*) — NOT passed as -e flags.
+            # The EC2 instance IAM role must have ssm:GetParametersByPath on that path.
             docker run -d \
               --name ${{ env.CONTAINER_NAME }} \
               --restart unless-stopped \
@@ -99,17 +102,8 @@ jobs:
               -e NODE_ENV=production \
               -e LOG_LEVEL=info \
               -e PORT=${{ env.CONTAINER_PORT }} \
-              -e DB_HOST=badge-system-db.cvs80y0my080.eu-west-1.rds.amazonaws.com \
-              -e DB_PORT=5432 \
-              -e DB_USER=postgres \
-              -e DB_PASSWORD='${{ secrets.RDS_PASSWORD }}' \
-              -e DB_NAME=badge_system \
-              -e JWT_SECRET='${{ secrets.JWT_SECRET }}' \
-              -e JWT_REFRESH_SECRET='${{ secrets.JWT_REFRESH_SECRET }}' \
-              -e JWT_EXPIRY=30m \
-              -e JWT_REFRESH_EXPIRY=7d \
-              -e CORS_ORIGIN="https://dataxiom-badge.netlify.app,http://localhost:5173" \
-              -e CORS_CREDENTIALS="true" \
+              -e AWS_REGION=${{ env.AWS_REGION }} \
+              -e SSM_PARAM_PATH=/badge/production \
               ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
 
             CONTAINER_ID=$(docker ps -q -f name=${{ env.CONTAINER_NAME }})
