@@ -58,17 +58,13 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
   const userRole = req.user.role;
 
   try {
+    if (userRole === 'employee') {
+      return next(new ForbiddenError('CSV export is restricted to managers and admins', 'FORBIDDEN_ROLE'));
+    }
+
     // Resolve IDs from names if needed (MVP: accept both UUID and name)
     const resolvedSiteId = site_id ? await resolveSiteId(site_id) : undefined;
-    let resolvedEmployeeId = employee_id ? await resolveEmployeeId(employee_id) : undefined;
-
-    // Employees can only export their own data — force filter regardless of query params
-    if (userRole === 'employee') {
-      if (!req.user.employee_id) {
-        return next(new ForbiddenError('Employee access requires employee_id'));
-      }
-      resolvedEmployeeId = req.user.employee_id;
-    }
+    const resolvedEmployeeId = employee_id ? await resolveEmployeeId(employee_id) : undefined;
 
     // Build WHERE clause (MVP: no client_id filtering)
     const whereClauses = [];

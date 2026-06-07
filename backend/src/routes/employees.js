@@ -9,7 +9,7 @@ const pino = require('pino');
 const { pool } = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { createValidationMiddleware, GetEmployeesSchema } = require('../middleware/validation');
-const { NotFoundError } = require('../utils/errors');
+const { NotFoundError, ForbiddenError } = require('../utils/errors');
 
 const router = express.Router();
 const logger = pino({
@@ -24,6 +24,10 @@ const logger = pino({
 router.get('/', requireAuth, createValidationMiddleware(GetEmployeesSchema), async (req, res, next) => {
   const { limit, offset } = req.validated.query;
   const clientId = req.user.client_id;
+
+  if (req.user.role === 'employee') {
+    return next(new ForbiddenError('Employees cannot list all employees', 'FORBIDDEN_ROLE'));
+  }
 
   try {
     // Query employees with pagination
@@ -86,6 +90,10 @@ router.get('/', requireAuth, createValidationMiddleware(GetEmployeesSchema), asy
 router.get('/:id', requireAuth, async (req, res, next) => {
   const { id } = req.params;
   const clientId = req.user.client_id;
+
+  if (req.user.role === 'employee' && req.user.employee_id !== id) {
+    return next(new ForbiddenError('Employees can only view their own profile', 'FORBIDDEN_ROLE'));
+  }
 
   try {
     const query = `
