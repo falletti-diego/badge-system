@@ -24,6 +24,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Copy deploy scripts to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "scripts/wait-healthy.sh"
+          target: "/tmp"
+          strip_components: 1
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -106,51 +116,11 @@ jobs:
             echo "✅ Container running: ${CONTAINER_ID}"
 
             echo ""
-            echo "⏳ Step 5: Wait for container to become healthy (max 90s)..."
-            HEALTHY=false
-            for i in $(seq 1 18); do
-              STATUS=$(docker inspect ${{ env.CONTAINER_NAME }} --format "{{.State.Health.Status}}" 2>/dev/null || echo "unknown")
-              echo "  Health status ($i/18): $STATUS"
-              if [ "$STATUS" = "healthy" ]; then
-                HEALTHY=true
-                break
-              fi
-              if [ "$STATUS" = "unhealthy" ]; then
-                echo "❌ Container reported unhealthy — dumping logs:"
-                docker logs --tail 30 ${{ env.CONTAINER_NAME }}
-                break
-              fi
-              sleep 5
-            done
-
-            echo ""
-            echo "🏥 Step 6: Test health endpoint with retry loop..."
-            MAX_HEALTH_ATTEMPTS=10
-            HEALTH_OK=false
-            for attempt in $(seq 1 $MAX_HEALTH_ATTEMPTS); do
-              echo "Health check attempt $attempt/$MAX_HEALTH_ATTEMPTS..."
-              HEALTH_RESPONSE=$(curl -s http://localhost:${{ env.CONTAINER_PORT }}/health || echo '{}')
-              echo "Response: ${HEALTH_RESPONSE}"
-
-              if echo "${HEALTH_RESPONSE}" | grep -q '"status":"ok"'; then
-                echo "✅ Health endpoint working!"
-                HEALTH_OK=true
-                break
-              fi
-
-              if [ $attempt -lt $MAX_HEALTH_ATTEMPTS ]; then
-                echo "⏳ Health check failed, waiting 5s before retry..."
-                sleep 5
-              fi
-            done
-
-            if [ "$HEALTH_OK" = false ]; then
-              echo "⚠️  Health endpoint not responding after $MAX_HEALTH_ATTEMPTS attempts"
-              echo "Checking container status..."
-              docker ps -a | grep ${{ env.CONTAINER_NAME }}
-              echo "Recent logs:"
-              docker logs --tail 50 ${{ env.CONTAINER_NAME }}
-            fi
+            echo "⏳ Step 5: Wait for container to become healthy..."
+            chmod +x /tmp/wait-healthy.sh
+            bash /tmp/wait-healthy.sh ${{ env.CONTAINER_NAME }} \
+              --port ${{ env.CONTAINER_PORT }} \
+              --timeout 120
 
             echo ""
             echo "======================================"
