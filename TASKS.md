@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-06 (Session 8: FASE 4.1-4.2 — Mobile Config Review + Device Testing Plan)  
+**Last Updated:** 2026-06-07 (Session 9: DevOps — Skills, RBAC fixes, CI/CD, SSM Parameter Store)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -58,9 +58,21 @@
 - [x] **3.3.8** `EmployeeShiftsPage.jsx`: read-only personal schedule view
 - [x] **3.3.9** Backend API integrated (real DB persistence, not local state)
 
-### FASE 3.x — Deploy Tooling
+### FASE 3.x — Deploy Tooling & Security
 - [x] **3.x.1** `scripts/deploy.sh`: build → push → HTTPS cert verify → CORS preflight × 7 endpoints → auth smoke test
 - [x] **3.x.2** `.claude/skills/deploy/SKILL.md`: `/deploy` skill with troubleshooting guide
+- [x] **3.x.3** RBAC fix: `GET /employees` → 403 for employee role
+- [x] **3.x.4** RBAC fix: `GET /export/csv` → 403 for employee role (hard block, no silent data leak)
+- [x] **3.x.5** `scripts/test-api.sh`: 23-test automated API suite (auth, RBAC, CORS, all endpoints)
+- [x] **3.x.6** `.claude/skills/api-test/SKILL.md`: `/api-test` skill (eliminates 150+ manual curl commands)
+- [x] **3.x.7** CI fix: `port already allocated` in `deploy-to-ec2.yml` (targeted port kill, no daemon restart)
+- [x] **3.x.8** `scripts/wait-healthy.sh`: smart Docker health poller (exponential backoff, crash detection)
+- [x] **3.x.9** `deploy-to-ec2.yml`: integrated `wait-healthy.sh` via `scp-action` (replaces 35-line sleep loops)
+- [x] **3.x.10** `backend/Dockerfile`: SSM bootstrap — fetch secrets at container startup from AWS SSM
+- [x] **3.x.11** `scripts/entrypoint.sh`: bootstrap script (fetch SSM → validate critical vars → drop to nodejs → exec)
+- [x] **3.x.12** `infrastructure/iam-ssm-policy.json`: IAM inline policy attached to EC2 role
+- [x] **3.x.13** 14 SSM parameters populated under `/badge/production/*` (DB, JWT, CORS, config)
+- [x] **3.x.14** `deploy-to-ec2.yml`: removed hardcoded `-e` secret flags — secrets come from SSM at runtime
 
 ---
 
@@ -181,6 +193,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-05 | Mobile App (Part 1) | 4.1–4.8 | Expo SDK 54, login flow, QR scanner (CameraView), Face ID, flow fixes |
 | 2026-06-06 | FASE 4.1 Config Review | — | 7 config sources consolidated → 1, 3 critical bugs fixed, 97% production ready |
 | 2026-06-06 | FASE 4.2 Device Testing Plan | — | Comprehensive testing plan (50+ scenarios), build instructions, readiness verification |
+| 2026-06-07 | DevOps + Security (Session 9) | 3.x.3–3.x.14 | RBAC fixes, `/api-test` skill (23 tests), CI port-conflict fix, `wait-healthy.sh`, SSM Parameter Store bootstrap (14 params, IAM policy, entrypoint.sh — 23/23 ✅) |
 
 ---
 
