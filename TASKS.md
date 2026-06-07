@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-07 (Session 9: DevOps — Skills, RBAC fixes, CI/CD, SSM Parameter Store)  
+**Last Updated:** 2026-06-07 (Session 10: Code Review — 7 security/UX findings fixed, test suite stabilizzata)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -73,6 +73,16 @@
 - [x] **3.x.12** `infrastructure/iam-ssm-policy.json`: IAM inline policy attached to EC2 role
 - [x] **3.x.13** 14 SSM parameters populated under `/badge/production/*` (DB, JWT, CORS, config)
 - [x] **3.x.14** `deploy-to-ec2.yml`: removed hardcoded `-e` secret flags — secrets come from SSM at runtime
+
+### FASE 3.x — Code Review & Quality (Session 10)
+- [x] **3.x.15** `routes/auth.js`: removed JWT_SECRET fallback `'test-secret-mvp'` — server now fails fast at startup if env var missing (CRITICAL: forgeable tokens)
+- [x] **3.x.16** `routes/export.js`: added RBAC filter for manager role — managers can only export CSV for their assigned site (CRITICAL: data breach)
+- [x] **3.x.17** `middleware/auth.js`: replaced `res.status(500).json()` with `next(err)` in catch — unexpected errors now reach global error handler and Sentry
+- [x] **3.x.18** `hooks/usePresences.js`: `fetchStats` now calls `setError` on failure — KPI card errors are visible to the user instead of silently swallowed
+- [x] **3.x.19** `CorrectionsPage.jsx`: added `disabled={loading}` to Cerca/Reset buttons — eliminates race condition from parallel filter fetches
+- [x] **3.x.20** `PlanningPage.jsx`: added `disabled={isSaving}` to all shift Select cells and Export CSV button — prevents silent shift loss on concurrent edits; fixed hardcoded title 'Giugno 2026' → dynamic
+- [x] **3.x.21** `apiClient.js`: removed stale `auth_token` fallback from request interceptor — only `badge_auth_token` is read
+- [x] **3.x.22** `backend/jest.setup.js`: added Jest setup file with test-only env vars — fixes test suite crash introduced by JWT_SECRET fail-fast guard
 
 ---
 
@@ -194,6 +204,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-06 | FASE 4.1 Config Review | — | 7 config sources consolidated → 1, 3 critical bugs fixed, 97% production ready |
 | 2026-06-06 | FASE 4.2 Device Testing Plan | — | Comprehensive testing plan (50+ scenarios), build instructions, readiness verification |
 | 2026-06-07 | DevOps + Security (Session 9) | 3.x.3–3.x.14 | RBAC fixes, `/api-test` skill (23 tests), CI port-conflict fix, `wait-healthy.sh`, SSM Parameter Store bootstrap (14 params, IAM policy, entrypoint.sh — 23/23 ✅) |
+| 2026-06-07 | Code Review + Fixes (Session 10) | 3.x.15–3.x.22 | Multi-angle code review (7 findings: 2 critical, 3 medium, 2 low) — JWT_SECRET fail-fast, RBAC export, next(err), fetchStats errors, race conditions, PlanningPage UX, apiClient cleanup. Jest setup fix. 17/17 ✅ deploy verified 12/12 ✅ |
 
 ---
 
