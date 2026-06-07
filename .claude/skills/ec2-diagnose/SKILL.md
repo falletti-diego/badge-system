@@ -22,7 +22,7 @@ Arguments (space-separated, both optional — defaults to Badge System productio
 
 **Defaults (Badge System production):**
 - `EC2_HOST` = `34.245.145.143`
-- `SSH_KEY_PATH` = `~/.ssh/badge-key.pem`
+- `SSH_KEY_PATH` = `~/.ssh/badge-system-ec2-v2.pem`
 - `CONTAINER_NAME` = `badge-system-api`
 - `PORT` = `3000`
 
@@ -47,7 +47,7 @@ SSH_KEY="${2:-~/.ssh/badge-key.pem}"
 CONTAINER="badge-system-api"
 PORT=3000
 
-ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@"$SSH_HOST" bash <<'REMOTE'
+ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes ubuntu@"$SSH_HOST" bash <<'REMOTE'
 CONTAINER="badge-system-api"
 PORT=3000
 
