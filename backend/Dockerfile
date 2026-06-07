@@ -11,7 +11,7 @@ LABEL version="1.0.0"
 #   dumb-init             — PID 1 signal handling, prevents zombie processes
 #   su-exec               — privilege-drop helper (replaces gosu on Alpine)
 #   aws-cli               — SSM parameter fetch at bootstrap
-RUN apk add --no-cache build-base python3 dumb-init su-exec aws-cli
+RUN apk add --no-cache build-base python3 bash dumb-init su-exec aws-cli
 
 # Set working directory
 WORKDIR /app
