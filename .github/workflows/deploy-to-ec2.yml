@@ -54,27 +54,31 @@ jobs:
             echo "✅ Image pulled successfully"
 
             echo ""
-            echo "🛑 Step 3: Stop and remove existing container..."
+            echo "🛑 Step 3: Stop and remove ALL containers on port ${{ env.CONTAINER_PORT }}..."
+
+            # Stop the target container by name
             docker stop ${{ env.CONTAINER_NAME }} 2>/dev/null || true
-            sleep 1
             docker rm ${{ env.CONTAINER_NAME }} 2>/dev/null || true
-            sleep 1
 
-            # Aggressive cleanup: networks, sockets, AND docker daemon restart
-            echo "Cleaning up Docker networks and residual sockets..."
-            docker network prune -f 2>/dev/null || true
-            docker container prune -f 2>/dev/null || true
+            # Stop ANY other container occupying port 3000 (covers renamed/legacy containers)
+            OTHERS=$(docker ps -q --filter "publish=${{ env.CONTAINER_PORT }}" 2>/dev/null)
+            if [ -n "$OTHERS" ]; then
+              echo "Stopping other containers on port ${{ env.CONTAINER_PORT }}: $OTHERS"
+              docker stop $OTHERS
+              docker rm $OTHERS 2>/dev/null || true
+            fi
 
-            # Kill any remaining processes on port 3000
-            echo "Checking for any remaining processes on port 3000..."
-            sudo lsof -i :${{ env.CONTAINER_PORT }} 2>/dev/null || echo "No processes found"
+            # Kill lingering docker-proxy processes on the port directly (no daemon restart)
+            sudo fuser -k ${{ env.CONTAINER_PORT }}/tcp 2>/dev/null || true
+            sleep 2
 
-            # Last resort: restart Docker daemon to clear all iptables rules
-            echo "Restarting Docker daemon to clear iptables state..."
-            sudo systemctl restart docker 2>/dev/null || sudo /etc/init.d/docker restart 2>/dev/null || true
-            sleep 5
+            # Confirm port is free before proceeding
+            if sudo lsof -i :${{ env.CONTAINER_PORT }} 2>/dev/null | grep LISTEN; then
+              echo "⚠️  Port ${{ env.CONTAINER_PORT }} still in use — waiting 3s more..."
+              sleep 3
+            fi
 
-            echo "✅ Old container removed, port cleaned, docker restarted"
+            echo "✅ Old containers removed, port ${{ env.CONTAINER_PORT }} cleared"
 
             echo ""
             echo "🚀 Step 4: Run new container..."
@@ -102,8 +106,22 @@ jobs:
             echo "✅ Container running: ${CONTAINER_ID}"
 
             echo ""
-            echo "⏳ Step 5: Wait for container to initialize (20s for RDS cold start)..."
-            sleep 20
+            echo "⏳ Step 5: Wait for container to become healthy (max 90s)..."
+            HEALTHY=false
+            for i in $(seq 1 18); do
+              STATUS=$(docker inspect ${{ env.CONTAINER_NAME }} --format "{{.State.Health.Status}}" 2>/dev/null || echo "unknown")
+              echo "  Health status ($i/18): $STATUS"
+              if [ "$STATUS" = "healthy" ]; then
+                HEALTHY=true
+                break
+              fi
+              if [ "$STATUS" = "unhealthy" ]; then
+                echo "❌ Container reported unhealthy — dumping logs:"
+                docker logs --tail 30 ${{ env.CONTAINER_NAME }}
+                break
+              fi
+              sleep 5
+            done
 
             echo ""
             echo "🏥 Step 6: Test health endpoint with retry loop..."
