@@ -19,10 +19,18 @@ REGION="${AWS_REGION:-eu-west-1}"
 # Variables that MUST be present — container refuses to start if any are missing
 CRITICAL_VARS=(DB_HOST DB_PASSWORD JWT_SECRET JWT_REFRESH_SECRET)
 
+# Temp files for Python scripts (avoids heredoc-in-subshell quoting issues)
+PY_FETCH=/tmp/_ssm_fetch.py
+PY_WRITE=/tmp/_ssm_write.py
+SSM_RAW=/tmp/_ssm_raw.json
+
 ts()  { date -Iseconds; }
 log() { echo "$(ts) [bootstrap] $*" >&2; }
 ok()  { log "✅ $*"; }
 die() { log "❌ $*" >&2; exit 1; }
+
+# Cleanup temp files on exit
+trap 'rm -f "$PY_FETCH" "$PY_WRITE" "$SSM_RAW"' EXIT
 
 # ── 1. Prepare secure env directory ─────────────────────────────────────────
 mkdir -p /etc/badge
@@ -30,81 +38,71 @@ chmod 700 /etc/badge
 
 log "Fetching parameters from SSM path: ${SSM_PATH}/*  region: ${REGION}"
 
-# ── 2. Fetch all pages from SSM (handles >10 params via NextToken) ──────────
-ALL_PARAMS_JSON=$(python3 - <<PYEOF 2>&1) || die "SSM fetch failed:\n$ALL_PARAMS_JSON"
-import subprocess, json, sys
+# ── 2. Write SSM fetch script to temp file ───────────────────────────────────
+# Using a file avoids heredoc-in-subshell $() quoting issues in bash
+printf '%s\n' \
+  'import subprocess, json, sys, os' \
+  'path   = os.environ.get("SSM_PARAM_PATH", "/badge/production")' \
+  'region = os.environ.get("AWS_REGION", "eu-west-1")' \
+  'all_params = []' \
+  'cmd_base = ["aws","ssm","get-parameters-by-path","--path",path,"--with-decryption","--recursive","--region",region,"--output","json"]' \
+  'next_token = None' \
+  'while True:' \
+  '    cmd = cmd_base + (["--starting-token", next_token] if next_token else [])' \
+  '    r = subprocess.run(cmd, capture_output=True, text=True)' \
+  '    if r.returncode != 0: sys.stderr.write(r.stderr.strip()); sys.exit(1)' \
+  '    data = json.loads(r.stdout)' \
+  '    all_params.extend(data.get("Parameters", []))' \
+  '    next_token = data.get("NextToken")' \
+  '    if not next_token: break' \
+  'print(json.dumps(all_params))' \
+  > "$PY_FETCH"
 
-path   = "$SSM_PATH"
-region = "$REGION"
-all_params = []
-
-cmd_base = [
-    "aws", "ssm", "get-parameters-by-path",
-    "--path", path,
-    "--with-decryption",
-    "--recursive",
-    "--region", region,
-    "--output", "json",
-]
-
-next_token = None
-while True:
-    cmd = cmd_base + (["--starting-token", next_token] if next_token else [])
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        print(result.stderr.strip(), file=sys.stderr)
-        sys.exit(1)
-    data = json.loads(result.stdout)
-    all_params.extend(data.get("Parameters", []))
-    next_token = data.get("NextToken")
-    if not next_token:
-        break
-
-print(json.dumps(all_params))
-PYEOF
-
-PARAM_COUNT=$(echo "$ALL_PARAMS_JSON" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
-
-if [[ "$PARAM_COUNT" -eq 0 ]]; then
-  die "No parameters found under $SSM_PATH
-  → Check that SSM parameters exist (e.g. aws ssm get-parameters-by-path --path $SSM_PATH)
-  → Check that the EC2 instance IAM role has ssm:GetParametersByPath permission"
+# ── 3. Fetch all parameters (with pagination) ───────────────────────────────
+if ! python3 "$PY_FETCH" > "$SSM_RAW" 2>/tmp/_ssm_err.txt; then
+  die "SSM fetch failed: $(cat /tmp/_ssm_err.txt)
+  → Check EC2 IAM role has ssm:GetParametersByPath on ${SSM_PATH}/*"
 fi
 
-# ── 3. Write KEY=value pairs using shlex.quote() for safe shell sourcing ─────
-# shlex.quote handles all special chars: spaces, $, quotes, backslashes, etc.
-echo "$ALL_PARAMS_JSON" | python3 - <<'PYEOF'
-import sys, json, shlex
+PARAM_COUNT=$(python3 -c "import json; print(len(json.load(open('$SSM_RAW'))))")
 
-params = json.load(sys.stdin)
-with open("/etc/badge/.env", "w") as f:
-    for p in params:
-        name  = p["Name"].rsplit("/", 1)[-1]      # strip /badge/production/ prefix
-        value = shlex.quote(p["Value"])
-        f.write(f"export {name}={value}\n")
-PYEOF
+if [[ "$PARAM_COUNT" -eq 0 ]]; then
+  die "No parameters found under $SSM_PATH — run: aws ssm get-parameters-by-path --path $SSM_PATH --region $REGION"
+fi
 
+# ── 4. Write KEY=value pairs using shlex.quote() for safe shell sourcing ────
+printf '%s\n' \
+  'import json, shlex' \
+  'params = json.load(open("'"$SSM_RAW"'"))' \
+  'out = open("'"$ENV_FILE"'", "w")' \
+  'for p in params:' \
+  '    name  = p["Name"].rsplit("/", 1)[-1]' \
+  '    value = shlex.quote(p["Value"])' \
+  '    out.write("export " + name + "=" + value + "\n")' \
+  'out.close()' \
+  > "$PY_WRITE"
+
+python3 "$PY_WRITE"
 chmod 600 "$ENV_FILE"
 chown nodejs:nodejs "$ENV_FILE"
 ok "Wrote $PARAM_COUNT variable(s) to $ENV_FILE"
 
-# ── 4. Validate critical variables ──────────────────────────────────────────
+# ── 5. Validate critical variables ──────────────────────────────────────────
 MISSING=()
 for var in "${CRITICAL_VARS[@]}"; do
   grep -q "^export ${var}=" "$ENV_FILE" || MISSING+=("${SSM_PATH}/${var}")
 done
 
 if [[ ${#MISSING[@]} -gt 0 ]]; then
-  die "Missing critical SSM parameters — create them with:
-$(printf '  aws ssm put-parameter --name %s --type SecureString --value <value>\n' "${MISSING[@]}")"
+  die "Missing critical SSM parameters:
+$(printf '  aws ssm put-parameter --name %s --type SecureString --value <value> --region %s\n' "${MISSING[@]}" "$REGION")"
 fi
 ok "Critical variables verified: ${CRITICAL_VARS[*]}"
 
-# ── 5. Source env into current shell so exec inherits all vars ───────────────
+# ── 6. Source env into current shell so exec inherits all vars ───────────────
 # shellcheck source=/dev/null
 source "$ENV_FILE"
 ok "Environment loaded — starting app as 'nodejs' user"
 
-# ── 6. Drop privileges and exec dumb-init → app ──────────────────────────────
-# su-exec replaces itself with the next command (no extra PID), keeping PID 1 = dumb-init
+# ── 7. Drop privileges and exec dumb-init → app ──────────────────────────────
 exec su-exec nodejs dumb-init -- "$@"
