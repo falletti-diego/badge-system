@@ -46,6 +46,7 @@ export const usePresences = (filters = {}) => {
       const response = await apiClient.get('/api/checkins/stats', { params: filters });
       setStats(response.data.data || {});
     } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed to fetch stats');
       console.error('Error fetching stats:', err);
     }
   }, [filters]);

@@ -215,10 +215,11 @@ export const CorrectionsPage = () => {
               <MenuItem value="OUT">OUT</MenuItem>
             </Select>
             <Button variant="contained" onClick={handleApplyFilters}
+              disabled={loading}
               sx={{ backgroundColor: '#1E3A5F' }}>
               Cerca
             </Button>
-            <Button variant="outlined" onClick={handleClearFilters}>
+            <Button variant="outlined" onClick={handleClearFilters} disabled={loading}>
               Reset
             </Button>
           </Box>

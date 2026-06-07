@@ -15,7 +15,10 @@ const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
 });
 
-const JWT_SECRET = process.env.JWT_SECRET || 'test-secret-mvp';
+if (!process.env.JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET environment variable is required — server cannot start without it');
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 const TOKEN_EXPIRY = '7d'; // 7 days for MVP
 
 // MVP: Hardcoded demo credentials (5 test accounts)

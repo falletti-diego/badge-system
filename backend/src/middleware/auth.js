@@ -112,15 +112,8 @@ function requireAuth(req, res, next) {
 
     next();
   } catch (err) {
-    logger.error({
-      action: 'auth_middleware_error',
-      error: err.message,
-    });
-    return res.status(500).json({
-      error: 'INTERNAL_ERROR',
-      message: 'Internal server error',
-      statusCode: 500,
-    });
+    logger.error({ action: 'auth_middleware_error', err });
+    return next(err);
   }
 }
 

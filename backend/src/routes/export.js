@@ -56,6 +56,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
   const { site_id, employee_id, date_from, date_to } = req.validated.query;
   const clientId = req.user.client_id;
   const userRole = req.user.role;
+  const userSiteId = req.user.site_id;
 
   try {
     if (userRole === 'employee') {
@@ -63,10 +64,18 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
     }
 
     // Resolve IDs from names if needed (MVP: accept both UUID and name)
-    const resolvedSiteId = site_id ? await resolveSiteId(site_id) : undefined;
+    let resolvedSiteId = site_id ? await resolveSiteId(site_id) : undefined;
     const resolvedEmployeeId = employee_id ? await resolveEmployeeId(employee_id) : undefined;
 
-    // Build WHERE clause (MVP: no client_id filtering)
+    // RBAC: managers can only export data for their assigned site
+    if (userRole === 'manager' && userSiteId) {
+      if (resolvedSiteId && resolvedSiteId !== userSiteId) {
+        return next(new ForbiddenError('Managers can only export data for their assigned site', 'FORBIDDEN_SITE'));
+      }
+      resolvedSiteId = userSiteId;
+    }
+
+    // Build WHERE clause
     const whereClauses = [];
     const params = [];
     let paramCount = 0;

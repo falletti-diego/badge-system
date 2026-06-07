@@ -227,7 +227,7 @@ export const PlanningPage = () => {
         {/* Header */}
         <Box sx={{ marginBottom: '32px' }}>
           <Typography variant="h3" sx={{ fontFamily: 'Cormorant', fontWeight: 'bold', marginBottom: '16px' }}>
-            Turni di Giugno 2026
+            Turni di {new Date(year, month - 1).toLocaleString('it-IT', { month: 'long' })} {year}
           </Typography>
 
           {/* Month/Year Selector */}
@@ -306,6 +306,7 @@ export const PlanningPage = () => {
           )}
           <Button
             variant="outlined"
+            disabled={isSaving}
             sx={{ borderColor: '#1E3A5F', color: '#1E3A5F', marginLeft: 'auto' }}
             onClick={handleExportCSV}
           >
@@ -435,6 +436,7 @@ export const PlanningPage = () => {
                               )}
                               <Select
                                 value={shift}
+                                disabled={isSaving}
                                 onChange={(e) => handleShiftChange(emp.id, dateStr, e.target.value)}
                                 renderValue={(val) => (val && val !== '—') ? val.toUpperCase() : '—'}
                                 sx={{
