@@ -9,6 +9,8 @@ const jwt = require('jsonwebtoken');
 const pino = require('pino');
 const { createValidationMiddleware, LoginSchema } = require('../middleware/validation');
 const { ValidationError } = require('../utils/errors');
+const { verifyPassword } = require('../auth/password');
+const { pool } = require('../db/pool');
 
 const router = express.Router();
 const logger = pino({
@@ -136,8 +138,45 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
   const { email, password } = req.validated.body;
 
   try {
-    // MVP: Check against hardcoded demo credentials (5 test accounts)
-    const user = DEMO_USERS.find((u) => u.email === email && u.password === password);
+    // Step 1: Check hardcoded DEMO_USERS (internal accounts, backward compat)
+    const demoUser = DEMO_USERS.find((u) => u.email === email && u.password === password);
+
+    let user = null;
+
+    if (demoUser) {
+      user = {
+        id: demoUser.id,
+        name: demoUser.name,
+        email: demoUser.email,
+        role: demoUser.role,
+        client_id: demoUser.client_id,
+        employee_id: demoUser.employee_id || null,
+        site_id: demoUser.site_id || null,
+      };
+    } else {
+      // Step 2: DB lookup — real customers created via admin panel
+      const result = await pool.query(
+        `SELECT id, client_id, email, name, role, site_id, password_hash
+         FROM employees
+         WHERE email = $1 AND password_hash IS NOT NULL`,
+        [email]
+      );
+      const dbEmployee = result.rows[0];
+      if (dbEmployee) {
+        const valid = await verifyPassword(password, dbEmployee.password_hash);
+        if (valid) {
+          user = {
+            id: dbEmployee.id,
+            name: dbEmployee.name,
+            email: dbEmployee.email,
+            role: dbEmployee.role,
+            client_id: dbEmployee.client_id,
+            employee_id: dbEmployee.id,
+            site_id: dbEmployee.site_id || null,
+          };
+        }
+      }
+    }
 
     if (!user) {
       throw new ValidationError('Email or password is incorrect', {
@@ -146,7 +185,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       });
     }
 
-    // Generate JWT token (include employee_id and site_id if present)
+    // Generate JWT token
     const tokenPayload = {
       user_id: user.id,
       name: user.name,
@@ -154,12 +193,8 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       role: user.role,
       client_id: user.client_id,
     };
-    if (user.employee_id) {
-      tokenPayload.employee_id = user.employee_id;
-    }
-    if (user.site_id) {
-      tokenPayload.site_id = user.site_id;
-    }
+    if (user.employee_id) tokenPayload.employee_id = user.employee_id;
+    if (user.site_id) tokenPayload.site_id = user.site_id;
 
     const token = jwt.sign(tokenPayload, JWT_PRIVATE_KEY, {
       algorithm: JWT_ALGORITHM,
@@ -188,12 +223,8 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       name: user.name,
       role: user.role,
     };
-    if (user.employee_id) {
-      userResponse.employee_id = user.employee_id;
-    }
-    if (user.site_id) {
-      userResponse.site_id = user.site_id;
-    }
+    if (user.employee_id) userResponse.employee_id = user.employee_id;
+    if (user.site_id) userResponse.site_id = user.site_id;
 
     res.json({
       data: {

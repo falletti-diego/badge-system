@@ -13,6 +13,7 @@ import { PlanningPage } from './features/planning/pages/PlanningPage';
 import { EmployeeShiftsPage } from './features/planning/pages/EmployeeShiftsPage';
 import { CorrectionsPage } from './features/corrections/pages/CorrectionsPage';
 import { SitesPage } from './features/sites/pages/SitesPage';
+import { AdminPage } from './features/admin/pages/AdminPage';
 
 // Create Material-UI theme with design system colors
 const theme = createTheme({
@@ -132,6 +133,16 @@ function App() {
             element={
               <ProtectedRoute requiredRole="admin">
                 <SitesPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Admin panel: onboarding clienti/sedi/dipendenti */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <AdminPage />
               </ProtectedRoute>
             }
           />

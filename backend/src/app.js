@@ -38,6 +38,7 @@ const shiftsRouter = require('./routes/shifts');
 const exportRouter = require('./routes/export');
 const notificationsRouter = require('./routes/notifications');
 const sitesRouter = require('./routes/sites');
+const adminRouter = require('./routes/admin');
 
 // Load environment variables
 dotenv.config();
@@ -147,6 +148,7 @@ app.use('/api/shifts', shiftsRouter);
 app.use('/api/export/csv', exportRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/sites', sitesRouter);
+app.use('/api/admin', adminRouter);
 
 // Sentry error handler — must come BEFORE custom error handler to capture exceptions
 if (process.env.SENTRY_DSN) {

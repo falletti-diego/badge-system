@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Benvenuto su Badge System</title>
+  <style>
+    body { margin: 0; padding: 0; background: #F5F2ED; font-family: 'DM Sans', Arial, sans-serif; }
+    .wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .header { background: #1E3A5F; padding: 32px 40px; }
+    .header h1 { margin: 0; color: #ffffff; font-size: 24px; font-weight: 700; letter-spacing: 0.5px; }
+    .header p { margin: 4px 0 0; color: rgba(255,255,255,0.7); font-size: 14px; }
+    .body { padding: 32px 40px; }
+    .body p { color: #2A2520; font-size: 15px; line-height: 1.6; margin: 0 0 16px; }
+    .credentials-box { background: #F5F2ED; border-left: 4px solid #1E3A5F; border-radius: 4px; padding: 20px 24px; margin: 24px 0; }
+    .credentials-box .label { font-size: 12px; color: #6B625A; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 2px; }
+    .credentials-box .value { font-size: 16px; font-weight: 600; color: #1E3A5F; font-family: 'Courier New', monospace; }
+    .cta-button { display: inline-block; background: #1E3A5F; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 4px; font-size: 15px; font-weight: 600; margin: 8px 0 24px; }
+    .steps { counter-reset: step; list-style: none; padding: 0; margin: 0 0 24px; }
+    .steps li { counter-increment: step; position: relative; padding: 12px 0 12px 48px; border-bottom: 1px solid #F0EDE8; color: #2A2520; font-size: 14px; line-height: 1.5; }
+    .steps li:last-child { border-bottom: none; }
+    .steps li::before { content: counter(step); position: absolute; left: 0; top: 10px; width: 28px; height: 28px; background: #1E3A5F; color: #fff; border-radius: 50%; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+    .warning-box { background: #FFF8EC; border: 1px solid #F59E0B; border-radius: 4px; padding: 14px 18px; margin: 24px 0; font-size: 13px; color: #78350F; }
+    .footer { background: #F5F2ED; padding: 20px 40px; }
+    .footer p { margin: 0; font-size: 12px; color: #6B625A; line-height: 1.6; }
+    .footer a { color: #1E3A5F; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <h1>Badge System</h1>
+      <p>Sistema di rilevazione presenze — {{COMPANY_NAME}}</p>
+    </div>
+    <div class="body">
+      <p>Ciao <strong>{{EMPLOYEE_NAME}}</strong>,</p>
+      <p>Il tuo account Badge System è stato creato. Puoi iniziare a registrare le presenze da oggi.</p>
+
+      <div class="credentials-box">
+        <div class="label">Email di accesso</div>
+        <div class="value">{{EMPLOYEE_EMAIL}}</div>
+        <br />
+        <div class="label">Password temporanea</div>
+        <div class="value">{{TEMP_PASSWORD}}</div>
+      </div>
+
+      <div class="warning-box">
+        ⚠️ <strong>Cambia la password</strong> al primo accesso — vai su Impostazioni → Cambia Password.
+      </div>
+
+      <a href="{{APP_URL}}/login" class="cta-button">Accedi a Badge System →</a>
+
+      <p><strong>Come iniziare — {{EMPLOYEE_ROLE_LABEL}}:</strong></p>
+      <ol class="steps">
+        {{#if IS_EMPLOYEE}}
+        <li>Apri l'app Badge sul tuo smartphone oppure accedi da browser.</li>
+        <li>Inserisci email e password qui sopra.</li>
+        <li>Quando arrivi in sede, inquadra il <strong>QR Code</strong> esposto all'ingresso.</li>
+        <li>Conferma con Face ID (o PIN) per registrare l'entrata.</li>
+        <li>Ripeti all'uscita per registrare la fine turno.</li>
+        {{/if}}
+        {{#if IS_MANAGER}}
+        <li>Accedi alla dashboard da browser: <a href="{{APP_URL}}/login">{{APP_URL}}/login</a></li>
+        <li>Nella sezione <strong>Planning</strong> assegna i turni ai tuoi dipendenti.</li>
+        <li>Nella sezione <strong>Dashboard</strong> monitora le presenze in tempo reale.</li>
+        <li>Usa <strong>Correzioni</strong> per modificare un'entrata/uscita errata (entro 7 giorni).</li>
+        <li>Esporta le presenze in CSV dal pulsante "Esporta" in Dashboard.</li>
+        {{/if}}
+      </ol>
+
+      <p>Hai bisogno di aiuto? Contatta il supporto Dataxiom: <a href="mailto:support@dataxiom.it">support@dataxiom.it</a></p>
+    </div>
+    <div class="footer">
+      <p>
+        Badge System · Dataxiom Srl · <a href="{{APP_URL}}">{{APP_URL}}</a><br />
+        Hai ricevuto questa email perché il tuo datore di lavoro ha attivato il servizio di rilevazione presenze.
+        I tuoi dati sono trattati in conformità al GDPR. Per informazioni: <a href="mailto:privacy@dataxiom.it">privacy@dataxiom.it</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>

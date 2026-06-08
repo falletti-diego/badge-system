@@ -131,6 +131,21 @@ const DashboardPage = () => {
               </Button>
             )}
 
+            {/* Admin panel - Admin only */}
+            {userRole === 'admin' && (
+              <Button
+                color="inherit"
+                onClick={() => navigate('/admin')}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '14px',
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
+                }}
+              >
+                ⚙️ Admin
+              </Button>
+            )}
+
             {/* Employee Schedule Link - Show for employees */}
             {userRole === 'employee' && (
               <Button
