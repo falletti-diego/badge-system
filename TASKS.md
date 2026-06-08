@@ -192,7 +192,7 @@ Go-live with first paying customer (pilota).
 
 ### Trovati nella sessione 17 — non critici per MVP, da chiudere prima del lancio
 
-- [ ] **S.1** `auth.js:34` — DEMO_USERS plaintext precede il check bcrypt: se un admin crea un employee reale con la stessa email di un account demo (es. `pippo@badge.local`), il check demo vince sempre. **Fix:** eliminare o isolare DEMO_USERS su `NODE_ENV !== 'production'` oppure invertire l'ordine (DB check prima, DEMO fallback per i soli domini `@badge.local`). Da completare prima del lancio con il primo cliente.
+- [x] **S.1** `auth.js:34` ✅ — DEMO_USERS limitati a `@badge.local`, tutti gli altri email usano DB bcrypt. Migration 007: password_hash per 4 seeded employees. Commit: d06e41e: se un admin crea un employee reale con la stessa email di un account demo (es. `pippo@badge.local`), il check demo vince sempre. **Fix:** eliminare o isolare DEMO_USERS su `NODE_ENV !== 'production'` oppure invertire l'ordine (DB check prima, DEMO fallback per i soli domini `@badge.local`). Da completare prima del lancio con il primo cliente.
 - [ ] **S.2** `AdminPage.jsx:476` — Inline role guard `user?.role !== 'admin'` è dead code: `ProtectedRoute` blocca già i non-admin prima che il componente monti. **Fix:** rimuovere il check ridondante. Maintenance risk: se il role name cambia in futuro solo uno dei due guard potrebbe essere aggiornato. Basso rischio, cosmetic.
 
 ---
