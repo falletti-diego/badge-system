@@ -171,7 +171,7 @@ Before first paying customer.
 - [x] **6.2** HTTPS on API (EC2) — Let's Encrypt ✅ (già attivo da Jun 3, scade Sep 1 2026, auto-renewal certbot.timer). Pulizia nginx: rimosso badge-api (server_name _ con self-signed), rimosso /etc/nginx/ssl/. Solo api-dataxiom attivo in sites-enabled.
 - [ ] **6.3** Custom domain (e.g., `app.badge.dataxiom.it` → Netlify, `api.badge.dataxiom.it` → EC2)
 - [x] **6.4** Load test ✅ — k6, 3 scenari (spike 50 VUs, sustained 10 VUs, dashboard 5 VUs). Risultati: spike 50/50 OK 0 errori 5xx, p95=621ms (target<500ms); sustained p95=179ms ✅; dashboard p95=136ms ✅. Bottleneck: db.t3.micro 1 CPU satura a 50 scritture concorrenti. Fix per <500ms su spike: upgrade a db.t3.small. Per MVP con traffico realistico: ok. Script: scripts/load-test.js. DB_POOL_MAX=20 (optimal per t3.micro, pool=30 era peggiore per CPU contention).
-- [ ] **6.5** OWASP security review (input sanitization, SQL injection, XSS, CSRF)
+- [x] **6.5** OWASP security review ✅ — 8 findings, 7 fixed (1 open Phase 2). CRITICAL: DISABLE_AUTH production guard (NODE_ENV check), export.js+checkins.js+stats mandatory c.client_id=$1 tenant isolation, resolve*() scoped to client. HIGH: /health db_host/db_port removed, shifts.js notification employee_id validated against client_id. MEDIUM: resolve helpers now pass clientId param. OPEN: localStorage JWT → httpOnly cookie (Phase 2). Commit: eec052a
 - [ ] **6.6** GDPR: data retention policy enforcement (delete records > 12 months)
 - [ ] **6.7** CloudWatch alarms: API response time > 1s, error rate > 1%, disk > 80%
 - [ ] **6.8** Database backups verified (RDS automated, test point-in-time restore)
@@ -235,6 +235,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-08 | FASE 4.9 + E2E Testing (Session 12) | 4.9, 3.x.34–3.x.38 | TestFlight ✅ (build 5). 3 bug critici fixati: employee_id UUID, client_id migration RDS, created_by UUID. IN/OUT toggle aggiunto. Flusso core verificato su iPhone reale. Commits: e2ee6f5→76aa4ba |
 | 2026-06-08 | Manager Mobile Features + Build 9 (Session 13) | 4.10–4.15 | StorePresencesScreen (manager vede presenze store). Manager QR check-in (migration 005, employee_id JWT). Build 6→7→8→9: fix duplicate IN (useRef), fix crash import, 5 code review fixes (AbortController, truncation, initials, role guard, dead code). Build 9 ✅ testata su iPhone. Commit: 82e93fc |
 | 2026-06-08 | FASE 6.1 Sentry + 6.2 HTTPS + 6.4 Load Test (Session 14) | 6.1, 6.2, 6.4 | Sentry attivo su 3 componenti (backend SSM, web Netlify, mobile EAS). HTTPS EC2 cleanup nginx. Load test k6: spike 50 VUs (100% OK, p95=621ms), sustained p95=179ms ✅, dashboard p95=136ms ✅. 0 crash/5xx. Bottleneck: db.t3.micro CPU a 50 write concorrenti. DB_POOL_MAX=20 ottimale. Script: scripts/load-test.js |
+| 2026-06-08 | FASE 6.5 OWASP Security Review (Session 14 cont.) | 6.5 | 8 findings: 3 critical (DISABLE_AUTH prod guard, tenant isolation GET/CSV/stats), 2 high (/health info leak, shifts notification validation), 2 medium (resolve helpers scoped), 1 open (localStorage→httpOnly Phase 2). 17/17 tests ✅. Deploy verified: /health clean, auth enforced. Commit: eec052a |
 
 ---
 
