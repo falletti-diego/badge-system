@@ -54,6 +54,7 @@ const DEMO_USERS = [
     role: 'manager',
     client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
     site_id: '550e8400-e29b-41d4-a716-446655440012', // Torino Store
+    employee_id: '550e8400-e29b-41d4-a716-446655440200', // Manager employee record (migration 005)
   },
   {
     email: 'maria@badge.local',

@@ -78,23 +78,13 @@ export default function CheckInScreen({ navigation }) {
       </View>
 
       <View style={styles.actionsContainer}>
-        {user?.role !== 'manager' && (
-          <TouchableOpacity style={styles.checkinButton} onPress={handleCheckIn}>
-            <Text style={styles.checkinIcon}>📱</Text>
-            <Text style={styles.checkinButtonText}>Scannerizza QR Code</Text>
-            <Text style={styles.checkinSubtext}>
-              {faceIdAvailable ? 'Face ID richiesto' : 'Avvicina il telefono al QR'}
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        {user?.role === 'manager' && (
-          <TouchableOpacity style={styles.managerButton} onPress={() => navigation.navigate('StorePresences')}>
-            <Text style={styles.checkinIcon}>👥</Text>
-            <Text style={styles.checkinButtonText}>Presenze Store</Text>
-            <Text style={styles.checkinSubtext}>Visualizza timbrature del tuo store</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity style={styles.checkinButton} onPress={handleCheckIn}>
+          <Text style={styles.checkinIcon}>📱</Text>
+          <Text style={styles.checkinButtonText}>Scannerizza QR Code</Text>
+          <Text style={styles.checkinSubtext}>
+            {faceIdAvailable ? 'Face ID richiesto' : 'Avvicina il telefono al QR'}
+          </Text>
+        </TouchableOpacity>
 
         <View style={styles.secondaryButtons}>
           <TouchableOpacity
@@ -105,7 +95,15 @@ export default function CheckInScreen({ navigation }) {
             <Text style={styles.secondaryText}>I Miei Turni</Text>
           </TouchableOpacity>
 
-          {user?.role !== 'manager' && (
+          {user?.role === 'manager' ? (
+            <TouchableOpacity
+              style={[styles.secondaryButton, styles.secondaryButtonManager]}
+              onPress={() => navigation.navigate('StorePresences')}
+            >
+              <Text style={styles.secondaryIcon}>👥</Text>
+              <Text style={[styles.secondaryText, styles.secondaryTextManager]}>Presenze Store</Text>
+            </TouchableOpacity>
+          ) : (
             <TouchableOpacity
               style={styles.secondaryButton}
               onPress={() => navigation.navigate('MyPresences')}
@@ -161,4 +159,6 @@ const styles = StyleSheet.create({
   },
   secondaryIcon: { fontSize: 32, marginBottom: 8 },
   secondaryText: { color: '#1E3A5F', fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  secondaryButtonManager: { borderWidth: 2, borderColor: '#0F4C2A' },
+  secondaryTextManager: { color: '#0F4C2A' },
 });
