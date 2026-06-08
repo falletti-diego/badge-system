@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-08 (Session 12: FASE 4.9 — app icon, splash screen, EAS build + TestFlight submission ✅)  
+**Last Updated:** 2026-06-08 (Session 12: FASE 4.9 + E2E testing — TestFlight ✅, QR scan IN/OUT verified on real iPhone ✅)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -96,6 +96,13 @@
 - [x] **3.x.31** `scripts/audit-log-retention.js` (NEW): GDPR 7-year retention cleanup — deletes `audit_log` records older than 2555 days; `--dry-run` flag; to be scheduled via AWS EventBridge Scheduler
 - [x] **3.x.32** `frontend-web/src/services/authService.js`: login stores `refresh_token`; logout clears it; `getRefreshToken()` + `refreshAccessToken()` methods added
 - [x] **3.x.33** `frontend-web/src/services/apiClient.js`: auto-refresh interceptor on 401 — queue-based retry for concurrent requests; single refresh call in flight; redirects to /login on refresh failure
+
+### FASE 5 + Mobile — End-to-End Testing & Fixes (Session 12)
+- [x] **3.x.34** `QRScannerScreen.jsx`: fixed `user?.id` → `user?.employee_id` — mock user IDs are non-UUID, Zod validation was rejecting all check-ins with 400
+- [x] **3.x.35** RDS migration: `004_add_client_id_to_checkins` applied manually — `client_id` column was missing from `checkins` table (migration existed in repo but never run on current RDS instance)
+- [x] **3.x.36** `routes/checkins.js`: `created_by` now uses `employee_id` instead of `req.user.user_id` — mock user IDs are non-UUID strings, DB column is UUID type
+- [x] **3.x.37** `QRScannerScreen.jsx`: added IN/OUT toggle UI — green=Entrata, red=Uscita; resets scan state on toggle
+- [x] **3.x.38** ✅ VERIFIED END-TO-END on real iPhone via TestFlight: Login → QR scan → IN check-in ✅ → OUT check-in ✅
 
 ---
 
@@ -219,7 +226,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-07 | DevOps + Security (Session 9) | 3.x.3–3.x.14 | RBAC fixes, `/api-test` skill (23 tests), CI port-conflict fix, `wait-healthy.sh`, SSM Parameter Store bootstrap (14 params, IAM policy, entrypoint.sh — 23/23 ✅) |
 | 2026-06-07 | Code Review + Fixes (Session 10) | 3.x.15–3.x.22 | Multi-angle code review (7 findings: 2 critical, 3 medium, 2 low) — JWT_SECRET fail-fast, RBAC export, next(err), fetchStats errors, race conditions, PlanningPage UX, apiClient cleanup. Jest setup fix. 17/17 ✅ deploy verified 12/12 ✅ |
 | 2026-06-08 | MASVS L1 Security Baseline (Session 11) | 3.x.23–3.x.33 | JWT HS256→RS256 (15min access + 7d refresh, SSM keypair), bcryptjs module (cost 12), CORS localhost rimosso, CI npm audit + detect-secrets, GDPR audit-log retention script, frontend auto-refresh interceptor. Commits: f1837b6 + 184da25. 17/17 ✅ produzione RS256 verificata. |
-| 2026-06-08 | FASE 4.9 — TestFlight (Session 12) | 4.9 | App icon (1024×1024) + splash screen (512×512) generati con pngjs. EAS production config (autoIncrement, adaptiveIcon). iOS credentials: cert UKZ95L3FHH, profile H5YHC7FVK9, API Key 3LSVMMS737. Build 1.0.0 (build 3) su TestFlight ✅. Commits: e2ee6f5, 35a0677, 0ada700, 252ed7d |
+| 2026-06-08 | FASE 4.9 + E2E Testing (Session 12) | 4.9, 3.x.34–3.x.38 | TestFlight ✅ (build 5). 3 bug critici fixati: employee_id UUID, client_id migration RDS, created_by UUID. IN/OUT toggle aggiunto. Flusso core verificato su iPhone reale. Commits: e2ee6f5→76aa4ba |
 
 ---
 
