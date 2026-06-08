@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-08 (Session 17: Deep code review FASE 6+7 — 6 critical/high/medium findings fixed, 2 low open)  
+**Last Updated:** 2026-06-08 (Session 18: Code review FASE 7 — 8 findings ALL fixed)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -181,7 +181,7 @@ Go-live with first paying customer (pilota).
 
 - [x] **7.1** Admin panel ✅ — `AdminPage.jsx` `/admin` route (admin-only), tabs Clienti/Sedi/Dipendenti, CSV upload, temp password display + copy button. Navbar link "⚙️ Admin" visibile solo ad admin.
 - [x] **7.2** API admin endpoints ✅ — `POST /api/admin/clients`, `POST /api/admin/sites` (QR auto-generato UUID-based), `POST /api/admin/employees` (bcrypt temp password), `GET /api/admin/clients`, `GET /api/admin/sites`. Auth.js extended: DB fallback login con bcrypt verify. Migration 006: `password_hash`, `role`, `site_id` su employees. Commit: 8115eab
-- [x] **7.3** CSV bulk import ✅ — `POST /api/admin/employees/import` (multer memory, csv-parse, max 500 righe, ON CONFLICT DO NOTHING con rowCount check corretto). Commit: 8115eab
+- [x] **7.3** CSV bulk import ✅ — `POST /api/admin/employees/import` (multer memory, csv-parse, max 100 righe, parallel bcrypt batches, BEGIN/COMMIT transaction, audit log per ogni riga, ON CONFLICT DO NOTHING). Commit: 9963f4b
 - [ ] **7.4** Customer-facing user guide (PDF, Italian)
 - [ ] **7.5** Manager training checklist (how to use dashboard + planning)
 - [x] **7.6** Welcome email template ✅ — `scripts/welcome-email-template.html`: HTML responsive con credenziali, CTA login, steps per dipendente/manager, GDPR footer. Commit: 8115eab
@@ -249,6 +249,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-08 | FASE 6.8 (Session 16) | 6.8 | RDS backup retention 0→1 (free tier max). Snapshot `badge-backup-test-20260608`. Restore `badge-restore-test` verificato: 7 tabelle + dati intatti. Istanza test eliminata. |
 | 2026-06-08 | FASE 7.1-7.3 + 7.6 (Session 16) | 7.1, 7.2, 7.3, 7.6 | Migration 006 (password_hash+role+site_id). /api/admin routes (clients/sites/employees/CSV import). Auth.js DB fallback. AdminPage (3 tab). Welcome email template. Commit: 8115eab |
 | 2026-06-08 | Deep Code Review FASE 6+7 (Session 17) | S.1 parziale | 8 findings (2 critical, 2 high, 2 medium, 2 low). Fixati 6: /refresh DB lookup, cross-tenant login client_id, assigned_sites ownership check (entrambe route), audit_log per admin writes, UUID regex strict, useFetch AbortController. Aperti 2: DEMO_USERS bypass (S.1), dead role guard (S.2). Commit: 6bd7651 |
+| 2026-06-08 | Code Review FASE 7 + 8 Fix (Session 18) | S.1 chiuso | Deep review FASE 7 admin panel: 8 findings ALL CONFIRMED, ALL FIXED. F1: CSV bcrypt parallel batches (event loop protection). F2: audit log CSV import (GDPR). F3: UUID guard /refresh (legacy token crash). F4: multi-tenant email guard + mobile clientId param. F5: assigned_sites $8::UUID[] (fragile $N fix). F6: CSV BEGIN/COMMIT transaction. F7: temp_password fuori da Alert string + Sentry scrubber. F8: createValidationMiddleware per admin POST routes. ESLint 0 warnings, build OK. Commit: 9963f4b |
 
 ---
 
