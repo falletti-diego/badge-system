@@ -9,7 +9,7 @@ const pino = require('pino');
 const { pool } = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { hashPassword } = require('../auth/password');
-const { ApiError, ValidationError, AuthorizationError } = require('../utils/errors');
+const { ValidationError, AuthorizationError } = require('../utils/errors');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }); // 2MB max
@@ -215,7 +215,7 @@ router.post('/employees/import', upload.single('file'), async (req, res, next) =
            VALUES ($1, $2, $3, $4, $5, $6, $7, ${assignedSitesArray})
            ON CONFLICT (client_id, email) DO NOTHING`,
           [parsed.client_id, parsed.email, parsed.name, parsed.phone || null,
-           parsed.role, parsed.site_id || null, passwordHash, ...parsed.assigned_sites]
+            parsed.role, parsed.site_id || null, passwordHash, ...parsed.assigned_sites]
         );
         if (insertResult.rowCount > 0) {
           results.created++;
