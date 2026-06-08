@@ -104,6 +104,10 @@ jobs:
               -e PORT=${{ env.CONTAINER_PORT }} \
               -e AWS_REGION=${{ env.AWS_REGION }} \
               -e SSM_PARAM_PATH=/badge/production \
+              --log-driver awslogs \
+              --log-opt awslogs-region=${{ env.AWS_REGION }} \
+              --log-opt awslogs-group=/badge/api \
+              --log-opt awslogs-stream=badge-api \
               ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
 
             CONTAINER_ID=$(docker ps -q -f name=${{ env.CONTAINER_NAME }})

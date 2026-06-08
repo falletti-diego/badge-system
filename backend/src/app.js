@@ -22,6 +22,7 @@ const dotenv = require('dotenv');
 const helmet = require('helmet');
 const cors = require('cors');
 const pino = require('pino');
+const pinoHttp = require('pino-http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
@@ -70,14 +71,16 @@ app.use('/api/', apiLimiter); // General API limiter
 app.use('/api/auth/', authLimiter); // Tighter limit for auth endpoints
 app.use('/api/export/csv', csvLimiter); // CSV export limiter
 
-// Request logging
-app.use((req, res, next) => {
-  logger.info({
-    method: req.method,
-    path: req.path,
-  });
-  next();
-});
+// Structured request/response logging (method, path, statusCode, responseTime)
+// Used by CloudWatch metric filters for 5xx rate and slow request alarms
+app.use(pinoHttp({
+  logger,
+  customLogLevel: (req, res) => res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info',
+  serializers: {
+    req: (req) => ({ method: req.method, url: req.url }),
+    res: (res) => ({ statusCode: res.statusCode }),
+  },
+}));
 
 // Health check endpoint (for Docker HEALTHCHECK)
 app.get('/health', async (req, res) => {
