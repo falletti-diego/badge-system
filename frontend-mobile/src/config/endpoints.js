@@ -60,6 +60,9 @@ export const CHECKINS_CONFIG = {
 
 // Demo credentials for development/testing
 export const DEMO_ACCOUNTS = {
+  employee: { email: 'alice.neri@employee.it', password: 'Alice1975' },
+  manager: { email: 'diego@badge.local', password: 'Diego1975' },
+  // Legacy alias (kept for backwards compatibility in LoginScreen)
   email: 'alice.neri@employee.it',
   password: 'Alice1975',
 };

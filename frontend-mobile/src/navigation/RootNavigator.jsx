@@ -11,6 +11,7 @@ import QRScannerScreen from '../screens/checkin/QRScannerScreen';
 import SuccessScreen from '../screens/checkin/SuccessScreen';
 import MyScheduleScreen from '../screens/schedule/MyScheduleScreen';
 import MyPresencesScreen from '../screens/presences/MyPresencesScreen';
+import StorePresencesScreen from '../screens/presences/StorePresencesScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -45,6 +46,7 @@ export default function RootNavigator() {
         <Stack.Screen name="Success" component={SuccessScreen} />
         <Stack.Screen name="MySchedule" component={MyScheduleScreen} />
         <Stack.Screen name="MyPresences" component={MyPresencesScreen} />
+        <Stack.Screen name="StorePresences" component={StorePresencesScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

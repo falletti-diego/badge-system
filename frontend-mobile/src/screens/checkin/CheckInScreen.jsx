@@ -78,13 +78,23 @@ export default function CheckInScreen({ navigation }) {
       </View>
 
       <View style={styles.actionsContainer}>
-        <TouchableOpacity style={styles.checkinButton} onPress={handleCheckIn}>
-          <Text style={styles.checkinIcon}>📱</Text>
-          <Text style={styles.checkinButtonText}>Scannerizza QR Code</Text>
-          <Text style={styles.checkinSubtext}>
-            {faceIdAvailable ? 'Face ID richiesto' : 'Avvicina il telefono al QR'}
-          </Text>
-        </TouchableOpacity>
+        {user?.role !== 'manager' && (
+          <TouchableOpacity style={styles.checkinButton} onPress={handleCheckIn}>
+            <Text style={styles.checkinIcon}>📱</Text>
+            <Text style={styles.checkinButtonText}>Scannerizza QR Code</Text>
+            <Text style={styles.checkinSubtext}>
+              {faceIdAvailable ? 'Face ID richiesto' : 'Avvicina il telefono al QR'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {user?.role === 'manager' && (
+          <TouchableOpacity style={styles.managerButton} onPress={() => navigation.navigate('StorePresences')}>
+            <Text style={styles.checkinIcon}>👥</Text>
+            <Text style={styles.checkinButtonText}>Presenze Store</Text>
+            <Text style={styles.checkinSubtext}>Visualizza timbrature del tuo store</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={styles.secondaryButtons}>
           <TouchableOpacity
@@ -95,13 +105,15 @@ export default function CheckInScreen({ navigation }) {
             <Text style={styles.secondaryText}>I Miei Turni</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => navigation.navigate('MyPresences')}
-          >
-            <Text style={styles.secondaryIcon}>📋</Text>
-            <Text style={styles.secondaryText}>Le Mie Presenze</Text>
-          </TouchableOpacity>
+          {user?.role !== 'manager' && (
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => navigation.navigate('MyPresences')}
+            >
+              <Text style={styles.secondaryIcon}>📋</Text>
+              <Text style={styles.secondaryText}>Le Mie Presenze</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </SafeAreaView>
@@ -127,6 +139,12 @@ const styles = StyleSheet.create({
   actionsContainer: { flex: 1, padding: 24, gap: 20 },
   checkinButton: {
     backgroundColor: '#1E3A5F', borderRadius: 20, padding: 32,
+    alignItems: 'center', elevation: 4,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15, shadowRadius: 8,
+  },
+  managerButton: {
+    backgroundColor: '#0F4C2A', borderRadius: 20, padding: 32,
     alignItems: 'center', elevation: 4,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15, shadowRadius: 8,
