@@ -85,12 +85,14 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
       }
 
       // 4. Create check-in
+      // Use employee_id as created_by: mock user IDs are non-UUID strings,
+      // but employee_id is always a valid UUID for self check-ins.
       const checkinResult = await client.query(
         `INSERT INTO checkins (
           employee_id, site_id, client_id, type, timestamp, created_by, created_at
         ) VALUES ($1, $2, $3, $4, NOW(), $5, NOW())
         RETURNING id, employee_id, site_id, type, timestamp, created_at`,
-        [employee_id, site_id, clientId, type, req.user.user_id]
+        [employee_id, site_id, clientId, type, employee_id]
       );
 
       const checkin = checkinResult.rows[0];

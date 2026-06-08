@@ -37,9 +37,9 @@ export default function QRScannerScreen({ navigation }) {
       if (!siteId || !clientId) throw new Error('QR incompleto');
 
       const user = await authService.getUser();
-      const employeeId = user?.id;
+      const employeeId = user?.employee_id;
 
-      if (!employeeId) throw new Error('Employee ID non trovato');
+      if (!employeeId) throw new Error('Employee ID non trovato — assicurati di accedere con un account dipendente');
 
       const response = await apiClient.post(ENDPOINTS.CHECKINS_POST, {
         employee_id: employeeId,
