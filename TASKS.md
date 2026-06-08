@@ -167,7 +167,7 @@ Admin generates and manages QR codes per site.
 ### FASE 6 — Production Hardening (~10-15h)
 Before first paying customer.
 
-- [x] **6.1** Sentry integration: @sentry/node (backend, guarded by SENTRY_DSN env), @sentry/react + vite-plugin (web, VITE_SENTRY_DSN), @sentry/react-native (mobile, EXPO_PUBLIC_SENTRY_DSN). Graceful degradation — app boots senza DSN. ⚠️ ATTIVA: aggiungi DSN in SSM + Netlify env + EAS secrets (vedi istruzioni sotto)
+- [x] **6.1** Sentry integration ATTIVA ✅ — backend (DSN in SSM, @sentry/node, Sentry.setUser per contesto utente), web (VITE_SENTRY_DSN in Netlify, source maps uploadati, DSN nel bundle verificato), mobile (EXPO_PUBLIC_SENTRY_DSN in EAS production, @sentry/react-native, Sentry.wrap). Org: dataxium | Projects: badge-backend / badge-web / badge-mobile. Build 10 richiesta per attivare mobile.
 - [x] **6.2** HTTPS on API (EC2) — Let's Encrypt ✅ (già attivo da Jun 3, scade Sep 1 2026, auto-renewal certbot.timer). Pulizia nginx: rimosso badge-api (server_name _ con self-signed), rimosso /etc/nginx/ssl/. Solo api-dataxiom attivo in sites-enabled.
 - [ ] **6.3** Custom domain (e.g., `app.badge.dataxiom.it` → Netlify, `api.badge.dataxiom.it` → EC2)
 - [ ] **6.4** Load test: 50 simultaneous check-ins (k6 or Artillery)
