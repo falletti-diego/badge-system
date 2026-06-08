@@ -5,6 +5,7 @@ const multer = require('multer');
 const { parse } = require('csv-parse');
 const { z } = require('zod');
 const { v4: uuidv4 } = require('uuid');
+const { randomBytes } = require('crypto');
 const pino = require('pino');
 const { pool } = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
@@ -263,6 +264,9 @@ router.get('/sites', async (req, res, next) => {
     const params = [];
     let where = '';
     if (client_id) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(client_id)) {
+        return next(new ValidationError('Invalid client_id format'));
+      }
       params.push(client_id);
       where = 'WHERE s.client_id = $1';
     }
@@ -285,7 +289,8 @@ router.get('/sites', async (req, res, next) => {
 
 function generateTempPassword() {
   const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  const bytes = randomBytes(10);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
 }
 
 function parseCsv(text) {

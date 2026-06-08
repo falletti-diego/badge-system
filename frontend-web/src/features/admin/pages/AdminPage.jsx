@@ -55,7 +55,7 @@ function CopyButton({ text }) {
 // ─── Tab: Clienti ──────────────────────────────────────────────────────────
 
 function ClientsTab() {
-  const { data: clients, loading, reload } = useFetch('/api/admin/clients');
+  const { data: clients, loading, error: fetchError, reload } = useFetch('/api/admin/clients');
   const [form, setForm] = useState({ name: '', email: '', plan: 'starter' });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -115,6 +115,7 @@ function ClientsTab() {
       <Card variant="outlined">
         <CardContent>
           <Typography variant="h6" gutterBottom>Clienti ({clients.length})</Typography>
+          {fetchError && <Alert severity="error" sx={{ mb: 2 }}>{fetchError}</Alert>}
           {loading ? <CircularProgress size={24} /> : (
             <TableContainer>
               <Table size="small">
@@ -157,7 +158,7 @@ function ClientsTab() {
 function SitesTab() {
   const { data: clients } = useFetch('/api/admin/clients');
   const [selectedClient, setSelectedClient] = useState('');
-  const { data: sites, loading, reload } = useFetch(
+  const { data: sites, loading, error: fetchError, reload } = useFetch(
     selectedClient ? `/api/admin/sites?client_id=${selectedClient}` : '/api/admin/sites'
   );
   const [form, setForm] = useState({ client_id: '', name: '', location: '' });
@@ -229,6 +230,7 @@ function SitesTab() {
               </Select>
             </FormControl>
           </Stack>
+          {fetchError && <Alert severity="error" sx={{ mb: 2 }}>{fetchError}</Alert>}
           {loading ? <CircularProgress size={24} /> : (
             <TableContainer>
               <Table size="small">

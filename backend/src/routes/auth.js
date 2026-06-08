@@ -158,7 +158,9 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       const result = await pool.query(
         `SELECT id, client_id, email, name, role, site_id, password_hash
          FROM employees
-         WHERE email = $1 AND password_hash IS NOT NULL`,
+         WHERE email = $1 AND password_hash IS NOT NULL
+         ORDER BY created_at ASC
+         LIMIT 1`,
         [email]
       );
       const dbEmployee = result.rows[0];
