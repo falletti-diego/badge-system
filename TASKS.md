@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-08 (Session 18: Code review FASE 7 — 8 findings ALL fixed)  
+**Last Updated:** 2026-06-08 (Session 19: 3-skill security audit — 4 CRITICAL fixed, EC2 SSM aggiornato)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -195,6 +195,39 @@ Go-live with first paying customer (pilota).
 - [x] **S.1** `auth.js:34` ✅ — DEMO_USERS limitati a `@badge.local`, tutti gli altri email usano DB bcrypt. Migration 007: password_hash per 4 seeded employees. Commit: d06e41e: se un admin crea un employee reale con la stessa email di un account demo (es. `pippo@badge.local`), il check demo vince sempre. **Fix:** eliminare o isolare DEMO_USERS su `NODE_ENV !== 'production'` oppure invertire l'ordine (DB check prima, DEMO fallback per i soli domini `@badge.local`). Da completare prima del lancio con il primo cliente.
 - [ ] **S.2** `AdminPage.jsx:476` — Inline role guard `user?.role !== 'admin'` è dead code: `ProtectedRoute` blocca già i non-admin prima che il componente monti. **Fix:** rimuovere il check ridondante. Maintenance risk: se il role name cambia in futuro solo uno dei due guard potrebbe essere aggiornato. Basso rischio, cosmetic.
 
+### Trovati nella sessione 19 — analisi senior-fullstack + senior-qa + senior-security (22 findings)
+
+**4 CRITICAL — tutti fixati in commit bd338ef:**
+- [x] **S.3** `admin.js:13` — `AuthorizationError` non esiste in `utils/errors.js` → TypeError crash per tutti i non-admin su `/api/admin/*`. Fix: → `ForbiddenError`.
+- [x] **S.4** `pool.js:26` — `rejectUnauthorized: false` hardcoded in prod → MITM possibile su EC2→RDS. Fix: env var `DB_SSL_REJECT_UNAUTHORIZED` (default `true`). SSM: impostato `false` temporaneamente (CA non nel trust store container Alpine).
+- [x] **S.5** `auth.js:37-80` — 5 password DEMO_USERS hardcoded in source code committato su GitHub. Fix: → `process.env.DEMO_*_PASSWORD`. Aggiunte su SSM `/badge/production/DEMO_*_PASSWORD`.
+- [x] **S.6** `rateLimiter.js` — MemoryStore (default) resettato ad ogni riavvio container → brute-force su `/api/auth/login` possibile dopo crash. Fix: store ibrido Redis+memory. `Retry-After` ora prima di `res.json()`.
+
+**3 ridondanze frontend fixate (commit bd338ef):**
+- [x] **S.7** `LoginPage.jsx` — password prefillate in `useState` + hint box con tutte le credenziali visibile in produzione. Fix: `useState('')` + `{import.meta.env.DEV && ...}`.
+- [x] **S.8** `frontend-mobile/endpoints.js` — `DEMO_ACCOUNTS.password: 'Diego1975'` nel bundle iOS. Fix: campo `password` rimosso.
+- [x] **S.9** `frontend-mobile/LoginScreen.jsx` — `{DEMO_ACCOUNTS.password}` a schermo in tutti i build. Fix: `{__DEV__ && ...}` + solo email mostrata.
+
+**6 HIGH — da fixare nella prossima sessione:**
+- [ ] **S.10** `export.js:137` — query CSV senza LIMIT → OOM crash con tabelle grandi. Fix: `LIMIT 50000` + header `X-Total-Count`.
+- [ ] **S.11** `shifts.js:321` — validazione `employee_id` dentro la transaction → rollback costoso se invalido. Fix: spostare validation PRIMA del `BEGIN`.
+- [ ] **S.12** `validation.js:379` — `AdminEmployeeSchema` password min 6 char → troppo corta. Fix: min 8 (NIST SP 800-63B).
+- [ ] **S.13** `admin.js` — `GET /api/admin/clients` e `GET /api/admin/sites` senza paginazione → OOM con molti tenant. Fix: `LIMIT/OFFSET` + `X-Total-Count`.
+- [ ] **S.14** `pool.js` — `statement_timeout: 120000ms` troppo alto → query lente tengono connessioni occupate. Fix: 30000ms (30s).
+
+**5 MEDIUM — da valutare prima del lancio:**
+- [ ] **S.15** `app.js:14` — Sentry `beforeSend` mancante → dati sensibili (JWT, password) potrebbero finire nei report. Fix: scrubber per `authorization`, `password`, `token`.
+- [ ] **S.16** Logger non è un singleton → ogni modulo crea una nuova istanza Pino senza `req_id`. Fix: singleton `src/utils/logger.js` + correlation ID via `AsyncLocalStorage`.
+- [ ] **S.17** `resolveEmployeeId`/`resolveSiteId` duplicati in 3 route files. Fix: estrarre in `src/utils/resolvers.js`.
+- [ ] **S.18** `shifts.js` — modifica turni non loggata in `audit_log`. Fix: aggiungere audit entry `shift_updated` con old/new value.
+- [ ] **S.19** `app.js` — `trust proxy` non configurato → `req.ip` è l'IP del load balancer, non del client reale. Fix: `app.set('trust proxy', 1)`.
+
+**4 LOW — backlog:**
+- [ ] **S.20** `app.js:1` — `dotenv.config()` dopo i `require` → env non disponibile durante init moduli. Fix: spostare al top.
+- [ ] **S.21** `app.js:295` — commento stale su vecchia logica. Fix: rimuovere.
+- [ ] **S.22** Package `uuid` usato ma `crypto.randomUUID()` disponibile natively in Node 20+. Fix: rimuovere dipendenza.
+- [ ] **S.23** Test coverage 9% → fragile. Fix: aggiungere test per auth, checkins, admin (target ≥40%).
+
 ---
 
 ## 🔲 TODO — LOW PRIORITY / PHASE 2
@@ -250,6 +283,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-08 | FASE 7.1-7.3 + 7.6 (Session 16) | 7.1, 7.2, 7.3, 7.6 | Migration 006 (password_hash+role+site_id). /api/admin routes (clients/sites/employees/CSV import). Auth.js DB fallback. AdminPage (3 tab). Welcome email template. Commit: 8115eab |
 | 2026-06-08 | Deep Code Review FASE 6+7 (Session 17) | S.1 parziale | 8 findings (2 critical, 2 high, 2 medium, 2 low). Fixati 6: /refresh DB lookup, cross-tenant login client_id, assigned_sites ownership check (entrambe route), audit_log per admin writes, UUID regex strict, useFetch AbortController. Aperti 2: DEMO_USERS bypass (S.1), dead role guard (S.2). Commit: 6bd7651 |
 | 2026-06-08 | Code Review FASE 7 + 8 Fix (Session 18) | S.1 chiuso | Deep review FASE 7 admin panel: 8 findings ALL CONFIRMED, ALL FIXED. F1: CSV bcrypt parallel batches (event loop protection). F2: audit log CSV import (GDPR). F3: UUID guard /refresh (legacy token crash). F4: multi-tenant email guard + mobile clientId param. F5: assigned_sites $8::UUID[] (fragile $N fix). F6: CSV BEGIN/COMMIT transaction. F7: temp_password fuori da Alert string + Sentry scrubber. F8: createValidationMiddleware per admin POST routes. ESLint 0 warnings, build OK. Commit: 9963f4b |
+| 2026-06-08 | 3-Skill Security Audit (Session 19) | S.3–S.9 | senior-fullstack + senior-qa + senior-security: 22 findings. 4 CRITICAL + 3 ridondanze frontend fixate (commit bd338ef). 6 HIGH aperti. EC2 SSM aggiornato: 6 nuovi parametri (DEMO_*_PASSWORD + DB_SSL_REJECT_UNAUTHORIZED). Login demo verificato su produzione. |
 
 ---
 
