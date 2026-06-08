@@ -3,6 +3,20 @@
  * Express.js application entry point
  */
 
+// Sentry must be initialized before any other require() to instrument modules correctly
+const Sentry = require('@sentry/node');
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'production',
+    tracesSampleRate: 0.2, // 20% of requests traced (free tier friendly)
+    // Attach user context from JWT if available
+    beforeSend(event) {
+      return event;
+    },
+  });
+}
+
 const express = require('express');
 const dotenv = require('dotenv');
 const helmet = require('helmet');
@@ -133,6 +147,11 @@ app.use('/api/shifts', shiftsRouter);
 app.use('/api/export/csv', exportRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/sites', sitesRouter);
+
+// Sentry error handler — must come BEFORE custom error handler to capture exceptions
+if (process.env.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app);
+}
 
 // Error handling middleware
 app.use((err, req, res, _next) => {

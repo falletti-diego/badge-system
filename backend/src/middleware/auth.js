@@ -5,6 +5,7 @@
 
 const jwt = require('jsonwebtoken');
 const pino = require('pino');
+const Sentry = require('@sentry/node');
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -103,6 +104,11 @@ function requireAuth(req, res, next) {
     // Include site_id if present (for manager role users assigned to specific store)
     if (decoded.site_id) {
       req.user.site_id = decoded.site_id;
+    }
+
+    // Set Sentry user context so errors are linked to the authenticated user
+    if (process.env.SENTRY_DSN) {
+      Sentry.setUser({ id: req.user.user_id, role: req.user.role });
     }
 
     logger.debug({
