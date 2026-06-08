@@ -30,7 +30,10 @@ const JWT_ALGORITHM = 'RS256';
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
 
-// MVP: Hardcoded demo credentials (5 test accounts)
+// Internal Dataxiom accounts — restricted to @badge.local domain only.
+// These are never exposed to real customers and cannot collide with real employee emails.
+// @employee.it accounts were removed: they now authenticate via the DB path (migration 007
+// set their bcrypt password_hash, so they no longer need a plaintext fallback here).
 const DEMO_USERS = [
   {
     email: 'pippo@badge.local',
@@ -38,7 +41,7 @@ const DEMO_USERS = [
     id: 'user-mvp-pippo',
     name: 'Pippo',
     role: 'admin',
-    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
+    client_id: '550e8400-e29b-41d4-a716-446655440001',
   },
   {
     email: 'pino@badge.local',
@@ -46,7 +49,7 @@ const DEMO_USERS = [
     id: 'user-mvp-pino',
     name: 'Pino',
     role: 'manager',
-    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
+    client_id: '550e8400-e29b-41d4-a716-446655440001',
   },
   {
     email: 'diego@badge.local',
@@ -54,9 +57,9 @@ const DEMO_USERS = [
     id: 'user-mvp-diego',
     name: 'Diego',
     role: 'manager',
-    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
-    site_id: '550e8400-e29b-41d4-a716-446655440012', // Torino Store
-    employee_id: '550e8400-e29b-41d4-a716-446655440200', // Manager employee record (migration 005)
+    client_id: '550e8400-e29b-41d4-a716-446655440001',
+    site_id: '550e8400-e29b-41d4-a716-446655440012',
+    employee_id: '550e8400-e29b-41d4-a716-446655440200',
   },
   {
     email: 'maria@badge.local',
@@ -64,7 +67,7 @@ const DEMO_USERS = [
     id: 'user-mvp-maria',
     name: 'Maria',
     role: 'employee',
-    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
+    client_id: '550e8400-e29b-41d4-a716-446655440001',
   },
   {
     email: 'lucia@badge.local',
@@ -72,45 +75,12 @@ const DEMO_USERS = [
     id: 'user-mvp-lucia',
     name: 'Lucia',
     role: 'employee',
-    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
-  },
-  {
-    email: 'luca.verdi@employee.it',
-    password: 'Luca1975',
-    id: 'user-mvp-luca-verdi',
-    name: 'Luca Verdi',
-    role: 'employee',
-    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
-    employee_id: '550e8400-e29b-41d4-a716-446655440102', // Database employee ID
-  },
-  {
-    email: 'alice.neri@employee.it',
-    password: 'Alice1975',
-    id: 'user-mvp-alice-neri',
-    name: 'Alice Neri',
-    role: 'employee',
-    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
-    employee_id: '550e8400-e29b-41d4-a716-446655440103', // Torino Store employee
-  },
-  {
-    email: 'carlo.rossi@employee.it',
-    password: 'Carlo1975',
-    id: 'user-mvp-carlo-rossi',
-    name: 'Carlo Rossi',
-    role: 'employee',
-    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
-    employee_id: '550e8400-e29b-41d4-a716-446655440104', // Torino Store employee
-  },
-  {
-    email: 'paolo.sordo@employee.it',
-    password: 'Paolo1975',
-    id: 'user-mvp-paolo-sordo',
-    name: 'Paolo Sordo',
-    role: 'employee',
-    client_id: '550e8400-e29b-41d4-a716-446655440001', // Dataxiom MVP
-    employee_id: '550e8400-e29b-41d4-a716-446655440116', // Torino Store employee
+    client_id: '550e8400-e29b-41d4-a716-446655440001',
   },
 ];
+
+// DEMO_USERS is only consulted for @badge.local emails — never for real-world domains.
+const BADGE_LOCAL_DOMAIN = '@badge.local';
 
 /**
  * POST /api/auth/login
@@ -138,25 +108,26 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
   const { email, password, client_id } = req.validated.body;
 
   try {
-    // Step 1: Check hardcoded DEMO_USERS (internal accounts, backward compat)
-    const demoUser = DEMO_USERS.find((u) => u.email === email && u.password === password);
-
     let user = null;
 
-    if (demoUser) {
-      user = {
-        id: demoUser.id,
-        name: demoUser.name,
-        email: demoUser.email,
-        role: demoUser.role,
-        client_id: demoUser.client_id,
-        employee_id: demoUser.employee_id || null,
-        site_id: demoUser.site_id || null,
-      };
+    if (email.endsWith(BADGE_LOCAL_DOMAIN)) {
+      // Step 1: @badge.local emails — internal Dataxiom accounts only.
+      // These never exist in customer DBs so plaintext comparison is safe here.
+      const demoUser = DEMO_USERS.find((u) => u.email === email && u.password === password);
+      if (demoUser) {
+        user = {
+          id: demoUser.id,
+          name: demoUser.name,
+          email: demoUser.email,
+          role: demoUser.role,
+          client_id: demoUser.client_id,
+          employee_id: demoUser.employee_id || null,
+          site_id: demoUser.site_id || null,
+        };
+      }
     } else {
-      // Step 2: DB lookup — real customers created via admin panel
-      // If client_id is provided in the request, filter by it to prevent cross-tenant identity
-      // when the same email exists in multiple tenants (UNIQUE is on (client_id, email), not email alone).
+      // Step 2: DB lookup — all non-badge.local emails (real customers + @employee.it demo accounts).
+      // If client_id is provided, filter by it to prevent cross-tenant identity collision.
       const params = client_id ? [email, client_id] : [email];
       const clientFilter = client_id ? 'AND client_id = $2' : '';
       const result = await pool.query(
