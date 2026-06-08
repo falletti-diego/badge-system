@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-07 (Session 10: Code Review — 7 security/UX findings fixed, test suite stabilizzata)  
+**Last Updated:** 2026-06-08 (Session 11: MASVS L1 Security Baseline — JWT RS256, bcrypt, CORS hardening, detect-secrets CI, GDPR retention)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -83,6 +83,19 @@
 - [x] **3.x.20** `PlanningPage.jsx`: added `disabled={isSaving}` to all shift Select cells and Export CSV button — prevents silent shift loss on concurrent edits; fixed hardcoded title 'Giugno 2026' → dynamic
 - [x] **3.x.21** `apiClient.js`: removed stale `auth_token` fallback from request interceptor — only `badge_auth_token` is read
 - [x] **3.x.22** `backend/jest.setup.js`: added Jest setup file with test-only env vars — fixes test suite crash introduced by JWT_SECRET fail-fast guard
+
+### FASE 3.x — MASVS L1 Security Baseline (Session 11)
+- [x] **3.x.23** `routes/auth.js`: JWT HS256 → RS256 — private key signs, public key verifies; access token 15min, refresh token 7d; `POST /api/auth/refresh` endpoint added (CRITICAL: token forgery eliminated)
+- [x] **3.x.24** `middleware/auth.js`: updated to verify RS256 with JWT_PUBLIC_KEY — `{ algorithms: ['RS256'] }` enforced; PEM newline handling via `.replace(/\\n/g, '\n')`
+- [x] **3.x.25** `scripts/entrypoint.sh`: CRITICAL_VARS updated — `JWT_SECRET`/`JWT_REFRESH_SECRET` → `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY`; container refuses start if missing
+- [x] **3.x.26** `backend/jest.setup.js`: replaced hardcoded test secrets with runtime RSA key generation (`generateKeyPairSync`) — no keys ever stored in repo
+- [x] **3.x.27** AWS SSM: RSA keypair (2048-bit) generated locally → stored as SecureString/String under `/badge/production/JWT_PRIVATE_KEY` + `JWT_PUBLIC_KEY`; local files deleted immediately after
+- [x] **3.x.28** `src/auth/password.js` (NEW): bcryptjs module — `hashPassword()` + `verifyPassword()` with cost 12; ready for Auth0 migration (OWASP minimum: cost 10)
+- [x] **3.x.29** `src/app.js`: CORS hardening — removed `localhost` from production fallback; only `https://dataxiom-badge.netlify.app` allowed when CORS_ORIGIN env var not set
+- [x] **3.x.30** `.github/workflows/ci.yml`: replaced fake security step with real `npm audit --audit-level=high` + `detect-secrets scan` (KeywordDetector disabled for demo passwords)
+- [x] **3.x.31** `scripts/audit-log-retention.js` (NEW): GDPR 7-year retention cleanup — deletes `audit_log` records older than 2555 days; `--dry-run` flag; to be scheduled via AWS EventBridge Scheduler
+- [x] **3.x.32** `frontend-web/src/services/authService.js`: login stores `refresh_token`; logout clears it; `getRefreshToken()` + `refreshAccessToken()` methods added
+- [x] **3.x.33** `frontend-web/src/services/apiClient.js`: auto-refresh interceptor on 401 — queue-based retry for concurrent requests; single refresh call in flight; redirects to /login on refresh failure
 
 ---
 
@@ -205,6 +218,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-06 | FASE 4.2 Device Testing Plan | — | Comprehensive testing plan (50+ scenarios), build instructions, readiness verification |
 | 2026-06-07 | DevOps + Security (Session 9) | 3.x.3–3.x.14 | RBAC fixes, `/api-test` skill (23 tests), CI port-conflict fix, `wait-healthy.sh`, SSM Parameter Store bootstrap (14 params, IAM policy, entrypoint.sh — 23/23 ✅) |
 | 2026-06-07 | Code Review + Fixes (Session 10) | 3.x.15–3.x.22 | Multi-angle code review (7 findings: 2 critical, 3 medium, 2 low) — JWT_SECRET fail-fast, RBAC export, next(err), fetchStats errors, race conditions, PlanningPage UX, apiClient cleanup. Jest setup fix. 17/17 ✅ deploy verified 12/12 ✅ |
+| 2026-06-08 | MASVS L1 Security Baseline (Session 11) | 3.x.23–3.x.33 | JWT HS256→RS256 (15min access + 7d refresh, SSM keypair), bcryptjs module (cost 12), CORS localhost rimosso, CI npm audit + detect-secrets, GDPR audit-log retention script, frontend auto-refresh interceptor. Commits: f1837b6 + 184da25. 17/17 ✅ produzione RS256 verificata. |
 
 ---
 
