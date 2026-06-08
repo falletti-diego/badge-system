@@ -14,6 +14,7 @@ export default function QRScannerScreen({ navigation }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [checkType, setCheckType] = useState('IN');
 
   const handleBarCodeScanned = async ({ data }) => {
     if (scanned || loading) return;
@@ -45,7 +46,7 @@ export default function QRScannerScreen({ navigation }) {
         employee_id: employeeId,
         site_id: siteId,
         client_id: clientId,
-        type: 'IN',
+        type: checkType,
         timestamp: new Date().toISOString(),
       });
 
@@ -110,6 +111,27 @@ export default function QRScannerScreen({ navigation }) {
           <View style={{ width: 80 }} />
         </View>
 
+        <View style={styles.typeToggle}>
+          <TouchableOpacity
+            style={[styles.typeButton, checkType === 'IN' && styles.typeButtonActive]}
+            onPress={() => { setCheckType('IN'); setScanned(false); }}
+            disabled={loading}
+          >
+            <Text style={[styles.typeButtonText, checkType === 'IN' && styles.typeButtonTextActive]}>
+              ↓ Entrata
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.typeButton, checkType === 'OUT' && styles.typeButtonActiveOut]}
+            onPress={() => { setCheckType('OUT'); setScanned(false); }}
+            disabled={loading}
+          >
+            <Text style={[styles.typeButtonText, checkType === 'OUT' && styles.typeButtonTextActive]}>
+              ↑ Uscita
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.scanFrame}>
           <View style={[styles.corner, styles.topLeft]} />
           <View style={[styles.corner, styles.topRight]} />
@@ -119,7 +141,9 @@ export default function QRScannerScreen({ navigation }) {
         </View>
 
         <Text style={styles.hint}>
-          {loading ? 'Registrazione check-in...' : 'Inquadra il QR code della sede'}
+          {loading
+            ? (checkType === 'IN' ? 'Registrazione entrata...' : 'Registrazione uscita...')
+            : `Inquadra il QR code della sede`}
         </Text>
       </SafeAreaView>
     </View>
@@ -152,6 +176,17 @@ const styles = StyleSheet.create({
   bottomLeft: { bottom: 0, left: 0, borderBottomWidth: BORDER, borderLeftWidth: BORDER },
   bottomRight: { bottom: 0, right: 0, borderBottomWidth: BORDER, borderRightWidth: BORDER },
   spinner: { position: 'absolute' },
+  typeToggle: {
+    flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 12, padding: 4, gap: 4,
+  },
+  typeButton: {
+    paddingVertical: 10, paddingHorizontal: 28, borderRadius: 10,
+  },
+  typeButtonActive: { backgroundColor: '#2D7049' },
+  typeButtonActiveOut: { backgroundColor: '#C0392B' },
+  typeButtonText: { color: 'rgba(255,255,255,0.6)', fontSize: 15, fontWeight: '600' },
+  typeButtonTextActive: { color: '#FFFFFF' },
   hint: {
     color: '#FFFFFF', fontSize: 16, textAlign: 'center',
     paddingHorizontal: 32, paddingBottom: 48,
