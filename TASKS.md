@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-08 (Session 13: Manager mobile Build 9 ✅ + FASE 6.2 HTTPS EC2 ✅ nginx cleanup)  
+**Last Updated:** 2026-06-08 (Session 17: Deep code review FASE 6+7 — 6 critical/high/medium findings fixed, 2 low open)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -188,6 +188,15 @@ Go-live with first paying customer (pilota).
 
 ---
 
+## 🔲 TODO — SECURITY TECH DEBT (open findings from code review)
+
+### Trovati nella sessione 17 — non critici per MVP, da chiudere prima del lancio
+
+- [ ] **S.1** `auth.js:34` — DEMO_USERS plaintext precede il check bcrypt: se un admin crea un employee reale con la stessa email di un account demo (es. `pippo@badge.local`), il check demo vince sempre. **Fix:** eliminare o isolare DEMO_USERS su `NODE_ENV !== 'production'` oppure invertire l'ordine (DB check prima, DEMO fallback per i soli domini `@badge.local`). Da completare prima del lancio con il primo cliente.
+- [ ] **S.2** `AdminPage.jsx:476` — Inline role guard `user?.role !== 'admin'` è dead code: `ProtectedRoute` blocca già i non-admin prima che il componente monti. **Fix:** rimuovere il check ridondante. Maintenance risk: se il role name cambia in futuro solo uno dei due guard potrebbe essere aggiornato. Basso rischio, cosmetic.
+
+---
+
 ## 🔲 TODO — LOW PRIORITY / PHASE 2
 
 ### Auth0 Migration (~5h)
@@ -239,6 +248,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-08 | FASE 6.7 + 6.6 (Session 15) | 6.6, 6.7 | CloudWatch: 8 alarms (EC2 status/CPU/disk, RDS CPU/storage/connections, API 5xx/slow), SNS email, CW agent, awslogs Docker driver, pino-http. GDPR: retention script (checkins >12m + audit_log >7y), cron 02:00 UTC. Commits: a8dff12, 1cd1477 |
 | 2026-06-08 | FASE 6.8 (Session 16) | 6.8 | RDS backup retention 0→1 (free tier max). Snapshot `badge-backup-test-20260608`. Restore `badge-restore-test` verificato: 7 tabelle + dati intatti. Istanza test eliminata. |
 | 2026-06-08 | FASE 7.1-7.3 + 7.6 (Session 16) | 7.1, 7.2, 7.3, 7.6 | Migration 006 (password_hash+role+site_id). /api/admin routes (clients/sites/employees/CSV import). Auth.js DB fallback. AdminPage (3 tab). Welcome email template. Commit: 8115eab |
+| 2026-06-08 | Deep Code Review FASE 6+7 (Session 17) | S.1 parziale | 8 findings (2 critical, 2 high, 2 medium, 2 low). Fixati 6: /refresh DB lookup, cross-tenant login client_id, assigned_sites ownership check (entrambe route), audit_log per admin writes, UUID regex strict, useFetch AbortController. Aperti 2: DEMO_USERS bypass (S.1), dead role guard (S.2). Commit: 6bd7651 |
 
 ---
 
