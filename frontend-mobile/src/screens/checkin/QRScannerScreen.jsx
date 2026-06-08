@@ -15,14 +15,21 @@ export default function QRScannerScreen({ navigation }) {
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checkType, setCheckType] = useState('IN');
+  // useRef guard: prevents duplicate submissions from rapid onBarcodeScanned events
+  // (setState is async and stale inside the closure — ref is synchronous)
+  const processingRef = useRef(false);
 
   const handleBarCodeScanned = async ({ data }) => {
-    if (scanned || loading) return;
+    if (processingRef.current) return;
+    processingRef.current = true;
 
     if (!data.startsWith(QR_PREFIX)) {
       setScanned(true);
       Alert.alert('QR non valido', 'Questo QR code non appartiene a Badge System.', [
-        { text: 'Riprova', onPress: () => setScanned(false) },
+        { text: 'Riprova', onPress: () => {
+          processingRef.current = false;
+          setScanned(false);
+        }},
       ]);
       return;
     }
@@ -57,7 +64,11 @@ export default function QRScannerScreen({ navigation }) {
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Check-in fallito';
       Alert.alert('Errore check-in', msg, [
-        { text: 'Riprova', onPress: () => { setScanned(false); setLoading(false); } },
+        { text: 'Riprova', onPress: () => {
+          processingRef.current = false;
+          setScanned(false);
+          setLoading(false);
+        }},
         { text: 'Annulla', onPress: () => navigation.goBack() },
       ]);
       setLoading(false);
@@ -114,7 +125,7 @@ export default function QRScannerScreen({ navigation }) {
         <View style={styles.typeToggle}>
           <TouchableOpacity
             style={[styles.typeButton, checkType === 'IN' && styles.typeButtonActive]}
-            onPress={() => { setCheckType('IN'); setScanned(false); }}
+            onPress={() => { processingRef.current = false; setCheckType('IN'); setScanned(false); }}
             disabled={loading}
           >
             <Text style={[styles.typeButtonText, checkType === 'IN' && styles.typeButtonTextActive]}>
@@ -123,7 +134,7 @@ export default function QRScannerScreen({ navigation }) {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.typeButton, checkType === 'OUT' && styles.typeButtonActiveOut]}
-            onPress={() => { setCheckType('OUT'); setScanned(false); }}
+            onPress={() => { processingRef.current = false; setCheckType('OUT'); setScanned(false); }}
             disabled={loading}
           >
             <Text style={[styles.typeButtonText, checkType === 'OUT' && styles.typeButtonTextActive]}>
