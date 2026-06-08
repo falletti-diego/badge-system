@@ -141,12 +141,6 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15, shadowRadius: 8,
   },
-  managerButton: {
-    backgroundColor: '#0F4C2A', borderRadius: 20, padding: 32,
-    alignItems: 'center', elevation: 4,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15, shadowRadius: 8,
-  },
   checkinIcon: { fontSize: 48, marginBottom: 12 },
   checkinButtonText: { color: '#FFFFFF', fontSize: 22, fontWeight: '700' },
   checkinSubtext: { color: '#93C5FD', fontSize: 14, marginTop: 6 },

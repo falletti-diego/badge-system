@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiClient from '../../services/apiClient';
+import authService from '../../services/authService';
 import { ENDPOINTS, CHECKINS_CONFIG } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SkeletonLoader from '../../components/SkeletonLoader';
@@ -35,35 +36,45 @@ export default function StorePresencesScreen({ navigation }) {
   const [checkins, setCheckins] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeFilter, setActiveFilter] = useState(0); // index into DATE_FILTERS
+  const [activeFilter, setActiveFilter] = useState(0);
+  const [truncated, setTruncated] = useState(false);
   const abortControllerRef = useRef(null);
 
   const fetchCheckins = async (filterIndex = activeFilter) => {
     abortControllerRef.current?.abort();
-    abortControllerRef.current = new AbortController();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     setLoading(true);
     setError(null);
+    setTruncated(false);
 
     try {
       const { date_from, date_to } = getDateRange(DATE_FILTERS[filterIndex].days);
       const response = await apiClient.get(ENDPOINTS.CHECKINS_LIST, {
         params: { limit: 200, date_from, date_to },
-        signal: abortControllerRef.current.signal,
+        signal: controller.signal,
       });
-      if (!abortControllerRef.current?.signal.aborted) {
+      if (!controller.signal.aborted) {
         setCheckins(response.data.data ?? []);
+        setTruncated(response.data.pagination?.hasMore === true);
       }
     } catch (err) {
-      if (!abortControllerRef.current?.signal.aborted) {
+      if (!controller.signal.aborted) {
         setError(err.response?.data?.message || 'Errore caricamento presenze');
       }
     } finally {
-      if (!abortControllerRef.current?.signal.aborted) {
+      if (!controller.signal.aborted) {
         setLoading(false);
       }
     }
   };
+
+  useEffect(() => {
+    authService.getUser().then(u => {
+      if (u?.role !== 'manager') navigation.replace('CheckIn');
+    });
+  }, []);
 
   useEffect(() => {
     fetchCheckins(activeFilter);
@@ -81,7 +92,7 @@ export default function StorePresencesScreen({ navigation }) {
     const color = TYPE_COLORS[item.type] ?? '#6B7280';
     const icon = TYPE_ICONS[item.type] ?? '•';
     const employeeName = item.employee_name ?? 'Dipendente sconosciuto';
-    const initials = employeeName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    const initials = employeeName.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
 
     return (
       <View style={styles.row}>
@@ -153,6 +164,12 @@ export default function StorePresencesScreen({ navigation }) {
             <Text style={[styles.statValue, { color: TYPE_COLORS.OUT }]}>{totalOut}</Text>
             <Text style={styles.statLabel}>Uscite</Text>
           </View>
+        </View>
+      )}
+
+      {truncated && (
+        <View style={styles.truncatedBanner}>
+          <Text style={styles.truncatedText}>⚠️ Mostrati solo i 200 check-in più recenti</Text>
         </View>
       )}
 
@@ -245,6 +262,11 @@ const styles = StyleSheet.create({
   },
   correctedText: { fontSize: 12 },
 
+  truncatedBanner: {
+    backgroundColor: '#FEF3C7', paddingHorizontal: 16, paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: '#F59E0B',
+  },
+  truncatedText: { fontSize: 12, color: '#92400E', textAlign: 'center' },
   emptyText: { textAlign: 'center', color: '#6B7280', marginTop: 60, fontSize: 16 },
   errorContainer: { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 32 },
   errorText: { color: '#C0392B', textAlign: 'center', fontSize: 16, marginBottom: 16 },
