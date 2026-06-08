@@ -20,23 +20,26 @@ const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
 });
 
-// Helper: resolve employee/site ID from name OR UUID
-async function resolveEmployeeId(nameOrId) {
+// Helper: resolve employee/site ID from name OR UUID, scoped to client
+async function resolveEmployeeId(nameOrId, clientId) {
   if (!nameOrId) return undefined;
-  // Try as UUID first
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (uuidRegex.test(nameOrId)) return nameOrId;
-  // Try as name
-  const result = await pool.query('SELECT id FROM employees WHERE name = $1 LIMIT 1', [nameOrId]);
+  const result = await pool.query(
+    'SELECT id FROM employees WHERE name = $1 AND client_id = $2::uuid LIMIT 1',
+    [nameOrId, clientId]
+  );
   return result.rows[0]?.id;
 }
 
-async function resolveSiteId(nameOrId) {
+async function resolveSiteId(nameOrId, clientId) {
   if (!nameOrId) return undefined;
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (uuidRegex.test(nameOrId)) return nameOrId;
-  // Try as name
-  const result = await pool.query('SELECT id FROM sites WHERE name = $1 LIMIT 1', [nameOrId]);
+  const result = await pool.query(
+    'SELECT id FROM sites WHERE name = $1 AND client_id = $2::uuid LIMIT 1',
+    [nameOrId, clientId]
+  );
   return result.rows[0]?.id;
 }
 
@@ -153,14 +156,19 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
   const userSiteId = req.user.site_id;
 
   try {
-    // Resolve IDs from names if needed (MVP: accept both UUID and name)
-    const resolvedSiteId = site_id ? await resolveSiteId(site_id) : undefined;
-    const resolvedEmployeeId = employee_id ? await resolveEmployeeId(employee_id) : undefined;
+    // Resolve IDs from names if needed — always scoped to caller's client
+    const resolvedSiteId = site_id ? await resolveSiteId(site_id, clientId) : undefined;
+    const resolvedEmployeeId = employee_id ? await resolveEmployeeId(employee_id, clientId) : undefined;
 
-    // Build WHERE clause dynamically
+    // Build WHERE clause dynamically — client_id is mandatory and always first
     const whereClauses = [];
     const params = [];
     let paramCount = 0;
+
+    // Mandatory tenant isolation — never removed
+    paramCount++;
+    whereClauses.push(`c.client_id = $${paramCount}::uuid`);
+    params.push(clientId);
 
     // IMPORTANT: If user is an employee, they can only see their own checkins
     if (userRole === 'employee' && userEmployeeId) {
@@ -280,14 +288,19 @@ router.get('/stats', requireAuth, createValidationMiddleware(GetStatsSchema), as
   const userSiteId = req.user.site_id;
 
   try {
-    // Resolve IDs from names if needed (MVP: accept both UUID and name)
-    const resolvedSiteId = site_id ? await resolveSiteId(site_id) : undefined;
-    const resolvedEmployeeId = employee_id ? await resolveEmployeeId(employee_id) : undefined;
+    // Resolve IDs from names if needed — always scoped to caller's client
+    const resolvedSiteId = site_id ? await resolveSiteId(site_id, clientId) : undefined;
+    const resolvedEmployeeId = employee_id ? await resolveEmployeeId(employee_id, clientId) : undefined;
 
-    // Build WHERE clause
+    // Build WHERE clause — client_id is mandatory and always first
     const whereClauses = [];
     const params = [];
     let paramCount = 0;
+
+    // Mandatory tenant isolation — never removed
+    paramCount++;
+    whereClauses.push(`c.client_id = $${paramCount}::uuid`);
+    params.push(clientId);
 
     // IMPORTANT: If user is an employee, they can only see their own stats
     if (userRole === 'employee' && userEmployeeId) {

@@ -86,8 +86,6 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     environment: NODE_ENV,
     database: 'connected',
-    db_host: process.env.DB_HOST,
-    db_port: process.env.DB_PORT,
   };
 
   try {
@@ -109,8 +107,7 @@ app.get('/health', async (req, res) => {
     const isConnection = errorCode === 'ECONNREFUSED' || errorCode === 'ENOTFOUND' || errorCode === 'ETIMEDOUT';
 
     diagnostics.database = 'disconnected';
-    diagnostics.error = err.message;
-    diagnostics.error_code = errorCode;
+    // Error details logged internally — not exposed to callers
     diagnostics.error_type = isTimeout ? 'TIMEOUT' : isConnection ? 'CONNECTION' : 'UNKNOWN';
 
     logger.error({

@@ -55,8 +55,8 @@ function verifyToken(token) {
  */
 function requireAuth(req, res, next) {
   try {
-    // MVP: Skip auth if DISABLE_AUTH=true
-    if (process.env.DISABLE_AUTH === 'true') {
+    // Dev-only: skip auth if DISABLE_AUTH=true AND not in production
+    if (process.env.DISABLE_AUTH === 'true' && process.env.NODE_ENV !== 'production') {
       req.user = {
         user_id: 'mvp-user-1',
         client_id: 'client-1',
