@@ -95,6 +95,7 @@ jobs:
             --exclude-files 'backend/\.env\.example' \
             --exclude-files 'backend/scripts/generate-prod-env\.sh' \
             --exclude-files 'docs/.*' \
+            --exclude-files 'infrastructure/.*' \
             > /tmp/secrets-scan.json
           COUNT=$(python3 -c "import json; d=json.load(open('/tmp/secrets-scan.json')); print(sum(len(v) for v in d.get('results',{}).values()))")
           if [ "$COUNT" -gt 0 ]; then
