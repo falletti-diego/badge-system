@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-08 (Session 13: Manager mobile features + Build 9 ✅ tested on iPhone — StorePresencesScreen, manager QR check-in, 5 code review fixes)  
+**Last Updated:** 2026-06-08 (Session 13: Manager mobile Build 9 ✅ + FASE 6.2 HTTPS EC2 ✅ nginx cleanup)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -168,7 +168,7 @@ Admin generates and manages QR codes per site.
 Before first paying customer.
 
 - [ ] **6.1** Sentry integration: backend error tracking + frontend crash reporting
-- [ ] **6.2** HTTPS on API (EC2) — Let's Encrypt via Certbot or AWS ACM + ALB
+- [x] **6.2** HTTPS on API (EC2) — Let's Encrypt ✅ (già attivo da Jun 3, scade Sep 1 2026, auto-renewal certbot.timer). Pulizia nginx: rimosso badge-api (server_name _ con self-signed), rimosso /etc/nginx/ssl/. Solo api-dataxiom attivo in sites-enabled.
 - [ ] **6.3** Custom domain (e.g., `app.badge.dataxiom.it` → Netlify, `api.badge.dataxiom.it` → EC2)
 - [ ] **6.4** Load test: 50 simultaneous check-ins (k6 or Artillery)
 - [ ] **6.5** OWASP security review (input sanitization, SQL injection, XSS, CSRF)
