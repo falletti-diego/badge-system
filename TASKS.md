@@ -170,7 +170,7 @@ Before first paying customer.
 - [x] **6.1** Sentry integration ATTIVA ✅ — backend (DSN in SSM, @sentry/node, Sentry.setUser per contesto utente), web (VITE_SENTRY_DSN in Netlify, source maps uploadati, DSN nel bundle verificato), mobile (EXPO_PUBLIC_SENTRY_DSN in EAS production, @sentry/react-native, Sentry.wrap). Org: dataxium | Projects: badge-backend / badge-web / badge-mobile. Build 10 richiesta per attivare mobile.
 - [x] **6.2** HTTPS on API (EC2) — Let's Encrypt ✅ (già attivo da Jun 3, scade Sep 1 2026, auto-renewal certbot.timer). Pulizia nginx: rimosso badge-api (server_name _ con self-signed), rimosso /etc/nginx/ssl/. Solo api-dataxiom attivo in sites-enabled.
 - [ ] **6.3** Custom domain (e.g., `app.badge.dataxiom.it` → Netlify, `api.badge.dataxiom.it` → EC2)
-- [ ] **6.4** Load test: 50 simultaneous check-ins (k6 or Artillery)
+- [x] **6.4** Load test ✅ — k6, 3 scenari (spike 50 VUs, sustained 10 VUs, dashboard 5 VUs). Risultati: spike 50/50 OK 0 errori 5xx, p95=621ms (target<500ms); sustained p95=179ms ✅; dashboard p95=136ms ✅. Bottleneck: db.t3.micro 1 CPU satura a 50 scritture concorrenti. Fix per <500ms su spike: upgrade a db.t3.small. Per MVP con traffico realistico: ok. Script: scripts/load-test.js. DB_POOL_MAX=20 (optimal per t3.micro, pool=30 era peggiore per CPU contention).
 - [ ] **6.5** OWASP security review (input sanitization, SQL injection, XSS, CSRF)
 - [ ] **6.6** GDPR: data retention policy enforcement (delete records > 12 months)
 - [ ] **6.7** CloudWatch alarms: API response time > 1s, error rate > 1%, disk > 80%
@@ -234,6 +234,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-08 | MASVS L1 Security Baseline (Session 11) | 3.x.23–3.x.33 | JWT HS256→RS256 (15min access + 7d refresh, SSM keypair), bcryptjs module (cost 12), CORS localhost rimosso, CI npm audit + detect-secrets, GDPR audit-log retention script, frontend auto-refresh interceptor. Commits: f1837b6 + 184da25. 17/17 ✅ produzione RS256 verificata. |
 | 2026-06-08 | FASE 4.9 + E2E Testing (Session 12) | 4.9, 3.x.34–3.x.38 | TestFlight ✅ (build 5). 3 bug critici fixati: employee_id UUID, client_id migration RDS, created_by UUID. IN/OUT toggle aggiunto. Flusso core verificato su iPhone reale. Commits: e2ee6f5→76aa4ba |
 | 2026-06-08 | Manager Mobile Features + Build 9 (Session 13) | 4.10–4.15 | StorePresencesScreen (manager vede presenze store). Manager QR check-in (migration 005, employee_id JWT). Build 6→7→8→9: fix duplicate IN (useRef), fix crash import, 5 code review fixes (AbortController, truncation, initials, role guard, dead code). Build 9 ✅ testata su iPhone. Commit: 82e93fc |
+| 2026-06-08 | FASE 6.1 Sentry + 6.2 HTTPS + 6.4 Load Test (Session 14) | 6.1, 6.2, 6.4 | Sentry attivo su 3 componenti (backend SSM, web Netlify, mobile EAS). HTTPS EC2 cleanup nginx. Load test k6: spike 50 VUs (100% OK, p95=621ms), sustained p95=179ms ✅, dashboard p95=136ms ✅. 0 crash/5xx. Bottleneck: db.t3.micro CPU a 50 write concorrenti. DB_POOL_MAX=20 ottimale. Script: scripts/load-test.js |
 
 ---
 
