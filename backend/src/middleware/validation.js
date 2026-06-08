@@ -335,6 +335,51 @@ function createValidationMiddleware(schema) {
   };
 }
 
+// =====================================================
+// ADMIN — POST /api/admin/clients
+// =====================================================
+
+const AdminClientSchema = z.object({
+  body: z.object({
+    name: z.string().min(2, 'name must be at least 2 characters').max(100),
+    email: z.string().email('Invalid email format').max(100),
+    plan: z.enum(['starter', 'growth', 'enterprise'], {
+      errorMap: () => ({ message: 'plan must be starter, growth, or enterprise' }),
+    }).default('starter'),
+  }),
+});
+
+// =====================================================
+// ADMIN — POST /api/admin/sites
+// =====================================================
+
+const AdminSiteSchema = z.object({
+  body: z.object({
+    client_id: z.string().uuid('client_id must be a valid UUID'),
+    name: z.string().min(2, 'name must be at least 2 characters').max(100),
+    location: z.string().max(200).optional(),
+  }),
+});
+
+// =====================================================
+// ADMIN — POST /api/admin/employees
+// =====================================================
+
+const AdminEmployeeSchema = z.object({
+  body: z.object({
+    client_id: z.string().uuid('client_id must be a valid UUID'),
+    email: z.string().email('Invalid email format').max(100),
+    name: z.string().min(2, 'name must be at least 2 characters').max(100),
+    phone: z.string().max(20).optional(),
+    role: z.enum(['employee', 'manager'], {
+      errorMap: () => ({ message: 'role must be employee or manager' }),
+    }).default('employee'),
+    site_id: z.string().uuid('site_id must be a valid UUID').optional().nullable(),
+    assigned_sites: z.array(z.string().uuid('each assigned_site must be a valid UUID')).default([]),
+    password: z.string().min(6, 'password must be at least 6 characters').max(100).optional(),
+  }),
+});
+
 module.exports = {
   LoginSchema,
   PostCheckinSchema,
@@ -347,5 +392,8 @@ module.exports = {
   GetMyScheduleSchema,
   PostShiftsSchema,
   ExportShiftsSchema,
+  AdminClientSchema,
+  AdminSiteSchema,
+  AdminEmployeeSchema,
   createValidationMiddleware,
 };

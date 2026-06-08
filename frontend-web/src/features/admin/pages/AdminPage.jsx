@@ -318,7 +318,7 @@ function EmployeesTab() {
       const tempPwd = res.data.temp_password;
       setMsg({
         type: 'success',
-        text: `Dipendente "${emp.name}" creato.${tempPwd ? ` Password temporanea: ${tempPwd}` : ''}`,
+        text: `Dipendente "${emp.name}" creato con successo.`,
         tempPwd,
       });
       setForm({ ...form, email: '', name: '', phone: '', site_id: '', password: '' });
@@ -415,7 +415,18 @@ function EmployeesTab() {
               {msg && (
                 <Alert severity={msg.type}>
                   {msg.text}
-                  {msg.tempPwd && <CopyButton text={msg.tempPwd} />}
+                  {msg.tempPwd && (
+                    <Box mt={1} display="flex" alignItems="center" gap={1}>
+                      <Typography variant="caption" component="span">Password temporanea:</Typography>
+                      <Box
+                        component="code"
+                        sx={{ px: 1, py: 0.25, borderRadius: 1, bgcolor: 'rgba(0,0,0,0.08)', fontFamily: 'monospace', fontSize: '0.85rem' }}
+                      >
+                        {msg.tempPwd}
+                      </Box>
+                      <CopyButton text={msg.tempPwd} />
+                    </Box>
+                  )}
                 </Alert>
               )}
               <Box>

@@ -5,8 +5,12 @@ import { ENDPOINTS, STORAGE_KEYS } from '../config/endpoints';
 const { AUTH_TOKEN: TOKEN_KEY, USER_DATA: USER_KEY } = STORAGE_KEYS;
 
 const authService = {
-  async login(email, password) {
-    const response = await apiClient.post(ENDPOINTS.AUTH_LOGIN, { email, password });
+  async login(email, password, clientId = null) {
+    const body = { email, password };
+    // Include client_id when available to prevent cross-tenant email collision
+    // (required once a second client is onboarded with an overlapping employee email)
+    if (clientId) body.client_id = clientId;
+    const response = await apiClient.post(ENDPOINTS.AUTH_LOGIN, body);
     const { token, user } = response.data.data;
     await AsyncStorage.multiSet([
       [TOKEN_KEY, token],

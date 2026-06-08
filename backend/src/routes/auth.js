@@ -128,6 +128,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
     } else {
       // Step 2: DB lookup — all non-badge.local emails (real customers + @employee.it demo accounts).
       // If client_id is provided, filter by it to prevent cross-tenant identity collision.
+      // If omitted, guard against silent wrong-tenant login: reject when multiple tenants share the email.
       const params = client_id ? [email, client_id] : [email];
       const clientFilter = client_id ? 'AND client_id = $2' : '';
       const result = await pool.query(
@@ -135,9 +136,18 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
          FROM employees
          WHERE email = $1 AND password_hash IS NOT NULL ${clientFilter}
          ORDER BY created_at ASC
-         LIMIT 1`,
+         LIMIT 2`,
         params
       );
+
+      // If two employees across different tenants share this email and no client_id was given,
+      // refuse to guess — require the caller to disambiguate.
+      if (!client_id && result.rows.length > 1) {
+        throw new ValidationError('Multiple accounts found for this email. Provide client_id to disambiguate.', {
+          field: 'client_id',
+          code: 'CLIENT_ID_REQUIRED',
+        });
+      }
       const dbEmployee = result.rows[0];
       if (dbEmployee) {
         const valid = await verifyPassword(password, dbEmployee.password_hash);
@@ -249,7 +259,15 @@ router.post('/refresh', async (req, res) => {
       if (demoUser.employee_id) tokenPayload.employee_id = demoUser.employee_id;
       if (demoUser.site_id) tokenPayload.site_id = demoUser.site_id;
     } else {
-      // Step 2: DB lookup for real customers created via admin panel
+      // Step 2: DB lookup for real customers created via admin panel.
+      // Guard against non-UUID user_id values (e.g. legacy 'user-mvp-*' strings from
+      // tokens issued before the S.1 fix) — pg throws a 22P02 UUID cast error otherwise.
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!UUID_REGEX.test(decoded.user_id)) {
+        logger.warn({ action: 'refresh_invalid_user_id_format', user_id: decoded.user_id });
+        return res.status(401).json({ error: 'USER_NOT_FOUND', message: 'User not found' });
+      }
+
       const result = await pool.query(
         `SELECT id, client_id, email, name, role, site_id
          FROM employees
