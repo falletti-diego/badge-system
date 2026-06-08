@@ -15,11 +15,18 @@ const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
 });
 
-if (!process.env.JWT_SECRET) {
-  throw new Error('FATAL: JWT_SECRET environment variable is required — server cannot start without it');
+if (!process.env.JWT_PRIVATE_KEY) {
+  throw new Error('FATAL: JWT_PRIVATE_KEY environment variable is required — server cannot start without it');
 }
-const JWT_SECRET = process.env.JWT_SECRET;
-const TOKEN_EXPIRY = '7d'; // 7 days for MVP
+if (!process.env.JWT_PUBLIC_KEY) {
+  throw new Error('FATAL: JWT_PUBLIC_KEY environment variable is required — server cannot start without it');
+}
+// RS256: private key signs tokens, public key verifies (asymmetric — token cannot be forged without the private key)
+const JWT_PRIVATE_KEY = process.env.JWT_PRIVATE_KEY.replace(/\\n/g, '\n');
+const JWT_PUBLIC_KEY = process.env.JWT_PUBLIC_KEY.replace(/\\n/g, '\n');
+const JWT_ALGORITHM = 'RS256';
+const ACCESS_TOKEN_EXPIRY = '15m';
+const REFRESH_TOKEN_EXPIRY = '7d';
 
 // MVP: Hardcoded demo credentials (5 test accounts)
 const DEMO_USERS = [
@@ -153,7 +160,15 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       tokenPayload.site_id = user.site_id;
     }
 
-    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
+    const token = jwt.sign(tokenPayload, JWT_PRIVATE_KEY, {
+      algorithm: JWT_ALGORITHM,
+      expiresIn: ACCESS_TOKEN_EXPIRY,
+    });
+    const refreshPayload = { user_id: user.id, type: 'refresh' };
+    const refresh_token = jwt.sign(refreshPayload, JWT_PRIVATE_KEY, {
+      algorithm: JWT_ALGORITHM,
+      expiresIn: REFRESH_TOKEN_EXPIRY,
+    });
 
     logger.info({
       action: 'user_login',
@@ -182,6 +197,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
     res.json({
       data: {
         token,
+        refresh_token,
         user: userResponse,
       },
     });
@@ -191,17 +207,64 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
 });
 
 /**
+ * POST /api/auth/refresh
+ * Exchange a valid refresh token for a new access token (15min)
+ */
+router.post('/refresh', (req, res) => {
+  const { refresh_token } = req.body;
+
+  if (!refresh_token) {
+    return res.status(400).json({ error: 'MISSING_REFRESH_TOKEN', message: 'refresh_token is required' });
+  }
+
+  try {
+    const decoded = jwt.verify(refresh_token, JWT_PUBLIC_KEY, { algorithms: [JWT_ALGORITHM] });
+
+    if (decoded.type !== 'refresh') {
+      return res.status(401).json({ error: 'INVALID_TOKEN_TYPE', message: 'Token is not a refresh token' });
+    }
+
+    // Find user to rebuild full token payload
+    const user = DEMO_USERS.find((u) => u.id === decoded.user_id);
+    if (!user) {
+      return res.status(401).json({ error: 'USER_NOT_FOUND', message: 'User not found' });
+    }
+
+    const tokenPayload = {
+      user_id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      client_id: user.client_id,
+    };
+    if (user.employee_id) tokenPayload.employee_id = user.employee_id;
+    if (user.site_id) tokenPayload.site_id = user.site_id;
+
+    const token = jwt.sign(tokenPayload, JWT_PRIVATE_KEY, {
+      algorithm: JWT_ALGORITHM,
+      expiresIn: ACCESS_TOKEN_EXPIRY,
+    });
+
+    logger.info({ action: 'token_refreshed', user_id: user.id });
+
+    res.json({ data: { token } });
+  } catch (err) {
+    logger.warn({ action: 'refresh_token_invalid', error: err.message });
+    res.status(401).json({ error: 'INVALID_REFRESH_TOKEN', message: 'Refresh token is invalid or expired' });
+  }
+});
+
+/**
  * POST /api/auth/logout (optional)
  * Frontend will clear localStorage, but can call this endpoint for audit logging
  */
 router.post('/logout', (req, res) => {
-  // JWT is stateless, so we just log the logout
   const authHeader = req.headers.authorization;
   const token = authHeader?.replace('Bearer ', '');
 
   if (token) {
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_PUBLIC_KEY, { algorithms: [JWT_ALGORITHM] });
       logger.info({
         action: 'user_logout',
         user_id: decoded.user_id,
@@ -209,10 +272,7 @@ router.post('/logout', (req, res) => {
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
-      logger.warn({
-        action: 'logout_invalid_token',
-        error: err.message,
-      });
+      logger.warn({ action: 'logout_invalid_token', error: err.message });
     }
   }
 

@@ -1,5 +1,6 @@
 import apiClient from './apiClient';
 const TOKEN_KEY = 'badge_auth_token';
+const REFRESH_TOKEN_KEY = 'badge_refresh_token';
 const USER_KEY = 'badge_user';
 const EMPLOYEE_ID_KEY = 'badge_employee_id';
 const SITE_ID_KEY = 'badge_site_id';
@@ -23,9 +24,9 @@ const authService = {
       });
 
       if (response.data.data && response.data.data.token) {
-        const { token, user } = response.data.data;
-        // Store token in localStorage
+        const { token, refresh_token, user } = response.data.data;
         localStorage.setItem(TOKEN_KEY, token);
+        if (refresh_token) localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
         localStorage.setItem(USER_KEY, JSON.stringify(user));
         // Store employee_id if present (for employee role users)
         if (user.employee_id) {
@@ -68,6 +69,7 @@ const authService = {
 
     // Clear localStorage
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(EMPLOYEE_ID_KEY);
     localStorage.removeItem(SITE_ID_KEY);
@@ -88,6 +90,23 @@ const authService = {
   getUser() {
     const user = localStorage.getItem(USER_KEY);
     return user ? JSON.parse(user) : null;
+  },
+
+  getRefreshToken() {
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
+  },
+
+  /**
+   * Use the refresh token to get a new access token (called by apiClient interceptor).
+   * Returns the new access token string, or throws if refresh fails.
+   */
+  async refreshAccessToken() {
+    const refresh_token = this.getRefreshToken();
+    if (!refresh_token) throw new Error('No refresh token');
+    const response = await apiClient.post('/api/auth/refresh', { refresh_token });
+    const { token } = response.data.data;
+    localStorage.setItem(TOKEN_KEY, token);
+    return token;
   },
 
   /**

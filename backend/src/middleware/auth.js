@@ -10,7 +10,8 @@ const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
 });
 
-const JWT_SECRET = process.env.JWT_SECRET;
+// RS256: verify with public key only — private key never needed here
+const JWT_PUBLIC_KEY = process.env.JWT_PUBLIC_KEY?.replace(/\\n/g, '\n');
 
 /**
  * Extract Bearer token from Authorization header
@@ -33,7 +34,7 @@ function extractToken(authHeader) {
  */
 function verifyToken(token) {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_PUBLIC_KEY, { algorithms: ['RS256'] });
     return decoded;
   } catch (err) {
     if (err.name === 'TokenExpiredError') {

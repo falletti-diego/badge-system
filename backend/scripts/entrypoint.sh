@@ -17,7 +17,7 @@ ENV_FILE="/etc/badge/.env"
 REGION="${AWS_REGION:-eu-west-1}"
 
 # Variables that MUST be present — container refuses to start if any are missing
-CRITICAL_VARS=(DB_HOST DB_PASSWORD JWT_SECRET JWT_REFRESH_SECRET)
+CRITICAL_VARS=(DB_HOST DB_PASSWORD JWT_PRIVATE_KEY JWT_PUBLIC_KEY)
 
 # Temp files for Python scripts (avoids heredoc-in-subshell quoting issues)
 PY_FETCH=/tmp/_ssm_fetch.py

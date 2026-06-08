@@ -58,7 +58,39 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run security audit
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: npm audit (fail on high/critical)
+        working-directory: ./backend
+        run: npm audit --audit-level=high
+
+      - name: detect-secrets scan
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install detect-secrets
+      - name: Scan for hardcoded secrets
         run: |
-          echo "Security audit: Checking for common vulnerabilities..."
-          echo "✅ No critical vulnerabilities detected"
+          detect-secrets scan \
+            --exclude-files 'package-lock\.json' \
+            --exclude-files '\.git/.*' \
+            --exclude-files 'frontend-mobile/node_modules/.*' \
+            --exclude-files 'frontend-web/node_modules/.*' \
+            --baseline /dev/null \
+            > /tmp/secrets-scan.json
+          COUNT=$(python3 -c "import json,sys; d=json.load(open('/tmp/secrets-scan.json')); print(sum(len(v) for v in d.get('results',{}).values()))")
+          if [ "$COUNT" -gt 0 ]; then
+            echo "❌ detect-secrets found $COUNT potential secret(s):"
+            cat /tmp/secrets-scan.json
+            exit 1
+          fi
+          echo "✅ No hardcoded secrets detected"

@@ -39,13 +39,11 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Security middleware
 app.use(helmet());
-// CORS — allow Netlify frontend and localhost dev server
+// CORS — explicit whitelist, no wildcards (MASVS-NETWORK)
+// Dev: set CORS_ORIGIN=http://localhost:5173 in .env
+// Prod: SSM /badge/production/CORS_ORIGIN = https://dataxiom-badge.netlify.app
 app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(',') || [
-    'https://dataxiom-badge.netlify.app',
-    'http://localhost:5173',
-    'http://localhost:3000',
-  ],
+  origin: process.env.CORS_ORIGIN?.split(',') || ['https://dataxiom-badge.netlify.app'],
   credentials: true,
 }));
 
