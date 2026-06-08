@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-08 (Session 12: FASE 4.9 + E2E testing — TestFlight ✅, QR scan IN/OUT verified on real iPhone ✅)  
+**Last Updated:** 2026-06-08 (Session 13: Manager mobile features + Build 9 ✅ tested on iPhone — StorePresencesScreen, manager QR check-in, 5 code review fixes)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -148,6 +148,12 @@ The primary check-in interface for employees.
 - [x] **4.7** My Presences screen (list of own check-ins)
 - [x] **4.8** Offline detection + user-friendly error (NetInfo)
 - [x] **4.9** App icon, splash screen, push to TestFlight / Play Store internal track
+- [x] **4.10** `StorePresencesScreen`: manager view of all store check-ins — date filters (Oggi/7gg/Mese), stats bar (dipendenti/entrate/uscite), employee avatar con iniziali
+- [x] **4.11** Manager QR check-in: migration 005 (Diego employee record su RDS), employee_id nel JWT, `CheckInScreen` role-aware (QR + Presenze Store per manager)
+- [x] **4.12** Build 6: StorePresencesScreen ✅ testata su iPhone — manager vede presenze store
+- [x] **4.13** Build 7: fix duplicate check-in IN (stale closure useState → useRef guard sincrono)
+- [x] **4.14** Build 8: fix crash QR scanner (useRef mancante dall'import React)
+- [x] **4.15** Build 9: 5 fix da code review (AbortController signal corretto, truncation banner 200 records, initials '?' per nome vuoto, role guard redirect, dead code rimosso) ✅ testata su iPhone
 
 ### FASE 5 — QR Code Management ✅
 Admin generates and manages QR codes per site.
@@ -227,6 +233,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-07 | Code Review + Fixes (Session 10) | 3.x.15–3.x.22 | Multi-angle code review (7 findings: 2 critical, 3 medium, 2 low) — JWT_SECRET fail-fast, RBAC export, next(err), fetchStats errors, race conditions, PlanningPage UX, apiClient cleanup. Jest setup fix. 17/17 ✅ deploy verified 12/12 ✅ |
 | 2026-06-08 | MASVS L1 Security Baseline (Session 11) | 3.x.23–3.x.33 | JWT HS256→RS256 (15min access + 7d refresh, SSM keypair), bcryptjs module (cost 12), CORS localhost rimosso, CI npm audit + detect-secrets, GDPR audit-log retention script, frontend auto-refresh interceptor. Commits: f1837b6 + 184da25. 17/17 ✅ produzione RS256 verificata. |
 | 2026-06-08 | FASE 4.9 + E2E Testing (Session 12) | 4.9, 3.x.34–3.x.38 | TestFlight ✅ (build 5). 3 bug critici fixati: employee_id UUID, client_id migration RDS, created_by UUID. IN/OUT toggle aggiunto. Flusso core verificato su iPhone reale. Commits: e2ee6f5→76aa4ba |
+| 2026-06-08 | Manager Mobile Features + Build 9 (Session 13) | 4.10–4.15 | StorePresencesScreen (manager vede presenze store). Manager QR check-in (migration 005, employee_id JWT). Build 6→7→8→9: fix duplicate IN (useRef), fix crash import, 5 code review fixes (AbortController, truncation, initials, role guard, dead code). Build 9 ✅ testata su iPhone. Commit: 82e93fc |
 
 ---
 
@@ -238,7 +245,7 @@ Go-live with first paying customer (pilota).
 - [x] Presences tracking (check-ins) working
 - [x] Shift planning (manager + employee views)
 - [x] **Corrections page** (3.4)
-- [ ] **Mobile app** (4.1–4.9) — critical path
+- [x] **Mobile app** (4.1–4.15) ✅ Build 9 testata su iPhone
 - [x] **QR code management** (5.1–5.5) — critical path
 - [ ] **Production hardening** (6.1–6.8)
 - [ ] **First customer onboarded** (7.1–7.6)

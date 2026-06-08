@@ -1,4 +1,4 @@
-# Badge System — Project Discussion (aggiornato 2026-06-05)
+# Badge System — Project Discussion (aggiornato 2026-06-08)
 
 ---
 
@@ -580,3 +580,105 @@ Frontend reads from localStorage → automatically applies same filters as backe
 **Date Completed:** 2026-06-04  
 **Next Feature:** Planning Page (Shift Management)  
 **User-Facing URL:** https://dataxiom-badge.netlify.app/login
+
+---
+
+# 📱 SESSION 2026-06-08 (Session 13) — FASE 4 Manager Mobile + Build 9 ✅
+
+## Obiettivo
+
+Aggiungere le funzionalità manager all'app mobile: visualizzazione presenze dello store e possibilità di scannerizzare il QR code come manager.
+
+---
+
+## 1. FUNZIONALITÀ IMPLEMENTATE
+
+### StorePresencesScreen (nuova schermata)
+- **Accesso:** tasto "Presenze Store 👥" nel `CheckInScreen` solo per manager
+- **Filtri data:** Oggi / 7 giorni / Mese (30 giorni)
+- **Stats bar:** numero dipendenti unici, totale Entrate (IN), totale Uscite (OUT)
+- **Lista check-in:** avatar con iniziali, nome dipendente, data/ora, sede, badge IN/OUT colorato
+- File: `frontend-mobile/src/screens/presences/StorePresencesScreen.jsx`
+
+### Manager QR Check-in
+- **Problema:** Diego (manager) non aveva un record `employees` → POST /api/checkins falliva (employee_id null)
+- **Migration 005:** aggiunto Diego come dipendente del Torino Store (`UUID: 550e8400-...0200`)
+- **JWT:** `employee_id` ora incluso nel token di Diego → QR scanner funziona per tutti i ruoli
+- **CheckInScreen:** role-aware — manager vede QR scanner + "Presenze Store", employee vede QR scanner + "Le Mie Presenze"
+
+---
+
+## 2. BUG CRITICI RISOLTI (Build 7 → 8 → 9)
+
+### Build 7 — Duplicate check-in IN (3-6 record per scan)
+- **Causa:** stale closure — `onBarcodeScanned` fires più volte/secondo; `useState` guard era async e già stale al secondo evento
+- **Perché solo IN:** premere OUT forzava re-render → closure fresca con state aggiornato
+- **Fix:** `processingRef = useRef(false)` — sincrono, visibile a tutti gli event handler immediatamente
+
+### Build 8 — App crash al tap del bottone QR scanner
+- **Causa:** `useRef` usato in build 7 ma non aggiunto all'import React (`import React, { useState } from 'react'`)
+- **Fix:** `import React, { useState, useRef } from 'react'`
+
+### Build 9 — 5 fix da code review (commit 82e93fc)
+Revisione multi-angolo degli ultimi 4 commit; 5 finding confermati corretti:
+
+| # | Severità | Problema | Fix |
+|---|----------|----------|-----|
+| 1 | Medium | AbortController: catch/finally leggeva il ref del fetch successivo (false error state su cambio filtro rapido) | Catturato `const controller = new AbortController()` localmente; usato `controller.signal` nei 3 check |
+| 2 | Medium | `limit: 200` hardcoded; `pagination.hasMore` mai letto → stats sbagliate se store > 200 check-in | Letto `hasMore`, banner giallo "⚠️ Mostrati solo i 200 check-in più recenti" |
+| 3 | Low-Med | Initials: stringa vuota `''` passava `??` → `[undefined]` → `'UNDEFINED'` nell'avatar | `.filter(Boolean)` + fallback `'?'` |
+| 4 | Low | Nessun role guard in `StorePresencesScreen` → employee poteva navigarci (dati incongruenti) | `useEffect` al mount: se `role !== 'manager'` → `navigation.replace('CheckIn')` |
+| 5 | Low | `managerButton` style definito ma mai usato nel JSX | Rimosso dallo StyleSheet |
+
+---
+
+## 3. BUILD HISTORY (Session 13)
+
+| Build | Piattaforma | Stato | Commit | Note |
+|-------|------------|-------|--------|------|
+| Build 6 | iOS (TestFlight) | ✅ testata | `80afb93` | StorePresencesScreen + manager QR. Funziona. |
+| Build 7 | iOS (TestFlight) | ❌ bug | `b098834` | Duplicate IN check-in (stale closure) |
+| Build 8 | iOS (TestFlight) | ❌ crash | `7328955` | App crash (useRef import mancante) |
+| Build 9 | iOS (TestFlight) | ✅ testata | `82e93fc` | 5 code review fixes. Tutto funzionante. |
+
+---
+
+## 4. ARCHITETTURA RUOLI MOBILE (finale)
+
+```
+CheckInScreen
+├── [tutti i ruoli] Scannerizza QR Code → QRScannerScreen → SuccessScreen
+├── [tutti i ruoli] I Miei Turni → MyScheduleScreen
+├── [manager]       Presenze Store → StorePresencesScreen
+└── [employee]      Le Mie Presenze → MyPresencesScreen
+```
+
+**Backend RBAC:**
+- `GET /api/checkins` con JWT manager → filtra automaticamente per `site_id` del token
+- Nessun parametro aggiuntivo necessario dal frontend
+
+---
+
+## 5. STATO MOBILE APP POST-SESSION 13
+
+- ✅ Login (tutti i ruoli)
+- ✅ QR scanner (dipendenti e manager)
+- ✅ Face ID authentication
+- ✅ Check-in IN/OUT con conferma
+- ✅ Le mie presenze (employee)
+- ✅ Presenze store (manager)
+- ✅ I miei turni (schedule)
+- ✅ Build 9 su TestFlight
+
+**Accounts di test disponibili:**
+| Account | Ruolo | Feature chiave |
+|---------|-------|----------------|
+| alice.neri@employee.it / Alice1975 | Employee | QR check-in, Le Mie Presenze |
+| diego@badge.local / Diego1975 | Manager | QR check-in, Presenze Store (Torino) |
+
+---
+
+**Status:** ✅ MOBILE APP MVP COMPLETA  
+**Date Completed:** 2026-06-08  
+**Build attiva:** Build 9 (TestFlight)  
+**Next:** FASE 6 — Production Hardening
