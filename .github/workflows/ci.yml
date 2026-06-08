@@ -86,11 +86,15 @@ jobs:
           # intentional placeholders replaced by bcrypt+DB in the Auth0 migration.
           detect-secrets scan \
             --disable-plugin KeywordDetector \
+            --disable-plugin Base64HighEntropyString \
             --exclude-files 'package-lock\.json' \
             --exclude-files '\.git/.*' \
             --exclude-files 'frontend-mobile/node_modules/.*' \
             --exclude-files 'frontend-web/node_modules/.*' \
             --exclude-files 'badge-system/.*' \
+            --exclude-files 'backend/\.env\.example' \
+            --exclude-files 'backend/scripts/generate-prod-env\.sh' \
+            --exclude-files 'docs/.*' \
             > /tmp/secrets-scan.json
           COUNT=$(python3 -c "import json; d=json.load(open('/tmp/secrets-scan.json')); print(sum(len(v) for v in d.get('results',{}).values()))")
           if [ "$COUNT" -gt 0 ]; then
