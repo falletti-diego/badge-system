@@ -179,12 +179,12 @@ Before first paying customer.
 ### FASE 7 — First Customer Onboarding (~5-10h)
 Go-live with first paying customer (pilota).
 
-- [ ] **7.1** Admin panel: create client, add sites, add employees
-- [ ] **7.2** `POST /api/admin/clients` + `POST /api/admin/sites` + `POST /api/admin/employees` endpoints
-- [ ] **7.3** Employee bulk import via CSV upload
+- [x] **7.1** Admin panel ✅ — `AdminPage.jsx` `/admin` route (admin-only), tabs Clienti/Sedi/Dipendenti, CSV upload, temp password display + copy button. Navbar link "⚙️ Admin" visibile solo ad admin.
+- [x] **7.2** API admin endpoints ✅ — `POST /api/admin/clients`, `POST /api/admin/sites` (QR auto-generato UUID-based), `POST /api/admin/employees` (bcrypt temp password), `GET /api/admin/clients`, `GET /api/admin/sites`. Auth.js extended: DB fallback login con bcrypt verify. Migration 006: `password_hash`, `role`, `site_id` su employees. Commit: 8115eab
+- [x] **7.3** CSV bulk import ✅ — `POST /api/admin/employees/import` (multer memory, csv-parse, max 500 righe, ON CONFLICT DO NOTHING con rowCount check corretto). Commit: 8115eab
 - [ ] **7.4** Customer-facing user guide (PDF, Italian)
 - [ ] **7.5** Manager training checklist (how to use dashboard + planning)
-- [ ] **7.6** Welcome email template with login credentials
+- [x] **7.6** Welcome email template ✅ — `scripts/welcome-email-template.html`: HTML responsive con credenziali, CTA login, steps per dipendente/manager, GDPR footer. Commit: 8115eab
 
 ---
 
@@ -238,6 +238,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-08 | FASE 6.5 OWASP Security Review (Session 14 cont.) | 6.5 | 8 findings: 3 critical (DISABLE_AUTH prod guard, tenant isolation GET/CSV/stats), 2 high (/health info leak, shifts notification validation), 2 medium (resolve helpers scoped), 1 open (localStorage→httpOnly Phase 2). 17/17 tests ✅. Deploy verified: /health clean, auth enforced. Commit: eec052a |
 | 2026-06-08 | FASE 6.7 + 6.6 (Session 15) | 6.6, 6.7 | CloudWatch: 8 alarms (EC2 status/CPU/disk, RDS CPU/storage/connections, API 5xx/slow), SNS email, CW agent, awslogs Docker driver, pino-http. GDPR: retention script (checkins >12m + audit_log >7y), cron 02:00 UTC. Commits: a8dff12, 1cd1477 |
 | 2026-06-08 | FASE 6.8 (Session 16) | 6.8 | RDS backup retention 0→1 (free tier max). Snapshot `badge-backup-test-20260608`. Restore `badge-restore-test` verificato: 7 tabelle + dati intatti. Istanza test eliminata. |
+| 2026-06-08 | FASE 7.1-7.3 + 7.6 (Session 16) | 7.1, 7.2, 7.3, 7.6 | Migration 006 (password_hash+role+site_id). /api/admin routes (clients/sites/employees/CSV import). Auth.js DB fallback. AdminPage (3 tab). Welcome email template. Commit: 8115eab |
 
 ---
 
