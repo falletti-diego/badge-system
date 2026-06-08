@@ -174,7 +174,7 @@ Before first paying customer.
 - [x] **6.5** OWASP security review ✅ — 8 findings, 7 fixed (1 open Phase 2). CRITICAL: DISABLE_AUTH production guard (NODE_ENV check), export.js+checkins.js+stats mandatory c.client_id=$1 tenant isolation, resolve*() scoped to client. HIGH: /health db_host/db_port removed, shifts.js notification employee_id validated against client_id. MEDIUM: resolve helpers now pass clientId param. OPEN: localStorage JWT → httpOnly cookie (Phase 2). Commit: eec052a
 - [x] **6.6** GDPR retention ✅ — `scripts/audit-log-retention.js`: delete checkins >12m + audit_log >7y, --dry-run flag. `scripts/run-retention.sh`: SSM param fetch wrapper per docker exec. EC2 crontab: `0 2 * * *` UTC → /var/log/badge-retention.log. Tested dry-run: 0 records (seed data giugno 2026). Commit: 1cd1477
 - [x] **6.7** CloudWatch alarms ✅ — 8 alarms attivi: EC2 StatusCheck, EC2 CPU>80%, disk>80% (CW agent), RDS CPU>80%, RDS storage<2GB, RDS connections>50, API 5xx>5/5min, API slow>10/5min. SNS badge-alerts → email. pino-http per structured logs + Docker awslogs driver → /badge/api CW Log Group. Metric filters: $.res.statusCode>=500, $.responseTime>1000. Commit: a8dff12
-- [ ] **6.8** Database backups verified (RDS automated, test point-in-time restore)
+- [x] **6.8** Database backups verified ✅ — RDS `badge-system-db`: backup retention era 0 → abilitato a 1 giorno (free tier max). Snapshot manuale `badge-backup-test-20260608` creato. Restore su `badge-restore-test` completato: 7 tabelle ✅, 338 checkins ✅, 21 employees ✅, 3 clients ✅. Istanza test eliminata post-verifica. Backup window: 02:00-02:30 UTC.
 
 ### FASE 7 — First Customer Onboarding (~5-10h)
 Go-live with first paying customer (pilota).
@@ -237,6 +237,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-08 | FASE 6.1 Sentry + 6.2 HTTPS + 6.4 Load Test (Session 14) | 6.1, 6.2, 6.4 | Sentry attivo su 3 componenti (backend SSM, web Netlify, mobile EAS). HTTPS EC2 cleanup nginx. Load test k6: spike 50 VUs (100% OK, p95=621ms), sustained p95=179ms ✅, dashboard p95=136ms ✅. 0 crash/5xx. Bottleneck: db.t3.micro CPU a 50 write concorrenti. DB_POOL_MAX=20 ottimale. Script: scripts/load-test.js |
 | 2026-06-08 | FASE 6.5 OWASP Security Review (Session 14 cont.) | 6.5 | 8 findings: 3 critical (DISABLE_AUTH prod guard, tenant isolation GET/CSV/stats), 2 high (/health info leak, shifts notification validation), 2 medium (resolve helpers scoped), 1 open (localStorage→httpOnly Phase 2). 17/17 tests ✅. Deploy verified: /health clean, auth enforced. Commit: eec052a |
 | 2026-06-08 | FASE 6.7 + 6.6 (Session 15) | 6.6, 6.7 | CloudWatch: 8 alarms (EC2 status/CPU/disk, RDS CPU/storage/connections, API 5xx/slow), SNS email, CW agent, awslogs Docker driver, pino-http. GDPR: retention script (checkins >12m + audit_log >7y), cron 02:00 UTC. Commits: a8dff12, 1cd1477 |
+| 2026-06-08 | FASE 6.8 (Session 16) | 6.8 | RDS backup retention 0→1 (free tier max). Snapshot `badge-backup-test-20260608`. Restore `badge-restore-test` verificato: 7 tabelle + dati intatti. Istanza test eliminata. |
 
 ---
 
