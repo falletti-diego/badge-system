@@ -58,13 +58,14 @@ export const CHECKINS_CONFIG = {
   },
 };
 
-// Demo credentials for development/testing
+// Demo account emails for development/testing.
+// Passwords are never stored client-side — set them via DEMO_*_PASSWORD env vars
+// on the backend (see backend/.env.example section 11).
 export const DEMO_ACCOUNTS = {
-  employee: { email: 'alice.neri@employee.it', password: 'Alice1975' },
-  manager: { email: 'diego@badge.local', password: 'Diego1975' },
+  employee: { email: 'alice.neri@employee.it' },
+  manager: { email: 'diego@badge.local' },
   // Legacy alias (kept for backwards compatibility in LoginScreen)
   email: 'alice.neri@employee.it',
-  password: 'Alice1975',
 };
 
 // Timing configuration (in milliseconds)

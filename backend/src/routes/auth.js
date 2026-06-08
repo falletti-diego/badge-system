@@ -31,13 +31,13 @@ const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
 
 // Internal Dataxiom accounts — restricted to @badge.local domain only.
-// These are never exposed to real customers and cannot collide with real employee emails.
-// @employee.it accounts were removed: they now authenticate via the DB path (migration 007
-// set their bcrypt password_hash, so they no longer need a plaintext fallback here).
+// Passwords are read from environment variables only — never hardcoded in source.
+// If an env var is not set, that account is effectively disabled (no match possible).
+// Set DEMO_*_PASSWORD in .env (dev) or EC2 --env-file (prod) — see .env.example.
 const DEMO_USERS = [
   {
     email: 'pippo@badge.local',
-    password: 'pippo01',
+    password: process.env.DEMO_PIPPO_PASSWORD,
     id: 'user-mvp-pippo',
     name: 'Pippo',
     role: 'admin',
@@ -45,7 +45,7 @@ const DEMO_USERS = [
   },
   {
     email: 'pino@badge.local',
-    password: 'pino01',
+    password: process.env.DEMO_PINO_PASSWORD,
     id: 'user-mvp-pino',
     name: 'Pino',
     role: 'manager',
@@ -53,7 +53,7 @@ const DEMO_USERS = [
   },
   {
     email: 'diego@badge.local',
-    password: 'Diego1975',
+    password: process.env.DEMO_DIEGO_PASSWORD,
     id: 'user-mvp-diego',
     name: 'Diego',
     role: 'manager',
@@ -63,7 +63,7 @@ const DEMO_USERS = [
   },
   {
     email: 'maria@badge.local',
-    password: 'maria01',
+    password: process.env.DEMO_MARIA_PASSWORD,
     id: 'user-mvp-maria',
     name: 'Maria',
     role: 'employee',
@@ -71,7 +71,7 @@ const DEMO_USERS = [
   },
   {
     email: 'lucia@badge.local',
-    password: 'lucia01',
+    password: process.env.DEMO_LUCIA_PASSWORD,
     id: 'user-mvp-lucia',
     name: 'Lucia',
     role: 'employee',

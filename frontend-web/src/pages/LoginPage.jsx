@@ -5,8 +5,8 @@ import authService from '../services/authService';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('pippo@badge.local');
-  const [password, setPassword] = useState('pippo01');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
@@ -159,33 +159,35 @@ export default function LoginPage() {
           </Button>
         </Box>
 
-        {/* Demo Credentials Info (MVP only) */}
-        <Box
-          sx={{
-            mt: 4,
-            p: 2,
-            backgroundColor: '#F0F9FF',
-            borderRadius: '6px',
-            border: '1px solid #BFDBFE',
-            width: '100%',
-          }}
-        >
-          <Typography variant="caption" sx={{ color: '#1E40AF', fontWeight: 600 }}>
-            MVP Test Accounts (6 accounts - Employees see only their data):
-          </Typography>
-          <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block', mt: 0.5, fontSize: '11px' }}>
-            Admin: <code>pippo@badge.local</code> / <code>pippo01</code>
-          </Typography>
-          <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block', fontSize: '11px' }}>
-            Manager: <code>pino@badge.local</code> / <code>pino01</code> (all stores) | <code>diego@badge.local</code> / <code>Diego1975</code> (⭐ Torino only)
-          </Typography>
-          <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block', fontSize: '11px' }}>
-            Employee: <code>maria@badge.local</code> / <code>maria01</code> | <code>lucia@badge.local</code> / <code>lucia01</code>
-          </Typography>
-          <Typography variant="caption" sx={{ color: '#C2255C', display: 'block', fontSize: '11px', fontWeight: 600 }}>
-            Employee (DB): <code>luca.verdi@employee.it</code> / <code>Luca1975</code> (⭐ sees only Luca Verdi data)
-          </Typography>
-        </Box>
+        {/* Demo Credentials Info — visible only in local dev builds, never in production */}
+        {import.meta.env.DEV && (
+          <Box
+            sx={{
+              mt: 4,
+              p: 2,
+              backgroundColor: '#F0F9FF',
+              borderRadius: '6px',
+              border: '1px solid #BFDBFE',
+              width: '100%',
+            }}
+          >
+            <Typography variant="caption" sx={{ color: '#1E40AF', fontWeight: 600 }}>
+              Dev accounts (visible only in local dev — set passwords in .env):
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block', mt: 0.5, fontSize: '11px' }}>
+              Admin: <code>pippo@badge.local</code>
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block', fontSize: '11px' }}>
+              Manager: <code>pino@badge.local</code> (all stores) | <code>diego@badge.local</code> (⭐ Torino only)
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#1E40AF', display: 'block', fontSize: '11px' }}>
+              Employee: <code>maria@badge.local</code> | <code>lucia@badge.local</code>
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#C2255C', display: 'block', fontSize: '11px', fontWeight: 600 }}>
+              Employee (DB): <code>alice.neri@employee.it</code> | <code>luca.verdi@employee.it</code>
+            </Typography>
+          </Box>
+        )}
       </Box>
     </Container>
   );

@@ -10,7 +10,7 @@ const pino = require('pino');
 const { pool } = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { hashPassword } = require('../auth/password');
-const { ValidationError, AuthorizationError } = require('../utils/errors');
+const { ValidationError, ForbiddenError } = require('../utils/errors');
 const { logAudit } = require('../middleware/audit');
 const {
   AdminClientSchema,
@@ -28,7 +28,7 @@ const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 router.use(requireAuth);
 router.use((req, res, next) => {
   if (req.user.role !== 'admin') {
-    return next(new AuthorizationError('Admin access required'));
+    return next(new ForbiddenError('Admin access required', 'ADMIN_REQUIRED'));
   }
   next();
 });

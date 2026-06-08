@@ -23,7 +23,13 @@ const dbConfig = {
   connectionTimeoutMillis: 60000, // Increased for RDS cold starts
   statement_timeout: 120000, // Increased for slow queries
   application_name: 'badge-system-api',
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  // DB_SSL_REJECT_UNAUTHORIZED defaults to true in production.
+  // Set to 'false' ONLY as a temporary escape hatch if your RDS CA cert isn't
+  // in the system trust store — and only after confirming the network path is
+  // private (VPC-only). Never set false on a public endpoint.
+  ssl: process.env.NODE_ENV === 'production'
+    ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
+    : false,
 };
 
 // Log connection attempt (without password)

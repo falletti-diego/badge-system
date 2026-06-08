@@ -76,9 +76,11 @@ export default function LoginScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.demoHint}>
-          Demo: {DEMO_ACCOUNTS.email} / {DEMO_ACCOUNTS.password}
-        </Text>
+        {__DEV__ && (
+          <Text style={styles.demoHint}>
+            Dev account: {DEMO_ACCOUNTS.email}
+          </Text>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
