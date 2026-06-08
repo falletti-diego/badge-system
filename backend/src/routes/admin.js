@@ -11,6 +11,7 @@ const { pool } = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { hashPassword } = require('../auth/password');
 const { ValidationError, AuthorizationError } = require('../utils/errors');
+const { logAudit } = require('../middleware/audit');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }); // 2MB max
@@ -66,6 +67,15 @@ router.post('/clients', async (req, res, next) => {
 
     const client = result.rows[0];
     logger.info({ action: 'admin_create_client', client_id: client.id, name: client.name });
+    await logAudit(pool, {
+      action: 'admin_create_client',
+      entity: 'client',
+      entityId: client.id,
+      clientId: client.id,
+      oldValue: null,
+      newValue: { name: client.name, email: client.email, plan: client.plan },
+      userId: req.user.user_id,
+    });
 
     res.status(201).json({ success: true, data: client });
   } catch (err) {
@@ -98,6 +108,15 @@ router.post('/sites', async (req, res, next) => {
 
     const site = result.rows[0];
     logger.info({ action: 'admin_create_site', site_id: site.id, client_id: data.client_id });
+    await logAudit(pool, {
+      action: 'admin_create_site',
+      entity: 'site',
+      entityId: site.id,
+      clientId: site.client_id,
+      oldValue: null,
+      newValue: { name: site.name, location: site.location, client_id: site.client_id },
+      userId: req.user.user_id,
+    });
 
     res.status(201).json({ success: true, data: site });
   } catch (err) {
@@ -123,6 +142,17 @@ router.post('/employees', async (req, res, next) => {
         [data.site_id, data.client_id]
       );
       if (siteCheck.rowCount === 0) return next(new ValidationError('Site not found for this client'));
+    }
+
+    // Verify all assigned_sites belong to this client (prevents cross-tenant site assignment)
+    if (data.assigned_sites.length > 0) {
+      const ownedSites = await pool.query(
+        'SELECT id FROM sites WHERE id = ANY($1::UUID[]) AND client_id = $2',
+        [data.assigned_sites, data.client_id]
+      );
+      if (ownedSites.rowCount !== data.assigned_sites.length) {
+        return next(new ValidationError('One or more assigned_sites do not belong to this client'));
+      }
     }
 
     // Generate temp password if not provided
@@ -153,6 +183,15 @@ router.post('/employees', async (req, res, next) => {
 
     const employee = result.rows[0];
     logger.info({ action: 'admin_create_employee', employee_id: employee.id, client_id: data.client_id });
+    await logAudit(pool, {
+      action: 'admin_create_employee',
+      entity: 'employee',
+      entityId: employee.id,
+      clientId: employee.client_id,
+      oldValue: null,
+      newValue: { name: employee.name, email: employee.email, role: employee.role, client_id: employee.client_id },
+      userId: req.user.user_id,
+    });
 
     res.status(201).json({
       success: true,
@@ -174,7 +213,7 @@ router.post('/employees/import', upload.single('file'), async (req, res, next) =
     if (!req.body.client_id) return next(new ValidationError('client_id is required'));
 
     const clientId = req.body.client_id;
-    if (!/^[0-9a-f-]{36}$/.test(clientId)) return next(new ValidationError('Invalid client_id'));
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clientId)) return next(new ValidationError('Invalid client_id'));
 
     const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1', [clientId]);
     if (clientCheck.rowCount === 0) return next(new ValidationError('Client not found'));
@@ -203,6 +242,19 @@ router.post('/employees/import', upload.single('file'), async (req, res, next) =
             ? row.assigned_sites.split(';').map((s) => s.trim()).filter(Boolean)
             : [],
         });
+
+        // Verify assigned_sites belong to this client (cross-tenant isolation)
+        if (parsed.assigned_sites.length > 0) {
+          const ownedSites = await pool.query(
+            'SELECT id FROM sites WHERE id = ANY($1::UUID[]) AND client_id = $2',
+            [parsed.assigned_sites, clientId]
+          );
+          if (ownedSites.rowCount !== parsed.assigned_sites.length) {
+            results.errors.push({ line: lineNum, email: row.email, error: 'One or more assigned_sites do not belong to this client' });
+            results.skipped++;
+            continue;
+          }
+        }
 
         const tempPassword = generateTempPassword();
         const passwordHash = await hashPassword(tempPassword);

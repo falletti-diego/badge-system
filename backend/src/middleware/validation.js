@@ -18,6 +18,7 @@ const LoginSchema = z.object({
   body: z.object({
     email: z.string().email('Invalid email format'),
     password: z.string().min(1, 'Password is required'),
+    client_id: z.string().uuid('Invalid client_id format').optional(),
   }),
 });
 

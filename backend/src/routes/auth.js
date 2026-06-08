@@ -135,7 +135,7 @@ const DEMO_USERS = [
  * }
  */
 router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, next) => {
-  const { email, password } = req.validated.body;
+  const { email, password, client_id } = req.validated.body;
 
   try {
     // Step 1: Check hardcoded DEMO_USERS (internal accounts, backward compat)
@@ -155,13 +155,17 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       };
     } else {
       // Step 2: DB lookup — real customers created via admin panel
+      // If client_id is provided in the request, filter by it to prevent cross-tenant identity
+      // when the same email exists in multiple tenants (UNIQUE is on (client_id, email), not email alone).
+      const params = client_id ? [email, client_id] : [email];
+      const clientFilter = client_id ? 'AND client_id = $2' : '';
       const result = await pool.query(
         `SELECT id, client_id, email, name, role, site_id, password_hash
          FROM employees
-         WHERE email = $1 AND password_hash IS NOT NULL
+         WHERE email = $1 AND password_hash IS NOT NULL ${clientFilter}
          ORDER BY created_at ASC
          LIMIT 1`,
-        [email]
+        params
       );
       const dbEmployee = result.rows[0];
       if (dbEmployee) {
@@ -244,7 +248,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
  * POST /api/auth/refresh
  * Exchange a valid refresh token for a new access token (15min)
  */
-router.post('/refresh', (req, res) => {
+router.post('/refresh', async (req, res) => {
   const { refresh_token } = req.body;
 
   if (!refresh_token) {
@@ -258,28 +262,51 @@ router.post('/refresh', (req, res) => {
       return res.status(401).json({ error: 'INVALID_TOKEN_TYPE', message: 'Token is not a refresh token' });
     }
 
-    // Find user to rebuild full token payload
-    const user = DEMO_USERS.find((u) => u.id === decoded.user_id);
-    if (!user) {
-      return res.status(401).json({ error: 'USER_NOT_FOUND', message: 'User not found' });
-    }
+    // Step 1: Check DEMO_USERS (internal accounts)
+    const demoUser = DEMO_USERS.find((u) => u.id === decoded.user_id);
 
-    const tokenPayload = {
-      user_id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      client_id: user.client_id,
-    };
-    if (user.employee_id) tokenPayload.employee_id = user.employee_id;
-    if (user.site_id) tokenPayload.site_id = user.site_id;
+    let tokenPayload;
+
+    if (demoUser) {
+      tokenPayload = {
+        user_id: demoUser.id,
+        name: demoUser.name,
+        email: demoUser.email,
+        role: demoUser.role,
+        client_id: demoUser.client_id,
+      };
+      if (demoUser.employee_id) tokenPayload.employee_id = demoUser.employee_id;
+      if (demoUser.site_id) tokenPayload.site_id = demoUser.site_id;
+    } else {
+      // Step 2: DB lookup for real customers created via admin panel
+      const result = await pool.query(
+        `SELECT id, client_id, email, name, role, site_id
+         FROM employees
+         WHERE id = $1`,
+        [decoded.user_id]
+      );
+      const dbEmployee = result.rows[0];
+      if (!dbEmployee) {
+        logger.warn({ action: 'refresh_user_not_found', user_id: decoded.user_id });
+        return res.status(401).json({ error: 'USER_NOT_FOUND', message: 'User not found' });
+      }
+      tokenPayload = {
+        user_id: dbEmployee.id,
+        name: dbEmployee.name,
+        email: dbEmployee.email,
+        role: dbEmployee.role,
+        client_id: dbEmployee.client_id,
+        employee_id: dbEmployee.id,
+      };
+      if (dbEmployee.site_id) tokenPayload.site_id = dbEmployee.site_id;
+    }
 
     const token = jwt.sign(tokenPayload, JWT_PRIVATE_KEY, {
       algorithm: JWT_ALGORITHM,
       expiresIn: ACCESS_TOKEN_EXPIRY,
     });
 
-    logger.info({ action: 'token_refreshed', user_id: user.id });
+    logger.info({ action: 'token_refreshed', user_id: decoded.user_id });
 
     res.json({ data: { token } });
   } catch (err) {
