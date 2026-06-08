@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-08 (Session 11: MASVS L1 Security Baseline — JWT RS256, bcrypt, CORS hardening, detect-secrets CI, GDPR retention)  
+**Last Updated:** 2026-06-08 (Session 12: FASE 4.9 — app icon, splash screen, EAS build + TestFlight submission ✅)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -140,7 +140,7 @@ The primary check-in interface for employees.
 - [x] **4.6** My Schedule screen (read-only, calls `GET /api/shifts/my-schedule`)
 - [x] **4.7** My Presences screen (list of own check-ins)
 - [x] **4.8** Offline detection + user-friendly error (NetInfo)
-- [ ] **4.9** App icon, splash screen, push to TestFlight / Play Store internal track
+- [x] **4.9** App icon, splash screen, push to TestFlight / Play Store internal track
 
 ### FASE 5 — QR Code Management ✅
 Admin generates and manages QR codes per site.
@@ -219,6 +219,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-07 | DevOps + Security (Session 9) | 3.x.3–3.x.14 | RBAC fixes, `/api-test` skill (23 tests), CI port-conflict fix, `wait-healthy.sh`, SSM Parameter Store bootstrap (14 params, IAM policy, entrypoint.sh — 23/23 ✅) |
 | 2026-06-07 | Code Review + Fixes (Session 10) | 3.x.15–3.x.22 | Multi-angle code review (7 findings: 2 critical, 3 medium, 2 low) — JWT_SECRET fail-fast, RBAC export, next(err), fetchStats errors, race conditions, PlanningPage UX, apiClient cleanup. Jest setup fix. 17/17 ✅ deploy verified 12/12 ✅ |
 | 2026-06-08 | MASVS L1 Security Baseline (Session 11) | 3.x.23–3.x.33 | JWT HS256→RS256 (15min access + 7d refresh, SSM keypair), bcryptjs module (cost 12), CORS localhost rimosso, CI npm audit + detect-secrets, GDPR audit-log retention script, frontend auto-refresh interceptor. Commits: f1837b6 + 184da25. 17/17 ✅ produzione RS256 verificata. |
+| 2026-06-08 | FASE 4.9 — TestFlight (Session 12) | 4.9 | App icon (1024×1024) + splash screen (512×512) generati con pngjs. EAS production config (autoIncrement, adaptiveIcon). iOS credentials: cert UKZ95L3FHH, profile H5YHC7FVK9, API Key 3LSVMMS737. Build 1.0.0 (build 3) su TestFlight ✅. Commits: e2ee6f5, 35a0677, 0ada700, 252ed7d |
 
 ---
 
