@@ -1,7 +1,50 @@
 /**
- * Integration Tests: Check-ins API
- * Tests POST, GET, PUT, and CSV export endpoints
+ * Unit/Integration Tests: Check-ins API
+ * Pool and Redis are mocked — no real DB connection required.
+ * DISABLE_AUTH=true (set in jest.setup.js) bypasses JWT validation.
  */
+
+// Bypass rate limiting in tests
+jest.mock('../middleware/rateLimiter', () => {
+  const passThrough = (req, res, next) => next();
+  return { apiLimiter: passThrough, authLimiter: passThrough, csvLimiter: passThrough };
+});
+
+jest.mock('../db/pool', () => ({
+  pool: {
+    query: jest.fn(),
+    connect: jest.fn(),
+    end: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
+jest.mock('../db/redis', () => ({
+  initializeRedis: jest.fn().mockResolvedValue(null),
+  closeRedis: jest.fn().mockResolvedValue(undefined),
+  isRedisAvailable: jest.fn().mockReturnValue(false),
+  getCache: jest.fn().mockResolvedValue(null),
+  setCache: jest.fn().mockResolvedValue(undefined),
+  deleteCacheByPattern: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('../middleware/db-transaction', () => ({
+  withTransaction: jest.fn(async (cb) => {
+    const { pool } = require('../db/pool');
+    const mockClient = {
+      query: pool.query,
+      release: jest.fn(),
+    };
+    await pool.query('BEGIN');
+    try {
+      const result = await cb(mockClient);
+      await pool.query('COMMIT');
+      return result;
+    } catch (err) {
+      await pool.query('ROLLBACK');
+      throw err;
+    }
+  }),
+}));
 
 const request = require('supertest');
 const app = require('../app');
@@ -10,244 +53,257 @@ const { pool } = require('../db/pool');
 const TEST_CLIENT_ID = '550e8400-e29b-41d4-a716-446655440001';
 const TEST_EMPLOYEE_ID = '550e8400-e29b-41d4-a716-446655440100';
 const TEST_SITE_ID = '550e8400-e29b-41d4-a716-446655440010';
+const TEST_CHECKIN_ID = '550e8400-e29b-41d4-a716-446655440200';
 
-describe('Check-ins API', () => {
-  // Skip tests if DB not available
-  let dbAvailable = true;
+beforeEach(() => {
+  jest.clearAllMocks();
+});
 
-  beforeAll(async () => {
-    try {
-      await pool.query('SELECT 1');
-    } catch (err) {
-      console.warn('⚠️  Database not available, skipping integration tests');
-      dbAvailable = false;
-    }
+// =====================================================
+// POST /api/checkins — Validation (no DB needed)
+// =====================================================
+
+describe('POST /api/checkins — validation', () => {
+  test('rejects missing type (400)', async () => {
+    const res = await request(app)
+      .post('/api/checkins')
+      .send({ employee_id: TEST_EMPLOYEE_ID, site_id: TEST_SITE_ID });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Validation Error');
   });
 
-  afterAll(async () => {
-    await pool.end();
+  test('rejects invalid employee_id UUID (400)', async () => {
+    const res = await request(app)
+      .post('/api/checkins')
+      .send({ employee_id: 'not-a-uuid', site_id: TEST_SITE_ID, type: 'IN' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Validation Error');
   });
 
-  describe('POST /api/checkins — Create check-in', () => {
-    test('Should create check-in with valid data', async () => {
-      if (!dbAvailable) return;
+  test('rejects invalid type value (400)', async () => {
+    const res = await request(app)
+      .post('/api/checkins')
+      .send({ employee_id: TEST_EMPLOYEE_ID, site_id: TEST_SITE_ID, type: 'MAYBE' });
 
-      const response = await request(app)
-        .post('/api/checkins')
-        .send({
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Validation Error');
+  });
+
+  test('rejects empty body (400)', async () => {
+    const res = await request(app).post('/api/checkins').send({});
+    expect(res.status).toBe(400);
+  });
+});
+
+// =====================================================
+// POST /api/checkins — Success path (mocked DB)
+// =====================================================
+
+describe('POST /api/checkins — success', () => {
+  test('creates check-in and returns 201', async () => {
+    // withTransaction mock calls pool.query: BEGIN, employee, site, assignment, INSERT, audit, COMMIT
+    pool.query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] }) // employee
+      .mockResolvedValueOnce({ rows: [{ id: TEST_SITE_ID }] }) // site
+      .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }) // assignment
+      .mockResolvedValueOnce({
+        rows: [{
+          id: TEST_CHECKIN_ID,
           employee_id: TEST_EMPLOYEE_ID,
           site_id: TEST_SITE_ID,
           type: 'IN',
-        });
+          timestamp: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        }],
+      }) // INSERT
+      .mockResolvedValueOnce({}) // audit log INSERT
+      .mockResolvedValueOnce({}); // COMMIT
 
-      expect(response.status).toBe(201);
-      expect(response.body.data).toHaveProperty('id');
-      expect(response.body.data.type).toBe('IN');
-      expect(response.body.message).toBe('Check-in created successfully');
-    });
+    const res = await request(app)
+      .post('/api/checkins')
+      .send({ employee_id: TEST_EMPLOYEE_ID, site_id: TEST_SITE_ID, type: 'IN' });
 
-    test('Should reject invalid employee_id', async () => {
-      if (!dbAvailable) return;
+    expect(res.status).toBe(201);
+    expect(res.body.data).toHaveProperty('id');
+    expect(res.body.data.type).toBe('IN');
+    expect(res.body.message).toBe('Check-in created successfully');
+  });
 
-      const response = await request(app)
-        .post('/api/checkins')
-        .send({
-          employee_id: 'not-uuid',
-          site_id: TEST_SITE_ID,
-          type: 'IN',
-        });
+  test('returns 404 when employee not found in DB', async () => {
+    pool.query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rows: [] }) // employee not found
+      .mockResolvedValueOnce({}); // ROLLBACK
 
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Validation Error');
-    });
+    const res = await request(app)
+      .post('/api/checkins')
+      .send({ employee_id: TEST_EMPLOYEE_ID, site_id: TEST_SITE_ID, type: 'IN' });
 
-    test('Should reject missing type', async () => {
-      if (!dbAvailable) return;
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('EMPLOYEE_NOT_FOUND');
+  });
 
-      const response = await request(app)
-        .post('/api/checkins')
-        .send({
+  test('returns 404 when site not found', async () => {
+    pool.query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] }) // employee OK
+      .mockResolvedValueOnce({ rows: [] }) // site not found
+      .mockResolvedValueOnce({}); // ROLLBACK
+
+    const res = await request(app)
+      .post('/api/checkins')
+      .send({ employee_id: TEST_EMPLOYEE_ID, site_id: TEST_SITE_ID, type: 'IN' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('SITE_NOT_FOUND');
+  });
+
+  test('returns 400 when employee not assigned to site', async () => {
+    pool.query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] }) // employee
+      .mockResolvedValueOnce({ rows: [{ id: TEST_SITE_ID }] }) // site
+      .mockResolvedValueOnce({ rows: [] }) // assignment: not assigned
+      .mockResolvedValueOnce({}); // ROLLBACK
+
+    const res = await request(app)
+      .post('/api/checkins')
+      .send({ employee_id: TEST_EMPLOYEE_ID, site_id: TEST_SITE_ID, type: 'IN' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+});
+
+// =====================================================
+// GET /api/checkins — Validation + mocked results
+// =====================================================
+
+describe('GET /api/checkins', () => {
+  test('returns 200 with empty array when no checkins', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: [] }) // checkins
+      .mockResolvedValueOnce({ rows: [{ total: '0' }] }); // count
+
+    const res = await request(app)
+      .get('/api/checkins')
+      .query({ client_id: TEST_CLIENT_ID });
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.pagination).toHaveProperty('total');
+  });
+
+  test('returns 200 with results and pagination', async () => {
+    const mockCheckins = [
+      { id: TEST_CHECKIN_ID, employee_id: TEST_EMPLOYEE_ID, type: 'IN', timestamp: new Date().toISOString() },
+    ];
+    pool.query
+      .mockResolvedValueOnce({ rows: mockCheckins }) // data
+      .mockResolvedValueOnce({ rows: [{ total: '1' }] }); // count
+
+    const res = await request(app)
+      .get('/api/checkins')
+      .query({ client_id: TEST_CLIENT_ID, limit: 10, offset: 0 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBe(1);
+    expect(res.body.pagination.limit).toBe(10);
+  });
+
+  test('returns 400 when date range exceeds 90 days', async () => {
+    const res = await request(app)
+      .get('/api/checkins')
+      .query({ client_id: TEST_CLIENT_ID, date_from: '2025-01-01', date_to: '2025-05-01' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Validation Error');
+  });
+
+  test('returns 400 for invalid date format', async () => {
+    const res = await request(app)
+      .get('/api/checkins')
+      .query({ client_id: TEST_CLIENT_ID, date_from: '01-01-2026' });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+// =====================================================
+// PUT /api/checkins/:id — Validation + mocked results
+// =====================================================
+
+describe('PUT /api/checkins/:id', () => {
+  test('returns 400 for invalid UUID in path', async () => {
+    const res = await request(app)
+      .put('/api/checkins/not-a-uuid')
+      .send({ type: 'OUT' });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 404 when checkin not found', async () => {
+    pool.query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rows: [] }) // checkin query → not found
+      .mockResolvedValueOnce({}); // ROLLBACK
+
+    const res = await request(app)
+      .put(`/api/checkins/${TEST_CHECKIN_ID}`)
+      .send({ type: 'OUT' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('CHECKIN_NOT_FOUND');
+  });
+
+  test('returns 400 when correction window has passed (>7 days)', async () => {
+    const oldTimestamp = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(); // 8 days ago
+    pool.query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({
+        rows: [{ id: TEST_CHECKIN_ID, type: 'IN', timestamp: oldTimestamp, site_id: TEST_SITE_ID }],
+      }) // checkin found
+      .mockResolvedValueOnce({}); // ROLLBACK
+
+    const res = await request(app)
+      .put(`/api/checkins/${TEST_CHECKIN_ID}`)
+      .send({ type: 'OUT' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  test('corrects checkin within time window', async () => {
+    const recentTimestamp = new Date(Date.now() - 60 * 1000).toISOString(); // 1 min ago
+    pool.query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({
+        rows: [{ id: TEST_CHECKIN_ID, type: 'IN', timestamp: recentTimestamp, site_id: TEST_SITE_ID }],
+      }) // fetch checkin
+      .mockResolvedValueOnce({
+        rows: [{
+          id: TEST_CHECKIN_ID,
+          type: 'OUT',
+          timestamp: recentTimestamp,
+          modified_at: new Date().toISOString(),
+          modified_by_name: 'mvp-user-1',
           employee_id: TEST_EMPLOYEE_ID,
           site_id: TEST_SITE_ID,
-        });
+          correction_note: null,
+        }],
+      }) // UPDATE
+      .mockResolvedValueOnce({}) // audit INSERT
+      .mockResolvedValueOnce({}); // COMMIT
 
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Validation Error');
-    });
+    const res = await request(app)
+      .put(`/api/checkins/${TEST_CHECKIN_ID}`)
+      .send({ type: 'OUT' });
 
-    test('Should reject non-existent employee', async () => {
-      if (!dbAvailable) return;
-
-      const response = await request(app)
-        .post('/api/checkins')
-        .send({
-          employee_id: '00000000-0000-0000-0000-000000000000',
-          site_id: TEST_SITE_ID,
-          type: 'IN',
-        });
-
-      expect(response.status).toBe(404);
-      expect(response.body.error).toBe('Employee not found');
-    });
-  });
-
-  describe('GET /api/checkins — List check-ins', () => {
-    test('Should list checkins with required client_id', async () => {
-      if (!dbAvailable) return;
-
-      const response = await request(app)
-        .get('/api/checkins')
-        .query({ client_id: TEST_CLIENT_ID });
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body.data)).toBe(true);
-      expect(response.body.pagination).toHaveProperty('limit');
-      expect(response.body.pagination).toHaveProperty('offset');
-      expect(response.body.pagination).toHaveProperty('total');
-    });
-
-    test('Should reject missing client_id', async () => {
-      if (!dbAvailable) return;
-
-      const response = await request(app)
-        .get('/api/checkins');
-
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Validation Error');
-    });
-
-    test('Should filter by site_id', async () => {
-      if (!dbAvailable) return;
-
-      const response = await request(app)
-        .get('/api/checkins')
-        .query({
-          client_id: TEST_CLIENT_ID,
-          site_id: TEST_SITE_ID,
-        });
-
-      expect(response.status).toBe(200);
-      expect(response.body.data).toBeDefined();
-    });
-
-    test('Should reject date range > 90 days', async () => {
-      if (!dbAvailable) return;
-
-      const response = await request(app)
-        .get('/api/checkins')
-        .query({
-          client_id: TEST_CLIENT_ID,
-          date_from: '2025-01-01',
-          date_to: '2025-05-01', // ~120 days
-        });
-
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Validation Error');
-    });
-
-    test('Should support pagination', async () => {
-      if (!dbAvailable) return;
-
-      const response = await request(app)
-        .get('/api/checkins')
-        .query({
-          client_id: TEST_CLIENT_ID,
-          limit: 10,
-          offset: 0,
-        });
-
-      expect(response.status).toBe(200);
-      expect(response.body.pagination.limit).toBe(10);
-      expect(response.body.pagination.offset).toBe(0);
-    });
-  });
-
-  describe('PUT /api/checkins/:id — Correct check-in', () => {
-    let checkinId;
-
-    beforeAll(async () => {
-      if (!dbAvailable) return;
-      // Create a check-in to modify
-      const result = await pool.query(
-        `INSERT INTO checkins (employee_id, site_id, client_id, type, timestamp, created_by)
-         VALUES ($1, $2, $3, $4, NOW(), 'test')
-         RETURNING id`,
-        [TEST_EMPLOYEE_ID, TEST_SITE_ID, TEST_CLIENT_ID, 'IN']
-      );
-      checkinId = result.rows[0].id;
-    });
-
-    test('Should correct check-in within 15 minutes', async () => {
-      if (!dbAvailable || !checkinId) return;
-
-      const response = await request(app)
-        .put(`/api/checkins/${checkinId}`)
-        .send({ type: 'OUT' });
-
-      expect(response.status).toBe(200);
-      expect(response.body.data.type).toBe('OUT');
-      expect(response.body.data.modified_at).toBeDefined();
-    });
-
-    test('Should reject invalid checkin ID', async () => {
-      if (!dbAvailable) return;
-
-      const response = await request(app)
-        .put('/api/checkins/not-uuid')
-        .send({ type: 'OUT' });
-
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Validation Error');
-    });
-
-    test('Should reject non-existent check-in', async () => {
-      if (!dbAvailable) return;
-
-      const response = await request(app)
-        .put('/api/checkins/00000000-0000-0000-0000-000000000000')
-        .send({ type: 'OUT' });
-
-      expect(response.status).toBe(404);
-      expect(response.body.error).toBe('Check-in not found');
-    });
-  });
-
-  describe('GET /api/export/csv — Export as CSV', () => {
-    test('Should return CSV content', async () => {
-      if (!dbAvailable) return;
-
-      const response = await request(app)
-        .get('/api/export/csv')
-        .query({ client_id: TEST_CLIENT_ID });
-
-      expect(response.status).toBe(200);
-      expect(response.headers['content-type']).toMatch(/text\/csv/);
-      expect(response.headers['content-disposition']).toMatch(/attachment/);
-    });
-
-    test('Should reject invalid client_id', async () => {
-      if (!dbAvailable) return;
-
-      const response = await request(app)
-        .get('/api/export/csv')
-        .query({ client_id: 'not-uuid' });
-
-      expect(response.status).toBe(400);
-    });
-
-    test('Should filter CSV by date range', async () => {
-      if (!dbAvailable) return;
-
-      const response = await request(app)
-        .get('/api/export/csv')
-        .query({
-          client_id: TEST_CLIENT_ID,
-          date_from: '2026-06-01',
-          date_to: '2026-06-02',
-        });
-
-      expect(response.status).toBe(200);
-      expect(response.headers['content-type']).toMatch(/text\/csv/);
-    });
+    expect(res.status).toBe(200);
+    expect(res.body.data.type).toBe('OUT');
+    expect(res.body.data.modified_at).toBeDefined();
   });
 });

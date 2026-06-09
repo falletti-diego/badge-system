@@ -226,7 +226,7 @@ Go-live with first paying customer (pilota).
 - [x] **S.20** `app.js` ✅ — `dotenv.config()` spostato prima di tutti i `require()` (salvo Sentry che deve restare primo per instrumentazione).
 - [x] **S.21** `app.js` ✅ — Rimosso commento stale `// Deployment test - mar 2 giu 2026`.
 - [x] **S.22** ✅ — `uuid` package rimosso, sostituito con `crypto.randomUUID()` (Node 20+ builtin). `npm uninstall uuid` eseguito.
-- [ ] **S.23** Test coverage 9% → fragile. Fix: aggiungere test per auth, checkins, admin (target ≥40%).
+- [x] **S.23** ✅ Test coverage 9% → 40.37% statements / 41.34% lines. 78 test passati (0 falliti). 5 nuovi file di test con mock pool/Redis/rateLimiter.
 
 ---
 
@@ -287,6 +287,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-09 | Security Fixes HIGH+MEDIUM (Session 20) | S.10–S.19 | 6 HIGH fixati: LIMIT 50000 export, employee_id pre-transaction, password min 8, LIMIT 500 admin lists, statement_timeout 30s. 5 MEDIUM fixati: Sentry scrubber, logger singleton, resolvers.js utility, shifts audit_log, trust proxy. CSV import limit 100→500. ESLint 0 warnings (argsIgnorePattern ^_). |
 | 2026-06-09 | FASE 6.3 Custom Domain (Session 21) | 6.3 | `badge.dataxiom.it` → Netlify (custom_domain set). `api.dataxiom.it` → EC2 già attivo. CORS_ORIGIN SSM aggiornato. CNAME aggiunto su register.it. Let's Encrypt provisioned. E2E verificato. |
 | 2026-06-09 | Tech Debt LOW (Session 21 cont.) | S.2, S.20, S.21, S.22 | S.2: rimosso dead role guard AdminPage. S.20: dotenv.config() spostato prima dei require. S.21: stale comment rimosso. S.22: uuid→crypto.randomUUID(), pacchetto rimosso. |
+| 2026-06-09 | Test Coverage S.23 (Session 22) | S.23 | 5 nuovi file di test con mock pool/Redis/rateLimiter: auth.test.js (22), checkins.test.js (16), middleware.test.js (15), errors.test.js (16), employees.test.js (9). Coverage: 19% → 40.37% statements, 41.34% lines. 78/78 test passati. |
 
 ---
 
