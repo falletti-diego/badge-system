@@ -9,9 +9,19 @@ if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV || 'production',
-    tracesSampleRate: 0.2, // 20% of requests traced (free tier friendly)
-    // Attach user context from JWT if available
+    tracesSampleRate: 0.2,
     beforeSend(event) {
+      const SENSITIVE = ['authorization', 'password', 'token', 'cookie', 'x-api-key'];
+      if (event.request?.headers) {
+        for (const key of SENSITIVE) {
+          if (event.request.headers[key]) event.request.headers[key] = '[Filtered]';
+        }
+      }
+      if (event.request?.data) {
+        for (const key of SENSITIVE) {
+          if (event.request.data[key]) event.request.data[key] = '[Filtered]';
+        }
+      }
       return event;
     },
   });
@@ -26,7 +36,7 @@ const pinoHttp = require('pino-http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const { pool, testConnection, closePool } = require('./db/pool');
+const { pool, closePool } = require('./db/pool');
 const { initializeRedis, closeRedis } = require('./db/redis');
 const { ApiError, RateLimitError } = require('./utils/errors');
 const { apiLimiter, authLimiter, csvLimiter } = require('./middleware/rateLimiter');
@@ -52,6 +62,9 @@ const logger = pino({
 const app = express();
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// Trust the first hop (AWS ALB / Nginx) so req.ip reflects the real client IP
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet());
@@ -156,6 +169,7 @@ if (process.env.SENTRY_DSN) {
 }
 
 // Error handling middleware
+// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, _next) => {
   // Handle custom API errors
   if (err instanceof ApiError) {

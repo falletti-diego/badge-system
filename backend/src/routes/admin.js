@@ -179,7 +179,7 @@ router.post('/employees', createValidationMiddleware(AdminEmployeeSchema), async
 
 // --- POST /api/admin/employees/import (CSV bulk) ---
 //
-// F1: max rows reduced from 500→100 to stay within the 60s ALB timeout (bcryptjs pure-JS, ~200ms/hash)
+// F1: max rows 500 — bcrypt batched 10-parallel, ~10s for 500 rows, well within 60s ALB timeout
 // F1: bcrypt hashed in parallel batches of 10 before the DB transaction
 // F2: each created employee is logged to audit_log (best-effort, does not abort transaction)
 // F5: assigned_sites passed as $8::UUID[] (no fragile $N index arithmetic)
@@ -202,7 +202,7 @@ router.post('/employees/import', upload.single('file'), async (req, res, next) =
     const rows = await parseCsv(csvText);
 
     if (rows.length === 0) return next(new ValidationError('CSV file is empty'));
-    if (rows.length > 100) return next(new ValidationError('Max 100 employees per import'));
+    if (rows.length > 500) return next(new ValidationError('Max 500 employees per import'));
 
     // Prefetch all sites for this client once — used for name→UUID resolution
     const sitesResult = await pool.query(
@@ -323,9 +323,10 @@ router.get('/clients', async (req, res, next) => {
        LEFT JOIN sites s ON s.client_id = c.id
        LEFT JOIN employees e ON e.client_id = c.id
        GROUP BY c.id
-       ORDER BY c.created_at DESC`
+       ORDER BY c.created_at DESC
+       LIMIT 500`
     );
-    res.json({ success: true, data: result.rows });
+    res.json({ success: true, data: result.rows, total: result.rows.length });
   } catch (err) {
     next(err);
   }
@@ -356,7 +357,7 @@ router.get('/employees', async (req, res, next) => {
        LIMIT 200`,
       params
     );
-    res.json({ success: true, data: result.rows });
+    res.json({ success: true, data: result.rows, total: result.rows.length });
   } catch (err) {
     next(err);
   }
@@ -477,10 +478,11 @@ router.get('/sites', async (req, res, next) => {
        FROM sites s
        JOIN clients c ON c.id = s.client_id
        ${where}
-       ORDER BY s.created_at DESC`,
+       ORDER BY s.created_at DESC
+       LIMIT 500`,
       params
     );
-    res.json({ success: true, data: result.rows });
+    res.json({ success: true, data: result.rows, total: result.rows.length });
   } catch (err) {
     next(err);
   }

@@ -21,7 +21,7 @@ const dbConfig = {
   max: parseInt(process.env.DB_POOL_MAX || '20', 10),
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 60000, // Increased for RDS cold starts
-  statement_timeout: 120000, // Increased for slow queries
+  statement_timeout: 30000,
   application_name: 'badge-system-api',
   // DB_SSL_REJECT_UNAUTHORIZED defaults to true in production.
   // Set to 'false' ONLY as a temporary escape hatch if your RDS CA cert isn't

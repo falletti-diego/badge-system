@@ -7,17 +7,15 @@
  */
 
 const express = require('express');
-const pino = require('pino');
 const { pool } = require('../db/pool');
 const { createValidationMiddleware, GetShiftsSchema, GetMyScheduleSchema, PostShiftsSchema, ExportShiftsSchema } = require('../middleware/validation');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
 const { NotFoundError, ForbiddenError, ValidationError } = require('../utils/errors');
+const { logAudit } = require('../middleware/audit');
+const logger = require('../utils/logger');
 
 const router = express.Router();
-const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-});
 
 // =====================================================
 // GET /api/shifts/my-schedule — Employee's own shifts
@@ -283,7 +281,19 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
       }
     }
 
-    // 3. Use transaction for atomic insert/update
+    // 3. Validate all employee IDs belong to this client BEFORE opening transaction
+    const empIds = Object.keys(shifts_data);
+    if (empIds.length > 0) {
+      const validEmpResult = await pool.query(
+        'SELECT id FROM employees WHERE id = ANY($1::uuid[]) AND client_id = $2::uuid',
+        [empIds, clientId]
+      );
+      if (validEmpResult.rows.length !== empIds.length) {
+        throw new ValidationError('One or more employee IDs are invalid or belong to a different client');
+      }
+    }
+
+    // 4. Use transaction for atomic insert/update
     const { shiftsRecord, oldValue } = await withTransaction(async (client) => {
       const existingResult = await client.query(
         `SELECT id, shifts_data FROM shifts
@@ -316,14 +326,19 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
       return { shiftsRecord: record, oldValue: existingShiftsData };
     });
 
-    // 4. Create notifications for employees whose shifts changed (best-effort, outside transaction)
-    // Validate all employee IDs belong to caller's client before any INSERT
-    const empIds = Object.keys(shifts_data);
-    const validEmpResult = await pool.query(
-      'SELECT id FROM employees WHERE id = ANY($1::uuid[]) AND client_id = $2::uuid',
-      [empIds, clientId]
-    );
-    const validEmpIds = new Set(validEmpResult.rows.map((r) => r.id));
+    // 5. Audit log — best-effort, outside transaction
+    await logAudit(pool, {
+      action: oldValue ? 'shift_updated' : 'shift_created',
+      entity: 'shift',
+      entityId: shiftsRecord.id,
+      clientId,
+      oldValue: oldValue || undefined,
+      newValue: shifts_data,
+      userId,
+    });
+
+    // 6. Create notifications for employees whose shifts changed (best-effort, outside transaction)
+    const validEmpIds = new Set(empIds);
 
     const SHIFT_LABELS = { m: 'Mattino', p: 'Pomeriggio', s: 'Sera', R: 'Riposo' };
     for (const [empId, dates] of Object.entries(shifts_data)) {

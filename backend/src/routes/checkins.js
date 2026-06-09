@@ -6,7 +6,6 @@
  */
 
 const express = require('express');
-const pino = require('pino');
 const { pool } = require('../db/pool');
 const { createValidationMiddleware, PostCheckinSchema, GetCheckinsSchema, PutCheckinSchema, GetStatsSchema } = require('../middleware/validation');
 const { logAudit } = require('../middleware/audit');
@@ -14,34 +13,10 @@ const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
 const { NotFoundError, ValidationError } = require('../utils/errors');
 const { deleteCacheByPattern } = require('../db/redis');
+const { resolveEmployeeId, resolveSiteId } = require('../utils/resolvers');
+const logger = require('../utils/logger');
 
 const router = express.Router();
-const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-});
-
-// Helper: resolve employee/site ID from name OR UUID, scoped to client
-async function resolveEmployeeId(nameOrId, clientId) {
-  if (!nameOrId) return undefined;
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (uuidRegex.test(nameOrId)) return nameOrId;
-  const result = await pool.query(
-    'SELECT id FROM employees WHERE name = $1 AND client_id = $2::uuid LIMIT 1',
-    [nameOrId, clientId]
-  );
-  return result.rows[0]?.id;
-}
-
-async function resolveSiteId(nameOrId, clientId) {
-  if (!nameOrId) return undefined;
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (uuidRegex.test(nameOrId)) return nameOrId;
-  const result = await pool.query(
-    'SELECT id FROM sites WHERE name = $1 AND client_id = $2::uuid LIMIT 1',
-    [nameOrId, clientId]
-  );
-  return result.rows[0]?.id;
-}
 
 // =====================================================
 // POST /api/checkins — Create check-in
@@ -478,7 +453,7 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
       return { updated, oldValues };
     });
 
-    const { updated, oldValues } = result;
+    const { updated } = result;
 
     logger.info({
       action: 'checkin_corrected',

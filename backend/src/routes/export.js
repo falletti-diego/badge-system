@@ -4,40 +4,15 @@
  */
 
 const express = require('express');
-const pino = require('pino');
 const { stringify } = require('csv-stringify');
 const { pool } = require('../db/pool');
 const { createValidationMiddleware, GetExportCsvSchema } = require('../middleware/validation');
 const { requireAuth } = require('../middleware/auth');
 const { ForbiddenError } = require('../utils/errors');
+const { resolveEmployeeId, resolveSiteId } = require('../utils/resolvers');
+const logger = require('../utils/logger');
 
 const router = express.Router();
-const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-});
-
-// Helper: resolve employee/site ID from name OR UUID, scoped to client
-async function resolveEmployeeId(nameOrId, clientId) {
-  if (!nameOrId) return undefined;
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (uuidRegex.test(nameOrId)) return nameOrId;
-  const result = await pool.query(
-    'SELECT id FROM employees WHERE name = $1 AND client_id = $2::uuid LIMIT 1',
-    [nameOrId, clientId]
-  );
-  return result.rows[0]?.id;
-}
-
-async function resolveSiteId(nameOrId, clientId) {
-  if (!nameOrId) return undefined;
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (uuidRegex.test(nameOrId)) return nameOrId;
-  const result = await pool.query(
-    'SELECT id FROM sites WHERE name = $1 AND client_id = $2::uuid LIMIT 1',
-    [nameOrId, clientId]
-  );
-  return result.rows[0]?.id;
-}
 
 /**
  * Escape CSV field to prevent formula injection
@@ -132,6 +107,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
       LEFT JOIN sites s ON c.site_id = s.id
       ${whereClause}
       ORDER BY c.timestamp DESC
+      LIMIT 50000
     `;
 
     const result = await pool.query(query, params);
@@ -140,6 +116,10 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
     const filename = `presenze_${new Date().toISOString().split('T')[0]}.csv`;
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Total-Count', String(result.rows.length));
+    if (result.rows.length === 50000) {
+      res.setHeader('X-Truncated', 'true');
+    }
 
     logger.info({
       action: 'csv_export_started',

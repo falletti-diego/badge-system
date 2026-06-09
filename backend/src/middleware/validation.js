@@ -376,7 +376,7 @@ const AdminEmployeeSchema = z.object({
     }).default('employee'),
     site_id: z.string().uuid('site_id must be a valid UUID').optional().nullable(),
     assigned_sites: z.array(z.string().uuid('each assigned_site must be a valid UUID')).default([]),
-    password: z.string().min(6, 'password must be at least 6 characters').max(100).optional(),
+    password: z.string().min(8, 'password must be at least 8 characters').max(100).optional(),
   }),
 });
 

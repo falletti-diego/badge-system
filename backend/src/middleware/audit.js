@@ -7,11 +7,7 @@
  * user_id is only stored when it is a valid UUID (i.e. employee users); managers use NULL.
  */
 
-const pino = require('pino');
-
-const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-});
+const logger = require('../utils/logger');
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -19,7 +15,7 @@ async function logAudit(client, {
   action,
   entity,
   entityId,
-  clientId, // kept in signature for call-site compatibility, not used in INSERT
+  _clientId, // kept in signature for call-site compatibility, not used in INSERT
   oldValue,
   newValue,
   userId = 'system',
