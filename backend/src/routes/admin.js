@@ -557,6 +557,131 @@ function generateTempPassword() {
   return Array.from(bytes, (b) => chars[b % chars.length]).join('');
 }
 
+// =====================================================
+// GET /api/admin/debug/employee-assignment/:employeeId
+// Debug endpoint to diagnose assigned_sites issues
+// =====================================================
+router.get('/debug/employee-assignment/:employeeId', requireAuth, async (req, res, next) => {
+  const { employeeId } = req.params;
+  const { client_id } = req.user;
+
+  try {
+    // 1. Get employee details
+    const empResult = await pool.query(
+      `SELECT id, client_id, email, name, role, assigned_sites
+       FROM employees
+       WHERE id = $1::uuid AND client_id = $2::uuid`,
+      [employeeId, client_id]
+    );
+
+    if (empResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const employee = empResult.rows[0];
+
+    // 2. Get all sites for this client
+    const sitesResult = await pool.query(
+      `SELECT id, name FROM sites WHERE client_id = $1 ORDER BY name ASC`,
+      [client_id]
+    );
+
+    // 3. Test the ANY(assigned_sites) query for each site
+    const assignmentTests = [];
+    for (const site of sitesResult.rows) {
+      const testResult = await pool.query(
+        `SELECT
+          site_id,
+          is_assigned,
+          raw_assigned_sites,
+          any_result
+        FROM (
+          SELECT
+            $2::uuid as site_id,
+            $2::uuid = ANY($1::uuid[]) as is_assigned,
+            $1::uuid[] as raw_assigned_sites,
+            $1::uuid[] as any_result
+        ) t`,
+        [employee.assigned_sites || [], site.id]
+      );
+
+      assignmentTests.push({
+        site_id: site.id,
+        site_name: site.name,
+        is_assigned: testResult.rows[0]?.is_assigned || false,
+        details: testResult.rows[0],
+      });
+    }
+
+    // 4. Raw PostgreSQL check
+    const rawCheckResult = await pool.query(
+      `SELECT
+        assigned_sites,
+        assigned_sites IS NULL as is_null,
+        array_length(assigned_sites, 1) as array_length,
+        assigned_sites::text as assigned_sites_text
+       FROM employees
+       WHERE id = $1::uuid`,
+      [employeeId]
+    );
+
+    res.json({
+      debug_info: {
+        timestamp: new Date().toISOString(),
+        client_id: client_id,
+        employee_id: employeeId,
+      },
+      employee: {
+        id: employee.id,
+        email: employee.email,
+        name: employee.name,
+        role: employee.role,
+        assigned_sites: employee.assigned_sites,
+        assigned_sites_type: typeof employee.assigned_sites,
+        assigned_sites_is_array: Array.isArray(employee.assigned_sites),
+        assigned_sites_length: Array.isArray(employee.assigned_sites) ? employee.assigned_sites.length : null,
+      },
+      sites: sitesResult.rows.map((s, idx) => ({
+        site_id: s.id,
+        site_name: s.name,
+        assignment_test: assignmentTests[idx],
+      })),
+      raw_database_check: rawCheckResult.rows[0],
+      diagnosis: generateDiagnosis(employee, assignmentTests),
+    });
+  } catch (err) {
+    logger.error({ action: 'debug_error', error: err.message, stack: err.stack });
+    next(err);
+  }
+});
+
+function generateDiagnosis(employee, assignmentTests) {
+  const issues = [];
+
+  if (!employee.assigned_sites) {
+    issues.push('🔴 assigned_sites is NULL - should be an array');
+  } else if (!Array.isArray(employee.assigned_sites)) {
+    issues.push('🔴 assigned_sites is not an array - type: ' + typeof employee.assigned_sites);
+  } else if (employee.assigned_sites.length === 0) {
+    issues.push('🟠 assigned_sites is EMPTY array - no sites assigned');
+  }
+
+  const failedTests = assignmentTests.filter(t => !t.is_assigned);
+  if (failedTests.length === assignmentTests.length && assignmentTests.length > 0) {
+    issues.push('🔴 ANY(assigned_sites) fails for ALL sites - array/query issue');
+  }
+
+  if (issues.length === 0) {
+    issues.push('✅ No obvious issues found - check mobile app QR code scanning logic');
+  }
+
+  return {
+    issues,
+    summary: issues.join('\n'),
+    assignment_tests_passed: assignmentTests.filter(t => t.is_assigned).length + '/' + assignmentTests.length,
+  };
+}
+
 function parseCsv(text) {
   return new Promise((resolve, reject) => {
     parse(text, {
