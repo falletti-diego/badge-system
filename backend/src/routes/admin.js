@@ -5,11 +5,11 @@ const multer = require('multer');
 const { parse } = require('csv-parse');
 const { z } = require('zod');
 const { randomBytes, randomUUID } = require('crypto');
-const pino = require('pino');
 const { pool } = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { hashPassword } = require('../auth/password');
 const { ValidationError, ForbiddenError, NotFoundError } = require('../utils/errors');
+const logger = require('../utils/logger');
 const { logAudit } = require('../middleware/audit');
 const {
   AdminClientSchema,
@@ -20,8 +20,6 @@ const {
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } }); // 2MB max
-
-const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
 // All admin routes require auth + admin role
 router.use(requireAuth);
@@ -467,19 +465,18 @@ router.post('/employees/:id/reset-password', async (req, res, next) => {
       return next(new ValidationError('Invalid employee id'));
     }
 
-    const empResult = await pool.query(
-      'SELECT id, name, email, client_id FROM employees WHERE id = $1',
-      [id]
-    );
-    if (empResult.rowCount === 0) {
-      return next(new NotFoundError('Employee not found', 'EMPLOYEE_NOT_FOUND'));
-    }
-
-    const emp = empResult.rows[0];
     const newPassword = generateTempPassword();
     const passwordHash = await hashPassword(newPassword);
 
-    await pool.query('UPDATE employees SET password_hash = $1 WHERE id = $2', [passwordHash, id]);
+    const updateResult = await pool.query(
+      'UPDATE employees SET password_hash = $1 WHERE id = $2 RETURNING id, name, email, client_id',
+      [passwordHash, id]
+    );
+    if (updateResult.rowCount === 0) {
+      return next(new NotFoundError('Employee not found', 'EMPLOYEE_NOT_FOUND'));
+    }
+
+    const emp = updateResult.rows[0];
 
     logger.info({ action: 'admin_reset_password', employee_id: id, admin_id: req.user.user_id });
     await logAudit(pool, {
@@ -490,7 +487,9 @@ router.post('/employees/:id/reset-password', async (req, res, next) => {
       oldValue: null,
       newValue: { reset_by: req.user.user_id, email: emp.email },
       userId: req.user.user_id,
-    }).catch(() => {});
+    }).catch((auditErr) => {
+      logger.warn({ action: 'audit_log_failed', employee_id: emp.id, error: auditErr.message });
+    });
 
     res.json({
       success: true,

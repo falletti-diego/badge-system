@@ -50,8 +50,7 @@ beforeEach(() => {
 describe('POST /api/admin/employees/:id/reset-password — happy path', () => {
   test('returns 200 with temp_password when employee exists', async () => {
     pool.query
-      .mockResolvedValueOnce({ rowCount: 1, rows: [mockEmployee] }) // SELECT employee
-      .mockResolvedValueOnce({ rowCount: 1, rows: [] })             // UPDATE password_hash
+      .mockResolvedValueOnce({ rowCount: 1, rows: [mockEmployee] }) // UPDATE...RETURNING
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });            // audit_log INSERT
 
     const res = await request(app)
@@ -67,7 +66,6 @@ describe('POST /api/admin/employees/:id/reset-password — happy path', () => {
   test('response includes employee name and email (for UI display)', async () => {
     pool.query
       .mockResolvedValueOnce({ rowCount: 1, rows: [mockEmployee] })
-      .mockResolvedValueOnce({ rowCount: 1, rows: [] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });
 
     const res = await request(app)
@@ -89,29 +87,28 @@ describe('POST /api/admin/employees/:id/reset-password — happy path', () => {
     expect(res1.body.temp_password).not.toBe(res2.body.temp_password);
   });
 
-  test('calls UPDATE on the correct employee id', async () => {
+  test('calls UPDATE...RETURNING on the correct employee id', async () => {
     pool.query
       .mockResolvedValueOnce({ rowCount: 1, rows: [mockEmployee] })
-      .mockResolvedValueOnce({ rowCount: 1, rows: [] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });
 
     await request(app).post(`/api/admin/employees/${VALID_EMP_ID}/reset-password`);
 
-    // Second pool.query call is the UPDATE
-    const updateCall = pool.query.mock.calls[1];
+    // First (and only) pool.query call is the UPDATE...RETURNING
+    const updateCall = pool.query.mock.calls[0];
     expect(updateCall[0]).toMatch(/UPDATE employees SET password_hash/i);
+    expect(updateCall[0]).toMatch(/RETURNING/i);
     expect(updateCall[1][1]).toBe(VALID_EMP_ID);
   });
 
   test('password hash in UPDATE is bcrypt-formatted (starts with $2)', async () => {
     pool.query
       .mockResolvedValueOnce({ rowCount: 1, rows: [mockEmployee] })
-      .mockResolvedValueOnce({ rowCount: 1, rows: [] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });
 
     await request(app).post(`/api/admin/employees/${VALID_EMP_ID}/reset-password`);
 
-    const updateCall = pool.query.mock.calls[1];
+    const updateCall = pool.query.mock.calls[0];
     const hashArg = updateCall[1][0]; // first param is the hash
     expect(hashArg).toMatch(/^\$2[aby]\$/);
   });
@@ -119,13 +116,12 @@ describe('POST /api/admin/employees/:id/reset-password — happy path', () => {
   test('audit log INSERT is called after UPDATE', async () => {
     pool.query
       .mockResolvedValueOnce({ rowCount: 1, rows: [mockEmployee] })
-      .mockResolvedValueOnce({ rowCount: 1, rows: [] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });
 
     await request(app).post(`/api/admin/employees/${VALID_EMP_ID}/reset-password`);
 
-    // Third call is audit_log INSERT
-    const auditCall = pool.query.mock.calls[2];
+    // Second call is audit_log INSERT
+    const auditCall = pool.query.mock.calls[1];
     expect(auditCall[0]).toMatch(/INSERT INTO audit_log/i);
     // The action param ($1) should be 'password_reset'
     expect(auditCall[1][0]).toBe('password_reset');
@@ -151,7 +147,7 @@ describe('POST /api/admin/employees/:id/reset-password — error cases', () => {
   });
 
   test('returns 404 when employee does not exist', async () => {
-    pool.query.mockResolvedValueOnce({ rowCount: 0, rows: [] }); // employee not found
+    pool.query.mockResolvedValueOnce({ rowCount: 0, rows: [] }); // UPDATE finds no row
 
     const res = await request(app)
       .post(`/api/admin/employees/${UNKNOWN_UUID}/reset-password`);
@@ -160,17 +156,16 @@ describe('POST /api/admin/employees/:id/reset-password — error cases', () => {
     expect(res.body.error).toBe('EMPLOYEE_NOT_FOUND');
   });
 
-  test('does NOT call UPDATE when employee not found', async () => {
+  test('only one DB call when employee not found (UPDATE...RETURNING is atomic)', async () => {
     pool.query.mockResolvedValueOnce({ rowCount: 0, rows: [] });
 
     await request(app).post(`/api/admin/employees/${UNKNOWN_UUID}/reset-password`);
 
-    // Only the SELECT should have been called, never the UPDATE
     expect(pool.query).toHaveBeenCalledTimes(1);
-    expect(pool.query.mock.calls[0][0]).toMatch(/SELECT.*FROM employees/i);
+    expect(pool.query.mock.calls[0][0]).toMatch(/UPDATE employees SET password_hash/i);
   });
 
-  test('returns 500 when DB throws on SELECT', async () => {
+  test('returns 500 when DB throws on UPDATE', async () => {
     pool.query.mockRejectedValueOnce(new Error('DB connection lost'));
 
     const res = await request(app)
@@ -181,8 +176,7 @@ describe('POST /api/admin/employees/:id/reset-password — error cases', () => {
 
   test('returns 200 even when audit log INSERT fails (best-effort)', async () => {
     pool.query
-      .mockResolvedValueOnce({ rowCount: 1, rows: [mockEmployee] }) // SELECT OK
-      .mockResolvedValueOnce({ rowCount: 1, rows: [] })             // UPDATE OK
+      .mockResolvedValueOnce({ rowCount: 1, rows: [mockEmployee] }) // UPDATE...RETURNING OK
       .mockRejectedValueOnce(new Error('audit_log table missing')); // audit FAILS
 
     const res = await request(app)
