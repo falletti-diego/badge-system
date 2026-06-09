@@ -12,6 +12,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import LockResetIcon from '@mui/icons-material/LockReset';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../../services/apiClient';
 import authService from '../../../services/authService';
@@ -60,6 +61,70 @@ function ConfirmDeleteDialog({ open, title, description, onConfirm, onCancel, lo
         <Button onClick={onConfirm} color="error" variant="contained" disabled={loading}>
           {loading ? <CircularProgress size={18} /> : 'Elimina'}
         </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function ResetPasswordDialog({ employee, onClose }) {
+  const [loading, setLoading] = useState(false);
+  const [newPwd, setNewPwd] = useState(null);
+  const [error, setError] = useState(null);
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiClient.post(`/api/admin/employees/${employee.id}/reset-password`);
+      setNewPwd(res.data.temp_password);
+    } catch (err) {
+      setError(err.response?.data?.message || err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!employee} onClose={newPwd ? onClose : undefined} maxWidth="xs" fullWidth>
+      <DialogTitle>Reset password — {employee?.name}</DialogTitle>
+      <DialogContent>
+        {!newPwd ? (
+          <>
+            <DialogContentText>
+              Verrà generata una nuova password temporanea per{' '}
+              <strong>{employee?.email}</strong>.<br />
+              La password attuale sarà immediatamente invalidata.
+            </DialogContentText>
+            {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+          </>
+        ) : (
+          <Box>
+            <Alert severity="success" sx={{ mb: 2 }}>
+              Password reimpostata con successo. Comunica questa password al dipendente — non verrà mostrata di nuovo.
+            </Alert>
+            <Box display="flex" alignItems="center" gap={1} sx={{
+              p: 1.5, borderRadius: 1, bgcolor: 'grey.100', fontFamily: 'monospace',
+            }}>
+              <Typography sx={{ fontFamily: 'monospace', fontSize: '1rem', flexGrow: 1 }}>
+                {newPwd}
+              </Typography>
+              <CopyButton text={newPwd} />
+            </Box>
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions>
+        {!newPwd ? (
+          <>
+            <Button onClick={onClose} disabled={loading}>Annulla</Button>
+            <Button onClick={handleConfirm} variant="contained" color="warning" disabled={loading}
+              startIcon={loading ? <CircularProgress size={16} /> : <LockResetIcon />}>
+              {loading ? 'Reset in corso…' : 'Reimposta Password'}
+            </Button>
+          </>
+        ) : (
+          <Button onClick={onClose} variant="contained">Chiudi</Button>
+        )}
       </DialogActions>
     </Dialog>
   );
@@ -389,6 +454,7 @@ function EmployeesTab() {
   const fileRef = useRef(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [resetTarget, setResetTarget] = useState(null);
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -636,6 +702,11 @@ function EmployeesTab() {
                       <TableCell>{e.site_name || '—'}</TableCell>
                       <TableCell>{new Date(e.created_at).toLocaleDateString('it-IT')}</TableCell>
                       <TableCell align="right">
+                        <Tooltip title="Reset password">
+                          <IconButton size="small" color="warning" onClick={() => setResetTarget(e)}>
+                            <LockResetIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                         <Tooltip title="Elimina dipendente">
                           <IconButton size="small" color="error" onClick={() => setDeleteTarget(e)}>
                             <DeleteIcon fontSize="small" />
@@ -662,6 +733,13 @@ function EmployeesTab() {
         onCancel={() => setDeleteTarget(null)}
         loading={deleting}
       />
+
+      {resetTarget && (
+        <ResetPasswordDialog
+          employee={resetTarget}
+          onClose={() => setResetTarget(null)}
+        />
+      )}
     </Stack>
   );
 }

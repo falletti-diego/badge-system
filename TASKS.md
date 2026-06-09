@@ -141,9 +141,9 @@ Identificati nell'analisi critica del 2026-06-09. Tutti bloccanti per l'onboardi
 ### C.1 — Reset Password Dipendenti
 Senza questo ogni dipendente che dimentica la password richiede intervento manuale.
 
-- [ ] **C.1.1** Backend: `POST /api/admin/employees/:id/reset-password` — genera nuova temp password (bcrypt cost 12), aggiorna `password_hash` nel DB, restituisce la password in chiaro una volta sola all'admin
-- [ ] **C.1.2** Frontend AdminPage: bottone "Reset Password" nella tab Dipendenti — mostra la nuova password in un dialog con copia-negli-appunti (stessa UX del temp_password display esistente)
-- [ ] **C.1.3** Audit log: registra `password_reset` con `user_id` admin che ha eseguito l'azione
+- [x] **C.1.1** Backend: `POST /api/admin/employees/:id/reset-password` — genera nuova temp password (bcrypt cost 12), aggiorna `password_hash` nel DB, restituisce la password in chiaro una volta sola all'admin
+- [x] **C.1.2** Frontend AdminPage: bottone "Reset Password" nella tab Dipendenti — mostra la nuova password in un dialog con copia-negli-appunti (stessa UX del temp_password display esistente)
+- [x] **C.1.3** Audit log: registra `password_reset` con `user_id` admin che ha eseguito l'azione
 
 ### C.2 — API Versioning (/api/v1/)
 Senza versioning ogni cambiamento breaking all'API rompe l'app mobile in produzione su iPhone dei dipendenti. Non è possibile forzare aggiornamenti immediati su iOS.

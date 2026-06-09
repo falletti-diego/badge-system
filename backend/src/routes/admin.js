@@ -9,7 +9,7 @@ const pino = require('pino');
 const { pool } = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { hashPassword } = require('../auth/password');
-const { ValidationError, ForbiddenError } = require('../utils/errors');
+const { ValidationError, ForbiddenError, NotFoundError } = require('../utils/errors');
 const { logAudit } = require('../middleware/audit');
 const {
   AdminClientSchema,
@@ -453,6 +453,51 @@ router.delete('/employees/:id', async (req, res, next) => {
 
     logger.info({ action: 'admin_delete_employee', employee_id: emp.id, email: emp.email });
     res.json({ success: true, message: `Dipendente "${emp.name}" eliminato.` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- POST /api/admin/employees/:id/reset-password ---
+
+router.post('/employees/:id/reset-password', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!z.string().uuid().safeParse(id).success) {
+      return next(new ValidationError('Invalid employee id'));
+    }
+
+    const empResult = await pool.query(
+      'SELECT id, name, email, client_id FROM employees WHERE id = $1',
+      [id]
+    );
+    if (empResult.rowCount === 0) {
+      return next(new NotFoundError('Employee not found', 'EMPLOYEE_NOT_FOUND'));
+    }
+
+    const emp = empResult.rows[0];
+    const newPassword = generateTempPassword();
+    const passwordHash = await hashPassword(newPassword);
+
+    await pool.query('UPDATE employees SET password_hash = $1 WHERE id = $2', [passwordHash, id]);
+
+    logger.info({ action: 'admin_reset_password', employee_id: id, admin_id: req.user.user_id });
+    await logAudit(pool, {
+      action: 'password_reset',
+      entity: 'employee',
+      entityId: emp.id,
+      clientId: emp.client_id,
+      oldValue: null,
+      newValue: { reset_by: req.user.user_id, email: emp.email },
+      userId: req.user.user_id,
+    }).catch(() => {});
+
+    res.json({
+      success: true,
+      data: { id: emp.id, name: emp.name, email: emp.email },
+      temp_password: newPassword,
+      message: `Password reimpostata per ${emp.name}`,
+    });
   } catch (err) {
     next(err);
   }
