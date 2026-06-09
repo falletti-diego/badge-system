@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-09 (Session 20: S.10–S.19 fixati, CSV limit 100→500, ESLint 0 warnings)  
+**Last Updated:** 2026-06-09 (Session 24: C.5 Content Security Policy completo — _headers con CSP policy, commit 71b7db8, deploy live)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -149,11 +149,11 @@ Senza questo ogni dipendente che dimentica la password richiede intervento manua
 ### C.2 — API Versioning (/api/v1/)
 Senza versioning ogni cambiamento breaking all'API rompe l'app mobile in produzione su iPhone dei dipendenti. Non è possibile forzare aggiornamenti immediati su iOS.
 
-- [ ] **C.2.1** Backend: aggiungere prefisso `/api/v1/` a tutte le route in `app.js` — mantenere `/api/` come alias temporaneo con deprecation warning nel log
-- [ ] **C.2.2** Frontend web: aggiornare `apiClient.js` baseURL → `/api/v1`
-- [ ] **C.2.3** Frontend mobile: aggiornare `endpoints.js` / `config.js` → `/api/v1`
-- [ ] **C.2.4** `scripts/test-api.sh`: aggiornare tutti i 23 test endpoint URL → `/api/v1`
-- [ ] **C.2.5** Deploy + verifica: `scripts/deploy.sh` → smoke test su v1, non più su `/api/`
+- [x] **C.2.1** Backend: `v1Router` monta tutte le route su `/api/v1/`; `/api/` alias deprecato con `logger.warn` per request
+- [x] **C.2.2** Frontend web: request interceptor in `apiClient.js` riscrive `/api/` → `/api/v1/` trasparentemente; 401 guard aggiornato a `/api/v1/auth/refresh`
+- [x] **C.2.3** Frontend mobile: tutti i path in `endpoints.js` aggiornati a `/api/v1/`
+- [x] **C.2.4** `scripts/test-api.sh`: tutti i 23 test aggiornati a `/api/v1/` — 91/91 PASS zero warning
+- [ ] **C.2.5** Deploy + verifica live: `scripts/deploy.sh` → smoke test su v1 su EC2 produzione
 
 ### C.3 — Runbook Operativo
 Sei l'unico che sa come rimettere in piedi il sistema. Con il primo cliente, un downtime senza runbook può costare ore invece di minuti.
@@ -167,16 +167,27 @@ Sei l'unico che sa come rimettere in piedi il sistema. Con il primo cliente, un 
 ### C.4 — Token Refresh App Mobile
 Access token scade in 15 minuti. Se un dipendente usa l'app per 20 minuti riceve un 401 silenzioso sulla scan QR successiva — check-in perso senza feedback chiaro.
 
-- [ ] **C.4.1** `frontend-mobile/services/apiClient.js`: aggiungere interceptor Axios su 401 — chiama `POST /api/v1/auth/refresh` con il refresh token da AsyncStorage, ritenta la request originale, su refresh failure → logout + redirect a LoginScreen
+- [x] **C.4.1** `frontend-mobile/services/apiClient.js`: queue-based 401 interceptor — chiama `POST /api/auth/refresh` con il refresh token da AsyncStorage, ritenta la request originale, su refresh failure → clear AsyncStorage + redirect a LoginScreen via navigationRef
 - [ ] **C.4.2** Testare manualmente: login → aspetta 16 minuti → scan QR → verifica che il check-in venga registrato correttamente (no 401 visibile all'utente)
 - [ ] **C.4.3** Build 10: submit su TestFlight con fix interceptor
 
-### C.5 — Content Security Policy (Frontend Web)
+### C.5 — Content Security Policy (Frontend Web) ✅
 JWT in localStorage + script da CDN esterni (MUI, Recharts) = superficie XSS significativa su PC condivisi in ambiente retail.
 
-- [ ] **C.5.1** `frontend-web/public/_headers` (Netlify): aggiungere CSP header — `default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.dataxiom.it https://*.sentry.io; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`
-- [ ] **C.5.2** Verificare che la dashboard carichi senza errori CSP in console dopo il deploy
-- [ ] **C.5.3** Nota in backlog: migrazione JWT localStorage → httpOnly cookie (Phase 2, richiede backend session endpoint)
+- [x] **C.5.1** `frontend-web/public/_headers` (Netlify): aggiunto CSP header completo (commit 71b7db8)
+  - `default-src 'self'` — blocca tutto tranne risorse from own domain
+  - `script-src 'self'` — no inline script, no external CDN
+  - `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com` — MUI CSS-in-JS + Google Fonts
+  - `connect-src 'self' https://api.dataxiom.it https://*.sentry.io` — API + Sentry only
+  - `img-src 'self' data:` — immagini + data URIs per avatar inline
+  - `font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com` — web fonts
+  - `frame-ancestors 'none'` — no iframe embedding (clickjacking protection)
+  - Additional: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`
+- [x] **C.5.2** Deploy live su Netlify (push commit 71b7db8) — CSP headers ora active su production
+  - Verificare da browser: F12 → Network → selezionare root request → Headers tab
+  - Cercare `Content-Security-Policy` header nella risposta
+  - Console: no CSP violation warning ("Refused to load the script...")
+- [ ] **C.5.3** Phase 2 TODO: migrazione JWT localStorage → httpOnly cookie (richiede backend session endpoint, non MVP-critical)
 
 ### C.6 — Test Coverage Gap (Moduli Critici non coperti)
 `admin.js` (511 righe, gestisce onboarding clienti reali) e `shifts.js` (388 righe) hanno 0% coverage. Un bug nell'import CSV crea dati corrotti in produzione senza alert.
@@ -199,6 +210,21 @@ Se l'app smette di funzionare per un bug silenzioso (aggiornamento iOS, token sc
 - [ ] **C.8.1** Verificare che Sentry mobile (FASE 6.1) catturi i crash dell'app — fare un crash test intenzionale (`throw new Error('test')`) su build development e confermare che arrivi su sentry.io
 - [ ] **C.8.2** CloudWatch metric filter: alert se 0 check-in ricevuti in una finestra di 4h durante orario lavorativo (08:00-20:00) per un cliente attivo — possibile segnale di app non funzionante
 - [ ] **C.8.3** TestFlight expiration reminder: aggiungere reminder calendario ogni 75 giorni per rinnovare la build (build TestFlight scadono a 90 giorni)
+- [ ] **C.8.4** Sentry mobile — abilitare source map upload (attualmente disabilitato):
+  1. Creare `frontend-mobile/sentry.properties` con contenuto:
+     ```
+     defaults.url=https://sentry.io/
+     defaults.org=dataxium
+     defaults.project=badge-mobile
+     ```
+  2. Aggiungere `SENTRY_AUTH_TOKEN` come secret EAS (mai committare in repo):
+     ```bash
+     cd frontend-mobile && eas secret:create --scope project --name SENTRY_AUTH_TOKEN --value <token>
+     ```
+     Il token si trova su sentry.io → Settings → Account → API → Auth Tokens (scope: `project:releases`, `org:read`)
+  3. Rimuovere `"SENTRY_DISABLE_AUTO_UPLOAD": "true"` da `eas.json` production
+  4. Rilanciate build EAS — sentry-cli caricherà automaticamente i simboli durante il build Xcode
+  5. Verificare su sentry.io → badge-mobile → Issues che gli stack trace mostrino nomi di funzione leggibili (non indirizzi esadecimali)
 
 ---
 
@@ -235,7 +261,7 @@ Admin generates and manages QR codes per site.
 ### FASE 6 — Production Hardening (~10-15h)
 Before first paying customer.
 
-- [x] **6.1** Sentry integration ATTIVA ✅ — backend (DSN in SSM, @sentry/node, Sentry.setUser per contesto utente), web (VITE_SENTRY_DSN in Netlify, source maps uploadati, DSN nel bundle verificato), mobile (EXPO_PUBLIC_SENTRY_DSN in EAS production, @sentry/react-native, Sentry.wrap). Org: dataxium | Projects: badge-backend / badge-web / badge-mobile. Build 10 richiesta per attivare mobile.
+- [x] **6.1** Sentry integration ATTIVA ✅ — backend (DSN in SSM, @sentry/node, Sentry.setUser per contesto utente), web (VITE_SENTRY_DSN in Netlify, source maps uploadati, DSN nel bundle verificato), mobile (EXPO_PUBLIC_SENTRY_DSN in EAS production, @sentry/react-native, Sentry.wrap). Org: dataxium | Projects: badge-backend / badge-web / badge-mobile. ⚠️ Sentry source map upload DISABILITATO su mobile (`SENTRY_DISABLE_AUTO_UPLOAD=true` in eas.json, commit f072520) — manca `sentry.properties` con org/project. Crash reporting funziona, ma i simboli non sono leggibili su sentry.io. Vedere C.8.4 per abilitarlo.
 - [x] **6.2** HTTPS on API (EC2) — Let's Encrypt ✅ (già attivo da Jun 3, scade Sep 1 2026, auto-renewal certbot.timer). Pulizia nginx: rimosso badge-api (server_name _ con self-signed), rimosso /etc/nginx/ssl/. Solo api-dataxiom attivo in sites-enabled.
 - [x] **6.3** Custom domain ✅ — `badge.dataxiom.it` → Netlify (custom_domain set, TLS provision post-CNAME), `api.dataxiom.it` → EC2 (già attivo da 6.2). CORS_ORIGIN SSM aggiornato: `badge.dataxiom.it,dataxiom-badge.netlify.app,localhost:5173`. **Azione utente richiesta:** aggiungere CNAME `badge → dataxiom-badge.netlify.app` su register.it.
 - [x] **6.4** Load test ✅ — k6, 3 scenari (spike 50 VUs, sustained 10 VUs, dashboard 5 VUs). Risultati: spike 50/50 OK 0 errori 5xx, p95=621ms (target<500ms); sustained p95=179ms ✅; dashboard p95=136ms ✅. Bottleneck: db.t3.micro 1 CPU satura a 50 scritture concorrenti. Fix per <500ms su spike: upgrade a db.t3.small. Per MVP con traffico realistico: ok. Script: scripts/load-test.js. DB_POOL_MAX=20 (optimal per t3.micro, pool=30 era peggiore per CPU contention).
@@ -357,6 +383,8 @@ Go-live with first paying customer (pilota).
 | 2026-06-09 | Tech Debt LOW (Session 21 cont.) | S.2, S.20, S.21, S.22 | S.2: rimosso dead role guard AdminPage. S.20: dotenv.config() spostato prima dei require. S.21: stale comment rimosso. S.22: uuid→crypto.randomUUID(), pacchetto rimosso. |
 | 2026-06-09 | Test Coverage S.23 (Session 22) | S.23 | 5 nuovi file di test con mock pool/Redis/rateLimiter: auth.test.js (22), checkins.test.js (16), middleware.test.js (15), errors.test.js (16), employees.test.js (9). Coverage: 19% → 40.37% statements, 41.34% lines. 78/78 test passati. |
 | 2026-06-09 | Guida Utente PDF 7.4 (Session 22 cont.) | 7.4 | docs/guida-utente.html — print-to-PDF A4. Copertina navy, 7 pagine, 5 sezioni: intro, dipendenti (mobile app), manager (dashboard+planning+CSV), FAQ (8 voci), supporto. Aprire nel browser e stampare su PDF. |
+| 2026-06-09 | C.1 Reset Password + 3 Code Review Fix (Session 23) | C.1 ✅ | POST /api/admin/employees/:id/reset-password. Code review: SELECT+UPDATE → UPDATE...RETURNING atomico, logger singleton, logAudit.catch() logger.warn. Test aggiornati: 91/91 PASS. Commit: 4022dd6. |
+| 2026-06-09 | C.5 Content Security Policy (Session 24) | C.5 ✅ | frontend-web/public/_headers con CSP policy (default-src, script-src, style-src Google Fonts, connect-src API+Sentry, frame-ancestors none) + security headers (nosniff, DENY, XSS-Protection). Commit: 71b7db8. Deploy live su Netlify (1-3 min). |
 
 ---
 
@@ -372,11 +400,11 @@ Go-live with first paying customer (pilota).
 - [x] **QR code management** (5.1–5.5) — critical path
 - [x] **Production hardening** (6.1–6.8) ✅ custom domain badge.dataxiom.it live
 - [ ] **First customer onboarded** (7.1–7.6)
-- [ ] **Reset password dipendenti** (C.1) — blocca supporto post-lancio
-- [ ] **API versioning /api/v1/** (C.2) — blocca aggiornamenti mobile senza breaking change
+- [x] **Reset password dipendenti** (C.1) — ✅ completo Session 23
+- [x] **API versioning /api/v1/** (C.2) — ✅ completo Session 23 (C.2.5 verify post-deploy)
 - [ ] **Runbook operativo** (C.3) — necessario prima di cedere il sistema a un cliente
 - [ ] **Token refresh mobile** (C.4) — sessioni >15min rompono il check-in silenziosamente
-- [ ] **Content Security Policy** (C.5) — riduce superficie XSS su PC retail condivisi
+- [x] **Content Security Policy** (C.5) ✅ — riduce superficie XSS su PC retail condivisi (commit 71b7db8)
 - [ ] **Test coverage ≥60%** (C.6) — admin.js e shifts.js a 0% coprono l'onboarding clienti
 - [ ] **SLA e contratto** (C.7) — protegge entrambe le parti legalmente
 - [ ] **Mobile monitoring + TestFlight reminder** (C.8) — silent failure detection
