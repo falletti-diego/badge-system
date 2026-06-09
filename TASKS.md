@@ -193,7 +193,7 @@ Go-live with first paying customer (pilota).
 ### Trovati nella sessione 17 — non critici per MVP, da chiudere prima del lancio
 
 - [x] **S.1** `auth.js:34` ✅ — DEMO_USERS limitati a `@badge.local`, tutti gli altri email usano DB bcrypt. Migration 007: password_hash per 4 seeded employees. Commit: d06e41e: se un admin crea un employee reale con la stessa email di un account demo (es. `pippo@badge.local`), il check demo vince sempre. **Fix:** eliminare o isolare DEMO_USERS su `NODE_ENV !== 'production'` oppure invertire l'ordine (DB check prima, DEMO fallback per i soli domini `@badge.local`). Da completare prima del lancio con il primo cliente.
-- [ ] **S.2** `AdminPage.jsx:476` — Inline role guard `user?.role !== 'admin'` è dead code: `ProtectedRoute` blocca già i non-admin prima che il componente monti. **Fix:** rimuovere il check ridondante. Maintenance risk: se il role name cambia in futuro solo uno dei due guard potrebbe essere aggiornato. Basso rischio, cosmetic.
+- [x] **S.2** `AdminPage.jsx:476` ✅ — Rimosso dead code: guard `user?.role !== 'admin'` e dichiarazione `user` non più necessaria. `ProtectedRoute` è il gate autoritativo.
 
 ### Trovati nella sessione 19 — analisi senior-fullstack + senior-qa + senior-security (22 findings)
 
@@ -223,9 +223,9 @@ Go-live with first paying customer (pilota).
 - [x] **S.19** `app.js` — `app.set('trust proxy', 1)` prima di tutto il middleware → `req.ip` ora riflette il client reale.
 
 **4 LOW — backlog:**
-- [ ] **S.20** `app.js:1` — `dotenv.config()` dopo i `require` → env non disponibile durante init moduli. Fix: spostare al top.
-- [ ] **S.21** `app.js:295` — commento stale su vecchia logica. Fix: rimuovere.
-- [ ] **S.22** Package `uuid` usato ma `crypto.randomUUID()` disponibile natively in Node 20+. Fix: rimuovere dipendenza.
+- [x] **S.20** `app.js` ✅ — `dotenv.config()` spostato prima di tutti i `require()` (salvo Sentry che deve restare primo per instrumentazione).
+- [x] **S.21** `app.js` ✅ — Rimosso commento stale `// Deployment test - mar 2 giu 2026`.
+- [x] **S.22** ✅ — `uuid` package rimosso, sostituito con `crypto.randomUUID()` (Node 20+ builtin). `npm uninstall uuid` eseguito.
 - [ ] **S.23** Test coverage 9% → fragile. Fix: aggiungere test per auth, checkins, admin (target ≥40%).
 
 ---
@@ -285,7 +285,8 @@ Go-live with first paying customer (pilota).
 | 2026-06-08 | Code Review FASE 7 + 8 Fix (Session 18) | S.1 chiuso | Deep review FASE 7 admin panel: 8 findings ALL CONFIRMED, ALL FIXED. F1: CSV bcrypt parallel batches (event loop protection). F2: audit log CSV import (GDPR). F3: UUID guard /refresh (legacy token crash). F4: multi-tenant email guard + mobile clientId param. F5: assigned_sites $8::UUID[] (fragile $N fix). F6: CSV BEGIN/COMMIT transaction. F7: temp_password fuori da Alert string + Sentry scrubber. F8: createValidationMiddleware per admin POST routes. ESLint 0 warnings, build OK. Commit: 9963f4b |
 | 2026-06-08 | 3-Skill Security Audit (Session 19) | S.3–S.9 | senior-fullstack + senior-qa + senior-security: 22 findings. 4 CRITICAL + 3 ridondanze frontend fixate (commit bd338ef). 6 HIGH aperti. EC2 SSM aggiornato: 6 nuovi parametri (DEMO_*_PASSWORD + DB_SSL_REJECT_UNAUTHORIZED). Login demo verificato su produzione. |
 | 2026-06-09 | Security Fixes HIGH+MEDIUM (Session 20) | S.10–S.19 | 6 HIGH fixati: LIMIT 50000 export, employee_id pre-transaction, password min 8, LIMIT 500 admin lists, statement_timeout 30s. 5 MEDIUM fixati: Sentry scrubber, logger singleton, resolvers.js utility, shifts audit_log, trust proxy. CSV import limit 100→500. ESLint 0 warnings (argsIgnorePattern ^_). |
-| 2026-06-09 | FASE 6.3 Custom Domain (Session 21) | 6.3 | `badge.dataxiom.it` → Netlify (custom_domain set). `api.dataxiom.it` → EC2 già attivo. CORS_ORIGIN SSM aggiornato. Azione pendente: CNAME `badge → dataxiom-badge.netlify.app` su register.it da Diego. |
+| 2026-06-09 | FASE 6.3 Custom Domain (Session 21) | 6.3 | `badge.dataxiom.it` → Netlify (custom_domain set). `api.dataxiom.it` → EC2 già attivo. CORS_ORIGIN SSM aggiornato. CNAME aggiunto su register.it. Let's Encrypt provisioned. E2E verificato. |
+| 2026-06-09 | Tech Debt LOW (Session 21 cont.) | S.2, S.20, S.21, S.22 | S.2: rimosso dead role guard AdminPage. S.20: dotenv.config() spostato prima dei require. S.21: stale comment rimosso. S.22: uuid→crypto.randomUUID(), pacchetto rimosso. |
 
 ---
 
@@ -299,7 +300,7 @@ Go-live with first paying customer (pilota).
 - [x] **Corrections page** (3.4)
 - [x] **Mobile app** (4.1–4.15) ✅ Build 9 testata su iPhone
 - [x] **QR code management** (5.1–5.5) — critical path
-- [ ] **Production hardening** (6.1–6.8)
+- [x] **Production hardening** (6.1–6.8) ✅ custom domain badge.dataxiom.it live
 - [ ] **First customer onboarded** (7.1–7.6)
 
 ---

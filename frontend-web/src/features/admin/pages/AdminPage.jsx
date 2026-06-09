@@ -671,16 +671,6 @@ function EmployeesTab() {
 export function AdminPage() {
   const [tab, setTab] = useState(0);
   const navigate = useNavigate();
-  const user = authService.getUser();
-
-  if (user?.role !== 'admin') {
-    return (
-      <Box p={4}>
-        <Alert severity="error">Accesso negato — solo amministratori.</Alert>
-      </Box>
-    );
-  }
-
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1200, mx: 'auto' }}>
       <Stack direction="row" alignItems="center" spacing={2} mb={1}>

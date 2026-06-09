@@ -4,8 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const { parse } = require('csv-parse');
 const { z } = require('zod');
-const { v4: uuidv4 } = require('uuid');
-const { randomBytes } = require('crypto');
+const { randomBytes, randomUUID } = require('crypto');
 const pino = require('pino');
 const { pool } = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
@@ -87,7 +86,7 @@ router.post('/sites', createValidationMiddleware(AdminSiteSchema), async (req, r
     const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1', [data.client_id]);
     if (clientCheck.rowCount === 0) return next(new ValidationError('Client not found'));
 
-    const siteId = uuidv4();
+    const siteId = randomUUID();
     const qrContent = `badge://checkin?site_id=${siteId}&client_id=${data.client_id}&v=1`;
 
     const result = await pool.query(

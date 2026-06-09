@@ -3,6 +3,10 @@
  * Express.js application entry point
  */
 
+// dotenv must load before any module reads process.env (local dev; prod uses SSM via entrypoint.sh)
+const dotenv = require('dotenv');
+dotenv.config();
+
 // Sentry must be initialized before any other require() to instrument modules correctly
 const Sentry = require('@sentry/node');
 if (process.env.SENTRY_DSN) {
@@ -28,7 +32,6 @@ if (process.env.SENTRY_DSN) {
 }
 
 const express = require('express');
-const dotenv = require('dotenv');
 const helmet = require('helmet');
 const cors = require('cors');
 const pinoHttp = require('pino-http');
@@ -48,9 +51,6 @@ const exportRouter = require('./routes/export');
 const notificationsRouter = require('./routes/notifications');
 const sitesRouter = require('./routes/sites');
 const adminRouter = require('./routes/admin');
-
-// Load environment variables
-dotenv.config();
 
 // Initialize logger (singleton shared across all modules)
 const logger = require('./utils/logger');
@@ -303,4 +303,3 @@ if (require.main === module) {
 }
 
 module.exports = app;
-// Deployment test - mar  2 giu 2026 11:39:48 CEST
