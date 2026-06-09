@@ -209,6 +209,14 @@ router.post('/employees/import', upload.single('file'), async (req, res, next) =
     // Map normalised lowercase name → UUID (case-insensitive match)
     const siteByName = new Map(sitesResult.rows.map((r) => [r.name.trim().toLowerCase(), r.id]));
 
+    // DEBUG: Log sites found
+    logger.info({
+      action: 'admin_import_sites_debug',
+      client_id: clientId,
+      sites_found: sitesResult.rows.map(r => ({ id: r.id, name: r.name })),
+      sites_map: Array.from(siteByName.entries()),
+    });
+
     const results = { created: 0, skipped: 0, errors: [] };
 
     // Phase 1: validate all rows + resolve site_name → site_id
@@ -232,6 +240,14 @@ router.post('/employees/import', upload.single('file'), async (req, res, next) =
         if (parsed.site_name) {
           siteId = siteByName.get(parsed.site_name.toLowerCase());
           if (!siteId) {
+            // DEBUG: Log missing site
+            logger.warn({
+              action: 'admin_import_site_not_found',
+              line: lineNum,
+              email: row.email,
+              site_name: parsed.site_name,
+              available_sites: Array.from(siteByName.keys()),
+            });
             results.errors.push({ line: lineNum, email: row.email, error: `Sede "${parsed.site_name}" non trovata per questo cliente` });
             results.skipped++;
             continue;
