@@ -60,7 +60,7 @@ describe('GET /api/employees', () => {
       .mockResolvedValueOnce({ rows: mockEmployees }) // data
       .mockResolvedValueOnce({ rows: [{ total: '1' }] }); // count
 
-    const res = await request(app).get('/api/employees');
+    const res = await request(app).get('/api/v1/employees');
 
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.data)).toBe(true);
@@ -73,7 +73,7 @@ describe('GET /api/employees', () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ total: '0' }] });
 
-    const res = await request(app).get('/api/employees');
+    const res = await request(app).get('/api/v1/employees');
 
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual([]);
@@ -81,7 +81,7 @@ describe('GET /api/employees', () => {
   });
 
   test('returns 400 for invalid limit', async () => {
-    const res = await request(app).get('/api/employees').query({ limit: 9999 });
+    const res = await request(app).get('/api/v1/employees').query({ limit: 9999 });
     expect(res.status).toBe(400);
   });
 
@@ -90,7 +90,7 @@ describe('GET /api/employees', () => {
       .mockResolvedValueOnce({ rows: mockEmployees })
       .mockResolvedValueOnce({ rows: [{ total: '1' }] });
 
-    const res = await request(app).get('/api/employees').query({ limit: 5, offset: 0 });
+    const res = await request(app).get('/api/v1/employees').query({ limit: 5, offset: 0 });
 
     expect(res.status).toBe(200);
     expect(res.body.pagination.limit).toBe(5);
@@ -117,7 +117,7 @@ describe('GET /api/employees/:id', () => {
       }],
     });
 
-    const res = await request(app).get(`/api/employees/${TEST_EMP_ID}`);
+    const res = await request(app).get(`/api/v1/employees/${TEST_EMP_ID}`);
 
     expect(res.status).toBe(200);
     expect(res.body.data.id).toBe(TEST_EMP_ID);
@@ -127,7 +127,7 @@ describe('GET /api/employees/:id', () => {
   test('returns 404 for non-existent employee', async () => {
     pool.query.mockResolvedValueOnce({ rows: [] });
 
-    const res = await request(app).get(`/api/employees/${TEST_EMP_ID}`);
+    const res = await request(app).get(`/api/v1/employees/${TEST_EMP_ID}`);
 
     expect(res.status).toBe(404);
   });
@@ -135,7 +135,7 @@ describe('GET /api/employees/:id', () => {
   test('returns 404 for random unknown UUID', async () => {
     pool.query.mockResolvedValueOnce({ rows: [] });
     const unknownId = '00000000-0000-0000-0000-000000000000';
-    const res = await request(app).get(`/api/employees/${unknownId}`);
+    const res = await request(app).get(`/api/v1/employees/${unknownId}`);
     expect(res.status).toBe(404);
   });
 });

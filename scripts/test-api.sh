@@ -38,7 +38,7 @@ http_body() { cat /tmp/api_body 2>/dev/null || echo ""; }
 login() {
   local email="$1" password="$2"
   local status
-  status=$(http POST "$API_URL/api/auth/login" "" "{\"email\":\"$email\",\"password\":\"$password\"}")
+  status=$(http POST "$API_URL/api/v1/auth/login" "" "{\"email\":\"$email\",\"password\":\"$password\"}")
   if [[ "$status" == "200" ]]; then
     http_body | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('token',''))" 2>/dev/null || echo ""
   else
@@ -91,7 +91,7 @@ TOKEN_EMPLOYEE=$(login "luca.verdi@employee.it" "Luca1975")
 [[ -n "$TOKEN_EMPLOYEE" ]] && pass "Login employee → token ricevuto" || fail "Login employee → nessun token"
 
 echo -e "  ${BOLD}Credenziali errate → deve dare 4xx (rifiutato)${NC}"
-status=$(http POST "$API_URL/api/auth/login" "" '{"email":"fake@test.it","password":"wrong"}')
+status=$(http POST "$API_URL/api/v1/auth/login" "" '{"email":"fake@test.it","password":"wrong"}')
 if [[ "$status" == "400" || "$status" == "401" || "$status" == "429" ]]; then
   pass "Login credenziali errate → HTTP $status (rifiutato correttamente)"
 else
@@ -99,20 +99,20 @@ else
 fi
 
 echo -e "  ${BOLD}Endpoint senza token → deve dare 401${NC}"
-status=$(http GET "$API_URL/api/employees")
+status=$(http GET "$API_URL/api/v1/employees")
 expect "GET /employees senza token" "$status" "401"
 
 # ══════════════════════════════════════════════════════════════════════════════
 section "3. EMPLOYEES"
 
-status=$(http GET "$API_URL/api/employees" "$TOKEN_ADMIN")
+status=$(http GET "$API_URL/api/v1/employees" "$TOKEN_ADMIN")
 expect "GET /employees (admin)" "$status" "200"
 if [[ "$status" == "200" ]]; then
   count=$(http_body | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('data',[])))" 2>/dev/null || echo "?")
   pass "Employees restituiti: $count"
 fi
 
-status=$(http GET "$API_URL/api/employees" "$TOKEN_EMPLOYEE")
+status=$(http GET "$API_URL/api/v1/employees" "$TOKEN_EMPLOYEE")
 if [[ "$status" == "403" ]]; then
   pass "GET /employees (employee → 403 corretto)"
 elif [[ "$status" == "200" ]]; then
@@ -124,32 +124,32 @@ fi
 # ══════════════════════════════════════════════════════════════════════════════
 section "4. CHECKINS"
 
-status=$(http GET "$API_URL/api/checkins" "$TOKEN_MANAGER")
+status=$(http GET "$API_URL/api/v1/checkins" "$TOKEN_MANAGER")
 expect "GET /checkins (manager)" "$status" "200"
 if [[ "$status" == "200" ]]; then
   count=$(http_body | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('data',[])))" 2>/dev/null || echo "?")
   pass "Checkins restituiti: $count"
 fi
 
-status=$(http GET "$API_URL/api/checkins" "$TOKEN_EMPLOYEE")
+status=$(http GET "$API_URL/api/v1/checkins" "$TOKEN_EMPLOYEE")
 expect "GET /checkins (employee → solo propri)" "$status" "200"
 
 # ══════════════════════════════════════════════════════════════════════════════
 section "5. SHIFTS (Planning)"
 
-status=$(http GET "$API_URL/api/shifts/$TORINO_SITE_ID?month=6&year=2026" "$TOKEN_MANAGER")
+status=$(http GET "$API_URL/api/v1/shifts/$TORINO_SITE_ID?month=6&year=2026" "$TOKEN_MANAGER")
 expect "GET /shifts/:siteId (manager Torino)" "$status" "200"
 
-status=$(http GET "$API_URL/api/shifts/my-schedule?month=6&year=2026" "$TOKEN_EMPLOYEE")
+status=$(http GET "$API_URL/api/v1/shifts/my-schedule?month=6&year=2026" "$TOKEN_EMPLOYEE")
 expect "GET /shifts/my-schedule (employee)" "$status" "200"
 
-status=$(http GET "$API_URL/api/shifts/$TORINO_SITE_ID?month=6&year=2026" "$TOKEN_EMPLOYEE")
+status=$(http GET "$API_URL/api/v1/shifts/$TORINO_SITE_ID?month=6&year=2026" "$TOKEN_EMPLOYEE")
 expect "GET /shifts/:siteId (employee → 403)" "$status" "403"
 
 # ══════════════════════════════════════════════════════════════════════════════
 section "6. SITES"
 
-status=$(http GET "$API_URL/api/sites" "$TOKEN_ADMIN")
+status=$(http GET "$API_URL/api/v1/sites" "$TOKEN_ADMIN")
 expect "GET /sites (admin)" "$status" "200"
 if [[ "$status" == "200" ]]; then
   count=$(http_body | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('data',[])))" 2>/dev/null || echo "?")
@@ -159,10 +159,10 @@ fi
 # ══════════════════════════════════════════════════════════════════════════════
 section "7. EXPORT CSV"
 
-status=$(http GET "$API_URL/api/export/csv?month=6&year=2026" "$TOKEN_MANAGER")
+status=$(http GET "$API_URL/api/v1/export/csv?month=6&year=2026" "$TOKEN_MANAGER")
 expect "GET /export/csv (manager)" "$status" "200"
 
-status=$(http GET "$API_URL/api/export/csv?month=6&year=2026" "$TOKEN_EMPLOYEE")
+status=$(http GET "$API_URL/api/v1/export/csv?month=6&year=2026" "$TOKEN_EMPLOYEE")
 if [[ "$status" == "403" ]]; then
   pass "GET /export/csv (employee → 403 corretto)"
 elif [[ "$status" == "200" ]]; then
@@ -174,10 +174,10 @@ fi
 # ══════════════════════════════════════════════════════════════════════════════
 section "8. NOTIFICATIONS"
 
-status=$(http GET "$API_URL/api/notifications" "$TOKEN_EMPLOYEE")
+status=$(http GET "$API_URL/api/v1/notifications" "$TOKEN_EMPLOYEE")
 expect "GET /notifications (employee)" "$status" "200"
 
-status=$(http PUT "$API_URL/api/notifications/read-all" "$TOKEN_EMPLOYEE")
+status=$(http PUT "$API_URL/api/v1/notifications/read-all" "$TOKEN_EMPLOYEE")
 expect "PUT /notifications/read-all (employee)" "$status" "200"
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -187,11 +187,11 @@ cors_status=$(curl -s -o /dev/null -w "%{http_code}" \
   -H "Origin: https://dataxiom-badge.netlify.app" \
   -H "Access-Control-Request-Method: GET" \
   -H "Access-Control-Request-Headers: Authorization" \
-  -X OPTIONS "$API_URL/api/checkins" --max-time 10 2>/dev/null || echo "000")
+  -X OPTIONS "$API_URL/api/v1/checkins" --max-time 10 2>/dev/null || echo "000")
 
 cors_header=$(curl -s -I \
   -H "Origin: https://dataxiom-badge.netlify.app" \
-  "$API_URL/api/checkins" --max-time 10 2>/dev/null | grep -i "access-control-allow-origin" | tr -d '\r' || echo "")
+  "$API_URL/api/v1/checkins" --max-time 10 2>/dev/null | grep -i "access-control-allow-origin" | tr -d '\r' || echo "")
 
 if [[ -n "$cors_header" ]]; then
   pass "CORS header presente: $cors_header"

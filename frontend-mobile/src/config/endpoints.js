@@ -7,16 +7,16 @@ export const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://api.dataxiom
 
 export const ENDPOINTS = {
   // Auth
-  AUTH_LOGIN: '/api/auth/login',
-  AUTH_LOGOUT: '/api/auth/logout',
-  AUTH_REFRESH: '/api/auth/refresh',
+  AUTH_LOGIN: '/api/v1/auth/login',
+  AUTH_LOGOUT: '/api/v1/auth/logout',
+  AUTH_REFRESH: '/api/v1/auth/refresh',
 
   // Check-ins
-  CHECKINS_POST: '/api/checkins',
-  CHECKINS_LIST: '/api/checkins',
+  CHECKINS_POST: '/api/v1/checkins',
+  CHECKINS_LIST: '/api/v1/checkins',
 
   // Shifts
-  SHIFTS_MY_SCHEDULE: '/api/shifts/my-schedule',
+  SHIFTS_MY_SCHEDULE: '/api/v1/shifts/my-schedule',
 
   // Health
   HEALTH: '/health',

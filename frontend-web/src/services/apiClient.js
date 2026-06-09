@@ -21,10 +21,14 @@ const apiClient = axios.create({
 });
 
 /**
- * Request interceptor: Add authorization token
+ * Request interceptor: rewrite /api/ → /api/v1/ and add authorization token.
+ * Callers keep /api/... paths; versioning is transparent.
  */
 apiClient.interceptors.request.use(
   (config) => {
+    if (config.url?.startsWith('/api/') && !config.url.startsWith('/api/v1/')) {
+      config.url = '/api/v1/' + config.url.slice('/api/'.length);
+    }
     const token = localStorage.getItem('badge_auth_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -58,7 +62,7 @@ apiClient.interceptors.response.use(
     const message = error.response?.data?.message || error.message;
     const originalRequest = error.config;
 
-    if (status === 401 && !originalRequest._retried && originalRequest.url !== '/api/auth/refresh') {
+    if (status === 401 && !originalRequest._retried && originalRequest.url !== '/api/v1/auth/refresh') {
       if (isRefreshing) {
         // Queue concurrent requests while a refresh is in flight
         return new Promise((resolve, reject) => {

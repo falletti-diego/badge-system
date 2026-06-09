@@ -77,10 +77,12 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Rate limiting middleware
-app.use('/api/', apiLimiter); // General API limiter
-app.use('/api/auth/', authLimiter); // Tighter limit for auth endpoints
-app.use('/api/export/csv', csvLimiter); // CSV export limiter
+// Rate limiting middleware — applies to both /api/v1/ and deprecated /api/
+app.use('/api/', apiLimiter);
+app.use('/api/auth/', authLimiter);
+app.use('/api/v1/auth/', authLimiter);
+app.use('/api/export/csv', csvLimiter);
+app.use('/api/v1/export/csv', csvLimiter);
 
 // Structured request/response logging (method, path, statusCode, responseTime)
 // Used by CloudWatch metric filters for 5xx rate and slow request alarms
@@ -140,25 +142,33 @@ app.get('/health', async (req, res) => {
 
 // API routes
 app.get('/api', (req, res) => {
-  res.json({
-    message: 'Badge System API',
-    version: '1.0.0',
-    status: 'operational',
-  });
+  res.json({ message: 'Badge System API', version: '1.0.0', status: 'operational' });
+});
+app.get('/api/v1', (req, res) => {
+  res.json({ message: 'Badge System API', version: '1.0.0', status: 'operational' });
 });
 
-// Cache middleware for GET requests
+// Cache middleware for GET requests (covers /api/ and /api/v1/ via prefix match)
 app.use('/api/', cacheMiddleware());
 
-// Register routes
-app.use('/api/auth', authRouter);
-app.use('/api/employees', employeesRouter);
-app.use('/api/checkins', checkinsRouter);
-app.use('/api/shifts', shiftsRouter);
-app.use('/api/export/csv', exportRouter);
-app.use('/api/notifications', notificationsRouter);
-app.use('/api/sites', sitesRouter);
-app.use('/api/admin', adminRouter);
+// v1 router — canonical API prefix
+const v1Router = express.Router();
+v1Router.use('/auth', authRouter);
+v1Router.use('/employees', employeesRouter);
+v1Router.use('/checkins', checkinsRouter);
+v1Router.use('/shifts', shiftsRouter);
+v1Router.use('/export/csv', exportRouter);
+v1Router.use('/notifications', notificationsRouter);
+v1Router.use('/sites', sitesRouter);
+v1Router.use('/admin', adminRouter);
+app.use('/api/v1', v1Router);
+
+// Deprecated /api/ aliases — kept for backwards compatibility with mobile clients
+// that cannot be force-updated. Logs a warning per request.
+app.use('/api', (req, res, next) => {
+  logger.warn({ action: 'deprecated_api_path', path: req.originalUrl, method: req.method });
+  next();
+}, v1Router);
 
 // Sentry error handler — must come BEFORE custom error handler to capture exceptions
 if (process.env.SENTRY_DSN) {

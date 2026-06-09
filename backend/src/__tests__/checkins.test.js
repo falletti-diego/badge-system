@@ -66,7 +66,7 @@ beforeEach(() => {
 describe('POST /api/checkins — validation', () => {
   test('rejects missing type (400)', async () => {
     const res = await request(app)
-      .post('/api/checkins')
+      .post('/api/v1/checkins')
       .send({ employee_id: TEST_EMPLOYEE_ID, site_id: TEST_SITE_ID });
 
     expect(res.status).toBe(400);
@@ -75,7 +75,7 @@ describe('POST /api/checkins — validation', () => {
 
   test('rejects invalid employee_id UUID (400)', async () => {
     const res = await request(app)
-      .post('/api/checkins')
+      .post('/api/v1/checkins')
       .send({ employee_id: 'not-a-uuid', site_id: TEST_SITE_ID, type: 'IN' });
 
     expect(res.status).toBe(400);
@@ -84,7 +84,7 @@ describe('POST /api/checkins — validation', () => {
 
   test('rejects invalid type value (400)', async () => {
     const res = await request(app)
-      .post('/api/checkins')
+      .post('/api/v1/checkins')
       .send({ employee_id: TEST_EMPLOYEE_ID, site_id: TEST_SITE_ID, type: 'MAYBE' });
 
     expect(res.status).toBe(400);
@@ -92,7 +92,7 @@ describe('POST /api/checkins — validation', () => {
   });
 
   test('rejects empty body (400)', async () => {
-    const res = await request(app).post('/api/checkins').send({});
+    const res = await request(app).post('/api/v1/checkins').send({});
     expect(res.status).toBe(400);
   });
 });
@@ -123,7 +123,7 @@ describe('POST /api/checkins — success', () => {
       .mockResolvedValueOnce({}); // COMMIT
 
     const res = await request(app)
-      .post('/api/checkins')
+      .post('/api/v1/checkins')
       .send({ employee_id: TEST_EMPLOYEE_ID, site_id: TEST_SITE_ID, type: 'IN' });
 
     expect(res.status).toBe(201);
@@ -139,7 +139,7 @@ describe('POST /api/checkins — success', () => {
       .mockResolvedValueOnce({}); // ROLLBACK
 
     const res = await request(app)
-      .post('/api/checkins')
+      .post('/api/v1/checkins')
       .send({ employee_id: TEST_EMPLOYEE_ID, site_id: TEST_SITE_ID, type: 'IN' });
 
     expect(res.status).toBe(404);
@@ -154,7 +154,7 @@ describe('POST /api/checkins — success', () => {
       .mockResolvedValueOnce({}); // ROLLBACK
 
     const res = await request(app)
-      .post('/api/checkins')
+      .post('/api/v1/checkins')
       .send({ employee_id: TEST_EMPLOYEE_ID, site_id: TEST_SITE_ID, type: 'IN' });
 
     expect(res.status).toBe(404);
@@ -170,7 +170,7 @@ describe('POST /api/checkins — success', () => {
       .mockResolvedValueOnce({}); // ROLLBACK
 
     const res = await request(app)
-      .post('/api/checkins')
+      .post('/api/v1/checkins')
       .send({ employee_id: TEST_EMPLOYEE_ID, site_id: TEST_SITE_ID, type: 'IN' });
 
     expect(res.status).toBe(400);
@@ -189,7 +189,7 @@ describe('GET /api/checkins', () => {
       .mockResolvedValueOnce({ rows: [{ total: '0' }] }); // count
 
     const res = await request(app)
-      .get('/api/checkins')
+      .get('/api/v1/checkins')
       .query({ client_id: TEST_CLIENT_ID });
 
     expect(res.status).toBe(200);
@@ -206,7 +206,7 @@ describe('GET /api/checkins', () => {
       .mockResolvedValueOnce({ rows: [{ total: '1' }] }); // count
 
     const res = await request(app)
-      .get('/api/checkins')
+      .get('/api/v1/checkins')
       .query({ client_id: TEST_CLIENT_ID, limit: 10, offset: 0 });
 
     expect(res.status).toBe(200);
@@ -216,7 +216,7 @@ describe('GET /api/checkins', () => {
 
   test('returns 400 when date range exceeds 90 days', async () => {
     const res = await request(app)
-      .get('/api/checkins')
+      .get('/api/v1/checkins')
       .query({ client_id: TEST_CLIENT_ID, date_from: '2025-01-01', date_to: '2025-05-01' });
 
     expect(res.status).toBe(400);
@@ -225,7 +225,7 @@ describe('GET /api/checkins', () => {
 
   test('returns 400 for invalid date format', async () => {
     const res = await request(app)
-      .get('/api/checkins')
+      .get('/api/v1/checkins')
       .query({ client_id: TEST_CLIENT_ID, date_from: '01-01-2026' });
 
     expect(res.status).toBe(400);
@@ -239,7 +239,7 @@ describe('GET /api/checkins', () => {
 describe('PUT /api/checkins/:id', () => {
   test('returns 400 for invalid UUID in path', async () => {
     const res = await request(app)
-      .put('/api/checkins/not-a-uuid')
+      .put('/api/v1/checkins/not-a-uuid')
       .send({ type: 'OUT' });
 
     expect(res.status).toBe(400);
@@ -252,7 +252,7 @@ describe('PUT /api/checkins/:id', () => {
       .mockResolvedValueOnce({}); // ROLLBACK
 
     const res = await request(app)
-      .put(`/api/checkins/${TEST_CHECKIN_ID}`)
+      .put(`/api/v1/checkins/${TEST_CHECKIN_ID}`)
       .send({ type: 'OUT' });
 
     expect(res.status).toBe(404);
@@ -269,7 +269,7 @@ describe('PUT /api/checkins/:id', () => {
       .mockResolvedValueOnce({}); // ROLLBACK
 
     const res = await request(app)
-      .put(`/api/checkins/${TEST_CHECKIN_ID}`)
+      .put(`/api/v1/checkins/${TEST_CHECKIN_ID}`)
       .send({ type: 'OUT' });
 
     expect(res.status).toBe(400);
@@ -299,7 +299,7 @@ describe('PUT /api/checkins/:id', () => {
       .mockResolvedValueOnce({}); // COMMIT
 
     const res = await request(app)
-      .put(`/api/checkins/${TEST_CHECKIN_ID}`)
+      .put(`/api/v1/checkins/${TEST_CHECKIN_ID}`)
       .send({ type: 'OUT' });
 
     expect(res.status).toBe(200);

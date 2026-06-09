@@ -54,7 +54,7 @@ describe('POST /api/admin/employees/:id/reset-password — happy path', () => {
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });            // audit_log INSERT
 
     const res = await request(app)
-      .post(`/api/admin/employees/${VALID_EMP_ID}/reset-password`);
+      .post(`/api/v1/admin/employees/${VALID_EMP_ID}/reset-password`);
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -69,7 +69,7 @@ describe('POST /api/admin/employees/:id/reset-password — happy path', () => {
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });
 
     const res = await request(app)
-      .post(`/api/admin/employees/${VALID_EMP_ID}/reset-password`);
+      .post(`/api/v1/admin/employees/${VALID_EMP_ID}/reset-password`);
 
     expect(res.body.data.name).toBe('Alice Rossi');
     expect(res.body.data.email).toBe('alice@torino.it');
@@ -79,10 +79,10 @@ describe('POST /api/admin/employees/:id/reset-password — happy path', () => {
   test('temp_password differs on every call (not hardcoded)', async () => {
     pool.query.mockResolvedValue({ rowCount: 1, rows: [mockEmployee] });
 
-    const res1 = await request(app).post(`/api/admin/employees/${VALID_EMP_ID}/reset-password`);
+    const res1 = await request(app).post(`/api/v1/admin/employees/${VALID_EMP_ID}/reset-password`);
     jest.clearAllMocks();
     pool.query.mockResolvedValue({ rowCount: 1, rows: [mockEmployee] });
-    const res2 = await request(app).post(`/api/admin/employees/${VALID_EMP_ID}/reset-password`);
+    const res2 = await request(app).post(`/api/v1/admin/employees/${VALID_EMP_ID}/reset-password`);
 
     expect(res1.body.temp_password).not.toBe(res2.body.temp_password);
   });
@@ -92,7 +92,7 @@ describe('POST /api/admin/employees/:id/reset-password — happy path', () => {
       .mockResolvedValueOnce({ rowCount: 1, rows: [mockEmployee] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });
 
-    await request(app).post(`/api/admin/employees/${VALID_EMP_ID}/reset-password`);
+    await request(app).post(`/api/v1/admin/employees/${VALID_EMP_ID}/reset-password`);
 
     // First (and only) pool.query call is the UPDATE...RETURNING
     const updateCall = pool.query.mock.calls[0];
@@ -106,7 +106,7 @@ describe('POST /api/admin/employees/:id/reset-password — happy path', () => {
       .mockResolvedValueOnce({ rowCount: 1, rows: [mockEmployee] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });
 
-    await request(app).post(`/api/admin/employees/${VALID_EMP_ID}/reset-password`);
+    await request(app).post(`/api/v1/admin/employees/${VALID_EMP_ID}/reset-password`);
 
     const updateCall = pool.query.mock.calls[0];
     const hashArg = updateCall[1][0]; // first param is the hash
@@ -118,7 +118,7 @@ describe('POST /api/admin/employees/:id/reset-password — happy path', () => {
       .mockResolvedValueOnce({ rowCount: 1, rows: [mockEmployee] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });
 
-    await request(app).post(`/api/admin/employees/${VALID_EMP_ID}/reset-password`);
+    await request(app).post(`/api/v1/admin/employees/${VALID_EMP_ID}/reset-password`);
 
     // Second call is audit_log INSERT
     const auditCall = pool.query.mock.calls[1];
@@ -133,7 +133,7 @@ describe('POST /api/admin/employees/:id/reset-password — happy path', () => {
 describe('POST /api/admin/employees/:id/reset-password — error cases', () => {
   test('returns 400 for non-UUID employee id', async () => {
     const res = await request(app)
-      .post('/api/admin/employees/not-a-uuid/reset-password');
+      .post('/api/v1/admin/employees/not-a-uuid/reset-password');
 
     expect(res.status).toBe(400);
     expect(pool.query).not.toHaveBeenCalled(); // no DB call made
@@ -141,7 +141,7 @@ describe('POST /api/admin/employees/:id/reset-password — error cases', () => {
 
   test('returns 400 for malformed UUID (missing segment)', async () => {
     const res = await request(app)
-      .post('/api/admin/employees/550e8400-e29b-41d4/reset-password');
+      .post('/api/v1/admin/employees/550e8400-e29b-41d4/reset-password');
 
     expect(res.status).toBe(400);
   });
@@ -150,7 +150,7 @@ describe('POST /api/admin/employees/:id/reset-password — error cases', () => {
     pool.query.mockResolvedValueOnce({ rowCount: 0, rows: [] }); // UPDATE finds no row
 
     const res = await request(app)
-      .post(`/api/admin/employees/${UNKNOWN_UUID}/reset-password`);
+      .post(`/api/v1/admin/employees/${UNKNOWN_UUID}/reset-password`);
 
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('EMPLOYEE_NOT_FOUND');
@@ -159,7 +159,7 @@ describe('POST /api/admin/employees/:id/reset-password — error cases', () => {
   test('only one DB call when employee not found (UPDATE...RETURNING is atomic)', async () => {
     pool.query.mockResolvedValueOnce({ rowCount: 0, rows: [] });
 
-    await request(app).post(`/api/admin/employees/${UNKNOWN_UUID}/reset-password`);
+    await request(app).post(`/api/v1/admin/employees/${UNKNOWN_UUID}/reset-password`);
 
     expect(pool.query).toHaveBeenCalledTimes(1);
     expect(pool.query.mock.calls[0][0]).toMatch(/UPDATE employees SET password_hash/i);
@@ -169,7 +169,7 @@ describe('POST /api/admin/employees/:id/reset-password — error cases', () => {
     pool.query.mockRejectedValueOnce(new Error('DB connection lost'));
 
     const res = await request(app)
-      .post(`/api/admin/employees/${VALID_EMP_ID}/reset-password`);
+      .post(`/api/v1/admin/employees/${VALID_EMP_ID}/reset-password`);
 
     expect(res.status).toBe(500);
   });
@@ -180,7 +180,7 @@ describe('POST /api/admin/employees/:id/reset-password — error cases', () => {
       .mockRejectedValueOnce(new Error('audit_log table missing')); // audit FAILS
 
     const res = await request(app)
-      .post(`/api/admin/employees/${VALID_EMP_ID}/reset-password`);
+      .post(`/api/v1/admin/employees/${VALID_EMP_ID}/reset-password`);
 
     // Main operation must succeed even if audit log fails
     expect(res.status).toBe(200);
