@@ -134,6 +134,73 @@ Employee gets notified when manager changes their shift.
 
 ---
 
+## 🚨 TODO — CRITICO: Prima del Primo Cliente
+
+Identificati nell'analisi critica del 2026-06-09. Tutti bloccanti per l'onboarding del primo cliente reale.
+
+### C.1 — Reset Password Dipendenti
+Senza questo ogni dipendente che dimentica la password richiede intervento manuale.
+
+- [ ] **C.1.1** Backend: `POST /api/admin/employees/:id/reset-password` — genera nuova temp password (bcrypt cost 12), aggiorna `password_hash` nel DB, restituisce la password in chiaro una volta sola all'admin
+- [ ] **C.1.2** Frontend AdminPage: bottone "Reset Password" nella tab Dipendenti — mostra la nuova password in un dialog con copia-negli-appunti (stessa UX del temp_password display esistente)
+- [ ] **C.1.3** Audit log: registra `password_reset` con `user_id` admin che ha eseguito l'azione
+
+### C.2 — API Versioning (/api/v1/)
+Senza versioning ogni cambiamento breaking all'API rompe l'app mobile in produzione su iPhone dei dipendenti. Non è possibile forzare aggiornamenti immediati su iOS.
+
+- [ ] **C.2.1** Backend: aggiungere prefisso `/api/v1/` a tutte le route in `app.js` — mantenere `/api/` come alias temporaneo con deprecation warning nel log
+- [ ] **C.2.2** Frontend web: aggiornare `apiClient.js` baseURL → `/api/v1`
+- [ ] **C.2.3** Frontend mobile: aggiornare `endpoints.js` / `config.js` → `/api/v1`
+- [ ] **C.2.4** `scripts/test-api.sh`: aggiornare tutti i 23 test endpoint URL → `/api/v1`
+- [ ] **C.2.5** Deploy + verifica: `scripts/deploy.sh` → smoke test su v1, non più su `/api/`
+
+### C.3 — Runbook Operativo
+Sei l'unico che sa come rimettere in piedi il sistema. Con il primo cliente, un downtime senza runbook può costare ore invece di minuti.
+
+- [ ] **C.3.1** `docs/runbook.md`: procedura di restart EC2+container (ssh → docker ps → docker restart / pull)
+- [ ] **C.3.2** `docs/runbook.md`: procedura di rollback DB (RDS point-in-time restore step-by-step)
+- [ ] **C.3.3** `docs/runbook.md`: checklist onboarding nuovo cliente (crea client → crea site → import CSV → genera QR → invia welcome email)
+- [ ] **C.3.4** `docs/runbook.md`: escalation contacts + SLA informale (es. risposta entro 4h in orario lavorativo)
+- [ ] **C.3.5** `docs/runbook.md`: credenziali di emergenza e dove trovarle (SSM path reference, non le credenziali stesse)
+
+### C.4 — Token Refresh App Mobile
+Access token scade in 15 minuti. Se un dipendente usa l'app per 20 minuti riceve un 401 silenzioso sulla scan QR successiva — check-in perso senza feedback chiaro.
+
+- [ ] **C.4.1** `frontend-mobile/services/apiClient.js`: aggiungere interceptor Axios su 401 — chiama `POST /api/v1/auth/refresh` con il refresh token da AsyncStorage, ritenta la request originale, su refresh failure → logout + redirect a LoginScreen
+- [ ] **C.4.2** Testare manualmente: login → aspetta 16 minuti → scan QR → verifica che il check-in venga registrato correttamente (no 401 visibile all'utente)
+- [ ] **C.4.3** Build 10: submit su TestFlight con fix interceptor
+
+### C.5 — Content Security Policy (Frontend Web)
+JWT in localStorage + script da CDN esterni (MUI, Recharts) = superficie XSS significativa su PC condivisi in ambiente retail.
+
+- [ ] **C.5.1** `frontend-web/public/_headers` (Netlify): aggiungere CSP header — `default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.dataxiom.it https://*.sentry.io; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`
+- [ ] **C.5.2** Verificare che la dashboard carichi senza errori CSP in console dopo il deploy
+- [ ] **C.5.3** Nota in backlog: migrazione JWT localStorage → httpOnly cookie (Phase 2, richiede backend session endpoint)
+
+### C.6 — Test Coverage Gap (Moduli Critici non coperti)
+`admin.js` (511 righe, gestisce onboarding clienti reali) e `shifts.js` (388 righe) hanno 0% coverage. Un bug nell'import CSV crea dati corrotti in produzione senza alert.
+
+- [ ] **C.6.1** `backend/src/__tests__/admin.test.js`: test per `POST /api/admin/clients`, `POST /api/admin/sites`, `POST /api/admin/employees`, `POST /api/admin/employees/import` (CSV valido, encoding errato, duplicati, >100 righe)
+- [ ] **C.6.2** `backend/src/__tests__/shifts.test.js`: test per `GET /api/shifts/:siteId`, `POST /api/shifts/:siteId` (creazione, aggiornamento, validazione employee_id), `GET /api/shifts/my-schedule`
+- [ ] **C.6.3** `backend/src/__tests__/export.test.js`: test per `GET /api/export/csv` — risposta con dati, limite 50000, RBAC (employee→403, manager→solo proprio site)
+- [ ] **C.6.4** Target coverage: portare dal 40% a ≥60% statements prima del lancio
+
+### C.7 — SLA e Contratto Cliente
+Senza un SLA formale ogni minuto di downtime è un litigio. Anche un documento minimo protegge entrambe le parti.
+
+- [ ] **C.7.1** `docs/sla.md`: uptime target (es. 99% mensile = max 7h downtime/mese), orari di supporto, tempi di risposta per severity (critico/alto/basso), esclusioni (manutenzione programmata)
+- [ ] **C.7.2** Clausola nel contratto: dati del cliente eliminati entro 30 giorni dalla disdetta (GDPR Art. 17) — già tecnicamente supportato da retention script, serve solo la clausola contrattuale
+- [ ] **C.7.3** Definire "manutenzione programmata" (es. domenica 02:00-04:00 UTC) per le finestre di deploy
+
+### C.8 — Monitoring App Mobile
+Se l'app smette di funzionare per un bug silenzioso (aggiornamento iOS, token scaduto, API incompatibile), nessuno lo sa finché un dipendente si lamenta.
+
+- [ ] **C.8.1** Verificare che Sentry mobile (FASE 6.1) catturi i crash dell'app — fare un crash test intenzionale (`throw new Error('test')`) su build development e confermare che arrivi su sentry.io
+- [ ] **C.8.2** CloudWatch metric filter: alert se 0 check-in ricevuti in una finestra di 4h durante orario lavorativo (08:00-20:00) per un cliente attivo — possibile segnale di app non funzionante
+- [ ] **C.8.3** TestFlight expiration reminder: aggiungere reminder calendario ogni 75 giorni per rinnovare la build (build TestFlight scadono a 90 giorni)
+
+---
+
 ## 🔲 TODO — MEDIUM PRIORITY
 
 ### FASE 4 — Mobile App: React Native (~25-35h)
@@ -304,6 +371,14 @@ Go-live with first paying customer (pilota).
 - [x] **QR code management** (5.1–5.5) — critical path
 - [x] **Production hardening** (6.1–6.8) ✅ custom domain badge.dataxiom.it live
 - [ ] **First customer onboarded** (7.1–7.6)
+- [ ] **Reset password dipendenti** (C.1) — blocca supporto post-lancio
+- [ ] **API versioning /api/v1/** (C.2) — blocca aggiornamenti mobile senza breaking change
+- [ ] **Runbook operativo** (C.3) — necessario prima di cedere il sistema a un cliente
+- [ ] **Token refresh mobile** (C.4) — sessioni >15min rompono il check-in silenziosamente
+- [ ] **Content Security Policy** (C.5) — riduce superficie XSS su PC retail condivisi
+- [ ] **Test coverage ≥60%** (C.6) — admin.js e shifts.js a 0% coprono l'onboarding clienti
+- [ ] **SLA e contratto** (C.7) — protegge entrambe le parti legalmente
+- [ ] **Mobile monitoring + TestFlight reminder** (C.8) — silent failure detection
 
 ---
 
