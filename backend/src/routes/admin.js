@@ -34,14 +34,16 @@ router.use((req, res, next) => {
 });
 
 // Internal Zod schema for CSV row validation (no body wrapper needed)
+// Accepts site_name (human-readable) — resolved to UUID before INSERT.
+// external_employee_id is the client's own employee code (e.g. EMP001).
 const CsvRowSchema = z.object({
   client_id: z.string().uuid(),
   email: z.string().email().max(100),
   name: z.string().min(2).max(100),
   phone: z.string().max(20).optional(),
   role: z.enum(['employee', 'manager']).default('employee'),
-  site_id: z.string().uuid().optional().nullable(),
-  assigned_sites: z.array(z.string().uuid()).default([]),
+  site_name: z.string().min(1).max(100).optional().nullable(),
+  external_employee_id: z.string().max(50).optional().nullable(),
 });
 
 // --- POST /api/admin/clients ---
@@ -202,16 +204,17 @@ router.post('/employees/import', upload.single('file'), async (req, res, next) =
     if (rows.length === 0) return next(new ValidationError('CSV file is empty'));
     if (rows.length > 100) return next(new ValidationError('Max 100 employees per import'));
 
-    // Prefetch all valid site IDs for this client once (avoids N DB round-trips per row)
+    // Prefetch all sites for this client once — used for name→UUID resolution
     const sitesResult = await pool.query(
-      'SELECT id FROM sites WHERE client_id = $1',
+      'SELECT id, name FROM sites WHERE client_id = $1',
       [clientId]
     );
-    const validSiteIds = new Set(sitesResult.rows.map((r) => r.id));
+    // Map normalised lowercase name → UUID (case-insensitive match)
+    const siteByName = new Map(sitesResult.rows.map((r) => [r.name.trim().toLowerCase(), r.id]));
 
     const results = { created: 0, skipped: 0, errors: [] };
 
-    // Phase 1: validate all rows (Zod + site ownership check in memory)
+    // Phase 1: validate all rows + resolve site_name → site_id
     const prepared = [];
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -223,19 +226,22 @@ router.post('/employees/import', upload.single('file'), async (req, res, next) =
           name: row.name?.trim(),
           phone: row.phone?.trim() || undefined,
           role: row.role?.trim() || 'employee',
-          site_id: row.site_id?.trim() || undefined,
-          assigned_sites: row.assigned_sites
-            ? row.assigned_sites.split(';').map((s) => s.trim()).filter(Boolean)
-            : [],
+          site_name: row.site_name?.trim() || undefined,
+          external_employee_id: row.employee_id?.trim() || undefined,
         });
 
-        if (parsed.assigned_sites.some((id) => !validSiteIds.has(id))) {
-          results.errors.push({ line: lineNum, email: row.email, error: 'One or more assigned_sites do not belong to this client' });
-          results.skipped++;
-          continue;
+        // Resolve site_name → UUID
+        let siteId = null;
+        if (parsed.site_name) {
+          siteId = siteByName.get(parsed.site_name.toLowerCase());
+          if (!siteId) {
+            results.errors.push({ line: lineNum, email: row.email, error: `Sede "${parsed.site_name}" non trovata per questo cliente` });
+            results.skipped++;
+            continue;
+          }
         }
 
-        prepared.push({ parsed, lineNum });
+        prepared.push({ parsed, siteId, lineNum });
       } catch (rowErr) {
         results.errors.push({ line: lineNum, email: row.email, error: rowErr.message });
         results.skipped++;
@@ -260,14 +266,14 @@ router.post('/employees/import', upload.single('file'), async (req, res, next) =
       await pgClient.query('BEGIN');
 
       for (const item of prepared) {
-        const { parsed, passwordHash } = item;
+        const { parsed, siteId, passwordHash } = item;
         const insertResult = await pgClient.query(
-          `INSERT INTO employees (client_id, email, name, phone, role, site_id, password_hash, assigned_sites)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::UUID[])
+          `INSERT INTO employees (client_id, email, name, phone, role, site_id, password_hash, external_employee_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            ON CONFLICT (client_id, email) DO NOTHING
            RETURNING id, client_id, email, name, role`,
           [parsed.client_id, parsed.email, parsed.name, parsed.phone || null,
-            parsed.role, parsed.site_id || null, passwordHash, parsed.assigned_sites]
+            parsed.role, siteId || null, passwordHash, parsed.external_employee_id || null]
         );
 
         if (insertResult.rowCount > 0) {
@@ -340,7 +346,7 @@ router.get('/employees', async (req, res, next) => {
     }
     const result = await pool.query(
       `SELECT e.id, e.client_id, e.email, e.name, e.role, e.phone,
-              e.site_id, e.created_at, c.name AS client_name,
+              e.site_id, e.external_employee_id, e.created_at, c.name AS client_name,
               s.name AS site_name
        FROM employees e
        JOIN clients c ON c.id = e.client_id

@@ -553,11 +553,15 @@ function EmployeesTab() {
         <CardContent>
           <Typography variant="h6" gutterBottom>Importazione CSV</Typography>
           <Typography variant="body2" color="text.secondary" mb={2}>
-            Formato CSV: <code>name,email,phone,role,site_id,assigned_sites</code>
+            Formato CSV: <code>name,email,role,site_name,employee_id</code>
             <br />
-            Colonne obbligatorie: <code>name</code>, <code>email</code>. Max 500 righe.
+            Obbligatorie: <code>name</code>, <code>email</code>. Max 100 righe.
             <br />
-            <code>assigned_sites</code>: UUID separati da <code>;</code>
+            <code>site_name</code>: nome della sede (es. <em>Torino Store</em>) — deve esistere già nel sistema.
+            <br />
+            <code>employee_id</code>: codice interno del cliente (es. <em>EMP001</em>) — opzionale.
+            <br />
+            <code>role</code>: <code>employee</code> (default) oppure <code>manager</code>.
           </Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
             <FormControl size="small" required sx={{ minWidth: 200 }}>
@@ -612,6 +616,7 @@ function EmployeesTab() {
                     <TableCell>Nome</TableCell>
                     <TableCell>Email</TableCell>
                     <TableCell>Ruolo</TableCell>
+                    <TableCell>ID Dipendente</TableCell>
                     <TableCell>Cliente</TableCell>
                     <TableCell>Sede</TableCell>
                     <TableCell>Creato</TableCell>
@@ -624,6 +629,9 @@ function EmployeesTab() {
                       <TableCell>{e.name}</TableCell>
                       <TableCell>{e.email}</TableCell>
                       <TableCell><Chip label={e.role} size="small" color={e.role === 'manager' ? 'primary' : 'default'} /></TableCell>
+                      <TableCell sx={{ color: e.external_employee_id ? 'inherit' : 'text.disabled' }}>
+                        {e.external_employee_id || '—'}
+                      </TableCell>
                       <TableCell>{e.client_name}</TableCell>
                       <TableCell>{e.site_name || '—'}</TableCell>
                       <TableCell>{new Date(e.created_at).toLocaleDateString('it-IT')}</TableCell>
