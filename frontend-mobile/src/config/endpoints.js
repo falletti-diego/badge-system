@@ -9,6 +9,7 @@ export const ENDPOINTS = {
   // Auth
   AUTH_LOGIN: '/api/auth/login',
   AUTH_LOGOUT: '/api/auth/logout',
+  AUTH_REFRESH: '/api/auth/refresh',
 
   // Check-ins
   CHECKINS_POST: '/api/checkins',
@@ -78,6 +79,7 @@ export const TIMING = {
 // Storage keys for AsyncStorage persistence
 export const STORAGE_KEYS = {
   AUTH_TOKEN: 'badge_auth_token',
+  REFRESH_TOKEN: 'badge_refresh_token',
   USER_DATA: 'badge_user',
 };
 

@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/endpoints';
+import { navigationRef } from '../utils/navigationRef';
 
 import LoginScreen from '../screens/auth/LoginScreen';
 import CheckInScreen from '../screens/checkin/CheckInScreen';
@@ -35,7 +36,7 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         screenOptions={{ headerShown: false }}
         initialRouteName={initialRoute}

@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from './apiClient';
 import { ENDPOINTS, STORAGE_KEYS } from '../config/endpoints';
 
-const { AUTH_TOKEN: TOKEN_KEY, USER_DATA: USER_KEY } = STORAGE_KEYS;
+const { AUTH_TOKEN: TOKEN_KEY, REFRESH_TOKEN: REFRESH_KEY, USER_DATA: USER_KEY } = STORAGE_KEYS;
 
 const authService = {
   async login(email, password, clientId = null) {
@@ -11,11 +11,10 @@ const authService = {
     // (required once a second client is onboarded with an overlapping employee email)
     if (clientId) body.client_id = clientId;
     const response = await apiClient.post(ENDPOINTS.AUTH_LOGIN, body);
-    const { token, user } = response.data.data;
-    await AsyncStorage.multiSet([
-      [TOKEN_KEY, token],
-      [USER_KEY, JSON.stringify(user)],
-    ]);
+    const { token, refresh_token, user } = response.data.data;
+    const pairs = [[TOKEN_KEY, token], [USER_KEY, JSON.stringify(user)]];
+    if (refresh_token) pairs.push([REFRESH_KEY, refresh_token]);
+    await AsyncStorage.multiSet(pairs);
     return { token, user };
   },
 
@@ -25,11 +24,24 @@ const authService = {
     } catch {
       // best-effort
     }
-    await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
+    await AsyncStorage.multiRemove([TOKEN_KEY, REFRESH_KEY, USER_KEY]);
   },
 
   async getToken() {
     return AsyncStorage.getItem(TOKEN_KEY);
+  },
+
+  async getRefreshToken() {
+    return AsyncStorage.getItem(REFRESH_KEY);
+  },
+
+  async refreshAccessToken() {
+    const refresh_token = await this.getRefreshToken();
+    if (!refresh_token) throw new Error('No refresh token');
+    const response = await apiClient.post(ENDPOINTS.AUTH_REFRESH, { refresh_token });
+    const { token } = response.data.data;
+    await AsyncStorage.setItem(TOKEN_KEY, token);
+    return token;
   },
 
   async getUser() {
