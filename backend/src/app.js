@@ -67,9 +67,9 @@ app.set('trust proxy', 1);
 app.use(helmet());
 // CORS — explicit whitelist, no wildcards (MASVS-NETWORK)
 // Dev: set CORS_ORIGIN=http://localhost:5173 in .env
-// Prod: SSM /badge/production/CORS_ORIGIN = https://dataxiom-badge.netlify.app
+// Prod: SSM /badge/production/CORS_ORIGIN = https://badge.dataxiom.it,https://dataxiom-badge.netlify.app
 app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(',') || ['https://dataxiom-badge.netlify.app'],
+  origin: process.env.CORS_ORIGIN?.split(',') || ['https://badge.dataxiom.it', 'https://dataxiom-badge.netlify.app'],
   credentials: true,
 }));
 
