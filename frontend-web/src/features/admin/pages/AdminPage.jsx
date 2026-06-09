@@ -4,11 +4,15 @@ import {
   TextField, Button, Alert, CircularProgress,
   Table, TableBody, TableCell, TableHead, TableRow, TableContainer,
   Select, MenuItem, FormControl, InputLabel, Chip, Stack,
-  Divider, Tooltip, IconButton,
+  Divider, Tooltip, IconButton, Dialog, DialogTitle,
+  DialogContent, DialogContentText, DialogActions,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { useNavigate } from 'react-router-dom';
 import apiClient from '../../../services/apiClient';
 import authService from '../../../services/authService';
 
@@ -44,6 +48,23 @@ function useFetch(url) {
   return { data, loading, error, reload: load };
 }
 
+function ConfirmDeleteDialog({ open, title, description, onConfirm, onCancel, loading }) {
+  return (
+    <Dialog open={open} onClose={onCancel} maxWidth="xs" fullWidth>
+      <DialogTitle>{title}</DialogTitle>
+      <DialogContent>
+        <DialogContentText>{description}</DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onCancel} disabled={loading}>Annulla</Button>
+        <Button onClick={onConfirm} color="error" variant="contained" disabled={loading}>
+          {loading ? <CircularProgress size={18} /> : 'Elimina'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false);
   const handle = () => {
@@ -67,6 +88,22 @@ function ClientsTab() {
   const [form, setForm] = useState({ name: '', email: '', plan: 'starter' });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await apiClient.delete(`/api/admin/clients/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      reload();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.message || err.message });
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -135,6 +172,7 @@ function ClientsTab() {
                     <TableCell align="center">Sedi</TableCell>
                     <TableCell align="center">Dipendenti</TableCell>
                     <TableCell>Creato</TableCell>
+                    <TableCell />
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -146,10 +184,17 @@ function ClientsTab() {
                       <TableCell align="center">{c.site_count}</TableCell>
                       <TableCell align="center">{c.employee_count}</TableCell>
                       <TableCell>{new Date(c.created_at).toLocaleDateString('it-IT')}</TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="Elimina cliente">
+                          <IconButton size="small" color="error" onClick={() => setDeleteTarget(c)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {clients.length === 0 && (
-                    <TableRow><TableCell colSpan={6} align="center" sx={{ color: 'text.secondary' }}>Nessun cliente</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} align="center" sx={{ color: 'text.secondary' }}>Nessun cliente</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -157,6 +202,15 @@ function ClientsTab() {
           )}
         </CardContent>
       </Card>
+
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        title={`Elimina cliente "${deleteTarget?.name}"?`}
+        description={`Questa azione eliminerà anche tutte le sedi, i dipendenti e i check-in associati. L'operazione è irreversibile.`}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+        loading={deleting}
+      />
     </Stack>
   );
 }
@@ -172,6 +226,22 @@ function SitesTab() {
   const [form, setForm] = useState({ client_id: '', name: '', location: '' });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await apiClient.delete(`/api/admin/sites/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      reload();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.message || err.message });
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -249,6 +319,7 @@ function SitesTab() {
                     <TableCell>Indirizzo</TableCell>
                     <TableCell>QR Code Content</TableCell>
                     <TableCell>Creato</TableCell>
+                    <TableCell />
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -266,10 +337,17 @@ function SitesTab() {
                         </Stack>
                       </TableCell>
                       <TableCell>{new Date(s.created_at).toLocaleDateString('it-IT')}</TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="Elimina sede">
+                          <IconButton size="small" color="error" onClick={() => setDeleteTarget(s)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {sites.length === 0 && (
-                    <TableRow><TableCell colSpan={5} align="center" sx={{ color: 'text.secondary' }}>Nessuna sede</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} align="center" sx={{ color: 'text.secondary' }}>Nessuna sede</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -277,6 +355,15 @@ function SitesTab() {
           )}
         </CardContent>
       </Card>
+
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        title={`Elimina sede "${deleteTarget?.name}"?`}
+        description="Questa azione eliminerà tutti i check-in associati a questa sede. L'operazione è irreversibile."
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+        loading={deleting}
+      />
     </Stack>
   );
 }
@@ -286,6 +373,10 @@ function SitesTab() {
 function EmployeesTab() {
   const { data: clients } = useFetch('/api/admin/clients');
   const { data: allSites } = useFetch('/api/admin/sites');
+  const [filterClient, setFilterClient] = useState('');
+  const { data: employees, loading: empLoading, reload: reloadEmployees } = useFetch(
+    filterClient ? `/api/admin/employees?client_id=${filterClient}` : '/api/admin/employees'
+  );
   const [form, setForm] = useState({
     client_id: '', email: '', name: '', phone: '',
     role: 'employee', site_id: '', password: '',
@@ -296,6 +387,22 @@ function EmployeesTab() {
   const [csvClientId, setCsvClientId] = useState('');
   const [csvLoading, setCsvLoading] = useState(false);
   const fileRef = useRef(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await apiClient.delete(`/api/admin/employees/${deleteTarget.id}`);
+      setDeleteTarget(null);
+      reloadEmployees();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.message || err.message });
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const clientSites = allSites.filter((s) => s.client_id === form.client_id);
 
@@ -322,6 +429,7 @@ function EmployeesTab() {
         tempPwd,
       });
       setForm({ ...form, email: '', name: '', phone: '', site_id: '', password: '' });
+      reloadEmployees();
     } catch (err) {
       setMsg({ type: 'error', text: err.response?.data?.message || err.message });
     } finally {
@@ -482,6 +590,70 @@ function EmployeesTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* Employee list */}
+      <Card variant="outlined">
+        <CardContent>
+          <Stack direction="row" spacing={2} alignItems="center" mb={2}>
+            <Typography variant="h6">Dipendenti ({employees.length})</Typography>
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel>Filtra cliente</InputLabel>
+              <Select label="Filtra cliente" value={filterClient} onChange={(e) => setFilterClient(e.target.value)}>
+                <MenuItem value="">Tutti</MenuItem>
+                {clients.map((c) => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+              </Select>
+            </FormControl>
+          </Stack>
+          {empLoading ? <CircularProgress size={24} /> : (
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Nome</TableCell>
+                    <TableCell>Email</TableCell>
+                    <TableCell>Ruolo</TableCell>
+                    <TableCell>Cliente</TableCell>
+                    <TableCell>Sede</TableCell>
+                    <TableCell>Creato</TableCell>
+                    <TableCell />
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {employees.map((e) => (
+                    <TableRow key={e.id} hover>
+                      <TableCell>{e.name}</TableCell>
+                      <TableCell>{e.email}</TableCell>
+                      <TableCell><Chip label={e.role} size="small" color={e.role === 'manager' ? 'primary' : 'default'} /></TableCell>
+                      <TableCell>{e.client_name}</TableCell>
+                      <TableCell>{e.site_name || '—'}</TableCell>
+                      <TableCell>{new Date(e.created_at).toLocaleDateString('it-IT')}</TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="Elimina dipendente">
+                          <IconButton size="small" color="error" onClick={() => setDeleteTarget(e)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {employees.length === 0 && (
+                    <TableRow><TableCell colSpan={7} align="center" sx={{ color: 'text.secondary' }}>Nessun dipendente</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        title={`Elimina dipendente "${deleteTarget?.name}"?`}
+        description="Questa azione eliminerà anche tutti i check-in registrati da questo dipendente. L'operazione è irreversibile."
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+        loading={deleting}
+      />
     </Stack>
   );
 }
@@ -490,6 +662,7 @@ function EmployeesTab() {
 
 export function AdminPage() {
   const [tab, setTab] = useState(0);
+  const navigate = useNavigate();
   const user = authService.getUser();
 
   if (user?.role !== 'admin') {
@@ -502,7 +675,17 @@ export function AdminPage() {
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1200, mx: 'auto' }}>
-      <Typography variant="h3" gutterBottom>Pannello Admin</Typography>
+      <Stack direction="row" alignItems="center" spacing={2} mb={1}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/dashboard')}
+          variant="outlined"
+          size="small"
+        >
+          Dashboard
+        </Button>
+        <Typography variant="h3">Pannello Admin</Typography>
+      </Stack>
       <Typography variant="body2" color="text.secondary" mb={3}>
         Gestisci clienti, sedi e dipendenti del sistema Badge.
       </Typography>

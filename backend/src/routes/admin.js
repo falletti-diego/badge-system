@@ -325,6 +325,133 @@ router.get('/clients', async (req, res, next) => {
   }
 });
 
+// --- GET /api/admin/employees?client_id=... ---
+
+router.get('/employees', async (req, res, next) => {
+  try {
+    const { client_id } = req.query;
+    const params = [];
+    let where = '';
+    if (client_id) {
+      const uuidCheck = z.string().uuid().safeParse(client_id);
+      if (!uuidCheck.success) return next(new ValidationError('Invalid client_id format'));
+      params.push(client_id);
+      where = 'WHERE e.client_id = $1';
+    }
+    const result = await pool.query(
+      `SELECT e.id, e.client_id, e.email, e.name, e.role, e.phone,
+              e.site_id, e.created_at, c.name AS client_name,
+              s.name AS site_name
+       FROM employees e
+       JOIN clients c ON c.id = e.client_id
+       LEFT JOIN sites s ON s.id = e.site_id
+       ${where}
+       ORDER BY e.created_at DESC
+       LIMIT 200`,
+      params
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- DELETE /api/admin/clients/:id ---
+
+router.delete('/clients/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const uuidCheck = z.string().uuid().safeParse(id);
+    if (!uuidCheck.success) return next(new ValidationError('Invalid client id'));
+
+    const result = await pool.query(
+      'DELETE FROM clients WHERE id = $1 RETURNING id, name',
+      [id]
+    );
+    if (result.rowCount === 0) return next(new ValidationError('Client not found'));
+
+    const client = result.rows[0];
+    await logAudit(pool, {
+      action: 'admin_delete_client',
+      entity: 'client',
+      entityId: client.id,
+      clientId: client.id,
+      oldValue: { name: client.name },
+      newValue: null,
+      userId: req.user.user_id,
+    }).catch(() => {});
+
+    logger.info({ action: 'admin_delete_client', client_id: client.id, name: client.name });
+    res.json({ success: true, message: `Cliente "${client.name}" eliminato.` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- DELETE /api/admin/sites/:id ---
+
+router.delete('/sites/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const uuidCheck = z.string().uuid().safeParse(id);
+    if (!uuidCheck.success) return next(new ValidationError('Invalid site id'));
+
+    const result = await pool.query(
+      'DELETE FROM sites WHERE id = $1 RETURNING id, name, client_id',
+      [id]
+    );
+    if (result.rowCount === 0) return next(new ValidationError('Site not found'));
+
+    const site = result.rows[0];
+    await logAudit(pool, {
+      action: 'admin_delete_site',
+      entity: 'site',
+      entityId: site.id,
+      clientId: site.client_id,
+      oldValue: { name: site.name },
+      newValue: null,
+      userId: req.user.user_id,
+    }).catch(() => {});
+
+    logger.info({ action: 'admin_delete_site', site_id: site.id, name: site.name });
+    res.json({ success: true, message: `Sede "${site.name}" eliminata.` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- DELETE /api/admin/employees/:id ---
+
+router.delete('/employees/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const uuidCheck = z.string().uuid().safeParse(id);
+    if (!uuidCheck.success) return next(new ValidationError('Invalid employee id'));
+
+    const result = await pool.query(
+      'DELETE FROM employees WHERE id = $1 RETURNING id, name, email, client_id',
+      [id]
+    );
+    if (result.rowCount === 0) return next(new ValidationError('Employee not found'));
+
+    const emp = result.rows[0];
+    await logAudit(pool, {
+      action: 'admin_delete_employee',
+      entity: 'employee',
+      entityId: emp.id,
+      clientId: emp.client_id,
+      oldValue: { name: emp.name, email: emp.email },
+      newValue: null,
+      userId: req.user.user_id,
+    }).catch(() => {});
+
+    logger.info({ action: 'admin_delete_employee', employee_id: emp.id, email: emp.email });
+    res.json({ success: true, message: `Dipendente "${emp.name}" eliminato.` });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // --- GET /api/admin/sites?client_id=... ---
 
 router.get('/sites', async (req, res, next) => {
