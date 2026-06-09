@@ -280,15 +280,15 @@ router.post('/employees/import', upload.single('file'), async (req, res, next) =
 
       for (const item of prepared) {
         const { parsed, siteId, passwordHash } = item;
-        // Convert single siteId to assigned_sites array with proper UUID casting
-        const assignedSitesArray = siteId ? `ARRAY['${siteId}'::uuid]::uuid[]` : `ARRAY[]::uuid[]`;
+        // Convert single siteId to assigned_sites array — PostgreSQL accepts UUID[] natively
+        const assignedSitesArray = siteId ? [siteId] : [];
         const insertResult = await pgClient.query(
           `INSERT INTO employees (client_id, email, name, phone, role, assigned_sites, password_hash, external_employee_id)
-           VALUES ($1, $2, $3, $4, $5, ${assignedSitesArray}, $6, $7)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            ON CONFLICT (client_id, email) DO NOTHING
            RETURNING id, client_id, email, name, role`,
           [parsed.client_id, parsed.email, parsed.name, parsed.phone || null,
-            parsed.role, passwordHash, parsed.external_employee_id || null]
+            parsed.role, assignedSitesArray, passwordHash, parsed.external_employee_id || null]
         );
 
         if (insertResult.rowCount > 0) {
