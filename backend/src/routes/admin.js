@@ -560,10 +560,16 @@ function generateTempPassword() {
 // =====================================================
 // GET /api/admin/debug/employee-assignment/:employeeId
 // Debug endpoint to diagnose assigned_sites issues
+// Accessible to admin or manager (for their client)
 // =====================================================
 router.get('/debug/employee-assignment/:employeeId', requireAuth, async (req, res, next) => {
   const { employeeId } = req.params;
-  const { client_id } = req.user;
+  const { client_id, role } = req.user;
+
+  // Allow admin (all clients) or manager (own client)
+  if (role !== 'admin' && role !== 'manager') {
+    return next(new ForbiddenError('Admin or manager access required'));
+  }
 
   try {
     // 1. Get employee details
