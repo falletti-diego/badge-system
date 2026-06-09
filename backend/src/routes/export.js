@@ -107,17 +107,19 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
       LEFT JOIN sites s ON c.site_id = s.id
       ${whereClause}
       ORDER BY c.timestamp DESC
-      LIMIT 50000
+      LIMIT 50001
     `;
 
     const result = await pool.query(query, params);
+    const truncated = result.rows.length > 50000;
+    const rows = truncated ? result.rows.slice(0, 50000) : result.rows;
 
     // Set response headers AFTER successful query
     const filename = `presenze_${new Date().toISOString().split('T')[0]}.csv`;
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('X-Total-Count', String(result.rows.length));
-    if (result.rows.length === 50000) {
+    res.setHeader('X-Total-Count', String(rows.length));
+    if (truncated) {
       res.setHeader('X-Truncated', 'true');
     }
 
@@ -164,7 +166,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
 
     // Pipe CSV stringifier to response and write rows
     stringifier.pipe(res);
-    result.rows.forEach((row) => {
+    rows.forEach((row) => {
       stringifier.write(row);
     });
     stringifier.end();
@@ -173,7 +175,8 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
       action: 'csv_export_completed',
       client_id: clientId,
       filters: { site_id, employee_id, date_from, date_to },
-      row_count: result.rows.length,
+      row_count: rows.length,
+      truncated,
     });
   } catch (err) {
     next(err);

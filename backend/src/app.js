@@ -31,7 +31,6 @@ const express = require('express');
 const dotenv = require('dotenv');
 const helmet = require('helmet');
 const cors = require('cors');
-const pino = require('pino');
 const pinoHttp = require('pino-http');
 const https = require('https');
 const fs = require('fs');
@@ -53,10 +52,8 @@ const adminRouter = require('./routes/admin');
 // Load environment variables
 dotenv.config();
 
-// Initialize logger
-const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-});
+// Initialize logger (singleton shared across all modules)
+const logger = require('./utils/logger');
 
 // Initialize Express app
 const app = express();

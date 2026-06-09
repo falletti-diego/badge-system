@@ -338,11 +338,8 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
     });
 
     // 6. Create notifications for employees whose shifts changed (best-effort, outside transaction)
-    const validEmpIds = new Set(empIds);
-
     const SHIFT_LABELS = { m: 'Mattino', p: 'Pomeriggio', s: 'Sera', R: 'Riposo' };
     for (const [empId, dates] of Object.entries(shifts_data)) {
-      if (!validEmpIds.has(empId)) continue; // skip employee not in this client
       for (const [date, newShift] of Object.entries(dates)) {
         const oldShift = oldValue?.[empId]?.[date];
         if (oldShift === newShift) continue; // unchanged

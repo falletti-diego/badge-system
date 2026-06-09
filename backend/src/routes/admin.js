@@ -326,7 +326,7 @@ router.get('/clients', async (req, res, next) => {
        ORDER BY c.created_at DESC
        LIMIT 500`
     );
-    res.json({ success: true, data: result.rows, total: result.rows.length });
+    res.json({ success: true, data: result.rows, returned: result.rows.length });
   } catch (err) {
     next(err);
   }
@@ -357,7 +357,7 @@ router.get('/employees', async (req, res, next) => {
        LIMIT 200`,
       params
     );
-    res.json({ success: true, data: result.rows, total: result.rows.length });
+    res.json({ success: true, data: result.rows, returned: result.rows.length });
   } catch (err) {
     next(err);
   }
@@ -482,7 +482,7 @@ router.get('/sites', async (req, res, next) => {
        LIMIT 500`,
       params
     );
-    res.json({ success: true, data: result.rows, total: result.rows.length });
+    res.json({ success: true, data: result.rows, returned: result.rows.length });
   } catch (err) {
     next(err);
   }
