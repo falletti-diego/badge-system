@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Badge System — Guida Utente</title>
+  <style>
+    /* ─── Reset & Base ─── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.65;
+      color: #2A2520;
+      background: #fff;
+    }
+
+    /* ─── Print settings ─── */
+    @media print {
+      body { font-size: 10pt; }
+      .page-break { page-break-after: always; }
+      .no-print { display: none; }
+      a { color: inherit; text-decoration: none; }
+      @page { margin: 18mm 20mm; size: A4; }
+      .cover { page-break-after: always; }
+    }
+
+    /* ─── Colors ─── */
+    :root {
+      --navy:   #1E3A5F;
+      --green:  #2D7049;
+      --orange: #B45309;
+      --linen:  #F5F2ED;
+      --gray:   #6B7280;
+      --border: #D1D5DB;
+    }
+
+    /* ─── Cover ─── */
+    .cover {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 60px 70px;
+      background: var(--navy);
+      color: #fff;
+    }
+    .cover .logo-area {
+      font-size: 13pt;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      opacity: .75;
+      margin-bottom: 60px;
+    }
+    .cover .product-name {
+      font-size: 42pt;
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 12px;
+    }
+    .cover .tagline {
+      font-size: 16pt;
+      font-weight: 300;
+      opacity: .85;
+      margin-bottom: 60px;
+    }
+    .cover .cover-meta {
+      font-size: 10pt;
+      opacity: .6;
+      border-top: 1px solid rgba(255,255,255,.2);
+      padding-top: 20px;
+      width: 100%;
+    }
+    .cover .cover-meta span { margin-right: 32px; }
+
+    /* ─── Page wrapper ─── */
+    .page {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 40px 50px;
+    }
+
+    /* ─── Section header ─── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin: 48px 0 20px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--navy);
+    }
+    .section-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .icon-navy  { background: var(--navy); }
+    .icon-green { background: var(--green); }
+    .icon-orange { background: var(--orange); }
+
+    .section-header h2 {
+      font-size: 18pt;
+      font-weight: 700;
+      color: var(--navy);
+    }
+    .section-header .subtitle {
+      font-size: 10pt;
+      color: var(--gray);
+      font-weight: 400;
+      display: block;
+    }
+
+    /* ─── Subsection ─── */
+    h3 {
+      font-size: 13pt;
+      font-weight: 700;
+      color: var(--navy);
+      margin: 28px 0 10px;
+    }
+    h4 {
+      font-size: 11pt;
+      font-weight: 700;
+      color: #374151;
+      margin: 18px 0 6px;
+    }
+
+    p { margin-bottom: 10px; }
+
+    /* ─── Steps ─── */
+    .steps { list-style: none; margin: 12px 0 20px; }
+    .steps li {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+    .step-num {
+      min-width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--navy);
+      color: #fff;
+      font-weight: 700;
+      font-size: 10pt;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .steps li .step-body strong { display: block; margin-bottom: 2px; }
+
+    /* ─── Info box ─── */
+    .info-box {
+      border-left: 4px solid var(--navy);
+      background: var(--linen);
+      padding: 12px 16px;
+      border-radius: 0 6px 6px 0;
+      margin: 14px 0;
+      font-size: 10pt;
+    }
+    .info-box.green  { border-color: var(--green); }
+    .info-box.orange { border-color: var(--orange); }
+
+    .info-box .label {
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      font-size: 8.5pt;
+      margin-bottom: 4px;
+      color: var(--gray);
+    }
+
+    /* ─── Warning box ─── */
+    .warning-box {
+      border: 1.5px solid #FBBF24;
+      background: #FFFBEB;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin: 14px 0;
+      font-size: 10pt;
+    }
+
+    /* ─── Table ─── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 20px;
+      font-size: 10pt;
+    }
+    th {
+      background: var(--navy);
+      color: #fff;
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 600;
+    }
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: var(--linen); }
+
+    /* ─── Badge/pill ─── */
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-size: 8.5pt;
+      font-weight: 700;
+      letter-spacing: .3px;
+    }
+    .badge-green  { background: #D1FAE5; color: #065F46; }
+    .badge-blue   { background: #DBEAFE; color: #1E40AF; }
+    .badge-orange { background: #FED7AA; color: #92400E; }
+    .badge-gray   { background: #F3F4F6; color: #374151; }
+
+    /* ─── Two-column layout ─── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin: 14px 0;
+    }
+    .card {
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card h4 { margin-top: 0; color: var(--navy); }
+
+    /* ─── TOC ─── */
+    .toc {
+      background: var(--linen);
+      border-radius: 8px;
+      padding: 24px 28px;
+      margin: 24px 0 40px;
+    }
+    .toc h2 { font-size: 14pt; color: var(--navy); margin-bottom: 16px; }
+    .toc ol { padding-left: 18px; }
+    .toc li { margin-bottom: 6px; font-size: 10.5pt; }
+    .toc .toc-page { float: right; color: var(--gray); font-size: 9.5pt; }
+    .toc a { color: var(--navy); text-decoration: none; font-weight: 500; }
+
+    /* ─── Footer ─── */
+    .page-footer {
+      margin-top: 60px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      font-size: 8.5pt;
+      color: var(--gray);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* ─── Screen-only print button ─── */
+    .print-btn {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: var(--navy);
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11pt;
+      font-weight: 600;
+      z-index: 1000;
+      box-shadow: 0 2px 8px rgba(0,0,0,.2);
+    }
+    .print-btn:hover { background: #162d4a; }
+    @media print { .print-btn { display: none; } }
+
+    hr.section-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 40px 0;
+    }
+
+    ul.check-list { list-style: none; padding: 0; margin: 10px 0; }
+    ul.check-list li { padding: 4px 0; padding-left: 22px; position: relative; }
+    ul.check-list li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+
+    ul.bullet { padding-left: 18px; margin: 8px 0; }
+    ul.bullet li { margin-bottom: 5px; }
+  </style>
+</head>
+<body>
+
+<button class="print-btn no-print" onclick="window.print()">🖨 Stampa / Salva PDF</button>
+
+<!-- ══════════════════════════════════════════════
+     COPERTINA
+     ══════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="logo-area">DATAXIOM · Badge System</div>
+  <div class="product-name">Guida Utente</div>
+  <div class="tagline">Rilevazione presenze per negozi e punti vendita</div>
+  <div class="cover-meta">
+    <span>Versione 1.0</span>
+    <span>Giugno 2026</span>
+    <span>Uso interno — da non distribuire</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PAGINA 2 — INDICE + INTRODUZIONE
+     ══════════════════════════════════════════════ -->
+<div class="page page-break">
+
+  <div class="toc">
+    <h2>Indice</h2>
+    <ol>
+      <li><a href="#intro">Cos'è Badge System</a></li>
+      <li><a href="#dipendenti">Guida per Dipendenti</a> — App Mobile
+        <ul style="padding-left:16px; margin-top:4px; font-size:9.5pt; color:var(--gray);">
+          <li>Download e primo accesso</li>
+          <li>Come effettuare il check-in</li>
+          <li>Visualizzare le proprie presenze</li>
+          <li>I propri turni</li>
+        </ul>
+      </li>
+      <li><a href="#manager">Guida per Store Manager</a> — Dashboard Web
+        <ul style="padding-left:16px; margin-top:4px; font-size:9.5pt; color:var(--gray);">
+          <li>Accesso alla dashboard</li>
+          <li>Visualizzare le presenze</li>
+          <li>Correggere un check-in</li>
+          <li>Esportare il report CSV</li>
+          <li>Gestione turni (Planning)</li>
+        </ul>
+      </li>
+      <li><a href="#faq">Domande Frequenti (FAQ)</a></li>
+      <li><a href="#supporto">Supporto Tecnico</a></li>
+    </ol>
+  </div>
+
+  <!-- INTRODUZIONE -->
+  <div id="intro">
+    <div class="section-header">
+      <div class="section-icon icon-navy">📋</div>
+      <div>
+        <h2>1 · Cos'è Badge System</h2>
+        <span class="subtitle">Panoramica del prodotto</span>
+      </div>
+    </div>
+
+    <p>
+      <strong>Badge System</strong> è il sistema di rilevazione presenze di Dataxiom pensato per negozi,
+      centri commerciali e catene retail. Permette ai dipendenti di registrare entrata e uscita
+      direttamente dal proprio smartphone, senza badge fisici o lettori aggiuntivi.
+    </p>
+
+    <div class="two-col">
+      <div class="card">
+        <h4>👤 Per i Dipendenti</h4>
+        <ul class="check-list">
+          <li>App gratuita su iOS e Android</li>
+          <li>Check-in con QR code della sede</li>
+          <li>Riconoscimento con Face ID</li>
+          <li>Storico personale delle presenze</li>
+          <li>Visualizzazione turni del mese</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>🏪 Per i Manager</h4>
+        <ul class="check-list">
+          <li>Dashboard web accessibile ovunque</li>
+          <li>Presenze in tempo reale per la sede</li>
+          <li>Correzione check-in mancanti</li>
+          <li>Export CSV per paghe e HR</li>
+          <li>Pianificazione turni mensili</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Come funziona</h3>
+    <p>
+      In ogni sede è affisso un <strong>codice QR statico</strong> (cartello stampato o display).
+      Il dipendente apre l'app, scansiona il QR e si autentica con Face ID.
+      Il sistema registra automaticamente orario, sede e tipologia (entrata / uscita).
+      I dati sono visibili in tempo reale nella dashboard del manager.
+    </p>
+
+    <div class="info-box green">
+      <div class="label">Nota sulla privacy</div>
+      Badge System rispetta il GDPR: i dati biometrici (Face ID) non vengono mai inviati
+      ai server Dataxiom — l'autenticazione avviene interamente sul dispositivo del dipendente
+      tramite le API sicure di Apple/Android.
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>Badge System — Guida Utente v1.0</span>
+    <span>Dataxiom · Uso Riservato</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PAGINA 3 — DIPENDENTI (1/2)
+     ══════════════════════════════════════════════ -->
+<div class="page page-break" id="dipendenti">
+
+  <div class="section-header">
+    <div class="section-icon icon-green">📱</div>
+    <div>
+      <h2>2 · Guida per Dipendenti</h2>
+      <span class="subtitle">App Mobile — iOS &amp; Android</span>
+    </div>
+  </div>
+
+  <!-- 2.1 Download -->
+  <h3>2.1 · Download e primo accesso</h3>
+
+  <p>L'app <strong>Badge System</strong> è disponibile gratuitamente.</p>
+
+  <div class="two-col">
+    <div class="card">
+      <h4>iPhone (iOS)</h4>
+      <ol style="padding-left:16px;">
+        <li>Apri <strong>App Store</strong></li>
+        <li>Cerca <em>"Badge System Dataxiom"</em></li>
+        <li>Tocca <strong>Ottieni</strong> e installa</li>
+      </ol>
+      <p style="margin-top:8px; font-size:9.5pt; color:var(--gray);">Richiede iOS 15 o superiore</p>
+    </div>
+    <div class="card">
+      <h4>Android</h4>
+      <ol style="padding-left:16px;">
+        <li>Apri <strong>Google Play Store</strong></li>
+        <li>Cerca <em>"Badge System Dataxiom"</em></li>
+        <li>Tocca <strong>Installa</strong></li>
+      </ol>
+      <p style="margin-top:8px; font-size:9.5pt; color:var(--gray);">Richiede Android 10 o superiore</p>
+    </div>
+  </div>
+
+  <h4>Primo accesso</h4>
+  <ol class="steps">
+    <li>
+      <span class="step-num">1</span>
+      <div class="step-body">
+        <strong>Ricevi le credenziali</strong>
+        Il tuo responsabile ti fornirà email e password temporanea tramite email aziendale.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">2</span>
+      <div class="step-body">
+        <strong>Apri l'app e inserisci le credenziali</strong>
+        Inserisci la tua email e la password temporanea ricevuta. Tocca <strong>Accedi</strong>.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">3</span>
+      <div class="step-body">
+        <strong>Attiva Face ID</strong>
+        L'app ti chiederà il permesso di usare Face ID (o impronta digitale su Android).
+        Tocca <strong>Consenti</strong> — è richiesto per i check-in futuri.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">4</span>
+      <div class="step-body">
+        <strong>Cambia la password</strong>
+        Vai in <em>Impostazioni → Sicurezza</em> e imposta una password personale.
+      </div>
+    </li>
+  </ol>
+
+  <div class="warning-box">
+    ⚠️ <strong>Importante:</strong> usa la tua email aziendale personale come username.
+    Non condividere le credenziali con colleghi — ogni dipendente deve avere il proprio account.
+  </div>
+
+  <!-- 2.2 Check-in -->
+  <h3>2.2 · Come effettuare il check-in (entrata/uscita)</h3>
+
+  <p>Segui questi passaggi ogni volta che arrivi o lasci la sede:</p>
+
+  <ol class="steps">
+    <li>
+      <span class="step-num">1</span>
+      <div class="step-body">
+        <strong>Apri l'app Badge System</strong>
+        Tocca l'icona dell'app sul tuo smartphone. Se sei già autenticato, vai al punto 3.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">2</span>
+      <div class="step-body">
+        <strong>Accedi con Face ID</strong>
+        L'app usa Face ID per verificare la tua identità in modo rapido e sicuro.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">3</span>
+      <div class="step-body">
+        <strong>Tocca "Scansiona QR"</strong>
+        Nella schermata principale, tocca il pulsante <span class="badge badge-green">Scansiona QR</span>.
+        La fotocamera si aprirà automaticamente.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">4</span>
+      <div class="step-body">
+        <strong>Inquadra il codice QR della sede</strong>
+        Punta la fotocamera verso il cartello QR affisso all'ingresso del negozio.
+        Mantieni il codice al centro dello schermo fino al suono di conferma.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">5</span>
+      <div class="step-body">
+        <strong>Scegli il tipo di operazione</strong>
+        L'app mostrerà i pulsanti <span class="badge badge-green">ENTRATA</span> e
+        <span class="badge badge-orange">USCITA</span>. Seleziona quello corretto.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">6</span>
+      <div class="step-body">
+        <strong>Conferma con Face ID</strong>
+        Guarda lo schermo del telefono per il riconoscimento. L'operazione viene
+        registrata immediatamente. Comparirà il messaggio <em>"Check-in registrato ✓"</em>.
+      </div>
+    </li>
+  </ol>
+
+  <div class="info-box">
+    <div class="label">Suggerimento</div>
+    L'intera procedura richiede meno di <strong>15 secondi</strong>. Tieni l'app installata
+    e notifiche attive per ricevere i promemoria turno dal tuo responsabile.
+  </div>
+
+  <div class="page-footer">
+    <span>Badge System — Guida Utente v1.0 · Sezione 2 — Dipendenti</span>
+    <span>Dataxiom · Uso Riservato</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PAGINA 4 — DIPENDENTI (2/2)
+     ══════════════════════════════════════════════ -->
+<div class="page page-break">
+
+  <!-- 2.3 Presenze personali -->
+  <h3>2.3 · Visualizzare le proprie presenze</h3>
+
+  <p>
+    Dalla schermata principale dell'app, tocca la scheda <strong>Presenze</strong>
+    (icona calendario nella barra in basso). Vedrai:
+  </p>
+
+  <table>
+    <tr><th>Campo</th><th>Descrizione</th></tr>
+    <tr><td><strong>Data</strong></td><td>Giorno e ora del check-in/uscita</td></tr>
+    <tr><td><strong>Tipo</strong></td><td><span class="badge badge-green">IN</span> = entrata &nbsp;&nbsp; <span class="badge badge-orange">OUT</span> = uscita</td></tr>
+    <tr><td><strong>Sede</strong></td><td>Nome del negozio dove è stato effettuato il check-in</td></tr>
+    <tr><td><strong>Stato</strong></td><td>Verificato / Corretto (se modificato dal manager)</td></tr>
+  </table>
+
+  <div class="info-box green">
+    <div class="label">Se manca un check-in</div>
+    Contatta il tuo Store Manager. Solo il responsabile può aggiungere o correggere
+    una presenza nel sistema entro 7 giorni dall'accaduto.
+  </div>
+
+  <!-- 2.4 Turni -->
+  <h3>2.4 · Visualizzare i propri turni</h3>
+
+  <p>
+    Dalla barra in basso, tocca <strong>Turni</strong> per vedere il calendario del mese corrente
+    con i turni assegnati dal tuo responsabile.
+  </p>
+
+  <table>
+    <tr><th>Simbolo</th><th>Turno</th><th>Orario indicativo</th></tr>
+    <tr>
+      <td><span class="badge badge-blue">M</span></td>
+      <td>Mattino</td>
+      <td>08:00 – 14:00</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-orange">P</span></td>
+      <td>Pomeriggio</td>
+      <td>14:00 – 20:00</td>
+    </tr>
+    <tr>
+      <td style="background:#EDE9FE;"><span style="background:#EDE9FE; color:#5B21B6; font-weight:700; padding:2px 10px; border-radius:20px; font-size:8.5pt;">S</span></td>
+      <td>Sera</td>
+      <td>17:00 – 22:00</td>
+    </tr>
+    <tr>
+      <td><span class="badge badge-gray">R</span></td>
+      <td>Riposo</td>
+      <td>—</td>
+    </tr>
+  </table>
+
+  <div class="info-box">
+    <div class="label">Notifiche turno</div>
+    Riceverai una notifica push quando il tuo responsabile modifica un turno.
+    Assicurati che le notifiche dell'app siano abilitate nelle impostazioni del telefono.
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- Problemi comuni dipendenti -->
+  <h3>Problemi comuni — App Mobile</h3>
+
+  <table>
+    <tr><th>Problema</th><th>Soluzione</th></tr>
+    <tr>
+      <td>Face ID non funziona</td>
+      <td>Vai in <em>Impostazioni iPhone → Face ID e Codice → Badge System</em> e abilita l'accesso</td>
+    </tr>
+    <tr>
+      <td>Fotocamera non si apre</td>
+      <td>Vai in <em>Impostazioni → Badge System → Fotocamera</em> e consenti l'accesso</td>
+    </tr>
+    <tr>
+      <td>QR non viene riconosciuto</td>
+      <td>Mantieni il telefono fermo, assicurati che il QR sia ben illuminato e non rovinato</td>
+    </tr>
+    <tr>
+      <td>Check-in già registrato</td>
+      <td>Il sistema impedisce doppi check-in ravvicinati. Contatta il manager se c'è un errore</td>
+    </tr>
+    <tr>
+      <td>Password dimenticata</td>
+      <td>Contatta il tuo Store Manager o il supporto Dataxiom per il reset</td>
+    </tr>
+    <tr>
+      <td>App lenta o che si blocca</td>
+      <td>Chiudi e riapri l'app. Se il problema persiste, disinstalla e reinstalla dall'App Store</td>
+    </tr>
+  </table>
+
+  <div class="page-footer">
+    <span>Badge System — Guida Utente v1.0 · Sezione 2 — Dipendenti</span>
+    <span>Dataxiom · Uso Riservato</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PAGINA 5 — MANAGER (1/2)
+     ══════════════════════════════════════════════ -->
+<div class="page page-break" id="manager">
+
+  <div class="section-header">
+    <div class="section-icon icon-orange">🖥</div>
+    <div>
+      <h2>3 · Guida per Store Manager</h2>
+      <span class="subtitle">Dashboard Web — badge.dataxiom.it</span>
+    </div>
+  </div>
+
+  <!-- 3.1 Accesso -->
+  <h3>3.1 · Accesso alla dashboard</h3>
+
+  <ol class="steps">
+    <li>
+      <span class="step-num">1</span>
+      <div class="step-body">
+        <strong>Apri il browser</strong> (Chrome, Safari, Firefox, Edge)
+        e vai all'indirizzo: <strong>https://badge.dataxiom.it</strong>
+      </div>
+    </li>
+    <li>
+      <span class="step-num">2</span>
+      <div class="step-body">
+        <strong>Inserisci email e password</strong>
+        Usa le credenziali fornite da Dataxiom al momento dell'attivazione.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">3</span>
+      <div class="step-body">
+        <strong>Seleziona la sede</strong> (se hai più sedi assegnate)
+        Usa il menu in alto a destra per passare da una sede all'altra.
+      </div>
+    </li>
+  </ol>
+
+  <div class="info-box">
+    <div class="label">Accesso da smartphone</div>
+    La dashboard è ottimizzata per desktop, ma funziona anche da tablet e smartphone.
+    Puoi aggiungere il sito alla Home Screen del telefono per un accesso rapido.
+  </div>
+
+  <!-- 3.2 Dashboard presenze -->
+  <h3>3.2 · Visualizzare le presenze del giorno</h3>
+
+  <p>
+    Dopo il login arrivi alla <strong>Dashboard Presenze</strong>.
+    In alto trovi 4 riquadri KPI con il riepilogo della giornata:
+  </p>
+
+  <div class="two-col">
+    <div class="card">
+      <h4>📊 KPI Cards</h4>
+      <ul class="bullet">
+        <li><strong>Check-in IN</strong> — entrate del giorno</li>
+        <li><strong>Check-in OUT</strong> — uscite del giorno</li>
+        <li><strong>Totale presenze</strong> — totale nel periodo filtrato</li>
+        <li><strong>Dipendenti attivi</strong> — presenti oggi</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>🔍 Filtri disponibili</h4>
+      <ul class="bullet">
+        <li><strong>Sede</strong> — filtra per punto vendita</li>
+        <li><strong>Dipendente</strong> — cerca per nome</li>
+        <li><strong>Data inizio / fine</strong> — periodo massimo 90 giorni</li>
+        <li><strong>Tipo</strong> — IN / OUT / tutti</li>
+      </ul>
+    </div>
+  </div>
+
+  <p>
+    La tabella sotto i KPI mostra il dettaglio di ogni check-in:
+    nome dipendente, sede, orario, tipo (IN/OUT), e se la presenza è stata corretta.
+  </p>
+
+  <!-- 3.3 Correzione -->
+  <h3>3.3 · Correggere un check-in</h3>
+
+  <p>
+    È possibile correggere un check-in entro <strong>7 giorni</strong> dall'orario originale
+    (policy aziendale configurabile). Casi tipici: dipendente ha scansionato come IN invece di OUT,
+    o viceversa.
+  </p>
+
+  <ol class="steps">
+    <li>
+      <span class="step-num">1</span>
+      <div class="step-body">
+        <strong>Trova il check-in da correggere</strong>
+        Usa i filtri per data e nome dipendente per trovare la riga desiderata.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">2</span>
+      <div class="step-body">
+        <strong>Clicca sull'icona di modifica ✏</strong>
+        appare all'estrema destra di ogni riga nella tabella presenze.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">3</span>
+      <div class="step-body">
+        <strong>Modifica tipo (IN/OUT) e/o orario</strong>
+        nel pannello che si apre. Aggiungi una nota di motivazione se necessario.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">4</span>
+      <div class="step-body">
+        <strong>Clicca Salva</strong>. La modifica viene registrata nell'audit log
+        con il tuo nome e orario di intervento.
+      </div>
+    </li>
+  </ol>
+
+  <div class="warning-box">
+    ⚠️ <strong>Attenzione:</strong> ogni correzione viene registrata nel log di audit.
+    Non è possibile eliminare un check-in — solo modificarne il tipo o l'orario.
+    Dopo 7 giorni non è più possibile apportare modifiche.
+  </div>
+
+  <div class="page-footer">
+    <span>Badge System — Guida Utente v1.0 · Sezione 3 — Store Manager</span>
+    <span>Dataxiom · Uso Riservato</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PAGINA 6 — MANAGER (2/2)
+     ══════════════════════════════════════════════ -->
+<div class="page page-break">
+
+  <!-- 3.4 Export CSV -->
+  <h3>3.4 · Esportare il report CSV</h3>
+
+  <p>
+    L'export CSV contiene tutte le presenze del periodo selezionato,
+    pronto per essere importato in Excel, Google Sheets o nel software paghe.
+  </p>
+
+  <ol class="steps">
+    <li>
+      <span class="step-num">1</span>
+      <div class="step-body">
+        <strong>Imposta i filtri</strong> di data (es. mese corrente) e sede desiderata.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">2</span>
+      <div class="step-body">
+        <strong>Clicca "Esporta CSV"</strong>
+        Il pulsante si trova in alto a destra nella sezione Dashboard Presenze.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">3</span>
+      <div class="step-body">
+        <strong>Salva il file</strong> sul tuo computer.
+        Il nome del file sarà: <code>presenze_AAAA-MM-GG.csv</code>
+      </div>
+    </li>
+  </ol>
+
+  <h4>Struttura del file CSV</h4>
+  <table>
+    <tr>
+      <th>Colonna</th><th>Contenuto</th><th>Esempio</th>
+    </tr>
+    <tr><td>Employee Name</td><td>Nome e cognome</td><td>Mario Rossi</td></tr>
+    <tr><td>Email</td><td>Email dipendente</td><td>mario@negozio.it</td></tr>
+    <tr><td>Site</td><td>Nome sede</td><td>Torino Centro</td></tr>
+    <tr><td>Check-in Time</td><td>Data e ora</td><td>2026-06-01 08:03:22</td></tr>
+    <tr><td>Type (IN/OUT)</td><td>Tipo operazione</td><td>IN</td></tr>
+    <tr><td>Last Modified</td><td>Data ultima modifica</td><td>2026-06-01 09:15:00</td></tr>
+    <tr><td>Modified By</td><td>Chi ha modificato</td><td>Anna Verdi (manager)</td></tr>
+  </table>
+
+  <div class="info-box">
+    <div class="label">Limite export</div>
+    L'export è limitato a <strong>50.000 righe</strong> per richiesta.
+    Per periodi lunghi o molti dipendenti, esporta mese per mese.
+    Se il file è troncato, verrà indicato nell'intestazione del CSV.
+  </div>
+
+  <!-- 3.5 Planning -->
+  <h3>3.5 · Pianificazione Turni (Planning)</h3>
+
+  <p>
+    La sezione <strong>Planning</strong> permette di assegnare i turni mensili a ciascun dipendente.
+    Accessibile dal menu principale → <em>Planning</em>.
+  </p>
+
+  <h4>Assegnare o modificare i turni</h4>
+  <ol class="steps">
+    <li>
+      <span class="step-num">1</span>
+      <div class="step-body">
+        <strong>Seleziona mese e anno</strong>
+        Usa il selettore in alto a sinistra per navigare tra i mesi.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">2</span>
+      <div class="step-body">
+        <strong>Clicca sulla cella</strong> corrispondente al dipendente e al giorno.
+        Apparirà un menu con le opzioni:
+        <span class="badge badge-blue">M</span> Mattino &nbsp;
+        <span class="badge badge-orange">P</span> Pomeriggio &nbsp;
+        <span style="display:inline-block; padding:2px 10px; border-radius:20px; font-size:8.5pt; font-weight:700; background:#EDE9FE; color:#5B21B6;">S</span> Sera &nbsp;
+        <span class="badge badge-gray">R</span> Riposo
+      </div>
+    </li>
+    <li>
+      <span class="step-num">3</span>
+      <div class="step-body">
+        <strong>Il turno si salva automaticamente</strong>
+        Il dipendente riceverà una notifica push sull'app mobile.
+      </div>
+    </li>
+    <li>
+      <span class="step-num">4</span>
+      <div class="step-body">
+        <strong>Esporta il planning</strong>
+        Usa il pulsante <em>"Esporta CSV"</em> nella pagina Planning per scaricare il programma
+        del mese in formato foglio di calcolo.
+      </div>
+    </li>
+  </ol>
+
+  <div class="info-box orange">
+    <div class="label">Reset e modifiche retroattive</div>
+    Puoi modificare turni di giorni passati senza limitazioni di data.
+    Usa il pulsante <strong>Reset</strong> per annullare tutte le modifiche non salvate del mese.
+    Le modifiche già salvate rimangono nell'audit log.
+  </div>
+
+  <hr class="section-divider">
+
+  <h3>Riepilogo azioni rapide — Dashboard</h3>
+  <table>
+    <tr><th>Azione</th><th>Dove trovarla</th><th>Shortcut</th></tr>
+    <tr><td>Vedere presenze oggi</td><td>Dashboard → Presenze</td><td>Menu principale</td></tr>
+    <tr><td>Filtrare per dipendente</td><td>Dashboard → Campo "Dipendente"</td><td>Digita nome</td></tr>
+    <tr><td>Esportare presenze CSV</td><td>Dashboard → Pulsante "Esporta CSV"</td><td>—</td></tr>
+    <tr><td>Correggere check-in</td><td>Tabella presenze → ✏ nella riga</td><td>—</td></tr>
+    <tr><td>Assegnare turno</td><td>Planning → Cella dipendente/giorno</td><td>—</td></tr>
+    <tr><td>Esportare planning</td><td>Planning → "Esporta CSV"</td><td>—</td></tr>
+  </table>
+
+  <div class="page-footer">
+    <span>Badge System — Guida Utente v1.0 · Sezione 3 — Store Manager</span>
+    <span>Dataxiom · Uso Riservato</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     PAGINA 7 — FAQ + SUPPORTO
+     ══════════════════════════════════════════════ -->
+<div class="page" id="faq">
+
+  <div class="section-header">
+    <div class="section-icon icon-navy">❓</div>
+    <div>
+      <h2>4 · Domande Frequenti</h2>
+      <span class="subtitle">FAQ — Risposte alle domande più comuni</span>
+    </div>
+  </div>
+
+  <h4>Un dipendente ha dimenticato di fare check-out. Come si risolve?</h4>
+  <p>
+    Il manager può aprire la Dashboard, trovare il check-in IN senza un corrispondente OUT
+    e aggiungere manualmente l'uscita tramite il pulsante di correzione ✏.
+    La modifica viene tracciata nel log di audit con il nome del manager.
+  </p>
+
+  <h4>Il dipendente ha scansionato il QR sbagliato (altra sede). Come si corregge?</h4>
+  <p>
+    Anche in questo caso il manager può correggere la sede dal pannello di modifica della singola presenza.
+    La correzione è possibile entro 7 giorni dall'orario originale.
+  </p>
+
+  <h4>Quante sedi posso gestire con un unico account manager?</h4>
+  <p>
+    Un account manager può essere assegnato a una o più sedi.
+    Contatta il supporto Dataxiom per aggiungere sedi al tuo profilo.
+    La dashboard mostra sempre solo i dati delle sedi di tua competenza.
+  </p>
+
+  <h4>Il sistema funziona senza connessione internet?</h4>
+  <p>
+    No, nella versione attuale è richiesta connessione dati (4G/5G o Wi-Fi) per registrare
+    i check-in. La modalità offline è pianificata per una versione futura.
+    Se la connessione è assente, il sistema mostrerà un messaggio di errore all'utente.
+  </p>
+
+  <h4>Come vengono protetti i dati dei dipendenti?</h4>
+  <p>
+    Tutti i dati sono cifrati in transito (HTTPS) e a riposo (AWS RDS).
+    I server sono in Irlanda (UE) e rispettano il GDPR.
+    I dati biometrici (Face ID) non vengono mai inviati ai server — restano sul dispositivo.
+  </p>
+
+  <h4>Per quanto tempo vengono conservati i dati delle presenze?</h4>
+  <p>
+    Per impostazione predefinita i dati vengono conservati <strong>12 mesi</strong>
+    dalla data del check-in. La configurazione può essere modificata da Dataxiom su richiesta.
+    Ogni cliente può richiedere l'export completo o la cancellazione dei dati (diritto GDPR).
+  </p>
+
+  <h4>Un dipendente può vedere le presenze di un collega?</h4>
+  <p>
+    No. I dipendenti vedono solo le proprie presenze e i propri turni.
+    Solo i manager e gli amministratori possono accedere ai dati di tutti i dipendenti della sede.
+  </p>
+
+  <h4>Come posso aggiungere un nuovo dipendente?</h4>
+  <p>
+    Il pannello di amministrazione (accessibile solo all'amministratore Dataxiom) permette
+    di aggiungere dipendenti singolarmente o tramite import CSV bulk.
+    Contatta il supporto per ogni aggiunta o modifica all'organico.
+  </p>
+
+  <hr class="section-divider">
+
+  <!-- SUPPORTO -->
+  <div id="supporto">
+    <div class="section-header">
+      <div class="section-icon icon-green">🆘</div>
+      <div>
+        <h2>5 · Supporto Tecnico</h2>
+        <span class="subtitle">Come contattare Dataxiom</span>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <h4>Email supporto</h4>
+        <p><strong>supporto@dataxiom.it</strong></p>
+        <p style="font-size:9.5pt; color:var(--gray);">Risposta entro 1 giorno lavorativo</p>
+        <p style="font-size:9.5pt; margin-top:8px;">
+          Includi nel messaggio:
+          <ul class="bullet" style="margin-top:4px;">
+            <li>Nome azienda e sede</li>
+            <li>Descrizione del problema</li>
+            <li>Screenshot se disponibile</li>
+          </ul>
+        </p>
+      </div>
+      <div class="card">
+        <h4>Orari di supporto</h4>
+        <table style="font-size:9.5pt; margin:6px 0;">
+          <tr><td><strong>Lun – Ven</strong></td><td>09:00 – 18:00</td></tr>
+          <tr><td><strong>Sabato</strong></td><td>10:00 – 13:00</td></tr>
+          <tr><td><strong>Domenica</strong></td><td>Chiuso</td></tr>
+        </table>
+        <p style="font-size:9pt; color:var(--gray); margin-top:8px;">
+          Per emergenze critiche (sistema non funzionante): invia email con oggetto <em>[URGENTE]</em>
+        </p>
+      </div>
+    </div>
+
+    <h3>Prima di contattare il supporto — checklist</h3>
+    <ul class="check-list">
+      <li>Hai verificato la connessione internet del dispositivo?</li>
+      <li>Hai provato a chiudere e riaprire l'app o ricaricare la pagina?</li>
+      <li>L'app è aggiornata all'ultima versione disponibile sull'App Store/Play Store?</li>
+      <li>Hai controllato la sezione FAQ sopra?</li>
+      <li>Hai verificato che il QR code affisso in sede non sia rovinato o coperto?</li>
+    </ul>
+
+    <div class="info-box green" style="margin-top:24px;">
+      <div class="label">Richieste di personalizzazione</div>
+      Per configurazioni speciali (nuove sedi, cambio orari di lavoro, report personalizzati,
+      integrazione con software paghe) contatta il tuo referente commerciale Dataxiom.
+    </div>
+  </div>
+
+  <div class="page-footer" style="margin-top:40px;">
+    <span>Badge System — Guida Utente v1.0 · Giugno 2026</span>
+    <span>© 2026 Dataxiom Srl · Tutti i diritti riservati · badge.dataxiom.it</span>
+  </div>
+</div>
+
+</body>
+</html>

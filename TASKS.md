@@ -182,7 +182,7 @@ Go-live with first paying customer (pilota).
 - [x] **7.1** Admin panel ✅ — `AdminPage.jsx` `/admin` route (admin-only), tabs Clienti/Sedi/Dipendenti, CSV upload, temp password display + copy button. Navbar link "⚙️ Admin" visibile solo ad admin.
 - [x] **7.2** API admin endpoints ✅ — `POST /api/admin/clients`, `POST /api/admin/sites` (QR auto-generato UUID-based), `POST /api/admin/employees` (bcrypt temp password), `GET /api/admin/clients`, `GET /api/admin/sites`. Auth.js extended: DB fallback login con bcrypt verify. Migration 006: `password_hash`, `role`, `site_id` su employees. Commit: 8115eab
 - [x] **7.3** CSV bulk import ✅ — `POST /api/admin/employees/import` (multer memory, csv-parse, max 100 righe, parallel bcrypt batches, BEGIN/COMMIT transaction, audit log per ogni riga, ON CONFLICT DO NOTHING). Commit: 9963f4b
-- [ ] **7.4** Customer-facing user guide (PDF, Italian)
+- [x] **7.4** ✅ Customer-facing user guide (PDF, Italian) — `docs/guida-utente.html` (print-to-PDF). Copertina + 5 sezioni: intro, dipendenti (download/check-in/presenze/turni), manager (dashboard/correzioni/CSV/planning), FAQ 8 domande, supporto. Aprire nel browser e Stampa → Salva come PDF.
 - [ ] **7.5** Manager training checklist (how to use dashboard + planning)
 - [x] **7.6** Welcome email template ✅ — `scripts/welcome-email-template.html`: HTML responsive con credenziali, CTA login, steps per dipendente/manager, GDPR footer. Commit: 8115eab
 
@@ -288,6 +288,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-09 | FASE 6.3 Custom Domain (Session 21) | 6.3 | `badge.dataxiom.it` → Netlify (custom_domain set). `api.dataxiom.it` → EC2 già attivo. CORS_ORIGIN SSM aggiornato. CNAME aggiunto su register.it. Let's Encrypt provisioned. E2E verificato. |
 | 2026-06-09 | Tech Debt LOW (Session 21 cont.) | S.2, S.20, S.21, S.22 | S.2: rimosso dead role guard AdminPage. S.20: dotenv.config() spostato prima dei require. S.21: stale comment rimosso. S.22: uuid→crypto.randomUUID(), pacchetto rimosso. |
 | 2026-06-09 | Test Coverage S.23 (Session 22) | S.23 | 5 nuovi file di test con mock pool/Redis/rateLimiter: auth.test.js (22), checkins.test.js (16), middleware.test.js (15), errors.test.js (16), employees.test.js (9). Coverage: 19% → 40.37% statements, 41.34% lines. 78/78 test passati. |
+| 2026-06-09 | Guida Utente PDF 7.4 (Session 22 cont.) | 7.4 | docs/guida-utente.html — print-to-PDF A4. Copertina navy, 7 pagine, 5 sezioni: intro, dipendenti (mobile app), manager (dashboard+planning+CSV), FAQ (8 voci), supporto. Aprire nel browser e stampare su PDF. |
 
 ---
 
