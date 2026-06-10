@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-10 (Session 25: C.6.1 parziale — 10 nuovi test CSV import + debug endpoint, coverage 40%→47.54%, commit fcebbfe)  
+**Last Updated:** 2026-06-10 (Session 26: QR code verified ✅ su Torino+Milano, EC2 deploy live, 4 admin.js code review fixes — debug endpoint middleware order, 404 consistency, UUID validation, ESLint unblocked)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -386,6 +386,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-09 | C.1 Reset Password + 3 Code Review Fix (Session 23) | C.1 ✅ | POST /api/admin/employees/:id/reset-password. Code review: SELECT+UPDATE → UPDATE...RETURNING atomico, logger singleton, logAudit.catch() logger.warn. Test aggiornati: 91/91 PASS. Commit: 4022dd6. |
 | 2026-06-09 | C.5 Content Security Policy (Session 24) | C.5 ✅ | frontend-web/public/_headers con CSP policy (default-src, script-src, style-src Google Fonts, connect-src API+Sentry, frame-ancestors none) + security headers (nosniff, DENY, XSS-Protection). Commit: 71b7db8. Deploy live su Netlify (1-3 min). |
 | 2026-06-10 | CSV Import Verification + Test Coverage (Session 25) | C.6.1 parziale | Verifica bug assigned_sites NULL (commit ecf3620 — parameterized query fix). Root cause analizzata: string interpolation ARRAY[uuid::uuid] causava disallineamento parametri. Debug endpoint diagnostico (f671c5b, c6479f0). 10 nuovi test in admin-csv-import.test.js: assigned_sites array nativo verificato, sito non trovato → skip, duplicati, debug endpoint. 101/101 test passati. Coverage 40.37% → 47.54%. Commit: fcebbfe |
+| 2026-06-10 | QR Code Fix Live + Code Review (Session 26) | — | QR code verificato su iPhone reale: Torino Store ✅ (Maria Rossi) + Milano Store ✅ (Francesca). EC2 deploy riuscito (commit 530ec75 → Deploy to EC2 success). Fix ESLint bloccante CI/CD: admin-csv-import.test.js (doppi apici + unused vars), admin-reset-password.test.js (doppi apici), auth.test.js (verifyPassword unused). Code review admin.js: 4 finding fixati — (1) debug endpoint irraggiungibile da manager: spostato prima del middleware admin-only (era dead code), (2) `res.status(404).json()` → `next(new NotFoundError())` per rispettare error handler centralizzato, (3) UUID validation su employeeId param mancante, (4) requireAuth ridondante rimosso. Commits: 530ec75, dccd135. 10/10 test admin-csv-import passati post-refactor. |
 
 ---
 
