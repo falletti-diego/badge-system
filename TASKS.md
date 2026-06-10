@@ -268,6 +268,89 @@ Go-live with first paying customer (pilota).
 
 ---
 
+## 🔲 TODO — NUOVE FEATURE COMMERCIALI (v1.1)
+
+> Design spec completo: `docs/superpowers/specs/2026-06-10-commercial-features-design.md`  
+> Obiettivo: rimuovere le 3 principali obiezioni commerciali (prezzo, frode, integrazione paghe)  
+> Effort stimato: ~32h totali · Ordine: FASE 8 → FASE 9 → FASE 10
+
+---
+
+### FASE 8 — Portale Commercialista & CSV Paghe (~11h)
+
+**Migration 008** (shared con FASE 9 — fare in un'unica migration):
+- [ ] **8.1** `migration 008`: `ALTER TABLE employees ADD COLUMN matricola VARCHAR(50)` + `ALTER TABLE clients ADD COLUMN meal_voucher_hours DECIMAL(4,2) DEFAULT 5.0`
+
+**Backend — ruolo viewer:**
+- [ ] **8.2** `src/middleware/validation.js`: aggiungere `'viewer'` ai valori ammessi nel role enum Zod
+- [ ] **8.3** `src/middleware/auth.js`: aggiungere guard `requireViewer` (alias di requireAuth — il ruolo è già nel JWT); aggiornare `adminOnly` e `managerOrAdmin` per escludere viewer dove necessario
+- [ ] **8.4** `src/routes/admin.js`: `POST /api/admin/viewers` (crea account viewer: email, nome, temp password via bcrypt) + `GET /api/admin/viewers`
+- [ ] **8.5** `src/routes/export.js`: aggiungere parametro `?format=generic|zucchetti|teamsystem`; implementare `formatZucchetti(rows)` e `formatTeamSystem(rows)` — vedere spec per struttura colonne esatta
+
+**Frontend — export formato:**
+- [ ] **8.6** `frontend-web/src/pages/DashboardPage.jsx` (o componente ExportButton): aggiungere dropdown "Formato export" con opzioni Generic / Zucchetti / TeamSystem; passa `?format=` alla chiamata API
+- [ ] **8.7** `frontend-web/src/pages/AdminPage.jsx`: nuova tab "Commercialisti" — form aggiungi viewer (email + nome), tabella lista viewers con pulsante rimuovi
+- [ ] **8.8** `frontend-web/src/pages/AdminPage.jsx`: aggiungere colonna "Matricola" nella tab Dipendenti (input editabile per ogni riga); aggiornare CSV import per accettare colonna opzionale `matricola`
+
+**Frontend — layout viewer:**
+- [ ] **8.9** `frontend-web/src/components/Navbar.jsx` + routing: se `role === 'viewer'`, nascondere link Correzioni, Planning, Admin; mostrare solo Dashboard e Riepilogo (FASE 9)
+- [ ] **8.10** `frontend-web/src/services/authService.js`: gestire `role === 'viewer'` nel redirect post-login (→ `/dashboard`)
+
+**Test:**
+- [ ] **8.11** `backend/src/__tests__/export-formats.test.js`: test CSV Zucchetti (una riga per giorno, OreOrdinarie/Straordinarie) e TeamSystem (righe separate IN/OUT, formato data DD/MM/YYYY)
+- [ ] **8.12** `backend/src/__tests__/admin-viewers.test.js`: RBAC viewer (accesso presenze ✅, correzioni ❌, admin ❌), creazione account, formato JWT
+
+---
+
+### FASE 9 — Ore Lavorate & Buoni Pasto (~11h)
+
+*(Migration 008 già eseguita in FASE 8 — contiene anche `meal_voucher_hours`)*
+
+**Backend — calcolo ore:**
+- [ ] **9.1** `src/utils/hours.js` (nuovo): `calculateDailyHours(checkins)` — accoppia IN con OUT successivo, somma coppie nello stesso giorno, gestisce presenza aperta (IN senza OUT)
+- [ ] **9.2** `src/routes/presences.js` (nuovo file) oppure nuovo endpoint in `checkins.js`: `GET /api/presences/summary?month=6&year=2026` — risposta per dipendente: `{ ore_totali, ore_ordinarie, ore_straordinarie, buoni_pasto, giorni_presenti, presenze_aperte }`. Legge `meal_voucher_hours` da `clients` table per il calcolo buoni pasto
+- [ ] **9.3** RBAC: admin → tutti i dipendenti; manager → solo dipendenti della sua sede; viewer → tutti (read-only)
+- [ ] **9.4** `src/routes/admin.js` o nuovo endpoint: `PUT /api/admin/settings` — aggiorna `meal_voucher_hours` per il client dell'admin loggato
+
+**Frontend — Riepilogo Mensile:**
+- [ ] **9.5** `frontend-web/src/pages/SummaryPage.jsx` (nuovo): tabella mensile con colonne Nome, Matricola, Giorni Presenti, Ore Totali, Ore Ord, Ore Straord, Buoni Pasto, ⚠️ Presenze Aperte. Navigazione mese con frecce. Export CSV del riepilogo
+- [ ] **9.6** `frontend-web/src/App.jsx`: aggiungere route `/summary` (visibile a admin, manager, viewer)
+- [ ] **9.7** `frontend-web/src/components/Navbar.jsx`: aggiungere link "📊 Riepilogo" nella nav
+- [ ] **9.8** `frontend-web/src/pages/DashboardPage.jsx`: aggiungere colonna "Ore" nella tabella presenze (calcolata accoppiando IN/OUT — può essere client-side su dati già caricati)
+- [ ] **9.9** `frontend-web/src/pages/AdminPage.jsx`: aggiungere sezione "Impostazioni" con campo "Ore minime per buono pasto" (default 5) + pulsante Salva
+
+**Test:**
+- [ ] **9.10** `backend/src/__tests__/hours.test.js`: unit test `calculateDailyHours` — coppia singola, coppie multiple (pausa pranzo), presenza aperta, OUT senza IN, giorno vuoto
+- [ ] **9.11** `backend/src/__tests__/presences-summary.test.js`: RBAC, calcolo buoni pasto (5h soglia), ore straordinarie, mese senza dati
+
+---
+
+### FASE 10 — Geofencing (~10h)
+
+**Migration 009:**
+- [ ] **10.1** `migration 009`: `ALTER TABLE sites ADD COLUMN latitude DECIMAL(9,6)`, `longitude DECIMAL(9,6)`, `geofence_radius_meters INT DEFAULT 150`, `geofence_enabled BOOLEAN DEFAULT false`; `ALTER TABLE checkins ADD COLUMN checkin_latitude DECIMAL(9,6)`, `checkin_longitude DECIMAL(9,6)`
+
+**Backend:**
+- [ ] **10.2** `src/utils/geo.js` (nuovo): `haversineDistance(lat1, lng1, lat2, lng2)` → distanza in metri (no dipendenze esterne)
+- [ ] **10.3** `src/routes/checkins.js`: `POST /api/checkins` — se `geofence_enabled` per la sede: (a) richiede `latitude`/`longitude` nel body (→ `GEOFENCE_COORDINATES_REQUIRED` se mancanti), (b) calcola distanza, (c) se distanza > radius → `403 OUTSIDE_GEOFENCE` con `{ distance_meters, max_meters }`. Salva coordinate nel record
+- [ ] **10.4** `src/routes/sites.js` (o admin.js): `PUT /api/admin/sites/:id` — permette aggiornamento `latitude`, `longitude`, `geofence_radius_meters`, `geofence_enabled`
+- [ ] **10.5** `src/middleware/validation.js`: schema `PostCheckinSchema` — aggiungere `latitude` e `longitude` opzionali (z.number().min(-90).max(90))
+
+**Mobile:**
+- [ ] **10.6** `frontend-mobile/app.json`: aggiungere `expo-location` nei plugin; `NSLocationWhenInUseUsageDescription` in iOS infoPlist; `ACCESS_FINE_LOCATION` in Android permissions
+- [ ] **10.7** `frontend-mobile/package.json`: `expo install expo-location`
+- [ ] **10.8** `frontend-mobile/src/screens/QRScannerScreen.jsx`: prima di inviare il check-in, chiamare `Location.requestForegroundPermissionsAsync()` + `Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 5000 })`; aggiungere `latitude` e `longitude` alla request; gestire errori `OUTSIDE_GEOFENCE` (alert con distanza) e `GEOFENCE_COORDINATES_REQUIRED` (alert "attiva GPS")
+- [ ] **10.9** Build 17: submit su TestFlight con geofencing
+
+**Frontend Admin:**
+- [ ] **10.10** `frontend-web/src/pages/AdminPage.jsx` tab Sedi: aggiungere per ogni sede — toggle "Geofencing attivo", input Latitudine/Longitudine, slider o input Raggio (50–500m), link "📍 Trova coordinate" → `https://maps.google.com/?q=<lat>,<lng>`. Pulsante Salva chiama `PUT /api/admin/sites/:id`
+
+**Test:**
+- [ ] **10.11** `backend/src/__tests__/geo.test.js`: unit test `haversineDistance` — stessa posizione (0m), 100m, 1km, antipodi, edge cases lat/lng
+- [ ] **10.12** `backend/src/__tests__/checkins-geofence.test.js`: geofence disabled → accetta senza coordinate; dentro raggio → 201; fuori raggio → 403 OUTSIDE_GEOFENCE; coordinate mancanti con geofence abilitato → 403
+
+---
+
 ## 🔲 TODO — SECURITY TECH DEBT (open findings from code review)
 
 ### Trovati nella sessione 17 — non critici per MVP, da chiudere prima del lancio
@@ -393,7 +476,7 @@ Go-live with first paying customer (pilota).
 - [x] **Reset password dipendenti** (C.1) — ✅ completo Session 23
 - [x] **API versioning /api/v1/** (C.2) — ✅ completo Session 23 (C.2.5 verify post-deploy)
 - [x] **Runbook operativo** (C.3) ✅ — `docs/runbook.md`: restart EC2, rollback DB, onboarding, SLA, SSM refs
-- [ ] **Token refresh mobile** (C.4) — sessioni >15min rompono il check-in silenziosamente
+- [x] **Token refresh mobile** (C.4) ✅ — interceptor Build 14, verificato su iPhone 16 min (C.4.2)
 - [x] **Content Security Policy** (C.5) ✅ — riduce superficie XSS su PC retail condivisi (commit 71b7db8)
 - [x] **Test coverage ≥60%** (C.6) — ✅ 60.42% statements, 135/135 test passati (Session 27)
 - [x] **SLA e contratto** (C.7) ✅ — `docs/sla.md`: uptime 99%, severity + SLA, manutenzione programmata, GDPR cancellazione 30gg (Session 27)
