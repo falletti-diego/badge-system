@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-10 (Session 27: C.6.2+C.6.3 shifts.test.js+export.test.js — 23+11=34 new tests, coverage 47.54%→60.42%, C.6.4 ✅ target ≥60% reached)  
+**Last Updated:** 2026-06-10 (Session 27: C.6.2+C.6.3+C.6.4 ✅ coverage 60.42%, C.4.2 ✅ token refresh verificato su iPhone, C.7 ✅ docs/sla.md)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -168,7 +168,7 @@ Sei l'unico che sa come rimettere in piedi il sistema. Con il primo cliente, un 
 Access token scade in 15 minuti. Se un dipendente usa l'app per 20 minuti riceve un 401 silenzioso sulla scan QR successiva — check-in perso senza feedback chiaro.
 
 - [x] **C.4.1** `frontend-mobile/services/apiClient.js`: queue-based 401 interceptor — chiama `POST /api/auth/refresh` con il refresh token da AsyncStorage, ritenta la request originale, su refresh failure → clear AsyncStorage + redirect a LoginScreen via navigationRef
-- [ ] **C.4.2** Testare manualmente: login → aspetta 16 minuti → scan QR → verifica che il check-in venga registrato correttamente (no 401 visibile all'utente)
+- [x] **C.4.2** ✅ Testato manualmente: login → atteso 16 minuti → scan QR → check-in registrato correttamente (no 401 visibile all'utente) — 2026-06-10
 - [x] **C.4.3** Build 14: submit su TestFlight con token refresh interceptor ✅ — 2026-06-10
 
 ### C.5 — Content Security Policy (Frontend Web) ✅
@@ -200,9 +200,9 @@ JWT in localStorage + script da CDN esterni (MUI, Recharts) = superficie XSS sig
 ### C.7 — SLA e Contratto Cliente
 Senza un SLA formale ogni minuto di downtime è un litigio. Anche un documento minimo protegge entrambe le parti.
 
-- [ ] **C.7.1** `docs/sla.md`: uptime target (es. 99% mensile = max 7h downtime/mese), orari di supporto, tempi di risposta per severity (critico/alto/basso), esclusioni (manutenzione programmata)
-- [ ] **C.7.2** Clausola nel contratto: dati del cliente eliminati entro 30 giorni dalla disdetta (GDPR Art. 17) — già tecnicamente supportato da retention script, serve solo la clausola contrattuale
-- [ ] **C.7.3** Definire "manutenzione programmata" (es. domenica 02:00-04:00 UTC) per le finestre di deploy
+- [x] **C.7.1** `docs/sla.md` ✅ — uptime 99%/mese (~7h max), severity CRITICO/ALTO/MEDIO/BASSO con tempi risposta (2h/8h/24h/72h), orari supporto, esclusioni
+- [x] **C.7.2** `docs/sla.md §8` ✅ — clausola disdetta: export dati + cancellazione completa entro 30 giorni (GDPR Art. 17), conferma scritta via email
+- [x] **C.7.3** `docs/sla.md §5` ✅ — manutenzione programmata: domenica 02:00-04:00 UTC, notifica 48h per straordinaria, esclusa da calcolo uptime
 
 ### C.8 — Monitoring App Mobile
 Se l'app smette di funzionare per un bug silenzioso (aggiornamento iOS, token scaduto, API incompatibile), nessuno lo sa finché un dipendente si lamenta.
@@ -388,6 +388,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-10 | CSV Import Verification + Test Coverage (Session 25) | C.6.1 parziale | Verifica bug assigned_sites NULL (commit ecf3620 — parameterized query fix). Root cause analizzata: string interpolation ARRAY[uuid::uuid] causava disallineamento parametri. Debug endpoint diagnostico (f671c5b, c6479f0). 10 nuovi test in admin-csv-import.test.js: assigned_sites array nativo verificato, sito non trovato → skip, duplicati, debug endpoint. 101/101 test passati. Coverage 40.37% → 47.54%. Commit: fcebbfe |
 | 2026-06-10 | QR Code Fix Live + Code Review (Session 26) | — | QR code verificato su iPhone reale: Torino Store ✅ (Maria Rossi) + Milano Store ✅ (Francesca). EC2 deploy riuscito (commit 530ec75 → Deploy to EC2 success). Fix ESLint bloccante CI/CD: admin-csv-import.test.js (doppi apici + unused vars), admin-reset-password.test.js (doppi apici), auth.test.js (verifyPassword unused). Code review admin.js: 4 finding fixati — (1) debug endpoint irraggiungibile da manager: spostato prima del middleware admin-only (era dead code), (2) `res.status(404).json()` → `next(new NotFoundError())` per rispettare error handler centralizzato, (3) UUID validation su employeeId param mancante, (4) requireAuth ridondante rimosso. Commits: 530ec75, dccd135. 10/10 test admin-csv-import passati post-refactor. |
 | 2026-06-10 | Test Coverage C.6.2+C.6.3+C.6.4 (Session 27) | C.6.2 ✅, C.6.3 ✅, C.6.4 ✅ | shifts.test.js: 23 test (GET my-schedule, GET/:siteId, GET/:siteId/export, POST/:siteId) — shifts.js coverage 11%→98%. export.test.js: 11 test (RBAC, success paths, formula injection) — export.js coverage 14%→89%. Root cause fix: `jest.clearAllMocks()` non svuota coda `mockResolvedValueOnce` — 6 valori residui dal test precedente (`shifts_data: {}` bloccato da Zod) contaminano il test successivo e trasformano un 400 in 500. Fix: test usa `shifts_data` non-vuoto e consuma tutti i mock. 135/135 pass. Coverage 47.54%→60.42% ✅ |
+| 2026-06-10 | C.4.2 + C.7 (Session 27 cont.) | C.4.2 ✅, C.7 ✅ | C.4.2: token refresh verificato su iPhone — login → 16 min attesa → scan QR → check-in registrato, nessun 401 visibile. C.7: `docs/sla.md` creato — §2 uptime 99%/mese, §3 orari supporto, §4 severity+SLA (CRITICO 2h/ALTO 8h/MEDIO 24h/BASSO 72h), §5 manutenzione dom 02:00-04:00 UTC, §6 esclusioni, §7 GDPR misure tecniche, §8 disdetta+cancellazione 30gg+diritto oblio, §9 limitazione responsabilità. Commit: in corso |
 
 ---
 
@@ -409,7 +410,7 @@ Go-live with first paying customer (pilota).
 - [ ] **Token refresh mobile** (C.4) — sessioni >15min rompono il check-in silenziosamente
 - [x] **Content Security Policy** (C.5) ✅ — riduce superficie XSS su PC retail condivisi (commit 71b7db8)
 - [x] **Test coverage ≥60%** (C.6) — ✅ 60.42% statements, 135/135 test passati (Session 27)
-- [ ] **SLA e contratto** (C.7) — protegge entrambe le parti legalmente
+- [x] **SLA e contratto** (C.7) ✅ — `docs/sla.md`: uptime 99%, severity + SLA, manutenzione programmata, GDPR cancellazione 30gg (Session 27)
 - [ ] **Mobile monitoring + TestFlight reminder** (C.8) — silent failure detection
 
 ---
