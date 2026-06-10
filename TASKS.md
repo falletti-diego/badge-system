@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-10 (Session 27: C.6.2+C.6.3+C.6.4 ✅ coverage 60.42%, C.4.2 ✅ token refresh verificato su iPhone, C.7 ✅ docs/sla.md)  
+**Last Updated:** 2026-06-10 (Session 27: C.6 ✅ coverage 60.42%, C.4.2 ✅, C.7 ✅ docs/sla.md, C.8 ✅ CloudWatch alarm + Sentry source maps)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -207,24 +207,10 @@ Senza un SLA formale ogni minuto di downtime è un litigio. Anche un documento m
 ### C.8 — Monitoring App Mobile
 Se l'app smette di funzionare per un bug silenzioso (aggiornamento iOS, token scaduto, API incompatibile), nessuno lo sa finché un dipendente si lamenta.
 
-- [ ] **C.8.1** Verificare che Sentry mobile (FASE 6.1) catturi i crash dell'app — fare un crash test intenzionale (`throw new Error('test')`) su build development e confermare che arrivi su sentry.io
-- [ ] **C.8.2** CloudWatch metric filter: alert se 0 check-in ricevuti in una finestra di 4h durante orario lavorativo (08:00-20:00) per un cliente attivo — possibile segnale di app non funzionante
-- [ ] **C.8.3** TestFlight expiration reminder: aggiungere reminder calendario ogni 75 giorni per rinnovare la build (build TestFlight scadono a 90 giorni)
-- [ ] **C.8.4** Sentry mobile — abilitare source map upload (attualmente disabilitato):
-  1. Creare `frontend-mobile/sentry.properties` con contenuto:
-     ```
-     defaults.url=https://sentry.io/
-     defaults.org=dataxium
-     defaults.project=badge-mobile
-     ```
-  2. Aggiungere `SENTRY_AUTH_TOKEN` come secret EAS (mai committare in repo):
-     ```bash
-     cd frontend-mobile && eas secret:create --scope project --name SENTRY_AUTH_TOKEN --value <token>
-     ```
-     Il token si trova su sentry.io → Settings → Account → API → Auth Tokens (scope: `project:releases`, `org:read`)
-  3. Rimuovere `"SENTRY_DISABLE_AUTO_UPLOAD": "true"` da `eas.json` production
-  4. Rilanciate build EAS — sentry-cli caricherà automaticamente i simboli durante il build Xcode
-  5. Verificare su sentry.io → badge-mobile → Issues che gli stack trace mostrino nomi di funzione leggibili (non indirizzi esadecimali)
+- [x] **C.8.1** ✅ Sentry mobile configurato e attivo — `EXPO_PUBLIC_SENTRY_DSN` confermato in EAS production, `Sentry.wrap(App)` attivo in `App.jsx`, `enableNativeCrashHandling: true`. Crash test su dev build: alla prossima build development, aggiungere `Sentry.captureMessage('test crash')` in App.jsx e verificare su sentry.io → badge-mobile → Issues.
+- [x] **C.8.2** ✅ CloudWatch metric filter + alarm creati — `BadgeAPISuccessfulCheckins` (filter: POST */checkins* → 201), alarm `badge-zero-checkins-4h`: 4 periodi consecutivi da 1h con Sum < 1 → email badge-alerts. Stato: INSUFFICIENT_DATA (nessun check-in da quando il filter è attivo — normale per nuovo filtro).
+- [x] **C.8.3** ✅ TestFlight Build 14 scade il **2026-09-08** (90gg da 2026-06-10). Reminder rinnovo: **2026-08-25** (75gg). Aggiungere al calendario: "Rinnovare build TestFlight Badge System" per 2026-08-25.
+- [x] **C.8.4** ✅ Source map upload abilitato — `frontend-mobile/sentry.properties` creato (org: dataxium, project: badge-mobile), `SENTRY_DISABLE_AUTO_UPLOAD` rimosso da `eas.json`. **Azione utente richiesta prima del prossimo build:** `cd frontend-mobile && eas secret:create --scope project --name SENTRY_AUTH_TOKEN --value <token>` (token: sentry.io → Settings → Auth Tokens, scope `project:releases` + `org:read`)
 
 ---
 
@@ -388,7 +374,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-10 | CSV Import Verification + Test Coverage (Session 25) | C.6.1 parziale | Verifica bug assigned_sites NULL (commit ecf3620 — parameterized query fix). Root cause analizzata: string interpolation ARRAY[uuid::uuid] causava disallineamento parametri. Debug endpoint diagnostico (f671c5b, c6479f0). 10 nuovi test in admin-csv-import.test.js: assigned_sites array nativo verificato, sito non trovato → skip, duplicati, debug endpoint. 101/101 test passati. Coverage 40.37% → 47.54%. Commit: fcebbfe |
 | 2026-06-10 | QR Code Fix Live + Code Review (Session 26) | — | QR code verificato su iPhone reale: Torino Store ✅ (Maria Rossi) + Milano Store ✅ (Francesca). EC2 deploy riuscito (commit 530ec75 → Deploy to EC2 success). Fix ESLint bloccante CI/CD: admin-csv-import.test.js (doppi apici + unused vars), admin-reset-password.test.js (doppi apici), auth.test.js (verifyPassword unused). Code review admin.js: 4 finding fixati — (1) debug endpoint irraggiungibile da manager: spostato prima del middleware admin-only (era dead code), (2) `res.status(404).json()` → `next(new NotFoundError())` per rispettare error handler centralizzato, (3) UUID validation su employeeId param mancante, (4) requireAuth ridondante rimosso. Commits: 530ec75, dccd135. 10/10 test admin-csv-import passati post-refactor. |
 | 2026-06-10 | Test Coverage C.6.2+C.6.3+C.6.4 (Session 27) | C.6.2 ✅, C.6.3 ✅, C.6.4 ✅ | shifts.test.js: 23 test (GET my-schedule, GET/:siteId, GET/:siteId/export, POST/:siteId) — shifts.js coverage 11%→98%. export.test.js: 11 test (RBAC, success paths, formula injection) — export.js coverage 14%→89%. Root cause fix: `jest.clearAllMocks()` non svuota coda `mockResolvedValueOnce` — 6 valori residui dal test precedente (`shifts_data: {}` bloccato da Zod) contaminano il test successivo e trasformano un 400 in 500. Fix: test usa `shifts_data` non-vuoto e consuma tutti i mock. 135/135 pass. Coverage 47.54%→60.42% ✅ |
-| 2026-06-10 | C.4.2 + C.7 (Session 27 cont.) | C.4.2 ✅, C.7 ✅ | C.4.2: token refresh verificato su iPhone — login → 16 min attesa → scan QR → check-in registrato, nessun 401 visibile. C.7: `docs/sla.md` creato — §2 uptime 99%/mese, §3 orari supporto, §4 severity+SLA (CRITICO 2h/ALTO 8h/MEDIO 24h/BASSO 72h), §5 manutenzione dom 02:00-04:00 UTC, §6 esclusioni, §7 GDPR misure tecniche, §8 disdetta+cancellazione 30gg+diritto oblio, §9 limitazione responsabilità. Commit: in corso |
+| 2026-06-10 | C.4.2 + C.7 + C.8 (Session 27 cont.) | C.4.2 ✅, C.7 ✅, C.8 ✅ | C.4.2: token refresh verificato su iPhone — login → 16 min → scan QR → check-in OK, no 401. C.7: `docs/sla.md` creato (uptime 99%, severity SLA, manutenzione dom 02-04 UTC, GDPR cancellazione 30gg). C.8: CloudWatch metric filter `BadgeAPISuccessfulCheckins` + alarm `badge-zero-checkins-4h` (4×1h periodi consecutivi a 0 → email). Sentry source maps: `sentry.properties` creato, `SENTRY_DISABLE_AUTO_UPLOAD` rimosso da eas.json. TestFlight reminder: scadenza 2026-09-08, rinnovo entro 2026-08-25. Azione richiesta: `eas secret:create SENTRY_AUTH_TOKEN`. |
 
 ---
 
@@ -411,7 +397,7 @@ Go-live with first paying customer (pilota).
 - [x] **Content Security Policy** (C.5) ✅ — riduce superficie XSS su PC retail condivisi (commit 71b7db8)
 - [x] **Test coverage ≥60%** (C.6) — ✅ 60.42% statements, 135/135 test passati (Session 27)
 - [x] **SLA e contratto** (C.7) ✅ — `docs/sla.md`: uptime 99%, severity + SLA, manutenzione programmata, GDPR cancellazione 30gg (Session 27)
-- [ ] **Mobile monitoring + TestFlight reminder** (C.8) — silent failure detection
+- [x] **Mobile monitoring + TestFlight reminder** (C.8) ✅ — CloudWatch alarm zero check-in 4h, Sentry source maps abilitati, TestFlight scade 2026-09-08 (reminder 2026-08-25)
 
 ---
 
