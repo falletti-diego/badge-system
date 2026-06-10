@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-09 (Session 24: C.5 Content Security Policy completo — _headers con CSP policy, commit 71b7db8, deploy live)  
+**Last Updated:** 2026-06-10 (Session 25: C.6.1 parziale — 10 nuovi test CSV import + debug endpoint, coverage 40%→47.54%, commit fcebbfe)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -192,10 +192,10 @@ JWT in localStorage + script da CDN esterni (MUI, Recharts) = superficie XSS sig
 ### C.6 — Test Coverage Gap (Moduli Critici non coperti)
 `admin.js` (511 righe, gestisce onboarding clienti reali) e `shifts.js` (388 righe) hanno 0% coverage. Un bug nell'import CSV crea dati corrotti in produzione senza alert.
 
-- [ ] **C.6.1** `backend/src/__tests__/admin.test.js`: test per `POST /api/admin/clients`, `POST /api/admin/sites`, `POST /api/admin/employees`, `POST /api/admin/employees/import` (CSV valido, encoding errato, duplicati, >100 righe)
+- [x] **C.6.1** `backend/src/__tests__/admin-csv-import.test.js` ✅ (parziale) — 10 test: CSV import con `assigned_sites` verificato come array nativo (non NULL), sito non trovato → skip, duplicati → skip, debug endpoint diagnosi. Mancano ancora: `POST /api/admin/clients`, `POST /api/admin/sites`, `POST /api/admin/employees` (singolo). Commit: fcebbfe
 - [ ] **C.6.2** `backend/src/__tests__/shifts.test.js`: test per `GET /api/shifts/:siteId`, `POST /api/shifts/:siteId` (creazione, aggiornamento, validazione employee_id), `GET /api/shifts/my-schedule`
 - [ ] **C.6.3** `backend/src/__tests__/export.test.js`: test per `GET /api/export/csv` — risposta con dati, limite 50000, RBAC (employee→403, manager→solo proprio site)
-- [ ] **C.6.4** Target coverage: portare dal 40% a ≥60% statements prima del lancio
+- [ ] **C.6.4** Target coverage: portare dal 47.54% a ≥60% statements prima del lancio
 
 ### C.7 — SLA e Contratto Cliente
 Senza un SLA formale ogni minuto di downtime è un litigio. Anche un documento minimo protegge entrambe le parti.
@@ -385,6 +385,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-09 | Guida Utente PDF 7.4 (Session 22 cont.) | 7.4 | docs/guida-utente.html — print-to-PDF A4. Copertina navy, 7 pagine, 5 sezioni: intro, dipendenti (mobile app), manager (dashboard+planning+CSV), FAQ (8 voci), supporto. Aprire nel browser e stampare su PDF. |
 | 2026-06-09 | C.1 Reset Password + 3 Code Review Fix (Session 23) | C.1 ✅ | POST /api/admin/employees/:id/reset-password. Code review: SELECT+UPDATE → UPDATE...RETURNING atomico, logger singleton, logAudit.catch() logger.warn. Test aggiornati: 91/91 PASS. Commit: 4022dd6. |
 | 2026-06-09 | C.5 Content Security Policy (Session 24) | C.5 ✅ | frontend-web/public/_headers con CSP policy (default-src, script-src, style-src Google Fonts, connect-src API+Sentry, frame-ancestors none) + security headers (nosniff, DENY, XSS-Protection). Commit: 71b7db8. Deploy live su Netlify (1-3 min). |
+| 2026-06-10 | CSV Import Verification + Test Coverage (Session 25) | C.6.1 parziale | Verifica bug assigned_sites NULL (commit ecf3620 — parameterized query fix). Root cause analizzata: string interpolation ARRAY[uuid::uuid] causava disallineamento parametri. Debug endpoint diagnostico (f671c5b, c6479f0). 10 nuovi test in admin-csv-import.test.js: assigned_sites array nativo verificato, sito non trovato → skip, duplicati, debug endpoint. 101/101 test passati. Coverage 40.37% → 47.54%. Commit: fcebbfe |
 
 ---
 
