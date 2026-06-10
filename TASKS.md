@@ -169,7 +169,7 @@ Access token scade in 15 minuti. Se un dipendente usa l'app per 20 minuti riceve
 
 - [x] **C.4.1** `frontend-mobile/services/apiClient.js`: queue-based 401 interceptor — chiama `POST /api/auth/refresh` con il refresh token da AsyncStorage, ritenta la request originale, su refresh failure → clear AsyncStorage + redirect a LoginScreen via navigationRef
 - [ ] **C.4.2** Testare manualmente: login → aspetta 16 minuti → scan QR → verifica che il check-in venga registrato correttamente (no 401 visibile all'utente)
-- [ ] **C.4.3** Build 10: submit su TestFlight con fix interceptor
+- [x] **C.4.3** Build 14: submit su TestFlight con token refresh interceptor ✅ — 2026-06-10
 
 ### C.5 — Content Security Policy (Frontend Web) ✅
 JWT in localStorage + script da CDN esterni (MUI, Recharts) = superficie XSS significativa su PC condivisi in ambiente retail.
