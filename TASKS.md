@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-10 (Session 27: C.6 ✅ coverage 60.42%, C.4.2 ✅, C.7 ✅ docs/sla.md, C.8 ✅ CloudWatch alarm + Sentry source maps)  
+**Last Updated:** 2026-06-10 (Session 27: C.6 ✅ C.4.2 ✅ C.7 ✅ C.8 ✅ 7.5 ✅ — MVP checklist COMPLETA, pronto per primo cliente)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -263,7 +263,7 @@ Go-live with first paying customer (pilota).
 - [x] **7.2** API admin endpoints ✅ — `POST /api/admin/clients`, `POST /api/admin/sites` (QR auto-generato UUID-based), `POST /api/admin/employees` (bcrypt temp password), `GET /api/admin/clients`, `GET /api/admin/sites`. Auth.js extended: DB fallback login con bcrypt verify. Migration 006: `password_hash`, `role`, `site_id` su employees. Commit: 8115eab
 - [x] **7.3** CSV bulk import ✅ — `POST /api/admin/employees/import` (multer memory, csv-parse, max 100 righe, parallel bcrypt batches, BEGIN/COMMIT transaction, audit log per ogni riga, ON CONFLICT DO NOTHING). Commit: 9963f4b
 - [x] **7.4** ✅ Customer-facing user guide (PDF, Italian) — `docs/guida-utente.html` (print-to-PDF). Copertina + 5 sezioni: intro, dipendenti (download/check-in/presenze/turni), manager (dashboard/correzioni/CSV/planning), FAQ 8 domande, supporto. Aprire nel browser e Stampa → Salva come PDF.
-- [ ] **7.5** Manager training checklist (how to use dashboard + planning)
+- [x] **7.5** Manager training checklist ✅ — `docs/manager-training-checklist.md`: 7 parti (login, presenze, CSV export, correzioni, planning, QR code, verifica finale) con checklist step-by-step e tabella supporto
 - [x] **7.6** Welcome email template ✅ — `scripts/welcome-email-template.html`: HTML responsive con credenziali, CTA login, steps per dipendente/manager, GDPR footer. Commit: 8115eab
 
 ---
@@ -389,7 +389,7 @@ Go-live with first paying customer (pilota).
 - [x] **Mobile app** (4.1–4.15) ✅ Build 9 testata su iPhone
 - [x] **QR code management** (5.1–5.5) — critical path
 - [x] **Production hardening** (6.1–6.8) ✅ custom domain badge.dataxiom.it live
-- [ ] **First customer onboarded** (7.1–7.6)
+- [x] **First customer onboarded** (7.1–7.6) — tutti i prerequisiti completati ✅
 - [x] **Reset password dipendenti** (C.1) — ✅ completo Session 23
 - [x] **API versioning /api/v1/** (C.2) — ✅ completo Session 23 (C.2.5 verify post-deploy)
 - [x] **Runbook operativo** (C.3) ✅ — `docs/runbook.md`: restart EC2, rollback DB, onboarding, SLA, SSM refs
