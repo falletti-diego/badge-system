@@ -212,7 +212,7 @@ describe('POST /api/admin/employees/:id/reset-password — RBAC', () => {
     // Confirm the guard logic string is in the source
     const fs = require('fs');
     const src = fs.readFileSync(require.resolve('../routes/admin'), 'utf8');
-    expect(src).toContain("req.user.role !== 'admin'");
+    expect(src).toContain('req.user.role !== \'admin\'');
     expect(src).toContain('ForbiddenError');
   });
 });

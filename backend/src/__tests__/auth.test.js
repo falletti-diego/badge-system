@@ -164,8 +164,6 @@ describe('POST /api/auth/login — validation', () => {
 // =====================================================
 
 describe('POST /api/auth/login — DB-backed accounts', () => {
-  const { verifyPassword } = require('../auth/password');
-
   test('returns 400 for unknown non-badge.local email (empty DB result)', async () => {
     pool.query.mockResolvedValueOnce({ rows: [] });
 
