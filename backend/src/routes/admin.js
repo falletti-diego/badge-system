@@ -588,7 +588,7 @@ router.get('/debug/employee-assignment/:employeeId', requireAuth, async (req, re
 
     // 2. Get all sites for this client
     const sitesResult = await pool.query(
-      `SELECT id, name FROM sites WHERE client_id = $1 ORDER BY name ASC`,
+      'SELECT id, name FROM sites WHERE client_id = $1 ORDER BY name ASC',
       [client_id]
     );
 

@@ -70,13 +70,6 @@ function setupImportMocks({ sitesRows, insertRows, auditShouldFail = false }) {
     .mockResolvedValueOnce({ rows: [{ id: CLIENT_ID }], rowCount: 1 })    // 1. client check
     .mockResolvedValueOnce({ rows: sitesRows, rowCount: sitesRows.length }); // 2. sites prefetch
 
-  // pool.connect() → pgClient with transaction
-  const pgQueryMocks = [
-    { rows: [], rowCount: 0 }, // BEGIN
-    ...insertRows,             // INSERT per employee
-    { rows: [], rowCount: 0 }, // COMMIT
-  ];
-
   // Insert audit log mock after each INSERT (if insert succeeded)
   const pgQueryWithAudit = [];
   pgQueryWithAudit.push({ rows: [], rowCount: 0 }); // BEGIN
@@ -123,7 +116,7 @@ describe('POST /api/v1/admin/employees/import — assigned_sites population', ()
       }],
     });
 
-    const csvContent = `email,name,phone,role,site_name\nemp1@test.com,Emp One,3391234567,employee,Torino\n`;
+    const csvContent = 'email,name,phone,role,site_name\nemp1@test.com,Emp One,3391234567,employee,Torino\n';
 
     const res = await request(app)
       .post('/api/v1/admin/employees/import')
@@ -159,12 +152,12 @@ describe('POST /api/v1/admin/employees/import — assigned_sites population', ()
   test('assigned_sites is empty array when site_name not found in CSV row', async () => {
     // Site "NonExistentSite" is not in the client's sites list
     // Route skips the row with an error and counts it as skipped
-    const pgClient = setupImportMocks({
+    setupImportMocks({
       sitesRows: [{ id: SITE_ID_TORINO, name: 'Torino' }], // only Torino exists
       insertRows: [], // no inserts because row is skipped
     });
 
-    const csvContent = `email,name,phone,role,site_name\nemp2@test.com,Emp Two,3391234568,employee,NonExistentSite\n`;
+    const csvContent = 'email,name,phone,role,site_name\nemp2@test.com,Emp Two,3391234568,employee,NonExistentSite\n';
 
     const res = await request(app)
       .post('/api/v1/admin/employees/import')
@@ -186,7 +179,7 @@ describe('POST /api/v1/admin/employees/import — assigned_sites population', ()
       }],
     });
 
-    const csvContent = `email,name,phone,role,site_name\nemp3@test.com,Emp Three,3391234569,employee,\n`;
+    const csvContent = 'email,name,phone,role,site_name\nemp3@test.com,Emp Three,3391234569,employee,\n';
 
     const res = await request(app)
       .post('/api/v1/admin/employees/import')
@@ -207,12 +200,12 @@ describe('POST /api/v1/admin/employees/import — assigned_sites population', ()
   });
 
   test('duplicate employee (conflict) is counted as skipped', async () => {
-    const pgClient = setupImportMocks({
+    setupImportMocks({
       sitesRows: [{ id: SITE_ID_TORINO, name: 'Torino' }],
       insertRows: [{ rows: [], rowCount: 0 }], // ON CONFLICT DO NOTHING → rowCount 0
     });
 
-    const csvContent = `email,name,phone,role,site_name\nexisting@test.com,Existing,123,employee,Torino\n`;
+    const csvContent = 'email,name,phone,role,site_name\nexisting@test.com,Existing,123,employee,Torino\n';
 
     const res = await request(app)
       .post('/api/v1/admin/employees/import')
@@ -225,7 +218,7 @@ describe('POST /api/v1/admin/employees/import — assigned_sites population', ()
   });
 
   test('rejects request without client_id', async () => {
-    const csvContent = `email,name,phone,role,site_name\nemp@test.com,Emp,123,employee,Torino\n`;
+    const csvContent = 'email,name,phone,role,site_name\nemp@test.com,Emp,123,employee,Torino\n';
 
     const res = await request(app)
       .post('/api/v1/admin/employees/import')
@@ -248,7 +241,7 @@ describe('POST /api/v1/admin/employees/import — assigned_sites population', ()
     // Client check returns empty
     pool.query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    const csvContent = `email,name,phone,role,site_name\nemp@test.com,Emp,123,employee,Torino\n`;
+    const csvContent = 'email,name,phone,role,site_name\nemp@test.com,Emp,123,employee,Torino\n';
 
     const res = await request(app)
       .post('/api/v1/admin/employees/import')
@@ -325,7 +318,7 @@ describe('GET /api/v1/admin/debug/employee-assignment/:employeeId', () => {
     pool.query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
     const res = await request(app)
-      .get(`/api/v1/admin/debug/employee-assignment/550e8400-e29b-41d4-a716-000000000099`);
+      .get('/api/v1/admin/debug/employee-assignment/550e8400-e29b-41d4-a716-000000000099');
 
     expect(res.status).toBe(404);
   });
