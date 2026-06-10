@@ -153,7 +153,7 @@ Senza versioning ogni cambiamento breaking all'API rompe l'app mobile in produzi
 - [x] **C.2.2** Frontend web: request interceptor in `apiClient.js` riscrive `/api/` → `/api/v1/` trasparentemente; 401 guard aggiornato a `/api/v1/auth/refresh`
 - [x] **C.2.3** Frontend mobile: tutti i path in `endpoints.js` aggiornati a `/api/v1/`
 - [x] **C.2.4** `scripts/test-api.sh`: tutti i 23 test aggiornati a `/api/v1/` — 91/91 PASS zero warning
-- [ ] **C.2.5** Deploy + verifica live: `scripts/deploy.sh` → smoke test su v1 su EC2 produzione
+- [x] **C.2.5** Deploy + verifica live: `scripts/test-api.sh` → 23/23 PASS su EC2 produzione — 2026-06-10 ✅
 
 ### C.3 — Runbook Operativo
 Sei l'unico che sa come rimettere in piedi il sistema. Con il primo cliente, un downtime senza runbook può costare ore invece di minuti.
