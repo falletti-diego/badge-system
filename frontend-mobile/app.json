@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "it.dataxiom.badge",
-      "buildNumber": "2",
+      "buildNumber": "15",
       "infoPlist": {
         "NSCameraUsageDescription": "Utilizzato per scansionare il QR code della sede",
         "NSFaceIDUsageDescription": "Utilizzato per autenticare il check-in",
@@ -43,7 +43,14 @@
         }
       ],
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "dataxium",
+          "project": "badge-mobile"
+        }
+      ]
     ],
     "extra": {
       "eas": {
