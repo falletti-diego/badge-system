@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-10 (Session 26: QR code verified ✅ su Torino+Milano, EC2 deploy live, 4 admin.js code review fixes — debug endpoint middleware order, 404 consistency, UUID validation, ESLint unblocked)  
+**Last Updated:** 2026-06-10 (Session 27: C.6.2+C.6.3 shifts.test.js+export.test.js — 23+11=34 new tests, coverage 47.54%→60.42%, C.6.4 ✅ target ≥60% reached)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -193,9 +193,9 @@ JWT in localStorage + script da CDN esterni (MUI, Recharts) = superficie XSS sig
 `admin.js` (511 righe, gestisce onboarding clienti reali) e `shifts.js` (388 righe) hanno 0% coverage. Un bug nell'import CSV crea dati corrotti in produzione senza alert.
 
 - [x] **C.6.1** `backend/src/__tests__/admin-csv-import.test.js` ✅ (parziale) — 10 test: CSV import con `assigned_sites` verificato come array nativo (non NULL), sito non trovato → skip, duplicati → skip, debug endpoint diagnosi. Mancano ancora: `POST /api/admin/clients`, `POST /api/admin/sites`, `POST /api/admin/employees` (singolo). Commit: fcebbfe
-- [ ] **C.6.2** `backend/src/__tests__/shifts.test.js`: test per `GET /api/shifts/:siteId`, `POST /api/shifts/:siteId` (creazione, aggiornamento, validazione employee_id), `GET /api/shifts/my-schedule`
-- [ ] **C.6.3** `backend/src/__tests__/export.test.js`: test per `GET /api/export/csv` — risposta con dati, limite 50000, RBAC (employee→403, manager→solo proprio site)
-- [ ] **C.6.4** Target coverage: portare dal 47.54% a ≥60% statements prima del lancio
+- [x] **C.6.2** `backend/src/__tests__/shifts.test.js` ✅ — 23 test: GET /my-schedule (6), GET /:siteId (6), GET /:siteId/export (4), POST /:siteId (7). Coverage shifts.js: 11.76%→98.31%. Root cause fix: `jest.clearAllMocks()` non svuota la coda `mockResolvedValueOnce` — mock contaminati da test precedente risolvevano 500 anziché 400.
+- [x] **C.6.3** `backend/src/__tests__/export.test.js` ✅ — 11 test: RBAC (employee→403, no token→401, manager wrong site→403), success paths (admin CSV, date filters, manager scoped, empty, truncated 50001→X-Truncated), formula injection prevention (=HYPERLINK, +cmd → prefixed with '). Coverage export.js: 13.75%→88.75%.
+- [x] **C.6.4** ✅ Coverage raggiunta: 47.54%→**60.42% statements**, 61.44% lines — target ≥60% superato. 135/135 test passati.
 
 ### C.7 — SLA e Contratto Cliente
 Senza un SLA formale ogni minuto di downtime è un litigio. Anche un documento minimo protegge entrambe le parti.
@@ -387,6 +387,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-09 | C.5 Content Security Policy (Session 24) | C.5 ✅ | frontend-web/public/_headers con CSP policy (default-src, script-src, style-src Google Fonts, connect-src API+Sentry, frame-ancestors none) + security headers (nosniff, DENY, XSS-Protection). Commit: 71b7db8. Deploy live su Netlify (1-3 min). |
 | 2026-06-10 | CSV Import Verification + Test Coverage (Session 25) | C.6.1 parziale | Verifica bug assigned_sites NULL (commit ecf3620 — parameterized query fix). Root cause analizzata: string interpolation ARRAY[uuid::uuid] causava disallineamento parametri. Debug endpoint diagnostico (f671c5b, c6479f0). 10 nuovi test in admin-csv-import.test.js: assigned_sites array nativo verificato, sito non trovato → skip, duplicati, debug endpoint. 101/101 test passati. Coverage 40.37% → 47.54%. Commit: fcebbfe |
 | 2026-06-10 | QR Code Fix Live + Code Review (Session 26) | — | QR code verificato su iPhone reale: Torino Store ✅ (Maria Rossi) + Milano Store ✅ (Francesca). EC2 deploy riuscito (commit 530ec75 → Deploy to EC2 success). Fix ESLint bloccante CI/CD: admin-csv-import.test.js (doppi apici + unused vars), admin-reset-password.test.js (doppi apici), auth.test.js (verifyPassword unused). Code review admin.js: 4 finding fixati — (1) debug endpoint irraggiungibile da manager: spostato prima del middleware admin-only (era dead code), (2) `res.status(404).json()` → `next(new NotFoundError())` per rispettare error handler centralizzato, (3) UUID validation su employeeId param mancante, (4) requireAuth ridondante rimosso. Commits: 530ec75, dccd135. 10/10 test admin-csv-import passati post-refactor. |
+| 2026-06-10 | Test Coverage C.6.2+C.6.3+C.6.4 (Session 27) | C.6.2 ✅, C.6.3 ✅, C.6.4 ✅ | shifts.test.js: 23 test (GET my-schedule, GET/:siteId, GET/:siteId/export, POST/:siteId) — shifts.js coverage 11%→98%. export.test.js: 11 test (RBAC, success paths, formula injection) — export.js coverage 14%→89%. Root cause fix: `jest.clearAllMocks()` non svuota coda `mockResolvedValueOnce` — 6 valori residui dal test precedente (`shifts_data: {}` bloccato da Zod) contaminano il test successivo e trasformano un 400 in 500. Fix: test usa `shifts_data` non-vuoto e consuma tutti i mock. 135/135 pass. Coverage 47.54%→60.42% ✅ |
 
 ---
 
@@ -407,7 +408,7 @@ Go-live with first paying customer (pilota).
 - [x] **Runbook operativo** (C.3) ✅ — `docs/runbook.md`: restart EC2, rollback DB, onboarding, SLA, SSM refs
 - [ ] **Token refresh mobile** (C.4) — sessioni >15min rompono il check-in silenziosamente
 - [x] **Content Security Policy** (C.5) ✅ — riduce superficie XSS su PC retail condivisi (commit 71b7db8)
-- [ ] **Test coverage ≥60%** (C.6) — admin.js e shifts.js a 0% coprono l'onboarding clienti
+- [x] **Test coverage ≥60%** (C.6) — ✅ 60.42% statements, 135/135 test passati (Session 27)
 - [ ] **SLA e contratto** (C.7) — protegge entrambe le parti legalmente
 - [ ] **Mobile monitoring + TestFlight reminder** (C.8) — silent failure detection
 
