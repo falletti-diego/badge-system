@@ -158,11 +158,11 @@ Senza versioning ogni cambiamento breaking all'API rompe l'app mobile in produzi
 ### C.3 — Runbook Operativo
 Sei l'unico che sa come rimettere in piedi il sistema. Con il primo cliente, un downtime senza runbook può costare ore invece di minuti.
 
-- [ ] **C.3.1** `docs/runbook.md`: procedura di restart EC2+container (ssh → docker ps → docker restart / pull)
-- [ ] **C.3.2** `docs/runbook.md`: procedura di rollback DB (RDS point-in-time restore step-by-step)
-- [ ] **C.3.3** `docs/runbook.md`: checklist onboarding nuovo cliente (crea client → crea site → import CSV → genera QR → invia welcome email)
-- [ ] **C.3.4** `docs/runbook.md`: escalation contacts + SLA informale (es. risposta entro 4h in orario lavorativo)
-- [ ] **C.3.5** `docs/runbook.md`: credenziali di emergenza e dove trovarle (SSM path reference, non le credenziali stesse)
+- [x] **C.3.1** `docs/runbook.md`: procedura di restart EC2+container (ssh → docker ps → docker restart / pull)
+- [x] **C.3.2** `docs/runbook.md`: procedura di rollback DB (RDS point-in-time restore step-by-step)
+- [x] **C.3.3** `docs/runbook.md`: checklist onboarding nuovo cliente (crea client → crea site → import CSV → genera QR → invia welcome email)
+- [x] **C.3.4** `docs/runbook.md`: escalation contacts + SLA informale (es. risposta entro 4h in orario lavorativo)
+- [x] **C.3.5** `docs/runbook.md`: credenziali di emergenza e dove trovarle (SSM path reference, non le credenziali stesse)
 
 ### C.4 — Token Refresh App Mobile
 Access token scade in 15 minuti. Se un dipendente usa l'app per 20 minuti riceve un 401 silenzioso sulla scan QR successiva — check-in perso senza feedback chiaro.
@@ -404,7 +404,7 @@ Go-live with first paying customer (pilota).
 - [ ] **First customer onboarded** (7.1–7.6)
 - [x] **Reset password dipendenti** (C.1) — ✅ completo Session 23
 - [x] **API versioning /api/v1/** (C.2) — ✅ completo Session 23 (C.2.5 verify post-deploy)
-- [ ] **Runbook operativo** (C.3) — necessario prima di cedere il sistema a un cliente
+- [x] **Runbook operativo** (C.3) ✅ — `docs/runbook.md`: restart EC2, rollback DB, onboarding, SLA, SSM refs
 - [ ] **Token refresh mobile** (C.4) — sessioni >15min rompono il check-in silenziosamente
 - [x] **Content Security Policy** (C.5) ✅ — riduce superficie XSS su PC retail condivisi (commit 71b7db8)
 - [ ] **Test coverage ≥60%** (C.6) — admin.js e shifts.js a 0% coprono l'onboarding clienti
