@@ -51,7 +51,7 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
       `SELECT ci.id, ci.employee_id, ci.timestamp, ci.type,
               e.name AS employee_name, e.matricola,
               e.id AS emp_id
-       FROM check_ins ci
+       FROM checkins ci
        JOIN employees e ON e.id = ci.employee_id
        WHERE ci.client_id = $1::uuid
          AND ci.timestamp >= $2
