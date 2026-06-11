@@ -353,6 +353,39 @@ Go-live with first paying customer (pilota).
 
 ## 🔲 TODO — SECURITY TECH DEBT (open findings from code review)
 
+### 🚨 GDPR/Privacy Findings from Session 31 Security Review
+**Bloccanti per commercializzazione in Italia — PRIORITÀ MASSIMA**
+
+- [ ] **S.24** Missing GDPR Disclosure for GPS Data Collection (HIGH, Confidence 0.95)
+  - **Issue:** Geofencing feature raccoglie coordinate GPS sensibili (latitude, longitude). Privacy Policy è insufficiente (GDPR Art. 13-14 richiede disclosure esplicita su: base legale, retention, diritti dipendenti, controller/processor). Impact: Violazione regolatori, multa fino €20M o 4% fatturato globale.
+  - **TODO:** 
+    1. Creare `docs/privacy-policy-IT.md` — sezione GPS: base legale (Art. 6(1)(b) esecuzione contratto OR Art. 6(1)(f) legittimo interesse), retention policy (90 giorni), diritti, sub-processor AWS
+    2. In-app disclosure (frontend-mobile/src/screens): prima del primo checkin con GPS, dialog "Questo app raccoglie la tua localizzazione per verificare sei in sede. Dati cancellati dopo 90 giorni. [Accetto] [Rifiuto]"
+    3. Aggiornare Privacy Policy pubblica (`frontend-web/public/privacy-policy.html`) con sezione GPS
+  - **Effort:** 3-4 ore
+  - **Success:** Privacy Policy covers GPS processing, in-app dialog mostrato al primo GPS checkin, non c'è ambiguità su base legale
+
+- [ ] **S.25** Missing Data Processing Agreement (DPA) — GDPR Art. 28 (HIGH, Confidence 0.90)
+  - **Issue:** Dataxiom (Data Processor) deve avere DPA scritto con ogni cliente (Data Controller). Mancanza di DPA = violazione Art. 28, fini fino €20M. Impact: Blocco legale su onboarding cliente, compliance audit fallisce.
+  - **TODO:**
+    1. Creare `docs/DPA_GDPR_Art28_IT.md` template — sezioni: Data Controller (cliente), Processor (Dataxiom), data subjects (dipendenti), processing descrizione (GPS + Face ID + timbrature), retention (coordinate GPS 90gg, checkins 24m, audit log 3a), sub-processor AWS (RDS+EC2 eu-west-1), diritti controller (audit, accesso, cancellazione)
+    2. Backend: endpoint `POST /api/admin/dpa-acknowledgement` — registra firma cliente su DPA versione X (audit trail per compliance)
+    3. Onboarding flow: HR Director vede alert "DPA richiesto" → download/firmi DPA → upload scansione → sblocca geofencing
+  - **Effort:** 2-3 ore
+  - **Success:** DPA template in repo, cliente firma DPA prima di abilitare geofencing, audit trail registrato
+
+- [ ] **S.26** Missing Explicit Consent Mechanism for GPS Data Collection — GDPR Art. 7 (HIGH, Confidence 0.85)
+  - **Issue:** Geofencing abilitato per default (migration 010 `DEFAULT true`) senza consenso dipendente. GDPR Art. 7 richiede consenso: freely given, specific, informed, unambiguous. Se base legale è consenso (non contratto), senza consenso dichiarato è illegittimo. Impact: Privacy violazione, regolatore può forzare disabilitazione feature.
+  - **TODO:**
+    1. DB: colonna `employees.gps_consent_given` (boolean DEFAULT false) + tabella `employee_consent_log` (employee_id, consent_type, timestamp, version)
+    2. Mobile app (QRScannerScreen): prima di primo POST /api/checkins con GPS, mostra dialog "Il datore di lavoro richiede localizzazione GPS per il check-in. Dati usati solo per verificare sei in sede, cancellati dopo 90 giorni. Vedi Privacy Policy: <link>. [Accetto] [Rifiuto]" → POST /api/consent/gps-acceptance (con version=2.0)
+    3. Backend: `POST /api/consent/gps-acceptance` → aggiorna `employees.gps_consent_given=true`, log in audit_log, soft-gate: se gps_consent_given=false e geofencing_enabled=true, POST /api/checkins ritorna 403 CONSENT_REQUIRED (non 400, così è chiaro cosa serve)
+    4. AdminPage: nuova sezione "Consensi GPS" — tabella employees con colonna "GPS Accettato" (sì/no/data), bottone "Notifica dipendenti" (send email reminder)
+  - **Effort:** 4-5 ore
+  - **Success:** Dipendente vede consent dialog prima di primo GPS checkin, accettazione loggata in audit_log, admin vede storico consensi
+
+---
+
 ### Trovati nella sessione 17 — non critici per MVP, da chiudere prima del lancio
 
 - [x] **S.1** `auth.js:34` ✅ — DEMO_USERS limitati a `@badge.local`, tutti gli altri email usano DB bcrypt. Migration 007: password_hash per 4 seeded employees. Commit: d06e41e: se un admin crea un employee reale con la stessa email di un account demo (es. `pippo@badge.local`), il check demo vince sempre. **Fix:** eliminare o isolare DEMO_USERS su `NODE_ENV !== 'production'` oppure invertire l'ordine (DB check prima, DEMO fallback per i soli domini `@badge.local`). Da completare prima del lancio con il primo cliente.
@@ -462,6 +495,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-11 | FASE 9 Ore Lavorate & Buoni Pasto (Session 29) | 9.1–9.11 ✅ | hours.js: calculateDailyHours (greedy IN/OUT pairing, lunch-break sum, open presence) + aggregateMonthly (ore ord/straord, buoni pasto, giorni). presences.js: GET /api/presences/summary (RBAC: employee→403, manager→site-scoped, admin+viewer→all, meal_voucher_hours da clients). admin.js: PUT /api/admin/settings. SummaryPage.jsx: tabella mensile + navigazione mese + export CSV. PresencesTable: colonna Ore client-side. AdminPage: tab Impostazioni. App.jsx: route /summary. 190/190 test ✅ lint 0 errori. Commit: 3e792a0 |
 | 2026-06-11 | FASE 10 Geofencing (Session 30) | 10.1–10.12 ✅ | backend: migration 010 (lat/lng/geofence_radius_meters/geofence_enabled su sites, checkin_lat/lng su checkins). geo.js haversine. GeofenceError (403 OUTSIDE_GEOFENCE + distance_meters). checkins.js: geofence validation post-assegnazione. PUT /api/admin/sites/:id. admin.js: GET sites include geofence columns. mobile: expo-location (tryGetLocation opzionale), payload lat/lng, alert "Fuori dalla sede". AdminPage: GeofenceDialog (toggle+lat/lng+raggio), colonna Geofencing con chip "150m". 22 nuovi test (geo.test.js + checkins-geofence.test.js). 212/212 ✅. Commits: b740dbf, 13c67e5 |
 | 2026-06-11 | Bug Fix + FASE 8/9/10 Dashboard Testing (Session 31) | — | 3 bug produzione fixati: (1) presences.js `FROM check_ins` → `FROM checkins` (commit 5aee3f3), (2) presences.js `e.matricola` → `e.external_employee_id AS matricola` su 3 occorrenze (commit 0054404), (3) admin.js GET /sites mancavano geofence columns → GeofenceDialog non pre-popolava (commit ea156fa). Web dashboard FASE 8/9/10 verificata via browser: viewer RBAC ✅, SummaryPage ore+buoni pasto ✅, Impostazioni meal_voucher_hours save/reload ✅, GeofenceDialog pre-populate ✅. Deploy Netlify frontend ✅. EAS Build 17 pending (in attesa conferma). |
+| 2026-06-11 | Final Code Review + Security Audit (Session 32) | — | Max-effort code review FASE 8-10 (5 CRITICAL + 6 MEDIUM + 4 deferred findings). All 11 fixes implemented + tested: logAudit pool param, presences ANY(assigned_sites), clientGeofencingEnabled wrong client, geofence feature flag !== false, settings dialog error handling, meal_voucher_hours optional, coordinate validation, assigned_sites .min(1), GeofenceDialog client flag, audit error logging, response validation. 216/216 test ✅. Security review identified 3 GDPR blockers: S.24 (GPS disclosure), S.25 (DPA template), S.26 (consent mechanism) — registered in TASKS.md SECURITY TECH DEBT section, PRIORITÀ MASSIMA for Italian market launch. Commit: 76ec7ef |
 
 ---
 
