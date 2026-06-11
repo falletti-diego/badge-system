@@ -23,6 +23,7 @@
     "expo-font": "~14.0.12",
     "expo-keep-awake": "~15.0.8",
     "expo-local-authentication": "~17.0.8",
+    "expo-location": "~18.1.5",
     "expo-status-bar": "~3.0.9",
     "promise": "^8.3.0",
     "react": "19.1.0",

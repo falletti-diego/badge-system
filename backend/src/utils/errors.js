@@ -65,6 +65,14 @@ class InternalServerError extends ApiError {
   }
 }
 
+class GeofenceError extends ApiError {
+  constructor(distanceMeters, maxMeters) {
+    super('OUTSIDE_GEOFENCE', 'Check-in location is outside the allowed area', 403);
+    this.name = 'GeofenceError';
+    this.details = { distance_meters: Math.round(distanceMeters), max_meters: maxMeters };
+  }
+}
+
 module.exports = {
   ApiError,
   ValidationError,
@@ -74,4 +82,5 @@ module.exports = {
   ConflictError,
   RateLimitError,
   InternalServerError,
+  GeofenceError,
 };

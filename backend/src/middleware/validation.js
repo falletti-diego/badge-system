@@ -33,6 +33,8 @@ const PostCheckinSchema = z.object({
     type: z.enum(['IN', 'OUT'], {
       errorMap: () => ({ message: 'type must be either "IN" or "OUT"' }),
     }),
+    latitude: z.number().min(-90, 'latitude must be between -90 and 90').max(90, 'latitude must be between -90 and 90').nullable().optional(),
+    longitude: z.number().min(-180, 'longitude must be between -180 and 180').max(180, 'longitude must be between -180 and 180').nullable().optional(),
   }),
   query: z.object({
     client_id: z.string().uuid('Invalid client_id: must be valid UUID').optional(),
@@ -337,6 +339,22 @@ function createValidationMiddleware(schema) {
 }
 
 // =====================================================
+// ADMIN — PUT /api/admin/sites/:id (geofence settings)
+// =====================================================
+
+const UpdateSiteGeofenceSchema = z.object({
+  body: z.object({
+    latitude: z.number().min(-90).max(90).nullable().optional(),
+    longitude: z.number().min(-180).max(180).nullable().optional(),
+    geofence_radius_meters: z.number().int().min(50, 'radius must be at least 50m').max(5000, 'radius cannot exceed 5000m').default(150),
+    geofence_enabled: z.boolean(),
+  }),
+  params: z.object({
+    id: z.string().uuid('Invalid site id'),
+  }),
+});
+
+// =====================================================
 // ADMIN — POST /api/admin/clients
 // =====================================================
 
@@ -444,5 +462,6 @@ module.exports = {
   AdminViewerSchema,
   AdminSettingsSchema,
   GetPresencesSummarySchema,
+  UpdateSiteGeofenceSchema,
   createValidationMiddleware,
 };

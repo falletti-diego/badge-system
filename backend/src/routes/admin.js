@@ -17,6 +17,7 @@ const {
   AdminEmployeeSchema,
   AdminViewerSchema,
   AdminSettingsSchema,
+  UpdateSiteGeofenceSchema,
   createValidationMiddleware,
 } = require('../middleware/validation');
 
@@ -548,6 +549,44 @@ router.delete('/sites/:id', async (req, res, next) => {
 
     logger.info({ action: 'admin_delete_site', site_id: site.id, name: site.name });
     res.json({ success: true, message: `Sede "${site.name}" eliminata.` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- PUT /api/admin/sites/:id (geofence settings) ---
+
+router.put('/sites/:id', createValidationMiddleware(UpdateSiteGeofenceSchema), async (req, res, next) => {
+  const { client_id } = req.user;
+
+  const { id } = req.validated.params;
+  const { latitude, longitude, geofence_radius_meters, geofence_enabled } = req.validated.body;
+
+  try {
+    const result = await pool.query(
+      `UPDATE sites
+       SET latitude = $1, longitude = $2,
+           geofence_radius_meters = $3, geofence_enabled = $4,
+           updated_at = NOW()
+       WHERE id = $5::uuid AND client_id = $6::uuid
+       RETURNING id, name, latitude, longitude, geofence_radius_meters, geofence_enabled`,
+      [latitude ?? null, longitude ?? null, geofence_radius_meters, geofence_enabled, id, client_id]
+    );
+
+    if (result.rows.length === 0) return next(new NotFoundError('Site not found or not in your organization', 'SITE_NOT_FOUND'));
+
+    await logAudit(pool, {
+      action: 'admin_update_site_geofence',
+      entity: 'site',
+      entityId: id,
+      clientId: client_id,
+      oldValue: null,
+      newValue: { latitude, longitude, geofence_radius_meters, geofence_enabled },
+      userId: req.user.user_id,
+    }).catch(() => {});
+
+    logger.info({ action: 'admin_update_site_geofence', site_id: id, geofence_enabled });
+    res.json({ success: true, data: result.rows[0] });
   } catch (err) {
     next(err);
   }

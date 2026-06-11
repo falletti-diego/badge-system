@@ -6,6 +6,7 @@ import {
   Select, MenuItem, FormControl, InputLabel, Chip, Stack,
   Divider, Tooltip, IconButton, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions,
+  Switch, FormControlLabel,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
@@ -13,6 +14,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LockResetIcon from '@mui/icons-material/LockReset';
+import MyLocationIcon from '@mui/icons-material/MyLocation';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../../services/apiClient';
 import authService from '../../../services/authService';
@@ -280,6 +282,119 @@ function ClientsTab() {
   );
 }
 
+// ─── Geofence Dialog ────────────────────────────────────────────────────────
+
+function GeofenceDialog({ site, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    geofence_enabled: site.geofence_enabled || false,
+    latitude: site.latitude != null ? String(site.latitude) : '',
+    longitude: site.longitude != null ? String(site.longitude) : '',
+    geofence_radius_meters: site.geofence_radius_meters || 150,
+  });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const lat = form.latitude !== '' ? parseFloat(form.latitude) : null;
+      const lng = form.longitude !== '' ? parseFloat(form.longitude) : null;
+      if (form.geofence_enabled && (lat == null || lng == null || isNaN(lat) || isNaN(lng))) {
+        setMsg({ type: 'error', text: 'Inserisci latitudine e longitudine valide per attivare il geofencing.' });
+        setSaving(false);
+        return;
+      }
+      await apiClient.put(`/api/admin/sites/${site.id}`, {
+        latitude: lat,
+        longitude: lng,
+        geofence_radius_meters: Number(form.geofence_radius_meters),
+        geofence_enabled: form.geofence_enabled,
+      });
+      setMsg({ type: 'success', text: 'Geofencing aggiornato.' });
+      onSaved();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.message || err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const mapsUrl = form.latitude && form.longitude
+    ? `https://maps.google.com/?q=${form.latitude},${form.longitude}`
+    : null;
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>📍 Geofencing — {site.name}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={form.geofence_enabled}
+                onChange={(e) => setForm({ ...form, geofence_enabled: e.target.checked })}
+              />
+            }
+            label="Geofencing attivo"
+          />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField
+              label="Latitudine"
+              size="small"
+              fullWidth
+              value={form.latitude}
+              onChange={(e) => setForm({ ...form, latitude: e.target.value })}
+              placeholder="es. 45.4654"
+              disabled={!form.geofence_enabled}
+              type="number"
+              inputProps={{ step: 'any' }}
+            />
+            <TextField
+              label="Longitudine"
+              size="small"
+              fullWidth
+              value={form.longitude}
+              onChange={(e) => setForm({ ...form, longitude: e.target.value })}
+              placeholder="es. 9.1859"
+              disabled={!form.geofence_enabled}
+              type="number"
+              inputProps={{ step: 'any' }}
+            />
+          </Stack>
+          <TextField
+            label="Raggio (metri)"
+            size="small"
+            type="number"
+            value={form.geofence_radius_meters}
+            onChange={(e) => setForm({ ...form, geofence_radius_meters: e.target.value })}
+            inputProps={{ min: 50, max: 5000, step: 10 }}
+            disabled={!form.geofence_enabled}
+            helperText="Min 50m — Max 5000m. Consigliato: 100-200m."
+          />
+          {mapsUrl && (
+            <Typography variant="caption">
+              <a href={mapsUrl} target="_blank" rel="noreferrer">
+                📍 Verifica posizione su Google Maps
+              </a>
+            </Typography>
+          )}
+          <Typography variant="caption" color="text.secondary">
+            Suggerimento: apri Google Maps, fai click sulla sede e copia le coordinate.
+          </Typography>
+          {msg && <Alert severity={msg.type}>{msg.text}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={saving}>Annulla</Button>
+        <Button variant="contained" onClick={handleSave} disabled={saving} sx={{ backgroundColor: '#1E3A5F' }}>
+          {saving ? <CircularProgress size={18} /> : 'Salva'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 // ─── Tab: Sedi ─────────────────────────────────────────────────────────────
 
 function SitesTab() {
@@ -293,6 +408,7 @@ function SitesTab() {
   const [msg, setMsg] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [geofenceTarget, setGeofenceTarget] = useState(null);
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -383,6 +499,7 @@ function SitesTab() {
                     <TableCell>Cliente</TableCell>
                     <TableCell>Indirizzo</TableCell>
                     <TableCell>QR Code Content</TableCell>
+                    <TableCell>Geofencing</TableCell>
                     <TableCell>Creato</TableCell>
                     <TableCell />
                   </TableRow>
@@ -401,6 +518,17 @@ function SitesTab() {
                           <CopyButton text={s.qr_code_content} />
                         </Stack>
                       </TableCell>
+                      <TableCell>
+                        <Tooltip title="Configura geofencing">
+                          <IconButton size="small" onClick={() => setGeofenceTarget(s)}
+                            sx={{ color: s.geofence_enabled ? '#2D7049' : '#9E9E9E' }}>
+                            <MyLocationIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        {s.geofence_enabled && (
+                          <Chip label={`${s.geofence_radius_meters}m`} size="small" color="success" variant="outlined" />
+                        )}
+                      </TableCell>
                       <TableCell>{new Date(s.created_at).toLocaleDateString('it-IT')}</TableCell>
                       <TableCell align="right">
                         <Tooltip title="Elimina sede">
@@ -412,7 +540,7 @@ function SitesTab() {
                     </TableRow>
                   ))}
                   {sites.length === 0 && (
-                    <TableRow><TableCell colSpan={6} align="center" sx={{ color: 'text.secondary' }}>Nessuna sede</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} align="center" sx={{ color: 'text.secondary' }}>Nessuna sede</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -429,6 +557,14 @@ function SitesTab() {
         onCancel={() => setDeleteTarget(null)}
         loading={deleting}
       />
+
+      {geofenceTarget && (
+        <GeofenceDialog
+          site={geofenceTarget}
+          onClose={() => setGeofenceTarget(null)}
+          onSaved={() => { setGeofenceTarget(null); reload(); }}
+        />
+      )}
     </Stack>
   );
 }

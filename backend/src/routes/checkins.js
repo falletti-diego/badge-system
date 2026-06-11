@@ -11,7 +11,8 @@ const { createValidationMiddleware, PostCheckinSchema, GetCheckinsSchema, PutChe
 const { logAudit } = require('../middleware/audit');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
-const { NotFoundError, ValidationError } = require('../utils/errors');
+const { NotFoundError, ValidationError, GeofenceError } = require('../utils/errors');
+const { haversineDistance } = require('../utils/geo');
 const { deleteCacheByPattern } = require('../db/redis');
 const { resolveEmployeeId, resolveSiteId } = require('../utils/resolvers');
 const logger = require('../utils/logger');
@@ -38,9 +39,10 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
         throw new NotFoundError('Employee not found or not assigned to your organization', 'EMPLOYEE_NOT_FOUND');
       }
 
-      // 2. Verify site exists
+      // 2. Verify site exists and fetch geofence settings
       const siteResult = await client.query(
-        'SELECT id FROM sites WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1',
+        `SELECT id, geofence_enabled, latitude, longitude, geofence_radius_meters
+         FROM sites WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1`,
         [site_id, clientId]
       );
 
@@ -62,15 +64,36 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
         });
       }
 
+      // 3.5 Geofence check
+      const site = siteResult.rows[0];
+      const { latitude: checkinLat, longitude: checkinLng } = req.validated.body;
+      if (site.geofence_enabled) {
+        if (checkinLat == null || checkinLng == null) {
+          throw new ValidationError('GPS coordinates required for check-in at this site', {
+            code: 'GEOFENCE_COORDINATES_REQUIRED',
+          });
+        }
+        const distance = haversineDistance(
+          checkinLat, checkinLng,
+          Number(site.latitude), Number(site.longitude)
+        );
+        if (distance > site.geofence_radius_meters) {
+          throw new GeofenceError(distance, site.geofence_radius_meters);
+        }
+      }
+
       // 4. Create check-in
       // Use employee_id as created_by: mock user IDs are non-UUID strings,
       // but employee_id is always a valid UUID for self check-ins.
       const checkinResult = await client.query(
         `INSERT INTO checkins (
-          employee_id, site_id, client_id, type, timestamp, created_by, created_at
-        ) VALUES ($1, $2, $3, $4, NOW(), $5, NOW())
+          employee_id, site_id, client_id, type, timestamp, created_by, created_at,
+          checkin_latitude, checkin_longitude
+        ) VALUES ($1, $2, $3, $4, NOW(), $5, NOW(), $6, $7)
         RETURNING id, employee_id, site_id, type, timestamp, created_at`,
-        [employee_id, site_id, clientId, type, employee_id]
+        [employee_id, site_id, clientId, type, employee_id,
+          checkinLat != null ? checkinLat : null,
+          checkinLng != null ? checkinLng : null]
       );
 
       const checkin = checkinResult.rows[0];

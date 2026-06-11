@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/apiClient';
@@ -10,13 +11,28 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 
 const QR_PREFIX = 'badge://checkin';
 
+// Attempt to get current GPS position within the timeout.
+// Returns { latitude, longitude } or null if unavailable/denied.
+async function tryGetLocation() {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return null;
+    const pos = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.High,
+      timeInterval: 5000,
+    });
+    return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+  } catch {
+    return null;
+  }
+}
+
 export default function QRScannerScreen({ navigation }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checkType, setCheckType] = useState('IN');
   // useRef guard: prevents duplicate submissions from rapid onBarcodeScanned events
-  // (setState is async and stale inside the closure — ref is synchronous)
   const processingRef = useRef(false);
 
   const handleBarCodeScanned = async ({ data }) => {
@@ -49,21 +65,40 @@ export default function QRScannerScreen({ navigation }) {
 
       if (!employeeId) throw new Error('Employee ID non trovato — assicurati di accedere con un account dipendente');
 
-      const response = await apiClient.post(ENDPOINTS.CHECKINS_POST, {
+      // Attempt GPS — sent when available; server enforces it only if geofence is enabled
+      const location = await tryGetLocation();
+
+      const payload = {
         employee_id: employeeId,
         site_id: siteId,
         client_id: clientId,
         type: checkType,
         timestamp: new Date().toISOString(),
-      });
+        ...(location ? { latitude: location.latitude, longitude: location.longitude } : {}),
+      };
+
+      const response = await apiClient.post(ENDPOINTS.CHECKINS_POST, payload);
 
       navigation.replace('Success', {
         checkIn: response.data.data,
         siteId,
       });
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Check-in fallito';
-      Alert.alert('Errore check-in', msg, [
+      const code = err.response?.data?.code;
+      const details = err.response?.data?.details;
+
+      let title = 'Errore check-in';
+      let msg = err.response?.data?.message || err.message || 'Check-in fallito';
+
+      if (code === 'OUTSIDE_GEOFENCE') {
+        title = '📍 Fuori dalla sede';
+        msg = `Sei troppo lontano dalla sede.\nDistanza: ${details?.distance_meters ?? '?'}m\nMassimo consentito: ${details?.max_meters ?? '?'}m\n\nAvvicinati alla sede e riprova.`;
+      } else if (code === 'GEOFENCE_COORDINATES_REQUIRED' || (err.response?.data?.details?.code === 'GEOFENCE_COORDINATES_REQUIRED')) {
+        title = '📍 GPS richiesto';
+        msg = 'Questa sede richiede la posizione GPS per il check-in. Attiva il GPS e riprova.';
+      }
+
+      Alert.alert(title, msg, [
         { text: 'Riprova', onPress: () => {
           processingRef.current = false;
           setScanned(false);
