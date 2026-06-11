@@ -501,78 +501,80 @@ function GeofenceDialog({ site, clientGeofencingEnabled = true, onClose, onSaved
     : null;
 
   return (
-    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>📍 Geofencing — {site.name}</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={form.geofence_enabled}
-                onChange={(e) => setForm({ ...form, geofence_enabled: e.target.checked })}
-                disabled={!clientGeofencingEnabled}
+    <>
+      <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+        <DialogTitle>📍 Geofencing — {site.name}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={form.geofence_enabled}
+                  onChange={(e) => setForm({ ...form, geofence_enabled: e.target.checked })}
+                  disabled={!clientGeofencingEnabled}
+                />
+              }
+              label={!clientGeofencingEnabled ? 'Geofencing disabilitato' : 'Geofencing attivo'}
+            />
+            {!clientGeofencingEnabled && (
+              <Alert severity="info">
+                Geofencing è disattivato a livello cliente. Abilita il geofencing nelle Impostazioni per attivarlo per questa sede.
+              </Alert>
+            )}
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="Latitudine"
+                size="small"
+                fullWidth
+                value={form.latitude}
+                onChange={(e) => setForm({ ...form, latitude: e.target.value })}
+                placeholder="es. 45.4654"
+                disabled={!clientGeofencingEnabled || !form.geofence_enabled}
+                type="number"
+                inputProps={{ step: 'any' }}
               />
-            }
-            label={!clientGeofencingEnabled ? 'Geofencing disabilitato' : 'Geofencing attivo'}
-          />
-          {!clientGeofencingEnabled && (
-            <Alert severity="info">
-              Geofencing è disattivato a livello cliente. Abilita il geofencing nelle Impostazioni per attivarlo per questa sede.
-            </Alert>
-          )}
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="Longitudine"
+                size="small"
+                fullWidth
+                value={form.longitude}
+                onChange={(e) => setForm({ ...form, longitude: e.target.value })}
+                placeholder="es. 9.1859"
+                disabled={!clientGeofencingEnabled || !form.geofence_enabled}
+                type="number"
+                inputProps={{ step: 'any' }}
+              />
+            </Stack>
             <TextField
-              label="Latitudine"
+              label="Raggio (metri)"
               size="small"
-              fullWidth
-              value={form.latitude}
-              onChange={(e) => setForm({ ...form, latitude: e.target.value })}
-              placeholder="es. 45.4654"
-              disabled={!clientGeofencingEnabled || !form.geofence_enabled}
               type="number"
-              inputProps={{ step: 'any' }}
-            />
-            <TextField
-              label="Longitudine"
-              size="small"
-              fullWidth
-              value={form.longitude}
-              onChange={(e) => setForm({ ...form, longitude: e.target.value })}
-              placeholder="es. 9.1859"
+              value={form.geofence_radius_meters}
+              onChange={(e) => setForm({ ...form, geofence_radius_meters: e.target.value })}
+              inputProps={{ min: 50, max: 5000, step: 10 }}
               disabled={!clientGeofencingEnabled || !form.geofence_enabled}
-              type="number"
-              inputProps={{ step: 'any' }}
+              helperText="Min 50m — Max 5000m. Consigliato: 100-200m."
             />
-          </Stack>
-          <TextField
-            label="Raggio (metri)"
-            size="small"
-            type="number"
-            value={form.geofence_radius_meters}
-            onChange={(e) => setForm({ ...form, geofence_radius_meters: e.target.value })}
-            inputProps={{ min: 50, max: 5000, step: 10 }}
-            disabled={!clientGeofencingEnabled || !form.geofence_enabled}
-            helperText="Min 50m — Max 5000m. Consigliato: 100-200m."
-          />
-          {mapsUrl && (
-            <Typography variant="caption">
-              <a href={mapsUrl} target="_blank" rel="noreferrer">
-                📍 Verifica posizione su Google Maps
-              </a>
+            {mapsUrl && (
+              <Typography variant="caption">
+                <a href={mapsUrl} target="_blank" rel="noreferrer">
+                  📍 Verifica posizione su Google Maps
+                </a>
+              </Typography>
+            )}
+            <Typography variant="caption" color="text.secondary">
+              Suggerimento: apri Google Maps, fai click sulla sede e copia le coordinate.
             </Typography>
-          )}
-          <Typography variant="caption" color="text.secondary">
-            Suggerimento: apri Google Maps, fai click sulla sede e copia le coordinate.
-          </Typography>
-          {msg && <Alert severity={msg.type}>{msg.text}</Alert>}
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={saving}>Annulla</Button>
-        <Button variant="contained" onClick={handleSaveClick} disabled={saving} sx={{ backgroundColor: '#1E3A5F' }}>
-          {saving ? <CircularProgress size={18} /> : 'Salva'}
-        </Button>
-      </DialogActions>
+            {msg && <Alert severity={msg.type}>{msg.text}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose} disabled={saving}>Annulla</Button>
+          <Button variant="contained" onClick={handleSaveClick} disabled={saving} sx={{ backgroundColor: '#1E3A5F' }}>
+            {saving ? <CircularProgress size={18} /> : 'Salva'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <ConfirmSaveDialog
         open={confirmSave}
@@ -582,7 +584,7 @@ function GeofenceDialog({ site, clientGeofencingEnabled = true, onClose, onSaved
         onCancel={() => setConfirmSave(false)}
         loading={saving}
       />
-    </Dialog>
+    </>
   );
 }
 
