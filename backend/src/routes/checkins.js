@@ -11,7 +11,7 @@ const { createValidationMiddleware, PostCheckinSchema, GetCheckinsSchema, PutChe
 const { logAudit } = require('../middleware/audit');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
-const { NotFoundError, ValidationError, GeofenceError } = require('../utils/errors');
+const { NotFoundError, ValidationError, ForbiddenError, GeofenceError } = require('../utils/errors');
 const { haversineDistance } = require('../utils/geo');
 const { deleteCacheByPattern } = require('../db/redis');
 const { resolveEmployeeId, resolveSiteId } = require('../utils/resolvers');
@@ -28,6 +28,24 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
   const clientId = req.user.client_id;
 
   try {
+    // S.32.1: ownership check — only admins may create check-ins for other employees
+    if (req.user.role !== 'admin') {
+      if (!req.user.employee_id) {
+        throw new ForbiddenError(
+          'Your account has no employee profile — cannot create check-ins',
+          'CHECKIN_NO_EMPLOYEE_PROFILE'
+        );
+      }
+      if (req.user.employee_id !== employee_id) {
+        logger.warn({
+          action: 'checkin_ownership_violation',
+          user_id: req.user.user_id,
+          attempted_employee_id: employee_id,
+        });
+        throw new ForbiddenError('You can only create check-ins for yourself', 'CHECKIN_OWNERSHIP');
+      }
+    }
+
     const result = await withTransaction(async (client) => {
       // 1. Verify employee exists and belongs to authenticated client
       const employeeResult = await client.query(
@@ -397,7 +415,6 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
   const correctorName = req.user.name || req.user.email || req.user.user_id;
 
   if (req.user.role === 'viewer' || req.user.role === 'employee') {
-    const { ForbiddenError } = require('../utils/errors');
     return next(new ForbiddenError('Only managers and admins can correct check-ins', 'FORBIDDEN_ROLE'));
   }
 
