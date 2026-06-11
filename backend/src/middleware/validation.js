@@ -394,6 +394,38 @@ const AdminViewerSchema = z.object({
   }),
 });
 
+// =====================================================
+// ADMIN — PUT /api/admin/settings
+// =====================================================
+
+const AdminSettingsSchema = z.object({
+  body: z.object({
+    meal_voucher_hours: z.number()
+      .min(0, 'meal_voucher_hours must be >= 0')
+      .max(24, 'meal_voucher_hours must be <= 24'),
+  }),
+});
+
+// =====================================================
+// GET /api/presences/summary — Monthly summary
+// =====================================================
+
+const GetPresencesSummarySchema = z.object({
+  query: z.object({
+    month: z.coerce
+      .number()
+      .int('month must be an integer')
+      .min(1, 'month must be between 1 and 12')
+      .max(12, 'month must be between 1 and 12')
+      .default(new Date().getMonth() + 1),
+    year: z.coerce
+      .number()
+      .int('year must be an integer')
+      .min(2020, 'year must be 2020 or later')
+      .default(new Date().getFullYear()),
+  }),
+});
+
 module.exports = {
   LoginSchema,
   PostCheckinSchema,
@@ -410,5 +442,7 @@ module.exports = {
   AdminSiteSchema,
   AdminEmployeeSchema,
   AdminViewerSchema,
+  AdminSettingsSchema,
+  GetPresencesSummarySchema,
   createValidationMiddleware,
 };

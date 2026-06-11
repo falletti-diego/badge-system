@@ -918,6 +918,90 @@ function ViewersTab() {
   );
 }
 
+// ─── Tab: Impostazioni ────────────────────────────────────────────────────────
+
+function SettingsTab() {
+  const [mealHours, setMealHours] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+  const [msg, setMsg] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiClient.get('/api/admin/clients');
+        if (!cancelled && res.data.data && res.data.data.length > 0) {
+          const val = res.data.data[0].meal_voucher_hours;
+          setMealHours(val !== undefined && val !== null ? String(val) : '5');
+        }
+      } catch {
+        // ignore — user can still type in the field
+      } finally {
+        if (!cancelled) setFetching(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleSave = async () => {
+    const parsed = parseFloat(mealHours);
+    if (isNaN(parsed) || parsed < 0 || parsed > 24) {
+      setMsg({ type: 'error', text: 'Inserisci un valore tra 0 e 24 ore.' });
+      return;
+    }
+    setLoading(true);
+    setMsg(null);
+    try {
+      await apiClient.put('/api/admin/settings', { meal_voucher_hours: parsed });
+      setMsg({ type: 'success', text: 'Impostazioni salvate.' });
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.message || err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h6" fontWeight={700} mb={2}>Impostazioni Buoni Pasto</Typography>
+        <Typography variant="body2" color="text.secondary" mb={3}>
+          Il sistema assegna automaticamente un buono pasto per ogni giornata in cui il dipendente
+          lavora almeno il numero di ore configurato qui.
+        </Typography>
+
+        {fetching ? (
+          <CircularProgress size={24} />
+        ) : (
+          <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 2, maxWidth: 400 }}>
+            <TextField
+              label="Ore minime per buono pasto"
+              type="number"
+              value={mealHours}
+              onChange={(e) => setMealHours(e.target.value)}
+              inputProps={{ min: 0, max: 24, step: 0.5 }}
+              size="small"
+              helperText="Es: 5 = buono pasto se ≥ 5h lavorate"
+              sx={{ flexGrow: 1 }}
+            />
+            <Button
+              variant="contained"
+              onClick={handleSave}
+              disabled={loading}
+              sx={{ backgroundColor: '#1E3A5F', mb: '20px' }}
+            >
+              {loading ? <CircularProgress size={18} /> : 'Salva'}
+            </Button>
+          </Box>
+        )}
+
+        {msg && <Alert severity={msg.type} sx={{ mt: 2, maxWidth: 400 }}>{msg.text}</Alert>}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main AdminPage ─────────────────────────────────────────────────────────
 
 export function AdminPage() {
@@ -946,12 +1030,14 @@ export function AdminPage() {
         <Tab label="Sedi" />
         <Tab label="Dipendenti" />
         <Tab label="Commercialisti" />
+        <Tab label="Impostazioni" />
       </Tabs>
 
       {tab === 0 && <ClientsTab />}
       {tab === 1 && <SitesTab />}
       {tab === 2 && <EmployeesTab />}
       {tab === 3 && <ViewersTab />}
+      {tab === 4 && <SettingsTab />}
     </Box>
   );
 }

@@ -16,6 +16,7 @@ const {
   AdminSiteSchema,
   AdminEmployeeSchema,
   AdminViewerSchema,
+  AdminSettingsSchema,
   createValidationMiddleware,
 } = require('../middleware/validation');
 
@@ -696,6 +697,39 @@ router.get('/viewers', async (req, res, next) => {
       params
     );
     res.json({ success: true, data: result.rows, returned: result.rows.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- PUT /api/admin/settings ---
+
+router.put('/settings', createValidationMiddleware(AdminSettingsSchema), async (req, res, next) => {
+  if (req.user.role !== 'admin') return next(new ForbiddenError('Only admins can update settings', 'FORBIDDEN_ROLE'));
+
+  const { meal_voucher_hours } = req.validated.body;
+  const clientId = req.user.client_id;
+
+  try {
+    const result = await pool.query(
+      'UPDATE clients SET meal_voucher_hours = $1 WHERE id = $2::uuid RETURNING id, meal_voucher_hours',
+      [meal_voucher_hours, clientId]
+    );
+
+    if (result.rowCount === 0) {
+      return next(new NotFoundError('Client not found', 'CLIENT_NOT_FOUND'));
+    }
+
+    logAudit({
+      action: 'update_settings',
+      entity: 'client',
+      entityId: clientId,
+      oldValue: null,
+      newValue: { meal_voucher_hours },
+      userId: req.user.user_id,
+    }).catch(() => {});
+
+    res.json({ success: true, data: result.rows[0] });
   } catch (err) {
     next(err);
   }

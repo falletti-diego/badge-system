@@ -146,6 +146,21 @@ const DashboardPage = () => {
               </Button>
             )}
 
+            {/* Summary link - Show for admin, manager, viewer */}
+            {(userRole === 'admin' || userRole === 'manager' || userRole === 'viewer') && (
+              <Button
+                color="inherit"
+                onClick={() => navigate('/summary')}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '14px',
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
+                }}
+              >
+                📊 Riepilogo
+              </Button>
+            )}
+
             {/* Employee Schedule Link - Show for employees */}
             {userRole === 'employee' && (
               <Button

@@ -14,6 +14,7 @@ import { EmployeeShiftsPage } from './features/planning/pages/EmployeeShiftsPage
 import { CorrectionsPage } from './features/corrections/pages/CorrectionsPage';
 import { SitesPage } from './features/sites/pages/SitesPage';
 import { AdminPage } from './features/admin/pages/AdminPage';
+import SummaryPage from './pages/SummaryPage';
 
 // Create Material-UI theme with design system colors
 const theme = createTheme({
@@ -143,6 +144,16 @@ function App() {
             element={
               <ProtectedRoute requiredRole="admin">
                 <AdminPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Monthly summary: admin, manager, viewer */}
+          <Route
+            path="/summary"
+            element={
+              <ProtectedRoute requiredRoles={['admin', 'manager', 'viewer']}>
+                <SummaryPage />
               </ProtectedRoute>
             }
           />
