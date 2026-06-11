@@ -1,8 +1,85 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-11 (Session 30: FASE 10 ✅ — Geofencing: migration 010, haversine, GeofenceError, PUT /admin/sites/:id, GPS mobile, AdminPage dialog, 212/212 test)  
+**Last Updated:** 2026-06-12 (Session 32: analisi critica completa → piano d'azione S.32; fix submodule Netlify; ConfirmSaveDialog)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
+
+---
+
+## 🚨🚨 TODO — PRIORITÀ MASSIMA: Piano d'Azione Analisi Critica (2026-06-12)
+
+Identificati nell'analisi critica completa del codebase (Session 32). I primi 3 sono fix di sicurezza
+bloccanti per qualunque demo a clienti. Ordine di esecuzione obbligato.
+
+### S.32.1 — 🔴 Ownership check su POST /checkins (CRITICO — buddy punching)
+`checkins.js:26-103`: `employee_id` arriva dal body, verificato solo contro `client_id`.
+**Qualunque dipendente autenticato può timbrare per un collega.** Mina il valore stesso del prodotto.
+- [ ] Employee role: rifiuta se `req.user.employee_id !== body.employee_id` (403 `CHECKIN_OWNERSHIP`)
+- [ ] Manager role con `site_id`: può timbrare solo per la propria sede
+- [ ] Test: employee A → check-in per B = 403; manager sede X → sede Y = 403; admin = 201
+- Sforzo: 1-2h
+
+### S.32.2 — 🔴 RBAC fail-closed + helper condiviso (CRITICO — data leak intra-tenant)
+`checkins.js:178`, `/stats:310`, `presences.js`, `export.js`: pattern `if (role === 'employee' && employeeId)`
+è fail-open — token employee SENZA `employee_id` vede tutti i dati del tenant (demo Maria/Lucia inclusi).
+- [ ] Helper unico `utils/queryScope.js` → `buildScopedFilters(req.user, filters)` fail-closed by design
+- [ ] Employee senza `employee_id` nel token → 403 (non dati completi)
+- [ ] Applicare in: checkins GET, checkins/stats, presences, export
+- [ ] Test: matrice ruolo × claims → clausole WHERE attese; token employee senza employee_id → 403
+- Sforzo: 3-4h
+
+### S.32.3 — 🔴 Cache middleware: chiave pre-auth = leak cross-tenant (CRITICO latente)
+`app.js:154`: `cacheMiddleware()` montato PRIMA di `requireAuth` → `req.user` undefined → chiave
+`client:anonymous` per tutti. Se `CACHE_ENABLED=true`: risposta di un utente servita ad altri
+utenti/tenant. Inoltre il pattern di invalidazione (`cache:api:checkins:client:X:*`) non matcha mai
+le chiavi reali (`cache::v1:checkins:client:anonymous:*`) → cache stantia per sempre.
+- [ ] Decisione: rimuovere il middleware app-level OPPURE spostarlo dopo requireAuth per-route
+- [ ] Se mantenuto: chiave deve includere client_id + role + employee_id + site_id
+- [ ] Fix pattern invalidazione per matchare le chiavi reali
+- [ ] Test: 2 utenti diversi stesso path → chiavi diverse; employee B non riceve risposta cachata di A
+- Sforzo: 1h
+
+### S.32.4 — 🟡 CORS trim + verifica porta 3000 esposta
+- [ ] `app.js:74`: `.split(',').map(s => s.trim()).filter(Boolean)` + unit test
+- [ ] Verifica security group EC2: porta 3000 NON pubblica (solo reverse proxy/TLS terminator)
+- [ ] Aggiornare health check workflow a HTTPS
+- Sforzo: 1h
+
+### S.32.5 — 🟡 Migration runner + fix doppia 011
+Due migrazioni `011_*` (dpa_acknowledgements e geofencing_feature_flag), nessuna tabella di tracking,
+applicazione manuale via SSH (già causa del bug migration 004 in Session 12).
+- [ ] Rinominare `011_add_geofencing_feature_flag.sql` → `013_...`
+- [ ] Script runner con tabella `schema_migrations (filename, applied_at)` — idempotente, transazionale
+- [ ] Integrare nel deploy workflow
+- [ ] Test: doppia esecuzione → seconda non applica nulla
+- Sforzo: 2-3h
+
+### S.32.6 — 🟡 CSV import: temp password mai comunicate
+`admin.js`: `generateTempPassword()` hashata e salvata ma mai restituita → dipendenti importati
+non possono fare login senza reset manuale uno-a-uno.
+- [ ] Risposta import include `{email, temp_password}` scaricabile come CSV (visibile una volta sola)
+- [ ] Colonna `must_change_password BOOLEAN` + forced redirect cambio password al primo login
+- [ ] Test: import 3 righe → 3 temp password in risposta; login temp → forced change
+- Sforzo: 2h
+
+### S.32.7 — 🟠 Refresh token: rotazione + revoca + demo users hardening
+- [ ] Rotazione: ogni `/refresh` emette nuovo refresh token, vecchio invalidato (jti/token_version in DB)
+- [ ] `/logout` revoca server-side (incrementa token_version)
+- [ ] Demo users: hash bcrypt all'avvio invece di confronto plaintext; flag `DEMO_ACCOUNTS_ENABLED`
+- [ ] Test: refresh con token ruotato → 401; refresh post-logout → 401; demo disattivati → 401
+- Sforzo: 4-6h
+
+### S.32.8 — 🟠 Split file monolitici
+- [ ] `AdminPage.jsx` (1455 righe) → `admin/tabs/*.jsx` + `admin/components/*.jsx`
+- [ ] `routes/admin.js` (954 righe) → `routes/admin/{clients,sites,employees,import,settings}.js`
+- [ ] Refactor meccanico: 212 test verdi prima e dopo
+- Sforzo: 4-6h
+
+### S.32.9 — 🔵 Mitigazioni GPS spoofing (Phase 2)
+- [ ] Mobile: invia `isFromMockProvider` (Android) + `accuracy` GPS nel payload
+- [ ] Server: rilevazione "velocità impossibile" tra check-in consecutivi → flag in audit log
+- [ ] Test: 100 km in 10 min → flagged, non bloccato
+- Sforzo: 3-4h
 
 ---
 
