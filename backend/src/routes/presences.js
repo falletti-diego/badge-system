@@ -49,7 +49,7 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
     // Fetch all check-ins for the period, sorted by (employee_id, timestamp)
     const checkinsResult = await pool.query(
       `SELECT ci.id, ci.employee_id, ci.timestamp, ci.type,
-              e.name AS employee_name, e.matricola,
+              e.name AS employee_name, e.external_employee_id AS matricola,
               e.id AS emp_id
        FROM checkins ci
        JOIN employees e ON e.id = ci.employee_id
@@ -80,7 +80,7 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
     // we still need to list them (fetch separately)
     if (role === 'manager' && checkinsResult.rows.length === 0) {
       const empResult = await pool.query(
-        `SELECT id, name, matricola FROM employees
+        `SELECT id, name, external_employee_id AS matricola FROM employees
          WHERE client_id = $1::uuid AND site_id = $2::uuid AND role = 'employee'
          ORDER BY name`,
         [client_id, managerSiteId]
@@ -100,7 +100,7 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
     if (role === 'admin' || role === 'viewer') {
       // Get all employees for the client
       const allEmps = await pool.query(
-        `SELECT id, name, matricola FROM employees
+        `SELECT id, name, external_employee_id AS matricola FROM employees
          WHERE client_id = $1::uuid AND role != 'viewer' AND role != 'admin' AND role != 'manager'
          ORDER BY name`,
         [client_id]
