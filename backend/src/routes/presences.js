@@ -81,7 +81,7 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
     if (role === 'manager' && checkinsResult.rows.length === 0) {
       const empResult = await pool.query(
         `SELECT id, name, external_employee_id AS matricola FROM employees
-         WHERE client_id = $1::uuid AND site_id = $2::uuid AND role = 'employee'
+         WHERE client_id = $1::uuid AND $2::uuid = ANY(assigned_sites) AND role = 'employee'
          ORDER BY name`,
         [client_id, managerSiteId]
       );

@@ -73,6 +73,7 @@ function calculateDailyHours(checkins) {
           (r) => r.employee_id === employee_id && r.date === dateStr
         );
         if (existing) {
+          // Mark as open but preserve any existing minutes from paired IN/OUT earlier in the day
           existing.presenza_aperta = true;
         } else {
           results.push({ employee_id, date: dateStr, minutes: null, presenza_aperta: true });

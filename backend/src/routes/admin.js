@@ -514,7 +514,9 @@ router.delete('/clients/:id', async (req, res, next) => {
       oldValue: { name: client.name },
       newValue: null,
       userId: req.user.user_id,
-    }).catch(() => {});
+    }).catch((err) => {
+      logger.warn({ action: 'audit_log_error', error: err.message, client_id: client.id });
+    });
 
     logger.info({ action: 'admin_delete_client', client_id: client.id, name: client.name });
     res.json({ success: true, message: `Cliente "${client.name}" eliminato.` });
@@ -751,8 +753,13 @@ router.put('/settings', createValidationMiddleware(AdminSettingsSchema), async (
   const clientId = req.user.client_id;
 
   try {
-    const setClauses = ['meal_voucher_hours = $1'];
-    const params = [meal_voucher_hours];
+    const setClauses = [];
+    const params = [];
+
+    if (meal_voucher_hours !== undefined) {
+      params.push(meal_voucher_hours);
+      setClauses.push(`meal_voucher_hours = $${params.length}`);
+    }
 
     if (geofencing_feature_enabled !== undefined) {
       params.push(geofencing_feature_enabled);
@@ -770,7 +777,7 @@ router.put('/settings', createValidationMiddleware(AdminSettingsSchema), async (
       return next(new NotFoundError('Client not found', 'CLIENT_NOT_FOUND'));
     }
 
-    logAudit({
+    await logAudit(pool, {
       action: 'update_settings',
       entity: 'client',
       entityId: clientId,

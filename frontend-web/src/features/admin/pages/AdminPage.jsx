@@ -405,10 +405,16 @@ function GeofenceDialog({ site, clientGeofencingEnabled = true, onClose, onSaved
 
 function SitesTab() {
   const { data: clients } = useFetch('/api/admin/clients');
-  const clientGeofencingEnabled = clients.length > 0
-    ? clients[0]?.geofencing_feature_enabled !== false
-    : true;
   const [selectedClient, setSelectedClient] = useState('');
+
+  // clientGeofencingEnabled is determined by the currently selected/filtered client
+  const selectedClientObj = selectedClient
+    ? clients.find(c => c.id === selectedClient)
+    : (clients.length > 0 ? clients[0] : null);
+  const clientGeofencingEnabled = selectedClientObj
+    ? selectedClientObj.geofencing_feature_enabled !== false
+    : true;
+
   const { data: sites, loading, error: fetchError, reload } = useFetch(
     selectedClient ? `/api/admin/sites?client_id=${selectedClient}` : '/api/admin/sites'
   );
@@ -582,7 +588,7 @@ function SitesTab() {
       {geofenceTarget && (
         <GeofenceDialog
           site={geofenceTarget}
-          clientGeofencingEnabled={clientGeofencingEnabled}
+          clientGeofencingEnabled={geofenceTarget.geofencing_feature_enabled !== false}
           onClose={() => setGeofenceTarget(null)}
           onSaved={() => { setGeofenceTarget(null); reload(); }}
         />
@@ -1132,6 +1138,7 @@ function SettingsTab() {
       setConfirmDialog(false);
     } catch (err) {
       setMsg({ type: 'error', text: err.response?.data?.message || err.message });
+      setConfirmDialog(false);
     } finally {
       setLoading(false);
     }

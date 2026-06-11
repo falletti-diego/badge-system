@@ -69,7 +69,12 @@ const SummaryPage = () => {
     setError(null);
     try {
       const res = await apiClient.get(`/api/presences/summary?month=${month}&year=${year}`);
-      setData(res.data.data);
+      const summary = res.data.data;
+      // Validate response structure
+      if (!summary || !Array.isArray(summary.employees) || !summary.totals) {
+        throw new Error('Invalid response structure from server');
+      }
+      setData(summary);
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Errore nel caricamento del riepilogo');
     } finally {

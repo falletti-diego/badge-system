@@ -394,9 +394,14 @@ const AdminEmployeeSchema = z.object({
       errorMap: () => ({ message: 'role must be employee or manager' }),
     }).default('employee'),
     site_id: z.string().uuid('site_id must be a valid UUID').optional().nullable(),
-    assigned_sites: z.array(z.string().uuid('each assigned_site must be a valid UUID')).default([]),
+    assigned_sites: z.array(z.string().uuid('each assigned_site must be a valid UUID'))
+      .min(1, 'assigned_sites must contain at least one site')
+      .default([]),
     password: z.string().min(8, 'password must be at least 8 characters').max(100).optional(),
-  }),
+  }).refine(
+    (data) => data.role === 'manager' || data.assigned_sites.length > 0,
+    { message: 'employees must have at least one assigned site', path: ['assigned_sites'] }
+  ),
 });
 
 // =====================================================
@@ -420,9 +425,13 @@ const AdminSettingsSchema = z.object({
   body: z.object({
     meal_voucher_hours: z.number()
       .min(0, 'meal_voucher_hours must be >= 0')
-      .max(24, 'meal_voucher_hours must be <= 24'),
+      .max(24, 'meal_voucher_hours must be <= 24')
+      .optional(),
     geofencing_feature_enabled: z.boolean().optional(),
-  }),
+  }).refine(
+    (data) => data.meal_voucher_hours !== undefined || data.geofencing_feature_enabled !== undefined,
+    { message: 'At least one setting must be provided' }
+  ),
 });
 
 // =====================================================
