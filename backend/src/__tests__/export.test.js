@@ -217,7 +217,7 @@ describe('escapeCsvField — formula injection via CSV content', () => {
 
     expect(res.status).toBe(200);
     // The = formula should be escaped with a leading single quote
-    expect(res.text).toContain("'=HYPERLINK");
+    expect(res.text).toContain('\'=HYPERLINK');
   });
 
   test('fields starting with + are escaped', async () => {
@@ -238,6 +238,6 @@ describe('escapeCsvField — formula injection via CSV content', () => {
       .set('Authorization', `Bearer ${adminToken()}`);
 
     expect(res.status).toBe(200);
-    expect(res.text).toContain("'+cmd");
+    expect(res.text).toContain('\'+cmd');
   });
 });

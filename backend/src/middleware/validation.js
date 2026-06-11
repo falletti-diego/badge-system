@@ -132,6 +132,7 @@ const GetExportCsvSchema = z.object({
     employee_id: z.preprocess(val => val === '' ? undefined : val, z.string().optional()),
     date_from: z.preprocess(val => val === '' ? undefined : val, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_from must be YYYY-MM-DD').optional()),
     date_to: z.preprocess(val => val === '' ? undefined : val, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_to must be YYYY-MM-DD').optional()),
+    format: z.preprocess(val => val === '' ? undefined : val, z.enum(['generic', 'zucchetti', 'teamsystem']).default('generic')),
   })
     .refine(
       (data) => {
@@ -380,6 +381,19 @@ const AdminEmployeeSchema = z.object({
   }),
 });
 
+// =====================================================
+// ADMIN — POST /api/admin/viewers
+// =====================================================
+
+const AdminViewerSchema = z.object({
+  body: z.object({
+    client_id: z.string().uuid('client_id must be a valid UUID'),
+    email: z.string().email('Invalid email format').max(100),
+    name: z.string().min(2, 'name must be at least 2 characters').max(100),
+    password: z.string().min(8, 'password must be at least 8 characters').max(100).optional(),
+  }),
+});
+
 module.exports = {
   LoginSchema,
   PostCheckinSchema,
@@ -395,5 +409,6 @@ module.exports = {
   AdminClientSchema,
   AdminSiteSchema,
   AdminEmployeeSchema,
+  AdminViewerSchema,
   createValidationMiddleware,
 };

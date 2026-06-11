@@ -367,6 +367,11 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
   const clientId = req.user.client_id;
   const correctorName = req.user.name || req.user.email || req.user.user_id;
 
+  if (req.user.role === 'viewer' || req.user.role === 'employee') {
+    const { ForbiddenError } = require('../utils/errors');
+    return next(new ForbiddenError('Only managers and admins can correct check-ins', 'FORBIDDEN_ROLE'));
+  }
+
   try {
     const result = await withTransaction(async (client) => {
       // 1. Find check-in and verify ownership via employee.client_id
