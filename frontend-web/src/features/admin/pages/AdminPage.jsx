@@ -68,6 +68,23 @@ function ConfirmDeleteDialog({ open, title, description, onConfirm, onCancel, lo
   );
 }
 
+function ConfirmSaveDialog({ open, title, description, onConfirm, onCancel, loading }) {
+  return (
+    <Dialog open={open} onClose={onCancel} maxWidth="xs" fullWidth>
+      <DialogTitle>{title}</DialogTitle>
+      <DialogContent>
+        <DialogContentText>{description}</DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onCancel} disabled={loading}>Annulla</Button>
+        <Button onClick={onConfirm} variant="contained" disabled={loading} sx={{ backgroundColor: '#1E3A5F' }}>
+          {loading ? <CircularProgress size={18} /> : 'Salva'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 function ResetPasswordDialog({ employee, onClose }) {
   const [loading, setLoading] = useState(false);
   const [newPwd, setNewPwd] = useState(null);
@@ -443,19 +460,25 @@ function GeofenceDialog({ site, clientGeofencingEnabled = true, onClose, onSaved
     geofence_radius_meters: site.geofence_radius_meters || 150,
   });
   const [saving, setSaving] = useState(false);
+  const [confirmSave, setConfirmSave] = useState(false);
   const [msg, setMsg] = useState(null);
 
-  const handleSave = async () => {
+  const handleSaveClick = () => {
+    const lat = form.latitude !== '' ? parseFloat(form.latitude) : null;
+    const lng = form.longitude !== '' ? parseFloat(form.longitude) : null;
+    if (form.geofence_enabled && (lat == null || lng == null || isNaN(lat) || isNaN(lng))) {
+      setMsg({ type: 'error', text: 'Inserisci latitudine e longitudine valide per attivare il geofencing.' });
+      return;
+    }
+    setConfirmSave(true);
+  };
+
+  const handleConfirmSave = async () => {
     setSaving(true);
     setMsg(null);
     try {
       const lat = form.latitude !== '' ? parseFloat(form.latitude) : null;
       const lng = form.longitude !== '' ? parseFloat(form.longitude) : null;
-      if (form.geofence_enabled && (lat == null || lng == null || isNaN(lat) || isNaN(lng))) {
-        setMsg({ type: 'error', text: 'Inserisci latitudine e longitudine valide per attivare il geofencing.' });
-        setSaving(false);
-        return;
-      }
       await apiClient.put(`/api/admin/sites/${site.id}`, {
         latitude: lat,
         longitude: lng,
@@ -463,9 +486,11 @@ function GeofenceDialog({ site, clientGeofencingEnabled = true, onClose, onSaved
         geofence_enabled: form.geofence_enabled,
       });
       setMsg({ type: 'success', text: 'Geofencing aggiornato.' });
+      setConfirmSave(false);
       onSaved();
     } catch (err) {
       setMsg({ type: 'error', text: err.response?.data?.message || err.message });
+      setConfirmSave(false);
     } finally {
       setSaving(false);
     }
@@ -544,10 +569,19 @@ function GeofenceDialog({ site, clientGeofencingEnabled = true, onClose, onSaved
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={saving}>Annulla</Button>
-        <Button variant="contained" onClick={handleSave} disabled={saving} sx={{ backgroundColor: '#1E3A5F' }}>
+        <Button variant="contained" onClick={handleSaveClick} disabled={saving} sx={{ backgroundColor: '#1E3A5F' }}>
           {saving ? <CircularProgress size={18} /> : 'Salva'}
         </Button>
       </DialogActions>
+
+      <ConfirmSaveDialog
+        open={confirmSave}
+        title="Salvare configurazione geofencing?"
+        description={`Stai per salvare la configurazione di geofencing per ${site.name}. ${form.geofence_enabled ? 'Il geofencing sarà attivo con raggio ' + form.geofence_radius_meters + 'm.' : 'Il geofencing sarà disattivo.'}`}
+        onConfirm={handleConfirmSave}
+        onCancel={() => setConfirmSave(false)}
+        loading={saving}
+      />
     </Dialog>
   );
 }
