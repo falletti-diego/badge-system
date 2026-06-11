@@ -822,6 +822,87 @@ router.get('/sites', async (req, res, next) => {
   }
 });
 
+// =====================================================
+// POST /api/admin/dpa-acknowledgement
+// Record when a client accepts the Data Processing Agreement (GDPR Art. 28)
+// Admin-only
+// =====================================================
+router.post('/dpa-acknowledgement', async (req, res, next) => {
+  try {
+    const { client_id } = req.user;
+    const { accepted_by, notes } = req.body;
+
+    // Validate inputs
+    if (!accepted_by || typeof accepted_by !== 'string' || accepted_by.trim().length < 2) {
+      return next(new ValidationError('accepted_by must be a non-empty string (name/title)'));
+    }
+
+    const dpaVersion = '2.0';
+
+    // Record DPA acknowledgement
+    const result = await pool.query(
+      `INSERT INTO dpa_acknowledgements (client_id, dpa_version, accepted_by, notes, created_by)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, client_id, dpa_version, accepted_at, accepted_by, notes`,
+      [client_id, dpaVersion, accepted_by.trim(), notes || null, req.user.id]
+    );
+
+    // Log audit trail
+    await logAudit(pool, {
+      action: 'dpa_acknowledged',
+      entity: 'dpa_acknowledgements',
+      entity_id: result.rows[0].id,
+      old_value: null,
+      new_value: JSON.stringify({
+        client_id,
+        dpa_version: dpaVersion,
+        accepted_by: accepted_by.trim(),
+        accepted_at: result.rows[0].accepted_at,
+      }),
+      user_id: req.user.id,
+      client_id,
+    }).catch((err) => logger.warn('Audit log DPA acknowledgement failed:', err));
+
+    res.status(201).json({
+      success: true,
+      message: 'DPA acknowledged successfully',
+      data: result.rows[0],
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =====================================================
+// GET /api/admin/dpa-acknowledgements
+// Retrieve DPA acknowledgement history for client (admin only)
+// =====================================================
+router.get('/dpa-acknowledgements', async (req, res, next) => {
+  try {
+    const { client_id } = req.user;
+
+    const result = await pool.query(
+      `SELECT id, client_id, dpa_version, accepted_at, accepted_by, notes
+       FROM dpa_acknowledgements
+       WHERE client_id = $1
+       ORDER BY accepted_at DESC
+       LIMIT 10`,
+      [client_id]
+    );
+
+    const latest = result.rows.length > 0 ? result.rows[0] : null;
+
+    res.json({
+      success: true,
+      data: result.rows,
+      latest_acknowledgement: latest,
+      returned: result.rows.length,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // --- Helpers ---
 
 function generateTempPassword() {

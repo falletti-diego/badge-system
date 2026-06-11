@@ -15,6 +15,9 @@ export const ENDPOINTS = {
   CHECKINS_POST: '/api/v1/checkins',
   CHECKINS_LIST: '/api/v1/checkins',
 
+  // Consent (GDPR Art. 7)
+  CONSENT_GPS_ACCEPTANCE: '/api/v1/consent/gps-acceptance',
+
   // Shifts
   SHIFTS_MY_SCHEDULE: '/api/v1/shifts/my-schedule',
 

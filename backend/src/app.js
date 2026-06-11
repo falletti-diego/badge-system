@@ -52,6 +52,7 @@ const notificationsRouter = require('./routes/notifications');
 const sitesRouter = require('./routes/sites');
 const adminRouter = require('./routes/admin');
 const presencesRouter = require('./routes/presences');
+const consentRouter = require('./routes/consent');
 
 // Initialize logger (singleton shared across all modules)
 const logger = require('./utils/logger');
@@ -163,6 +164,7 @@ v1Router.use('/notifications', notificationsRouter);
 v1Router.use('/sites', sitesRouter);
 v1Router.use('/admin', adminRouter);
 v1Router.use('/presences', presencesRouter);
+v1Router.use('/consent', consentRouter);
 app.use('/api/v1', v1Router);
 
 // Deprecated /api/ aliases — kept for backwards compatibility with mobile clients
