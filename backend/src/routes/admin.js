@@ -789,6 +789,7 @@ router.get('/sites', async (req, res, next) => {
     }
     const result = await pool.query(
       `SELECT s.id, s.client_id, s.name, s.location, s.qr_code_content, s.created_at,
+              s.latitude, s.longitude, s.geofence_radius_meters, s.geofence_enabled,
               c.name AS client_name
        FROM sites s
        JOIN clients c ON c.id = s.client_id
