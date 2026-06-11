@@ -130,12 +130,8 @@ describe('POST /api/checkins — ownership (S.32.1)', () => {
     const res = await postCheckin(EMP_A_TOKEN, EMP_B_ID);
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('CHECKIN_OWNERSHIP');
-    // L'INSERT non deve mai essere eseguito
-    const client = (await pool.connect.mock.results[0].value);
-    const insertCalls = client.query.mock.calls.filter(
-      ([sql]) => sql.trim().toUpperCase().startsWith('INSERT INTO CHECKINS')
-    );
-    expect(insertCalls).toHaveLength(0);
+    // Il guard deve rifiutare PRIMA di qualunque accesso al DB
+    expect(pool.connect).not.toHaveBeenCalled();
   });
 
   it('employee senza employee_id nel token → 403 CHECKIN_NO_EMPLOYEE_PROFILE', async () => {
