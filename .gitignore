@@ -142,3 +142,6 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 # Force Netlify rebuild mer  3 giu 2026 22:46:34 CEST
+
+# Local Netlify folder
+.netlify

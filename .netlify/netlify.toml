@@ -1,14 +1,20 @@
+redirectsOrigin = "config"
 plugins = []
-headers = []
-redirects = []
+
+[dev]
+command = "npm run dev"
+port = 5173.0
 
 [functions]
 
 [functions."*"]
 
 [build]
-publish = "/Users/diegofalletti/DATAXIOM/Dataxiom – Analisi & BI/badge"
-publishOrigin = "default"
+publish = "/Users/diegofalletti/DATAXIOM/Dataxiom – Analisi & BI/badge/frontend-web/dist"
+publishOrigin = "config"
+commandOrigin = "config"
+base = "/Users/diegofalletti/DATAXIOM/Dataxiom – Analisi & BI/badge/frontend-web"
+command = "npm run build"
 
 [build.environment]
 
@@ -23,3 +29,36 @@ publishOrigin = "default"
 [build.processing.js]
 
 [build.services]
+
+[[headers]]
+for = "/*"
+
+[headers.values]
+Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; connect-src 'self' https://api.dataxiom.it https://*.sentry.io; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+X-Content-Type-Options = "nosniff"
+X-Frame-Options = "DENY"
+X-XSS-Protection = "1; mode=block"
+
+[[redirects]]
+from = "/api/*"
+to = "https://api.dataxiom.it/api/:splat"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
