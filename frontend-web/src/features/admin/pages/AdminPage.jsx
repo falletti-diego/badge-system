@@ -1074,6 +1074,11 @@ function SettingsTab() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [msg, setMsg] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(false);
+
+  // Load client from JWT client_id
+  const user = authService.getUser();
+  const clientId = user?.client_id;
 
   useEffect(() => {
     let cancelled = false;
@@ -1081,7 +1086,7 @@ function SettingsTab() {
       try {
         const res = await apiClient.get('/api/admin/clients');
         if (!cancelled && res.data.data && res.data.data.length > 0) {
-          const client = res.data.data[0];
+          const client = res.data.data.find(c => c.id === clientId) || res.data.data[0];
           setMealHours(client.meal_voucher_hours !== undefined && client.meal_voucher_hours !== null
             ? String(client.meal_voucher_hours) : '5');
           setGeofencingEnabled(client.geofencing_feature_enabled !== false);
@@ -1093,12 +1098,17 @@ function SettingsTab() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [clientId]);
 
-  const handleSave = async () => {
+  const handleSave = () => {
+    setConfirmDialog(true);
+  };
+
+  const handleConfirmSave = async () => {
     const parsed = parseFloat(mealHours);
     if (isNaN(parsed) || parsed < 0 || parsed > 24) {
       setMsg({ type: 'error', text: 'Inserisci un valore tra 0 e 24 ore.' });
+      setConfirmDialog(false);
       return;
     }
     setLoading(true);
@@ -1109,6 +1119,7 @@ function SettingsTab() {
         geofencing_feature_enabled: geofencingEnabled,
       });
       setMsg({ type: 'success', text: 'Impostazioni salvate.' });
+      setConfirmDialog(false);
     } catch (err) {
       setMsg({ type: 'error', text: err.response?.data?.message || err.message });
     } finally {
@@ -1119,31 +1130,13 @@ function SettingsTab() {
   return (
     <Card>
       <CardContent>
-        <Typography variant="h6" fontWeight={700} mb={2}>Impostazioni Buoni Pasto</Typography>
-        <Typography variant="body2" color="text.secondary" mb={3}>
-          Il sistema assegna automaticamente un buono pasto per ogni giornata in cui il dipendente
-          lavora almeno il numero di ore configurato qui.
-        </Typography>
-
         {fetching ? (
           <CircularProgress size={24} />
         ) : (
           <>
-            <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 2, maxWidth: 400 }}>
-              <TextField
-                label="Ore minime per buono pasto"
-                type="number"
-                value={mealHours}
-                onChange={(e) => setMealHours(e.target.value)}
-                inputProps={{ min: 0, max: 24, step: 0.5 }}
-                size="small"
-                helperText="Es: 5 = buono pasto se ≥ 5h lavorate"
-                sx={{ flexGrow: 1 }}
-              />
-            </Box>
-
-            <Box sx={{ mt: 3, mb: 1 }}>
-              <Typography variant="h6" fontWeight={700} mb={1}>Geofencing</Typography>
+            {/* GEOFENCING SECTION (FIRST) */}
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" fontWeight={700} mb={1}>📍 Geofencing</Typography>
               <Typography variant="body2" color="text.secondary" mb={2}>
                 Se attivo, i dipendenti possono effettuare il check-in solo quando si trovano
                 fisicamente nelle vicinanze della sede (configurabile per ogni sede).
@@ -1166,6 +1159,28 @@ function SettingsTab() {
               )}
             </Box>
 
+            {/* MEAL VOUCHERS SECTION (SECOND) */}
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" fontWeight={700} mb={1}>📋 Buoni Pasto</Typography>
+              <Typography variant="body2" color="text.secondary" mb={3}>
+                Il sistema assegna automaticamente un buono pasto per ogni giornata in cui il dipendente
+                lavora almeno il numero di ore configurato qui.
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 2, maxWidth: 400 }}>
+                <TextField
+                  label="Ore minime per buono pasto"
+                  type="number"
+                  value={mealHours}
+                  onChange={(e) => setMealHours(e.target.value)}
+                  inputProps={{ min: 0, max: 24, step: 0.5 }}
+                  size="small"
+                  helperText="Es: 5 = buono pasto se ≥ 5h lavorate"
+                  sx={{ flexGrow: 1 }}
+                />
+              </Box>
+            </Box>
+
+            {/* SAVE BUTTON */}
             <Button
               variant="contained"
               onClick={handleSave}
@@ -1178,6 +1193,16 @@ function SettingsTab() {
         )}
 
         {msg && <Alert severity={msg.type} sx={{ mt: 2, maxWidth: 500 }}>{msg.text}</Alert>}
+
+        {/* CONFIRMATION DIALOG */}
+        <ConfirmDeleteDialog
+          open={confirmDialog}
+          title="Conferma salvataggio"
+          description="Vuoi salvare le modifiche?"
+          onConfirm={handleConfirmSave}
+          onCancel={() => setConfirmDialog(false)}
+          loading={loading}
+        />
       </CardContent>
     </Card>
   );
