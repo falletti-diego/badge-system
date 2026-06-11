@@ -123,4 +123,58 @@ router.get('/my-consents', async (req, res, next) => {
   }
 });
 
+// =====================================================
+// GET /api/consent/admin/employee-consents
+// Retrieve GPS consent status for all employees (admin view)
+// =====================================================
+router.get('/admin/employee-consents', async (req, res, next) => {
+  try {
+    const { client_id, role } = req.user;
+
+    // Only admin can view all employee consents
+    if (role !== 'admin') {
+      return next(new ForbiddenError('Admin access required'));
+    }
+
+    const result = await pool.query(
+      `SELECT
+         e.id, e.email, e.name, e.gps_consent_given, e.gps_consent_given_at,
+         (SELECT consent_given FROM employee_consent_log
+          WHERE employee_id = e.id AND client_id = e.client_id AND consent_type = 'gps'
+          ORDER BY accepted_at DESC LIMIT 1) as latest_gps_consent,
+         (SELECT privacy_policy_version FROM employee_consent_log
+          WHERE employee_id = e.id AND client_id = e.client_id AND consent_type = 'gps'
+          ORDER BY accepted_at DESC LIMIT 1) as privacy_policy_version,
+         (SELECT accepted_at FROM employee_consent_log
+          WHERE employee_id = e.id AND client_id = e.client_id AND consent_type = 'gps'
+          ORDER BY accepted_at DESC LIMIT 1) as consent_accepted_at
+       FROM employees e
+       WHERE e.client_id = $1 AND e.role = 'employee'
+       ORDER BY e.gps_consent_given DESC, e.name ASC`,
+      [client_id]
+    );
+
+    // Summary statistics
+    const totalEmployees = result.rows.length;
+    const consentedEmployees = result.rows.filter(r => r.gps_consent_given).length;
+    const pendingEmployees = totalEmployees - consentedEmployees;
+
+    res.json({
+      success: true,
+      data: result.rows,
+      summary: {
+        total_employees: totalEmployees,
+        consented: consentedEmployees,
+        pending: pendingEmployees,
+        consent_rate_percent: totalEmployees > 0
+          ? Math.round((consentedEmployees / totalEmployees) * 100)
+          : 0,
+      },
+      returned: result.rows.length,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
