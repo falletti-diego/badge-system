@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-11 (Session 28: FASE 8 ✅ — Portale Commercialista: viewer role, CSV Zucchetti+TeamSystem, admin viewers, 161/161 test)  
+**Last Updated:** 2026-06-11 (Session 29: FASE 9 ✅ — Ore Lavorate & Buoni Pasto: summary endpoint, SummaryPage, Ore column, Settings tab, 190/190 test)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -302,26 +302,26 @@ Go-live with first paying customer (pilota).
 
 ---
 
-### FASE 9 — Ore Lavorate & Buoni Pasto (~11h)
+### FASE 9 — Ore Lavorate & Buoni Pasto (~11h) ✅
 
 *(Migration 008 già eseguita in FASE 8 — contiene anche `meal_voucher_hours`)*
 
 **Backend — calcolo ore:**
-- [ ] **9.1** `src/utils/hours.js` (nuovo): `calculateDailyHours(checkins)` — accoppia IN con OUT successivo, somma coppie nello stesso giorno, gestisce presenza aperta (IN senza OUT)
-- [ ] **9.2** `src/routes/presences.js` (nuovo file) oppure nuovo endpoint in `checkins.js`: `GET /api/presences/summary?month=6&year=2026` — risposta per dipendente: `{ ore_totali, ore_ordinarie, ore_straordinarie, buoni_pasto, giorni_presenti, presenze_aperte }`. Legge `meal_voucher_hours` da `clients` table per il calcolo buoni pasto
-- [ ] **9.3** RBAC: admin → tutti i dipendenti; manager → solo dipendenti della sua sede; viewer → tutti (read-only)
-- [ ] **9.4** `src/routes/admin.js` o nuovo endpoint: `PUT /api/admin/settings` — aggiorna `meal_voucher_hours` per il client dell'admin loggato
+- [x] **9.1** `src/utils/hours.js` (nuovo): `calculateDailyHours(checkins)` + `aggregateMonthly()` — greedy IN/OUT pairing, lunch-break sum, open presence detection. Commit: 3e792a0
+- [x] **9.2** `src/routes/presences.js` (nuovo): `GET /api/presences/summary?month&year` — per-employee: `{ ore_totali, ore_ordinarie, ore_straordinarie, buoni_pasto, giorni_presenti, presenze_aperte }`. Legge `meal_voucher_hours` da clients
+- [x] **9.3** RBAC: admin+viewer → tutti i dipendenti; manager → site-scoped; employee → 403
+- [x] **9.4** `PUT /api/admin/settings` in `admin.js` — aggiorna `meal_voucher_hours` per il client dell'admin loggato
 
 **Frontend — Riepilogo Mensile:**
-- [ ] **9.5** `frontend-web/src/pages/SummaryPage.jsx` (nuovo): tabella mensile con colonne Nome, Matricola, Giorni Presenti, Ore Totali, Ore Ord, Ore Straord, Buoni Pasto, ⚠️ Presenze Aperte. Navigazione mese con frecce. Export CSV del riepilogo
-- [ ] **9.6** `frontend-web/src/App.jsx`: aggiungere route `/summary` (visibile a admin, manager, viewer)
-- [ ] **9.7** `frontend-web/src/components/Navbar.jsx`: aggiungere link "📊 Riepilogo" nella nav
-- [ ] **9.8** `frontend-web/src/pages/DashboardPage.jsx`: aggiungere colonna "Ore" nella tabella presenze (calcolata accoppiando IN/OUT — può essere client-side su dati già caricati)
-- [ ] **9.9** `frontend-web/src/pages/AdminPage.jsx`: aggiungere sezione "Impostazioni" con campo "Ore minime per buono pasto" (default 5) + pulsante Salva
+- [x] **9.5** `frontend-web/src/pages/SummaryPage.jsx`: tabella mensile con colonne Nome, Matricola, Giorni, Ore Tot, Ore Ord, Ore Straord, Buoni Pasto, ⚠️ Presenze Aperte + navigazione mese + export CSV
+- [x] **9.6** `frontend-web/src/App.jsx`: route `/summary` (admin, manager, viewer via requiredRoles)
+- [x] **9.7** `DashboardPage.jsx`: link "📊 Riepilogo" nel navbar (admin, manager, viewer)
+- [x] **9.8** `PresencesTable.jsx`: colonna "Ore" client-side (IN/OUT pairing sulla pagina caricata, client-side)
+- [x] **9.9** `AdminPage.jsx`: tab "Impostazioni" con campo `meal_voucher_hours` + pulsante Salva
 
 **Test:**
-- [ ] **9.10** `backend/src/__tests__/hours.test.js`: unit test `calculateDailyHours` — coppia singola, coppie multiple (pausa pranzo), presenza aperta, OUT senza IN, giorno vuoto
-- [ ] **9.11** `backend/src/__tests__/presences-summary.test.js`: RBAC, calcolo buoni pasto (5h soglia), ore straordinarie, mese senza dati
+- [x] **9.10** `hours.test.js` ✅ — 17 test: coppia singola, pausa pranzo, presenza aperta, OUT senza IN, multi-day, multi-employee, aggregateMonthly (overtime, meal voucher threshold)
+- [x] **9.11** `presences-summary.test.js` ✅ — 12 test: RBAC, meal voucher calc, ore straordinarie, mese vuoto, defaults. 190/190 totale
 
 ---
 
@@ -459,6 +459,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-10 | Test Coverage C.6.2+C.6.3+C.6.4 (Session 27) | C.6.2 ✅, C.6.3 ✅, C.6.4 ✅ | shifts.test.js: 23 test (GET my-schedule, GET/:siteId, GET/:siteId/export, POST/:siteId) — shifts.js coverage 11%→98%. export.test.js: 11 test (RBAC, success paths, formula injection) — export.js coverage 14%→89%. Root cause fix: `jest.clearAllMocks()` non svuota coda `mockResolvedValueOnce` — 6 valori residui dal test precedente (`shifts_data: {}` bloccato da Zod) contaminano il test successivo e trasformano un 400 in 500. Fix: test usa `shifts_data` non-vuoto e consuma tutti i mock. 135/135 pass. Coverage 47.54%→60.42% ✅ |
 | 2026-06-10 | C.4.2 + C.7 + C.8 (Session 27 cont.) | C.4.2 ✅, C.7 ✅, C.8 ✅ | C.4.2: token refresh verificato su iPhone — login → 16 min → scan QR → check-in OK, no 401. C.7: `docs/sla.md` creato (uptime 99%, severity SLA, manutenzione dom 02-04 UTC, GDPR cancellazione 30gg). C.8: CloudWatch metric filter `BadgeAPISuccessfulCheckins` + alarm `badge-zero-checkins-4h` (4×1h periodi consecutivi a 0 → email). Sentry source maps: `sentry.properties` creato, `SENTRY_DISABLE_AUTO_UPLOAD` rimosso da eas.json. TestFlight reminder: scadenza 2026-09-08, rinnovo entro 2026-08-25. Azione richiesta: `eas secret:create SENTRY_AUTH_TOKEN`. |
 | 2026-06-11 | FASE 8 Portale Commercialista (Session 28) | 8.1–8.12 ✅ | viewer role (RBAC 4°): read presenze+export, blocco correzioni+admin. export.js: format=zucchetti (groupZucchetti, OreOrdinarie/Straordinarie, H,MM) + format=teamsystem (per-timbratura, tipo E/U). Migration 009 su RDS (meal_voucher_hours, viewer constraint). Admin viewers endpoint. ExportButton dropdown + AdminPage tab Commercialisti. DISABLE_AUTH=false pattern nei nuovi test. 161/161 ✅ lint 0 errori. Deploy Netlify ✅, deploy EC2 via CI/CD. Commit: f9c3080 |
+| 2026-06-11 | FASE 9 Ore Lavorate & Buoni Pasto (Session 29) | 9.1–9.11 ✅ | hours.js: calculateDailyHours (greedy IN/OUT pairing, lunch-break sum, open presence) + aggregateMonthly (ore ord/straord, buoni pasto, giorni). presences.js: GET /api/presences/summary (RBAC: employee→403, manager→site-scoped, admin+viewer→all, meal_voucher_hours da clients). admin.js: PUT /api/admin/settings. SummaryPage.jsx: tabella mensile + navigazione mese + export CSV. PresencesTable: colonna Ore client-side. AdminPage: tab Impostazioni. App.jsx: route /summary. 190/190 test ✅ lint 0 errori. Commit: 3e792a0 |
 
 ---
 
