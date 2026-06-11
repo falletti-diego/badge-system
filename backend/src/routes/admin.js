@@ -746,13 +746,23 @@ router.get('/viewers', async (req, res, next) => {
 router.put('/settings', createValidationMiddleware(AdminSettingsSchema), async (req, res, next) => {
   if (req.user.role !== 'admin') return next(new ForbiddenError('Only admins can update settings', 'FORBIDDEN_ROLE'));
 
-  const { meal_voucher_hours } = req.validated.body;
+  const { meal_voucher_hours, geofencing_feature_enabled } = req.validated.body;
   const clientId = req.user.client_id;
 
   try {
+    const setClauses = ['meal_voucher_hours = $1'];
+    const params = [meal_voucher_hours];
+
+    if (geofencing_feature_enabled !== undefined) {
+      params.push(geofencing_feature_enabled);
+      setClauses.push(`geofencing_feature_enabled = $${params.length}`);
+    }
+
+    params.push(clientId);
     const result = await pool.query(
-      'UPDATE clients SET meal_voucher_hours = $1 WHERE id = $2::uuid RETURNING id, meal_voucher_hours',
-      [meal_voucher_hours, clientId]
+      `UPDATE clients SET ${setClauses.join(', ')} WHERE id = $${params.length}::uuid
+       RETURNING id, meal_voucher_hours, geofencing_feature_enabled`,
+      params
     );
 
     if (result.rowCount === 0) {
@@ -764,7 +774,7 @@ router.put('/settings', createValidationMiddleware(AdminSettingsSchema), async (
       entity: 'client',
       entityId: clientId,
       oldValue: null,
-      newValue: { meal_voucher_hours },
+      newValue: { meal_voucher_hours, geofencing_feature_enabled },
       userId: req.user.user_id,
     }).catch(() => {});
 
@@ -790,7 +800,7 @@ router.get('/sites', async (req, res, next) => {
     const result = await pool.query(
       `SELECT s.id, s.client_id, s.name, s.location, s.qr_code_content, s.created_at,
               s.latitude, s.longitude, s.geofence_radius_meters, s.geofence_enabled,
-              c.name AS client_name
+              c.name AS client_name, c.geofencing_feature_enabled
        FROM sites s
        JOIN clients c ON c.id = s.client_id
        ${where}

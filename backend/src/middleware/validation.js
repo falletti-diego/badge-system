@@ -421,6 +421,7 @@ const AdminSettingsSchema = z.object({
     meal_voucher_hours: z.number()
       .min(0, 'meal_voucher_hours must be >= 0')
       .max(24, 'meal_voucher_hours must be <= 24'),
+    geofencing_feature_enabled: z.boolean().optional(),
   }),
 });
 

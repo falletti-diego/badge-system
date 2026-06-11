@@ -519,14 +519,26 @@ function SitesTab() {
                         </Stack>
                       </TableCell>
                       <TableCell>
-                        <Tooltip title="Configura geofencing">
-                          <IconButton size="small" onClick={() => setGeofenceTarget(s)}
-                            sx={{ color: s.geofence_enabled ? '#2D7049' : '#9E9E9E' }}>
-                            <MyLocationIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        {s.geofence_enabled && (
-                          <Chip label={`${s.geofence_radius_meters}m`} size="small" color="success" variant="outlined" />
+                        {s.geofencing_feature_enabled ? (
+                          <>
+                            <Tooltip title="Configura geofencing">
+                              <IconButton size="small" onClick={() => setGeofenceTarget(s)}
+                                sx={{ color: s.geofence_enabled ? '#2D7049' : '#9E9E9E' }}>
+                                <MyLocationIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            {s.geofence_enabled && (
+                              <Chip label={`${s.geofence_radius_meters}m`} size="small" color="success" variant="outlined" />
+                            )}
+                          </>
+                        ) : (
+                          <Tooltip title="Geofencing disabilitato nelle impostazioni">
+                            <span>
+                              <IconButton size="small" disabled>
+                                <MyLocationIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
                         )}
                       </TableCell>
                       <TableCell>{new Date(s.created_at).toLocaleDateString('it-IT')}</TableCell>
@@ -1058,6 +1070,7 @@ function ViewersTab() {
 
 function SettingsTab() {
   const [mealHours, setMealHours] = useState('');
+  const [geofencingEnabled, setGeofencingEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [msg, setMsg] = useState(null);
@@ -1068,8 +1081,10 @@ function SettingsTab() {
       try {
         const res = await apiClient.get('/api/admin/clients');
         if (!cancelled && res.data.data && res.data.data.length > 0) {
-          const val = res.data.data[0].meal_voucher_hours;
-          setMealHours(val !== undefined && val !== null ? String(val) : '5');
+          const client = res.data.data[0];
+          setMealHours(client.meal_voucher_hours !== undefined && client.meal_voucher_hours !== null
+            ? String(client.meal_voucher_hours) : '5');
+          setGeofencingEnabled(client.geofencing_feature_enabled !== false);
         }
       } catch {
         // ignore — user can still type in the field
@@ -1089,7 +1104,10 @@ function SettingsTab() {
     setLoading(true);
     setMsg(null);
     try {
-      await apiClient.put('/api/admin/settings', { meal_voucher_hours: parsed });
+      await apiClient.put('/api/admin/settings', {
+        meal_voucher_hours: parsed,
+        geofencing_feature_enabled: geofencingEnabled,
+      });
       setMsg({ type: 'success', text: 'Impostazioni salvate.' });
     } catch (err) {
       setMsg({ type: 'error', text: err.response?.data?.message || err.message });
@@ -1110,29 +1128,56 @@ function SettingsTab() {
         {fetching ? (
           <CircularProgress size={24} />
         ) : (
-          <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 2, maxWidth: 400 }}>
-            <TextField
-              label="Ore minime per buono pasto"
-              type="number"
-              value={mealHours}
-              onChange={(e) => setMealHours(e.target.value)}
-              inputProps={{ min: 0, max: 24, step: 0.5 }}
-              size="small"
-              helperText="Es: 5 = buono pasto se ≥ 5h lavorate"
-              sx={{ flexGrow: 1 }}
-            />
+          <>
+            <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 2, maxWidth: 400 }}>
+              <TextField
+                label="Ore minime per buono pasto"
+                type="number"
+                value={mealHours}
+                onChange={(e) => setMealHours(e.target.value)}
+                inputProps={{ min: 0, max: 24, step: 0.5 }}
+                size="small"
+                helperText="Es: 5 = buono pasto se ≥ 5h lavorate"
+                sx={{ flexGrow: 1 }}
+              />
+            </Box>
+
+            <Box sx={{ mt: 3, mb: 1 }}>
+              <Typography variant="h6" fontWeight={700} mb={1}>Geofencing</Typography>
+              <Typography variant="body2" color="text.secondary" mb={2}>
+                Se attivo, i dipendenti possono effettuare il check-in solo quando si trovano
+                fisicamente nelle vicinanze della sede (configurabile per ogni sede).
+                Se disattivato, il controllo GPS viene ignorato per tutte le sedi.
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={geofencingEnabled}
+                    onChange={(e) => setGeofencingEnabled(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label={geofencingEnabled ? 'Geofencing attivo' : 'Geofencing disattivato'}
+              />
+              {!geofencingEnabled && (
+                <Alert severity="info" sx={{ mt: 1, maxWidth: 500 }}>
+                  Il controllo GPS è disabilitato. I dipendenti possono fare check-in da qualsiasi posizione.
+                </Alert>
+              )}
+            </Box>
+
             <Button
               variant="contained"
               onClick={handleSave}
               disabled={loading}
-              sx={{ backgroundColor: '#1E3A5F', mb: '20px' }}
+              sx={{ backgroundColor: '#1E3A5F', mt: 2 }}
             >
               {loading ? <CircularProgress size={18} /> : 'Salva'}
             </Button>
-          </Box>
+          </>
         )}
 
-        {msg && <Alert severity={msg.type} sx={{ mt: 2, maxWidth: 400 }}>{msg.text}</Alert>}
+        {msg && <Alert severity={msg.type} sx={{ mt: 2, maxWidth: 500 }}>{msg.text}</Alert>}
       </CardContent>
     </Card>
   );

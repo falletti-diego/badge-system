@@ -259,4 +259,38 @@ describe('PUT /api/admin/settings', () => {
 
     expect(res.status).toBe(401);
   });
+
+  it('admin disables geofencing_feature_enabled → 200', async () => {
+    pool.query
+      .mockResolvedValueOnce({
+        rowCount: 1,
+        rows: [{ id: CLIENT_ID, meal_voucher_hours: '5', geofencing_feature_enabled: false }],
+      })
+      .mockResolvedValueOnce({ rows: [] }); // audit log
+
+    const res = await request(app)
+      .put('/api/v1/admin/settings')
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+      .send({ meal_voucher_hours: 5.0, geofencing_feature_enabled: false });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.geofencing_feature_enabled).toBe(false);
+  });
+
+  it('admin enables geofencing_feature_enabled → 200', async () => {
+    pool.query
+      .mockResolvedValueOnce({
+        rowCount: 1,
+        rows: [{ id: CLIENT_ID, meal_voucher_hours: '5', geofencing_feature_enabled: true }],
+      })
+      .mockResolvedValueOnce({ rows: [] }); // audit log
+
+    const res = await request(app)
+      .put('/api/v1/admin/settings')
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+      .send({ meal_voucher_hours: 5.0, geofencing_feature_enabled: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.geofencing_feature_enabled).toBe(true);
+  });
 });

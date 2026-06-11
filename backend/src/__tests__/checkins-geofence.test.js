@@ -68,10 +68,11 @@ const OUTSIDE_LNG = SITE_LNG;
 //
 // Uses SQL-based dispatch so call order (BEGIN/COMMIT/ROLLBACK) doesn't matter.
 
-function makeClientQuery({ geofenceEnabled = true, assignmentHits = true, checkinRow }) {
+function makeClientQuery({ geofenceEnabled = true, geofencingFeatureEnabled = true, assignmentHits = true, checkinRow }) {
   const siteRow = {
     id: SITE_ID,
     geofence_enabled: geofenceEnabled,
+    geofencing_feature_enabled: geofencingFeatureEnabled,
     latitude: geofenceEnabled ? SITE_LAT : null,
     longitude: geofenceEnabled ? SITE_LNG : null,
     geofence_radius_meters: SITE_RADIUS,
@@ -85,7 +86,8 @@ function makeClientQuery({ geofenceEnabled = true, assignmentHits = true, checki
     if (s.includes('FROM EMPLOYEES WHERE ID') && s.includes('AND CLIENT_ID')) {
       return Promise.resolve({ rows: [{ id: EMP_ID, client_id: CLIENT_ID }] });
     }
-    if (s.includes('FROM SITES WHERE')) {
+    // matches both old "FROM SITES WHERE" and new "FROM SITES S JOIN ... WHERE"
+    if (s.includes('FROM SITES')) {
       return Promise.resolve({ rows: [siteRow] });
     }
     if (s.includes('ANY(ASSIGNED_SITES)')) {
@@ -280,5 +282,49 @@ describe('PUT /api/admin/sites/:id', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.geofence_enabled).toBe(false);
+  });
+});
+
+// ─── POST /api/checkins — geofencing_feature_enabled = false ─────────────────
+// When the client disables geofencing at org level, site-level geofence_enabled
+// is ignored and check-in always succeeds regardless of GPS.
+
+describe('POST /api/checkins — client geofencing feature disabled', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Restore redis mock — resetAllMocks() in the PUT describe above wipes it
+    require('../db/redis').deleteCacheByPattern.mockResolvedValue(undefined);
+  });
+
+  it('site has geofence ON but client feature OFF → check-in without GPS → 201', async () => {
+    // geofencingFeatureEnabled=false means client disabled the feature entirely;
+    // even though geofenceEnabled=true on the site, the check is skipped.
+    const checkinRow = { id: 'ci-feat-1', employee_id: EMP_ID, site_id: SITE_ID, type: 'IN', timestamp: new Date(), created_at: new Date() };
+    pool.connect.mockResolvedValue({
+      query: makeClientQuery({ geofenceEnabled: true, geofencingFeatureEnabled: false, checkinRow }),
+      release: jest.fn(),
+    });
+
+    const res = await request(app)
+      .post('/api/v1/checkins')
+      .set('Authorization', `Bearer ${EMP_TOKEN}`)
+      .send({ employee_id: EMP_ID, site_id: SITE_ID, type: 'IN' }); // no GPS
+
+    expect(res.status).toBe(201);
+  });
+
+  it('site has geofence ON, client feature ON, no GPS → 400 (original behavior)', async () => {
+    pool.connect.mockResolvedValue({
+      query: makeClientQuery({ geofenceEnabled: true, geofencingFeatureEnabled: true, checkinRow: null }),
+      release: jest.fn(),
+    });
+
+    const res = await request(app)
+      .post('/api/v1/checkins')
+      .set('Authorization', `Bearer ${EMP_TOKEN}`)
+      .send({ employee_id: EMP_ID, site_id: SITE_ID, type: 'IN' }); // no GPS
+
+    expect(res.status).toBe(400);
+    expect(res.body.details?.code).toBe('GEOFENCE_COORDINATES_REQUIRED');
   });
 });

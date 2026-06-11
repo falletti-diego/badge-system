@@ -39,10 +39,13 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
         throw new NotFoundError('Employee not found or not assigned to your organization', 'EMPLOYEE_NOT_FOUND');
       }
 
-      // 2. Verify site exists and fetch geofence settings
+      // 2. Verify site exists and fetch geofence settings (JOIN clients for feature flag)
       const siteResult = await client.query(
-        `SELECT id, geofence_enabled, latitude, longitude, geofence_radius_meters
-         FROM sites WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1`,
+        `SELECT s.id, s.geofence_enabled, s.latitude, s.longitude, s.geofence_radius_meters,
+                c.geofencing_feature_enabled
+         FROM sites s
+         JOIN clients c ON c.id = s.client_id
+         WHERE s.id = $1::uuid AND s.client_id = $2::uuid LIMIT 1`,
         [site_id, clientId]
       );
 
@@ -64,10 +67,10 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
         });
       }
 
-      // 3.5 Geofence check
+      // 3.5 Geofence check — skip entirely if client has disabled the feature
       const site = siteResult.rows[0];
       const { latitude: checkinLat, longitude: checkinLng } = req.validated.body;
-      if (site.geofence_enabled) {
+      if (site.geofencing_feature_enabled && site.geofence_enabled) {
         if (checkinLat == null || checkinLng == null) {
           throw new ValidationError('GPS coordinates required for check-in at this site', {
             code: 'GEOFENCE_COORDINATES_REQUIRED',
