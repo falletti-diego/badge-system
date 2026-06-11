@@ -444,6 +444,7 @@ router.get('/clients', async (req, res, next) => {
   try {
     const result = await pool.query(
       `SELECT c.id, c.name, c.email, c.plan, c.created_at,
+              c.meal_voucher_hours, c.geofencing_feature_enabled,
               COUNT(DISTINCT s.id) AS site_count,
               COUNT(DISTINCT e.id) AS employee_count
        FROM clients c
