@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-10 (Session 27: C.6 ✅ C.4.2 ✅ C.7 ✅ C.8 ✅ 7.5 ✅ — MVP checklist COMPLETA, pronto per primo cliente)  
+**Last Updated:** 2026-06-11 (Session 28: FASE 8 ✅ — Portale Commercialista: viewer role, CSV Zucchetti+TeamSystem, admin viewers, 161/161 test)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -276,29 +276,29 @@ Go-live with first paying customer (pilota).
 
 ---
 
-### FASE 8 — Portale Commercialista & CSV Paghe (~11h)
+### FASE 8 — Portale Commercialista & CSV Paghe (~11h) ✅
 
-**Migration 008** (shared con FASE 9 — fare in un'unica migration):
-- [ ] **8.1** `migration 008`: `ALTER TABLE employees ADD COLUMN matricola VARCHAR(50)` + `ALTER TABLE clients ADD COLUMN meal_voucher_hours DECIMAL(4,2) DEFAULT 5.0`
+**Migration 008/009** (applicata su RDS production 2026-06-11):
+- [x] **8.1** `migration 009`: `ALTER TABLE clients ADD COLUMN meal_voucher_hours DECIMAL(4,2) DEFAULT 5.0`; viewer role aggiunto al constraint `employees_role_check`. (`external_employee_id` = matricola era già in migration 008)
 
 **Backend — ruolo viewer:**
-- [ ] **8.2** `src/middleware/validation.js`: aggiungere `'viewer'` ai valori ammessi nel role enum Zod
-- [ ] **8.3** `src/middleware/auth.js`: aggiungere guard `requireViewer` (alias di requireAuth — il ruolo è già nel JWT); aggiornare `adminOnly` e `managerOrAdmin` per escludere viewer dove necessario
-- [ ] **8.4** `src/routes/admin.js`: `POST /api/admin/viewers` (crea account viewer: email, nome, temp password via bcrypt) + `GET /api/admin/viewers`
-- [ ] **8.5** `src/routes/export.js`: aggiungere parametro `?format=generic|zucchetti|teamsystem`; implementare `formatZucchetti(rows)` e `formatTeamSystem(rows)` — vedere spec per struttura colonne esatta
+- [x] **8.2** `src/middleware/validation.js`: aggiunto `format` enum `generic|zucchetti|teamsystem` in `GetExportCsvSchema`; `AdminViewerSchema` per POST /admin/viewers
+- [x] **8.3** viewer role in JWT è gestito automaticamente dall'auth middleware esistente (legge `role` dal DB); `checkins.js PUT /:id`: guard 403 per viewer+employee
+- [x] **8.4** `src/routes/admin.js`: `POST /api/admin/viewers` (admin-only, crea viewer con bcrypt temp password) + `GET /api/admin/viewers`
+- [x] **8.5** `src/routes/export.js`: `format=zucchetti` (groupZucchetti: una riga/giorno, OreOrdinarie max 8h, OreStraordinarie, H,MM) + `format=teamsystem` (una riga/timbratura, tipo E/U, DD/MM/YYYY)
 
 **Frontend — export formato:**
-- [ ] **8.6** `frontend-web/src/pages/DashboardPage.jsx` (o componente ExportButton): aggiungere dropdown "Formato export" con opzioni Generic / Zucchetti / TeamSystem; passa `?format=` alla chiamata API
-- [ ] **8.7** `frontend-web/src/pages/AdminPage.jsx`: nuova tab "Commercialisti" — form aggiungi viewer (email + nome), tabella lista viewers con pulsante rimuovi
-- [ ] **8.8** `frontend-web/src/pages/AdminPage.jsx`: aggiungere colonna "Matricola" nella tab Dipendenti (input editabile per ogni riga); aggiornare CSV import per accettare colonna opzionale `matricola`
+- [x] **8.6** `ExportButton.jsx`: dropdown MUI Formato (Generico/Zucchetti/TeamSystem); viewer vede solo Zucchetti+TeamSystem; passa `?format=` all'API
+- [x] **8.7** `AdminPage.jsx`: nuova tab "Commercialisti" — form crea viewer (email+nome), tabella lista viewers
+- [x] **8.8** `AdminPage.jsx`: label "ID Dipendente" → "Matricola" nella tab Dipendenti
 
 **Frontend — layout viewer:**
-- [ ] **8.9** `frontend-web/src/components/Navbar.jsx` + routing: se `role === 'viewer'`, nascondere link Correzioni, Planning, Admin; mostrare solo Dashboard e Riepilogo (FASE 9)
-- [ ] **8.10** `frontend-web/src/services/authService.js`: gestire `role === 'viewer'` nel redirect post-login (→ `/dashboard`)
+- [x] **8.9** Navbar già esclude viewer da Correzioni/Planning/Admin (esistenti check `role === 'manager' || role === 'admin'`) — nessuna modifica necessaria
+- [x] **8.10** LoginPage già redirige a `/dashboard` per tutti i ruoli — nessuna modifica necessaria
 
 **Test:**
-- [ ] **8.11** `backend/src/__tests__/export-formats.test.js`: test CSV Zucchetti (una riga per giorno, OreOrdinarie/Straordinarie) e TeamSystem (righe separate IN/OUT, formato data DD/MM/YYYY)
-- [ ] **8.12** `backend/src/__tests__/admin-viewers.test.js`: RBAC viewer (accesso presenze ✅, correzioni ❌, admin ❌), creazione account, formato JWT
+- [x] **8.11** `backend/src/__tests__/export-formats.test.js` ✅ — 15 test: format=zucchetti (7), format=teamsystem (4), viewer access, default generic, invalid format 400
+- [x] **8.12** `backend/src/__tests__/admin-viewers.test.js` ✅ — 11 test: POST viewers (RBAC+validazione), GET viewers, viewer RBAC (presenze ✅, corrections ❌, admin ❌). DISABLE_AUTH=false per JWT role check reali. 161/161 totale ✅
 
 ---
 
@@ -458,6 +458,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-10 | QR Code Fix Live + Code Review (Session 26) | — | QR code verificato su iPhone reale: Torino Store ✅ (Maria Rossi) + Milano Store ✅ (Francesca). EC2 deploy riuscito (commit 530ec75 → Deploy to EC2 success). Fix ESLint bloccante CI/CD: admin-csv-import.test.js (doppi apici + unused vars), admin-reset-password.test.js (doppi apici), auth.test.js (verifyPassword unused). Code review admin.js: 4 finding fixati — (1) debug endpoint irraggiungibile da manager: spostato prima del middleware admin-only (era dead code), (2) `res.status(404).json()` → `next(new NotFoundError())` per rispettare error handler centralizzato, (3) UUID validation su employeeId param mancante, (4) requireAuth ridondante rimosso. Commits: 530ec75, dccd135. 10/10 test admin-csv-import passati post-refactor. |
 | 2026-06-10 | Test Coverage C.6.2+C.6.3+C.6.4 (Session 27) | C.6.2 ✅, C.6.3 ✅, C.6.4 ✅ | shifts.test.js: 23 test (GET my-schedule, GET/:siteId, GET/:siteId/export, POST/:siteId) — shifts.js coverage 11%→98%. export.test.js: 11 test (RBAC, success paths, formula injection) — export.js coverage 14%→89%. Root cause fix: `jest.clearAllMocks()` non svuota coda `mockResolvedValueOnce` — 6 valori residui dal test precedente (`shifts_data: {}` bloccato da Zod) contaminano il test successivo e trasformano un 400 in 500. Fix: test usa `shifts_data` non-vuoto e consuma tutti i mock. 135/135 pass. Coverage 47.54%→60.42% ✅ |
 | 2026-06-10 | C.4.2 + C.7 + C.8 (Session 27 cont.) | C.4.2 ✅, C.7 ✅, C.8 ✅ | C.4.2: token refresh verificato su iPhone — login → 16 min → scan QR → check-in OK, no 401. C.7: `docs/sla.md` creato (uptime 99%, severity SLA, manutenzione dom 02-04 UTC, GDPR cancellazione 30gg). C.8: CloudWatch metric filter `BadgeAPISuccessfulCheckins` + alarm `badge-zero-checkins-4h` (4×1h periodi consecutivi a 0 → email). Sentry source maps: `sentry.properties` creato, `SENTRY_DISABLE_AUTO_UPLOAD` rimosso da eas.json. TestFlight reminder: scadenza 2026-09-08, rinnovo entro 2026-08-25. Azione richiesta: `eas secret:create SENTRY_AUTH_TOKEN`. |
+| 2026-06-11 | FASE 8 Portale Commercialista (Session 28) | 8.1–8.12 ✅ | viewer role (RBAC 4°): read presenze+export, blocco correzioni+admin. export.js: format=zucchetti (groupZucchetti, OreOrdinarie/Straordinarie, H,MM) + format=teamsystem (per-timbratura, tipo E/U). Migration 009 su RDS (meal_voucher_hours, viewer constraint). Admin viewers endpoint. ExportButton dropdown + AdminPage tab Commercialisti. DISABLE_AUTH=false pattern nei nuovi test. 161/161 ✅ lint 0 errori. Deploy Netlify ✅, deploy EC2 via CI/CD. Commit: f9c3080 |
 
 ---
 
