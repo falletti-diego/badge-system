@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-11 (Session 29: FASE 9 ✅ — Ore Lavorate & Buoni Pasto: summary endpoint, SummaryPage, Ore column, Settings tab, 190/190 test)  
+**Last Updated:** 2026-06-11 (Session 30: FASE 10 ✅ — Geofencing: migration 010, haversine, GeofenceError, PUT /admin/sites/:id, GPS mobile, AdminPage dialog, 212/212 test)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -325,29 +325,29 @@ Go-live with first paying customer (pilota).
 
 ---
 
-### FASE 10 — Geofencing (~10h)
+### FASE 10 — Geofencing (~10h) ✅
 
-**Migration 009:**
-- [ ] **10.1** `migration 009`: `ALTER TABLE sites ADD COLUMN latitude DECIMAL(9,6)`, `longitude DECIMAL(9,6)`, `geofence_radius_meters INT DEFAULT 150`, `geofence_enabled BOOLEAN DEFAULT false`; `ALTER TABLE checkins ADD COLUMN checkin_latitude DECIMAL(9,6)`, `checkin_longitude DECIMAL(9,6)`
+**Migration 010:**
+- [x] **10.1** `migration 010`: `ALTER TABLE sites ADD COLUMN latitude DECIMAL(9,6)`, `longitude DECIMAL(9,6)`, `geofence_radius_meters INT DEFAULT 150`, `geofence_enabled BOOLEAN DEFAULT false`; `ALTER TABLE checkins ADD COLUMN checkin_latitude DECIMAL(9,6)`, `checkin_longitude DECIMAL(9,6)` — applicata su RDS production
 
 **Backend:**
-- [ ] **10.2** `src/utils/geo.js` (nuovo): `haversineDistance(lat1, lng1, lat2, lng2)` → distanza in metri (no dipendenze esterne)
-- [ ] **10.3** `src/routes/checkins.js`: `POST /api/checkins` — se `geofence_enabled` per la sede: (a) richiede `latitude`/`longitude` nel body (→ `GEOFENCE_COORDINATES_REQUIRED` se mancanti), (b) calcola distanza, (c) se distanza > radius → `403 OUTSIDE_GEOFENCE` con `{ distance_meters, max_meters }`. Salva coordinate nel record
-- [ ] **10.4** `src/routes/sites.js` (o admin.js): `PUT /api/admin/sites/:id` — permette aggiornamento `latitude`, `longitude`, `geofence_radius_meters`, `geofence_enabled`
-- [ ] **10.5** `src/middleware/validation.js`: schema `PostCheckinSchema` — aggiungere `latitude` e `longitude` opzionali (z.number().min(-90).max(90))
+- [x] **10.2** `src/utils/geo.js` (nuovo): `haversineDistance(lat1, lng1, lat2, lng2)` → distanza in metri (Haversine, no deps)
+- [x] **10.3** `src/routes/checkins.js`: geofence validation — GEOFENCE_COORDINATES_REQUIRED (400) se mancano lat/lng, GeofenceError 403 OUTSIDE_GEOFENCE con { distance_meters, max_meters } se fuori raggio. Salva coordinate nel record
+- [x] **10.4** `src/routes/admin.js`: `PUT /api/admin/sites/:id` — aggiorna latitude, longitude, geofence_radius_meters, geofence_enabled. `GET /api/sites`: ora ritorna anche colonne geofence
+- [x] **10.5** `src/middleware/validation.js`: `PostCheckinSchema` aggiunto latitude/longitude opzionali (−90..90, −180..180); `UpdateSiteGeofenceSchema` aggiunto (geofence_enabled bool, radius 50-5000m)
 
 **Mobile:**
-- [ ] **10.6** `frontend-mobile/app.json`: aggiungere `expo-location` nei plugin; `NSLocationWhenInUseUsageDescription` in iOS infoPlist; `ACCESS_FINE_LOCATION` in Android permissions
-- [ ] **10.7** `frontend-mobile/package.json`: `expo install expo-location`
-- [ ] **10.8** `frontend-mobile/src/screens/QRScannerScreen.jsx`: prima di inviare il check-in, chiamare `Location.requestForegroundPermissionsAsync()` + `Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 5000 })`; aggiungere `latitude` e `longitude` alla request; gestire errori `OUTSIDE_GEOFENCE` (alert con distanza) e `GEOFENCE_COORDINATES_REQUIRED` (alert "attiva GPS")
-- [ ] **10.9** Build 17: submit su TestFlight con geofencing
+- [x] **10.6** `frontend-mobile/app.json`: expo-location nei plugin; `NSLocationWhenInUseUsageDescription` in iOS infoPlist; `ACCESS_FINE_LOCATION` in Android permissions
+- [x] **10.7** `frontend-mobile/package.json`: `expo-location ~18.1.5` aggiunto
+- [x] **10.8** `frontend-mobile/src/screens/checkin/QRScannerScreen.jsx`: `tryGetLocation()` — GPS richiesto prima del POST, graceful fallback se negato; alert "📍 Fuori dalla sede" con distanza/max; alert "📍 GPS richiesto" per GEOFENCE_COORDINATES_REQUIRED
+- [ ] **10.9** Build 17: submit su TestFlight con geofencing (richiede `eas build`)
 
 **Frontend Admin:**
-- [ ] **10.10** `frontend-web/src/pages/AdminPage.jsx` tab Sedi: aggiungere per ogni sede — toggle "Geofencing attivo", input Latitudine/Longitudine, slider o input Raggio (50–500m), link "📍 Trova coordinate" → `https://maps.google.com/?q=<lat>,<lng>`. Pulsante Salva chiama `PUT /api/admin/sites/:id`
+- [x] **10.10** `AdminPage.jsx` tab Sedi: `GeofenceDialog` per sede — toggle, lat/lng inputs, raggio, link Google Maps. Colonna "Geofencing" con icona MyLocation (verde/grigia) + chip raggio
 
 **Test:**
-- [ ] **10.11** `backend/src/__tests__/geo.test.js`: unit test `haversineDistance` — stessa posizione (0m), 100m, 1km, antipodi, edge cases lat/lng
-- [ ] **10.12** `backend/src/__tests__/checkins-geofence.test.js`: geofence disabled → accetta senza coordinate; dentro raggio → 201; fuori raggio → 403 OUTSIDE_GEOFENCE; coordinate mancanti con geofence abilitato → 403
+- [x] **10.11** `backend/src/__tests__/geo.test.js`: 9 unit test haversineDistance (0m, 100m, 1km, Milan-Rome, antipodi, simmetria, emisfero sud, inside/outside raggio 150m)
+- [x] **10.12** `backend/src/__tests__/checkins-geofence.test.js`: 13 integration test. 212/212 totale ✅. Commit: b740dbf
 
 ---
 
