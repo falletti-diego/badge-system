@@ -284,7 +284,7 @@ function ClientsTab() {
 
 // ─── Geofence Dialog ────────────────────────────────────────────────────────
 
-function GeofenceDialog({ site, onClose, onSaved }) {
+function GeofenceDialog({ site, clientGeofencingEnabled = true, onClose, onSaved }) {
   const [form, setForm] = useState({
     geofence_enabled: site.geofence_enabled || false,
     latitude: site.latitude != null ? String(site.latitude) : '',
@@ -334,10 +334,16 @@ function GeofenceDialog({ site, onClose, onSaved }) {
               <Switch
                 checked={form.geofence_enabled}
                 onChange={(e) => setForm({ ...form, geofence_enabled: e.target.checked })}
+                disabled={!clientGeofencingEnabled}
               />
             }
-            label="Geofencing attivo"
+            label={!clientGeofencingEnabled ? 'Geofencing disabilitato' : 'Geofencing attivo'}
           />
+          {!clientGeofencingEnabled && (
+            <Alert severity="info">
+              Geofencing è disattivato a livello cliente. Abilita il geofencing nelle Impostazioni per attivarlo per questa sede.
+            </Alert>
+          )}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
               label="Latitudine"
@@ -346,7 +352,7 @@ function GeofenceDialog({ site, onClose, onSaved }) {
               value={form.latitude}
               onChange={(e) => setForm({ ...form, latitude: e.target.value })}
               placeholder="es. 45.4654"
-              disabled={!form.geofence_enabled}
+              disabled={!clientGeofencingEnabled || !form.geofence_enabled}
               type="number"
               inputProps={{ step: 'any' }}
             />
@@ -357,7 +363,7 @@ function GeofenceDialog({ site, onClose, onSaved }) {
               value={form.longitude}
               onChange={(e) => setForm({ ...form, longitude: e.target.value })}
               placeholder="es. 9.1859"
-              disabled={!form.geofence_enabled}
+              disabled={!clientGeofencingEnabled || !form.geofence_enabled}
               type="number"
               inputProps={{ step: 'any' }}
             />
@@ -369,7 +375,7 @@ function GeofenceDialog({ site, onClose, onSaved }) {
             value={form.geofence_radius_meters}
             onChange={(e) => setForm({ ...form, geofence_radius_meters: e.target.value })}
             inputProps={{ min: 50, max: 5000, step: 10 }}
-            disabled={!form.geofence_enabled}
+            disabled={!clientGeofencingEnabled || !form.geofence_enabled}
             helperText="Min 50m — Max 5000m. Consigliato: 100-200m."
           />
           {mapsUrl && (
@@ -399,6 +405,9 @@ function GeofenceDialog({ site, onClose, onSaved }) {
 
 function SitesTab() {
   const { data: clients } = useFetch('/api/admin/clients');
+  const clientGeofencingEnabled = clients.length > 0
+    ? clients[0]?.geofencing_feature_enabled !== false
+    : true;
   const [selectedClient, setSelectedClient] = useState('');
   const { data: sites, loading, error: fetchError, reload } = useFetch(
     selectedClient ? `/api/admin/sites?client_id=${selectedClient}` : '/api/admin/sites'
@@ -573,6 +582,7 @@ function SitesTab() {
       {geofenceTarget && (
         <GeofenceDialog
           site={geofenceTarget}
+          clientGeofencingEnabled={clientGeofencingEnabled}
           onClose={() => setGeofenceTarget(null)}
           onSaved={() => { setGeofenceTarget(null); reload(); }}
         />
