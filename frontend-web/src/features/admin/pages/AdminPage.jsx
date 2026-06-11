@@ -1399,10 +1399,10 @@ function SettingsTab() {
         {msg && <Alert severity={msg.type} sx={{ mt: 2, maxWidth: 500 }}>{msg.text}</Alert>}
 
         {/* CONFIRMATION DIALOG */}
-        <ConfirmDeleteDialog
+        <ConfirmSaveDialog
           open={confirmDialog}
-          title="Conferma salvataggio"
-          description="Vuoi salvare le modifiche?"
+          title="Conferma salvataggio impostazioni"
+          description="Vuoi salvare le modifiche alle impostazioni di geofencing e buoni pasto?"
           onConfirm={handleConfirmSave}
           onCancel={() => setConfirmDialog(false)}
           loading={loading}
