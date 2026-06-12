@@ -8,8 +8,9 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const pino = require('pino');
 const { createValidationMiddleware, LoginSchema } = require('../middleware/validation');
-const { ValidationError } = require('../utils/errors');
-const { verifyPassword } = require('../auth/password');
+const { ValidationError, ForbiddenError, NotFoundError } = require('../utils/errors');
+const { verifyPassword, hashPassword } = require('../auth/password');
+const { requireAuth } = require('../middleware/auth');
 const { pool } = require('../db/pool');
 
 const router = express.Router();
@@ -127,7 +128,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       const params = client_id ? [email, client_id] : [email];
       const clientFilter = client_id ? 'AND client_id = $2' : '';
       const result = await pool.query(
-        `SELECT id, client_id, email, name, role, site_id, password_hash
+        `SELECT id, client_id, email, name, role, site_id, password_hash, must_change_password
          FROM employees
          WHERE email = $1 AND password_hash IS NOT NULL ${clientFilter}
          ORDER BY created_at ASC
@@ -155,6 +156,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
             client_id: dbEmployee.client_id,
             employee_id: dbEmployee.id,
             site_id: dbEmployee.site_id || null,
+            must_change_password: dbEmployee.must_change_password || false,
           };
         }
       }
@@ -213,6 +215,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
         token,
         refresh_token,
         user: userResponse,
+        must_change_password: user.must_change_password || false,
       },
     });
   } catch (err) {
@@ -322,6 +325,94 @@ router.post('/logout', (req, res) => {
   }
 
   res.json({ message: 'Logged out successfully' });
+});
+
+/**
+ * POST /api/auth/change-password
+ * Change password for authenticated employee
+ * Requires: old_password, new_password
+ * Returns: new access token with must_change_password = false
+ */
+router.post('/change-password', requireAuth, async (req, res, next) => {
+  try {
+    const { old_password, new_password } = req.body;
+    const { employee_id, role } = req.user;
+
+    // Only employees and managers with employee_id can change password
+    if (!employee_id) {
+      return next(new ForbiddenError('Only employees can change their password'));
+    }
+
+    if (!old_password || !new_password) {
+      return next(new ValidationError('old_password and new_password required'));
+    }
+
+    if (new_password.length < 8) {
+      return next(new ValidationError('New password must be at least 8 characters'));
+    }
+
+    if (old_password === new_password) {
+      return next(new ValidationError('New password must be different from old password'));
+    }
+
+    // Fetch employee with password hash
+    const empResult = await pool.query(
+      'SELECT id, password_hash FROM employees WHERE id = $1::uuid',
+      [employee_id]
+    );
+
+    if (empResult.rows.length === 0) {
+      return next(new NotFoundError('Employee not found'));
+    }
+
+    const employee = empResult.rows[0];
+
+    // Verify old password matches
+    const passwordMatch = await verifyPassword(old_password, employee.password_hash);
+    if (!passwordMatch) {
+      return next(new ValidationError('Current password is incorrect'));
+    }
+
+    // Hash new password
+    const newPasswordHash = await hashPassword(new_password);
+
+    // Update database
+    await pool.query(
+      'UPDATE employees SET password_hash = $1, must_change_password = false WHERE id = $2::uuid',
+      [newPasswordHash, employee_id]
+    );
+
+    // Generate new JWT token with must_change_password = false
+    const tokenPayload = {
+      user_id: req.user.user_id,
+      name: req.user.name,
+      email: req.user.email,
+      role: req.user.role,
+      client_id: req.user.client_id,
+      employee_id: employee_id,
+      must_change_password: false,
+    };
+    if (req.user.site_id) tokenPayload.site_id = req.user.site_id;
+
+    const token = jwt.sign(tokenPayload, JWT_PRIVATE_KEY, {
+      algorithm: JWT_ALGORITHM,
+      expiresIn: ACCESS_TOKEN_EXPIRY,
+    });
+
+    logger.info({
+      action: 'password_changed',
+      user_id: req.user.user_id,
+      email: req.user.email,
+      timestamp: new Date().toISOString(),
+    });
+
+    res.status(200).json({
+      success: true,
+      data: { token }
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = router;

@@ -329,7 +329,7 @@ router.post('/employees/import', upload.single('file'), async (req, res, next) =
       sites_map: Array.from(siteByName.entries()),
     });
 
-    const results = { created: 0, skipped: 0, errors: [] };
+    const results = { created: 0, skipped: 0, errors: [], passwords: [] };
 
     // Phase 1: validate all rows + resolve site_name → site_id
     const prepared = [];
@@ -406,6 +406,11 @@ router.post('/employees/import', upload.single('file'), async (req, res, next) =
         if (insertResult.rowCount > 0) {
           results.created++;
           const emp = insertResult.rows[0];
+          // Collect unencrypted password for response (visible only in this response)
+          results.passwords.push({
+            email: emp.email,
+            temp_password: item.tempPassword
+          });
           // Audit log inside the same transaction — best-effort, never aborts the import
           await logAudit(pgClient, {
             action: 'admin_import_employee',
