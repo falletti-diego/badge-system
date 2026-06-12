@@ -11,6 +11,7 @@ const { createValidationMiddleware, GetExportCsvSchema } = require('../middlewar
 const { requireAuth } = require('../middleware/auth');
 const { ForbiddenError } = require('../utils/errors');
 const { resolveEmployeeId, resolveSiteId } = require('../utils/resolvers');
+const { buildScopedFilters } = require('../utils/queryScope');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -136,47 +137,14 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
       return next(new ForbiddenError('CSV export is restricted to managers and admins', 'FORBIDDEN_ROLE'));
     }
 
-    let resolvedSiteId = site_id ? await resolveSiteId(site_id, clientId) : undefined;
+    const resolvedSiteId = site_id ? await resolveSiteId(site_id, clientId) : undefined;
     const resolvedEmployeeId = employee_id ? await resolveEmployeeId(employee_id, clientId) : undefined;
 
-    if (userRole === 'manager' && userSiteId) {
-      if (resolvedSiteId && resolvedSiteId !== userSiteId) {
-        return next(new ForbiddenError('Managers can only export data for their assigned site', 'FORBIDDEN_SITE'));
-      }
-      resolvedSiteId = userSiteId;
-    }
-
-    const whereClauses = [];
-    const params = [];
-    let paramCount = 0;
-
-    paramCount++;
-    whereClauses.push(`c.client_id = $${paramCount}::uuid`);
-    params.push(clientId);
-
-    if (resolvedSiteId) {
-      paramCount++;
-      whereClauses.push(`c.site_id = $${paramCount}::uuid`);
-      params.push(resolvedSiteId);
-    }
-
-    if (resolvedEmployeeId) {
-      paramCount++;
-      whereClauses.push(`c.employee_id = $${paramCount}::uuid`);
-      params.push(resolvedEmployeeId);
-    }
-
-    if (date_from) {
-      paramCount++;
-      whereClauses.push(`c.timestamp >= $${paramCount}::date`);
-      params.push(date_from);
-    }
-
-    if (date_to) {
-      paramCount++;
-      whereClauses.push(`c.timestamp < $${paramCount}::date + INTERVAL '1 day'`);
-      params.push(date_to);
-    }
+    const { whereClauses, params } = buildScopedFilters(
+      req.user,
+      { siteId: resolvedSiteId, employeeId: resolvedEmployeeId, dateFrom: date_from, dateTo: date_to },
+      'c'
+    );
 
     const whereClause = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
