@@ -15,6 +15,7 @@ const { NotFoundError, ValidationError, ForbiddenError, GeofenceError } = requir
 const { haversineDistance } = require('../utils/geo');
 const { deleteCacheByPattern } = require('../db/redis');
 const { resolveEmployeeId, resolveSiteId } = require('../utils/resolvers');
+const { buildScopedFilters } = require('../utils/queryScope');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -182,62 +183,21 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
     const resolvedSiteId = site_id ? await resolveSiteId(site_id, clientId) : undefined;
     const resolvedEmployeeId = employee_id ? await resolveEmployeeId(employee_id, clientId) : undefined;
 
-    // Build WHERE clause dynamically — client_id is mandatory and always first
-    const whereClauses = [];
-    const params = [];
-    let paramCount = 0;
+    const { whereClauses, params: scopeParams } = buildScopedFilters(
+      req.user,
+      { siteId: resolvedSiteId, employeeId: resolvedEmployeeId, dateFrom: date_from, dateTo: date_to },
+      'c'
+    );
 
-    // Mandatory tenant isolation — never removed
-    paramCount++;
-    whereClauses.push(`c.client_id = $${paramCount}::uuid`);
-    params.push(clientId);
-
-    // IMPORTANT: If user is an employee, they can only see their own checkins
-    if (userRole === 'employee' && userEmployeeId) {
-      paramCount++;
-      whereClauses.push(`c.employee_id = $${paramCount}::uuid`);
-      params.push(userEmployeeId);
-    }
-
-    // IMPORTANT: If user is a manager assigned to a specific store, filter by that store
-    if (userRole === 'manager' && userSiteId) {
-      paramCount++;
-      whereClauses.push(`c.site_id = $${paramCount}::uuid`);
-      params.push(userSiteId);
-    }
-
-    if (resolvedSiteId) {
-      paramCount++;
-      whereClauses.push(`c.site_id = $${paramCount}::uuid`);
-      params.push(resolvedSiteId);
-    }
-
-    if (resolvedEmployeeId) {
-      paramCount++;
-      whereClauses.push(`c.employee_id = $${paramCount}::uuid`);
-      params.push(resolvedEmployeeId);
-    }
-
-    if (date_from) {
-      paramCount++;
-      whereClauses.push(`c.timestamp >= $${paramCount}::date`);
-      params.push(date_from);
-    }
-
-    if (date_to) {
-      paramCount++;
-      whereClauses.push(`c.timestamp < $${paramCount}::date + INTERVAL '1 day'`);
-      params.push(date_to);
-    }
+    const params = [...scopeParams];
+    const scopeParamCount = params.length;
 
     // Add pagination params
-    paramCount++;
     params.push(limit);
-    const limitParam = paramCount;
+    const limitParam = params.length;
 
-    paramCount++;
     params.push(offset);
-    const offsetParam = paramCount;
+    const offsetParam = params.length;
 
     const whereClause = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
@@ -272,7 +232,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
       SELECT COUNT(*) as total FROM checkins c
       ${whereClause}
     `;
-    const countParams = params.slice(0, paramCount - 2);
+    const countParams = params.slice(0, scopeParamCount);
     const countResult = await pool.query(countQuery, countParams);
     const total = parseInt(countResult.rows[0].total, 10);
 
@@ -314,53 +274,11 @@ router.get('/stats', requireAuth, createValidationMiddleware(GetStatsSchema), as
     const resolvedSiteId = site_id ? await resolveSiteId(site_id, clientId) : undefined;
     const resolvedEmployeeId = employee_id ? await resolveEmployeeId(employee_id, clientId) : undefined;
 
-    // Build WHERE clause — client_id is mandatory and always first
-    const whereClauses = [];
-    const params = [];
-    let paramCount = 0;
-
-    // Mandatory tenant isolation — never removed
-    paramCount++;
-    whereClauses.push(`c.client_id = $${paramCount}::uuid`);
-    params.push(clientId);
-
-    // IMPORTANT: If user is an employee, they can only see their own stats
-    if (userRole === 'employee' && userEmployeeId) {
-      paramCount++;
-      whereClauses.push(`c.employee_id = $${paramCount}::uuid`);
-      params.push(userEmployeeId);
-    }
-
-    // IMPORTANT: If user is a manager assigned to a specific store, filter by that store
-    if (userRole === 'manager' && userSiteId) {
-      paramCount++;
-      whereClauses.push(`c.site_id = $${paramCount}::uuid`);
-      params.push(userSiteId);
-    }
-
-    if (resolvedSiteId) {
-      paramCount++;
-      whereClauses.push(`c.site_id = $${paramCount}::uuid`);
-      params.push(resolvedSiteId);
-    }
-
-    if (resolvedEmployeeId) {
-      paramCount++;
-      whereClauses.push(`c.employee_id = $${paramCount}::uuid`);
-      params.push(resolvedEmployeeId);
-    }
-
-    if (date_from) {
-      paramCount++;
-      whereClauses.push(`c.timestamp >= $${paramCount}::date`);
-      params.push(date_from);
-    }
-
-    if (date_to) {
-      paramCount++;
-      whereClauses.push(`c.timestamp < $${paramCount}::date + INTERVAL '1 day'`);
-      params.push(date_to);
-    }
+    const { whereClauses, params } = buildScopedFilters(
+      req.user,
+      { siteId: resolvedSiteId, employeeId: resolvedEmployeeId, dateFrom: date_from, dateTo: date_to },
+      'c'
+    );
 
     const whereClause = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
