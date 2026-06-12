@@ -11,13 +11,14 @@
 Identificati nell'analisi critica completa del codebase (Session 32). I primi 3 sono fix di sicurezza
 bloccanti per qualunque demo a clienti. Ordine di esecuzione obbligato.
 
-### S.32.1 — 🔴 Ownership check su POST /checkins (CRITICO — buddy punching)
+### S.32.1 — 🔴 Ownership check su POST /checkins (CRITICO — buddy punching) ✅
 `checkins.js:26-103`: `employee_id` arriva dal body, verificato solo contro `client_id`.
 **Qualunque dipendente autenticato può timbrare per un collega.** Mina il valore stesso del prodotto.
-- [ ] Employee role: rifiuta se `req.user.employee_id !== body.employee_id` (403 `CHECKIN_OWNERSHIP`)
-- [ ] Manager role con `site_id`: può timbrare solo per la propria sede
-- [ ] Test: employee A → check-in per B = 403; manager sede X → sede Y = 403; admin = 201
-- Sforzo: 1-2h
+- [x] Employee/manager: solo self check-in — 403 `CHECKIN_OWNERSHIP` su mismatch, 403 `CHECKIN_NO_EMPLOYEE_PROFILE` se il token non ha employee_id (fail-closed)
+- [x] Admin: può creare check-in per chiunque nel tenant (policy approvata — manager-per-sede rimandato a endpoint dedicato futuro)
+- [x] Test: 8 test in `checkins-ownership.test.js` (TDD) — suite completa 235/235 verde
+- ✅ Completato 2026-06-12 — guard fail-closed prima di withTransaction | Spec: `docs/superpowers/specs/2026-06-12-checkin-ownership-design.md` | Commits: 00cf9a0, c295b2a, 2dd57db
+- Follow-up non bloccanti (da security review): normalizzare case UUID nel confronto; allow-list esplicita ruoli su POST (oggi viewer è bloccato solo perché non ha employee_id); aggiungere `client_id` al warn log `checkin_ownership_violation`
 
 ### S.32.2 — 🔴 RBAC fail-closed + helper condiviso (CRITICO — data leak intra-tenant)
 `checkins.js:178`, `/stats:310`, `presences.js`, `export.js`: pattern `if (role === 'employee' && employeeId)`
