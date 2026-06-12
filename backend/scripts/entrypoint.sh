@@ -104,5 +104,17 @@ ok "Critical variables verified: ${CRITICAL_VARS[*]}"
 source "$ENV_FILE"
 ok "Environment loaded — starting app as 'nodejs' user"
 
-# ── 7. Drop privileges and exec dumb-init → app ──────────────────────────────
+# ── 7. Run database migrations (idempotent, fail-fast) ───────────────────────
+log "Running database migrations..."
+node /app/scripts/run-migrations.js
+MIGRATION_EXIT=$?
+
+if [[ $MIGRATION_EXIT -ne 0 ]]; then
+  die "Database migrations failed (exit code: $MIGRATION_EXIT)"
+fi
+
+ok "Database migrations completed successfully"
+
+# ── 8. Drop privileges and exec dumb-init → app ──────────────────────────────
+log "Starting Express server..."
 exec su-exec nodejs dumb-init -- "$@"
