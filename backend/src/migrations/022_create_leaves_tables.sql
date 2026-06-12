@@ -44,12 +44,15 @@ CREATE TABLE IF NOT EXISTS leave_requests (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 
   CHECK (end_date >= start_date),
-  CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN'))
+  CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN')),
+  CHECK ((approved_by IS NULL AND approved_at IS NULL) OR (approved_by IS NOT NULL AND approved_at IS NOT NULL))
 );
 
 CREATE INDEX IF NOT EXISTS idx_leave_requests_user_id ON leave_requests(user_id);
 CREATE INDEX IF NOT EXISTS idx_leave_requests_status ON leave_requests(status);
-CREATE INDEX IF NOT EXISTS idx_leave_requests_date_range ON leave_requests(start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_leave_requests_client_status ON leave_requests(client_id, status);
+CREATE INDEX IF NOT EXISTS idx_leave_requests_client_user ON leave_requests(client_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_leave_requests_user_dates ON leave_requests(user_id, start_date, end_date);
 
 -- ============================================
 -- TABLE: LeaveSaldi (Leave Balance Tracking)
@@ -69,3 +72,4 @@ CREATE TABLE IF NOT EXISTS leave_saldi (
 );
 
 CREATE INDEX IF NOT EXISTS idx_leave_saldi_user_year ON leave_saldi(user_id, year);
+CREATE INDEX IF NOT EXISTS idx_leave_saldi_client_year ON leave_saldi(client_id, year);
