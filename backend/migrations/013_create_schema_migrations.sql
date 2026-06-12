@@ -10,4 +10,4 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   checksum VARCHAR(64) -- SHA256 of migration content (optional, for integrity)
 );
 
-CREATE INDEX idx_schema_migrations_filename ON schema_migrations(filename);
+CREATE INDEX IF NOT EXISTS idx_schema_migrations_filename ON schema_migrations(filename);
