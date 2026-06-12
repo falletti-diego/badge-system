@@ -481,7 +481,10 @@ router.post('/revoke-session', requireAuth, async (req, res, next) => {
   const { user_id: caller_id, role, site_id } = req.user;
 
   // Validation
-  if (!target_user_id) return next(new ValidationError('user_id is required'));
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!target_user_id || !UUID_REGEX.test(target_user_id)) {
+    return next(new ValidationError('user_id must be a valid UUID'));
+  }
 
   let client;
   try {
@@ -503,7 +506,9 @@ router.post('/revoke-session', requireAuth, async (req, res, next) => {
           await client.query('ROLLBACK');
           return next(new NotFoundError('User not found'));
         }
-        if (targetUserResult.rows[0].site_id !== site_id) {
+        // Manager cannot revoke users at different sites or with no site assigned
+        // (unassigned employees with site_id = NULL are not in any manager's scope)
+        if (!targetUserResult.rows[0].site_id || targetUserResult.rows[0].site_id !== site_id) {
           await client.query('ROLLBACK');
           return next(new ForbiddenError('You can only revoke users at your site'));
         }

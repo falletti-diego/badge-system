@@ -328,7 +328,8 @@ describe('S.32.7 Task 2 — POST /auth/refresh with Token Rotation', () => {
         );
 
         expect(revokeSection).toContain('!target_user_id');
-        expect(revokeSection).toContain('user_id is required');
+        expect(revokeSection).toContain('UUID_REGEX');
+        expect(revokeSection).toContain('user_id must be a valid UUID');
       });
     });
 
