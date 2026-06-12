@@ -156,9 +156,24 @@ function optionalAuth(req, res, next) {
   }
 }
 
+/**
+ * Middleware: Require auth + check revocation (composite)
+ * Chains requireAuth -> checkRevoked for a single middleware call
+ * Use this in route definitions: router.post('/', requireAuthWithRevoke, ...)
+ */
+function requireAuthWithRevoke(req, res, next) {
+  const checkRevoked = require('./checkRevoked');
+  requireAuth(req, res, (err) => {
+    if (err) return next(err);
+    // If auth passed, check revocation status
+    checkRevoked(req, res, next);
+  });
+}
+
 module.exports = {
   requireAuth,
   optionalAuth,
+  requireAuthWithRevoke,
   verifyToken,
   extractToken,
 };

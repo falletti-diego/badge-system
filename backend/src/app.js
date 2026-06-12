@@ -42,6 +42,7 @@ const { pool, closePool } = require('./db/pool');
 const { initializeRedis, closeRedis } = require('./db/redis');
 const { ApiError, RateLimitError } = require('./utils/errors');
 const { apiLimiter, authLimiter, csvLimiter } = require('./middleware/rateLimiter');
+const checkRevoked = require('./middleware/checkRevoked');
 const authRouter = require('./routes/auth');
 const employeesRouter = require('./routes/employees');
 const checkinsRouter = require('./routes/checkins');
@@ -169,6 +170,11 @@ app.use('/api', (req, res, next) => {
   logger.warn({ action: 'deprecated_api_path', path: req.originalUrl, method: req.method });
   next();
 }, v1Router);
+
+// Global checkRevoked middleware (runs on all /api/v1 requests after routing)
+// Safely skips unauthenticated requests (req.user will be undefined)
+// This enforces revocation on every request regardless of endpoint
+app.use(checkRevoked);
 
 // Sentry error handler — must come BEFORE custom error handler to capture exceptions
 if (process.env.SENTRY_DSN) {

@@ -73,6 +73,13 @@ class GeofenceError extends ApiError {
   }
 }
 
+class SessionRevokedError extends ApiError {
+  constructor(message = 'Session has been revoked') {
+    super('SESSION_REVOKED', message, 401);
+    this.name = 'SessionRevokedError';
+  }
+}
+
 module.exports = {
   ApiError,
   ValidationError,
@@ -83,4 +90,5 @@ module.exports = {
   RateLimitError,
   InternalServerError,
   GeofenceError,
+  SessionRevokedError,
 };
