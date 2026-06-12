@@ -35,6 +35,7 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
     // Build the check-ins query
     // - admin / viewer: all employees for the client
     // - manager: only employees assigned to manager's site
+    // FAIL-CLOSED RBAC: manager without site_id throws 403 instead of bypassing filter
     const params = [client_id, dateFrom.toISOString(), dateTo.toISOString()];
     let employeeFilter = '';
 
