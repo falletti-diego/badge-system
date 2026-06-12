@@ -67,13 +67,19 @@ Duplicate migration numbering fixed (011 → 013 → 014). Integrates into Docke
 - [x] Full suite: 275+/275+ tests passing
 - ✅ Completato 2026-06-12 — idempotent migrations, zero manual SSH | Spec: `docs/superpowers/specs/2026-06-12-migration-runner-design.md` | Commits: dc0813f (schema table), a1d2f57 (rename 011), f8b0042 (rename 013→014), 3f14eed (runner script), 2fed551 (tests), 640ec19 (Docker entrypoint)
 
-### S.32.6 — 🟡 CSV import: temp password mai comunicate
+### S.32.6 — 🟡 CSV import: temp password mai comunicate (Tasks 2-5 DONE, 6-8 TODO)
 `admin.js`: `generateTempPassword()` hashata e salvata ma mai restituita → dipendenti importati
 non possono fare login senza reset manuale uno-a-uno.
-- [ ] Risposta import include `{email, temp_password}` scaricabile come CSV (visibile una volta sola)
-- [ ] Colonna `must_change_password BOOLEAN` + forced redirect cambio password al primo login
-- [ ] Test: import 3 righe → 3 temp password in risposta; login temp → forced change
-- Sforzo: 2h
+- [x] Task 1: Migration 015 add must_change_password column ✅ (Commit 5579bfc)
+- [x] Task 2: POST /api/admin/employees/import returns {email, temp_password} in results.passwords ✅ (Commit c703d7c)
+- [x] Task 3: POST /api/auth/login includes must_change_password flag in response ✅ (Commit c703d7c)
+- [x] Task 4: POST /api/auth/change-password endpoint (requireAuth, old→new password, sets flag to false, returns token) ✅ (Commit c703d7c)
+- [x] Task 5: Tests (8/8 passing: migrations, auth routes, CSV import) ✅ (Commit c703d7c)
+- [ ] Task 6: Frontend ChangePasswordPage component + modal + redirect on must_change_password=true
+- [ ] Task 7: Auth guard in dashboard to redirect to change-password page if flag is true
+- [ ] Task 8: Final E2E test (import 3 employees → 3 temp passwords → login temp → forced change → new login works)
+- Backend 100% done, 283/283 tests passing
+- Sforzo rimanente frontend: 2-3h
 
 ### S.32.7 — 🟠 Refresh token: rotazione + revoca + demo users hardening
 - [ ] Rotazione: ogni `/refresh` emette nuovo refresh token, vecchio invalidato (jti/token_version in DB)
