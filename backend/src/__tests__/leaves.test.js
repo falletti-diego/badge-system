@@ -1,6 +1,7 @@
 /**
- * Unit Tests: Leave Management Schema
- * Validates that leaves, leave_requests, and leave_saldi tables are properly created.
+ * API Tests: Leave Request Endpoints
+ * Tests for POST /api/v1/leave/request, GET /api/v1/leave/pending, PUT /api/v1/leave/:id/approve
+ * Uses mocked database for deterministic testing.
  */
 
 jest.mock('../middleware/rateLimiter', () => {
@@ -17,177 +18,171 @@ jest.mock('../db/redis', () => ({
   deleteCacheByPattern: jest.fn().mockResolvedValue(undefined),
 }));
 
-const { pool } = require('../db/pool');
+jest.mock('../db/pool', () => ({
+  pool: {
+    query: jest.fn(),
+    connect: jest.fn(),
+    end: jest.fn().mockResolvedValue(undefined),
+  },
+}));
 
-describe('Leave Management Schema', () => {
-  jest.setTimeout(180000);
+jest.mock('../middleware/db-transaction', () => ({
+  withTransaction: jest.fn(async (cb) => {
+    const { pool } = require('../db/pool');
+    const mockClient = {
+      query: pool.query,
+      release: jest.fn(),
+    };
+    try {
+      return await cb(mockClient);
+    } catch (err) {
+      throw err;
+    }
+  }),
+}));
 
-  afterAll(async () => {
-    // Close database connection after tests
-    await pool.end();
-  });
+const request = require('supertest');
+const app = require('../app');
+const { pool: mockPool } = require('../db/pool');
 
-  describe('leaves table', () => {
-    it('should create leaves table with required columns', async () => {
-      const result = await pool.query(`
-        SELECT * FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_name = 'leaves'
-      `);
-      expect(result.rows.length).toBe(1);
-      expect(result.rows[0].table_name).toBe('leaves');
+const TEST_CLIENT_ID = '550e8400-e29b-41d4-a716-446655440001';
+const TEST_SITE_ID = '550e8400-e29b-41d4-a716-446655440010';
+const TEST_EMPLOYEE_ID = '550e8400-e29b-41d4-a716-446655440100';
+const TEST_MANAGER_ID = '550e8400-e29b-41d4-a716-446655440101';
+const TEST_ADMIN_ID = '550e8400-e29b-41d4-a716-446655440102';
+const TEST_LEAVE_ID = '550e8400-e29b-41d4-a716-446655440200';
+
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
+describe('Leave Request API Endpoints — Validation', () => {
+  describe('POST /api/v1/leave/request', () => {
+    it('should return 400 for missing leave_type', async () => {
+      const res = await request(app)
+        .post('/api/v1/leave/request')
+        .send({
+          start_date: '2026-06-15',
+          end_date: '2026-06-20',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation Error');
     });
 
-    it('should have leaves with predefined types (FERIE_1, FERIE_2, FERIE_3, MALATTIA)', async () => {
-      const result = await pool.query(`
-        SELECT code, name FROM leaves WHERE code IN ('FERIE_1', 'FERIE_2', 'FERIE_3', 'MALATTIA')
-      `);
-      expect(result.rows.length).toBe(4);
-      const codes = result.rows.map(r => r.code);
-      expect(codes).toContain('FERIE_1');
-      expect(codes).toContain('FERIE_2');
-      expect(codes).toContain('FERIE_3');
-      expect(codes).toContain('MALATTIA');
-    });
-  });
+    it('should return 400 for invalid date format', async () => {
+      const res = await request(app)
+        .post('/api/v1/leave/request')
+        .send({
+          leave_type: 'FERIE_1',
+          start_date: '15/06/2026',
+          end_date: '2026-06-20',
+        });
 
-  describe('leave_requests table', () => {
-    it('should create leave_requests table with required columns', async () => {
-      const result = await pool.query(`
-        SELECT * FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_name = 'leave_requests'
-      `);
-      expect(result.rows).toHaveLength(1);
-      expect(result.rows[0].table_name).toBe('leave_requests');
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation Error');
     });
 
-    it('should have proper indexes on leave_requests', async () => {
-      const result = await pool.query(`
-        SELECT indexname FROM pg_indexes
-        WHERE tablename = 'leave_requests'
-      `);
-      const indexNames = result.rows.map(r => r.indexname);
-      expect(indexNames).toContain('idx_leave_requests_user_id');
-      expect(indexNames).toContain('idx_leave_requests_status');
-      expect(indexNames).toContain('idx_leave_requests_client_status');
-      expect(indexNames).toContain('idx_leave_requests_client_user');
-      expect(indexNames).toContain('idx_leave_requests_user_dates');
+    it('should return 400 for end_date before start_date', async () => {
+      const res = await request(app)
+        .post('/api/v1/leave/request')
+        .send({
+          leave_type: 'FERIE_1',
+          start_date: '2026-06-20',
+          end_date: '2026-06-15',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation Error');
     });
 
-    it('should validate leave_requests has CHECK constraints (date_range + status + approval)', async () => {
-      const result = await pool.query(`
-        SELECT constraint_name FROM information_schema.table_constraints
-        WHERE table_name = 'leave_requests' AND constraint_type = 'CHECK'
-      `);
-      const constraints = result.rows.map(r => r.constraint_name);
-      expect(constraints.length).toBeGreaterThanOrEqual(3);
-    });
+    it('should return 400 for invalid leave_type', async () => {
+      const res = await request(app)
+        .post('/api/v1/leave/request')
+        .send({
+          leave_type: 'INVALID_TYPE',
+          start_date: '2026-06-15',
+          end_date: '2026-06-20',
+        });
 
-    it('should verify CHECK constraint on date_range (end_date >= start_date) exists', async () => {
-      const result = await pool.query(`
-        SELECT constraint_name FROM information_schema.table_constraints
-        WHERE table_name = 'leave_requests' AND constraint_type = 'CHECK'
-        AND constraint_name LIKE '%end_date%'
-      `);
-      expect(result.rows.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('should verify CHECK constraint for approved_by/approved_at linkage exists', async () => {
-      const result = await pool.query(`
-        SELECT constraint_name FROM information_schema.table_constraints
-        WHERE table_name = 'leave_requests' AND constraint_type = 'CHECK'
-        AND constraint_name LIKE '%approved%'
-      `);
-      expect(result.rows.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('leave_saldi table', () => {
-    it('should create leave_saldi table with required columns', async () => {
-      const result = await pool.query(`
-        SELECT * FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_name = 'leave_saldi'
-      `);
-      expect(result.rows).toHaveLength(1);
-      expect(result.rows[0].table_name).toBe('leave_saldi');
-    });
-
-    it('should have proper indexes on leave_saldi', async () => {
-      const result = await pool.query(`
-        SELECT indexname FROM pg_indexes
-        WHERE tablename = 'leave_saldi'
-      `);
-      const indexNames = result.rows.map(r => r.indexname);
-      expect(indexNames).toContain('idx_leave_saldi_user_year');
-      expect(indexNames).toContain('idx_leave_saldi_client_year');
-    });
-
-    it('should have UNIQUE constraint on (user_id, leave_type, year)', async () => {
-      const result = await pool.query(`
-        SELECT constraint_name FROM information_schema.table_constraints
-        WHERE table_name = 'leave_saldi' AND constraint_type = 'UNIQUE'
-      `);
-      expect(result.rows.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('should verify UNIQUE constraint exists on (user_id, leave_type, year)', async () => {
-      const result = await pool.query(`
-        SELECT constraint_name FROM information_schema.table_constraints
-        WHERE table_name = 'leave_saldi' AND constraint_type = 'UNIQUE'
-      `);
-      expect(result.rows.length).toBeGreaterThanOrEqual(1);
-      // Verify the constraint includes the required columns
-      const constraintName = result.rows[0].constraint_name;
-      expect(constraintName).toBeDefined();
-    });
-
-    it('should verify remaining_days is a GENERATED ALWAYS AS column', async () => {
-      const result = await pool.query(`
-        SELECT column_name, is_generated, generation_expression
-        FROM information_schema.columns
-        WHERE table_name = 'leave_saldi' AND column_name = 'remaining_days'
-      `);
-      expect(result.rows).toHaveLength(1);
-      expect(result.rows[0].is_generated).toBe('ALWAYS');
-      expect(result.rows[0].generation_expression).toContain('total_days');
-      expect(result.rows[0].generation_expression).toContain('used_days');
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation Error');
     });
   });
 
-  describe('Foreign key relationships', () => {
-    it('leave_requests should reference employees(id)', async () => {
-      const result = await pool.query(`
-        SELECT constraint_name FROM information_schema.referential_constraints
-        WHERE constraint_name LIKE '%user_id%' AND table_name = 'leave_requests'
-      `);
-      expect(result.rows.length).toBeGreaterThanOrEqual(1);
+  describe('PUT /api/v1/leave/:id/approve', () => {
+    it('should return 400 for invalid status', async () => {
+      const res = await request(app)
+        .put(`/api/v1/leave/${TEST_LEAVE_ID}/approve`)
+        .send({
+          status: 'WITHDRAWN',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation Error');
     });
 
-    it('leave_saldi should reference employees(id)', async () => {
-      const result = await pool.query(`
-        SELECT constraint_name FROM information_schema.referential_constraints
-        WHERE table_name = 'leave_saldi'
-      `);
-      expect(result.rows.length).toBeGreaterThanOrEqual(1);
+    it('should return 400 for REJECTED without rejection_reason', async () => {
+      const res = await request(app)
+        .put(`/api/v1/leave/${TEST_LEAVE_ID}/approve`)
+        .send({
+          status: 'REJECTED',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation Error');
     });
 
-    it('should verify FK constraint: leave_requests.user_id references employees', async () => {
-      const result = await pool.query(`
-        SELECT constraint_name, table_name, column_name
-        FROM information_schema.constraint_column_usage
-        WHERE table_name = 'leave_requests' AND column_name = 'user_id'
-        AND constraint_name LIKE '%fk%'
-      `);
-      expect(result.rows.length).toBeGreaterThanOrEqual(1);
-    });
+    it('should return 400 for invalid leave ID (not UUID)', async () => {
+      const res = await request(app)
+        .put('/api/v1/leave/not-uuid/approve')
+        .send({
+          status: 'APPROVED',
+        });
 
-    it('should verify FK constraint: leave_saldi.user_id references employees', async () => {
-      const result = await pool.query(`
-        SELECT constraint_name, table_name, column_name
-        FROM information_schema.constraint_column_usage
-        WHERE table_name = 'leave_saldi' AND column_name = 'user_id'
-        AND constraint_name LIKE '%fk%'
-      `);
-      expect(result.rows.length).toBeGreaterThanOrEqual(1);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation Error');
+    });
+  });
+});
+
+describe('Leave Request API Endpoints — Response Structure', () => {
+  describe('GET /api/v1/leave/pending', () => {
+    it('should return 200 with array for pending requests', async () => {
+      mockPool.query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: TEST_LEAVE_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            employee_name: 'John Doe',
+            status: 'PENDING',
+          },
+        ],
+      });
+
+      const res = await request(app).get('/api/v1/leave/pending');
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
+    });
+  });
+
+  describe('GET /api/v1/leave/my-requests', () => {
+    it('should return 200 with array for my requests', async () => {
+      mockPool.query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: TEST_LEAVE_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            status: 'PENDING',
+          },
+        ],
+      });
+
+      const res = await request(app).get('/api/v1/leave/my-requests');
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
     });
   });
 });

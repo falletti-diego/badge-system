@@ -454,6 +454,45 @@ const GetPresencesSummarySchema = z.object({
   }),
 });
 
+// =====================================================
+// LEAVE MANAGEMENT — POST /api/v1/leave/request
+// =====================================================
+
+const PostLeaveRequestSchema = z.object({
+  body: z.object({
+    leave_type: z.enum(['FERIE_1', 'FERIE_2', 'FERIE_3', 'MALATTIA'], {
+      errorMap: () => ({ message: 'leave_type must be one of: FERIE_1, FERIE_2, FERIE_3, MALATTIA' }),
+    }),
+    start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'start_date must be in YYYY-MM-DD format'),
+    end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'end_date must be in YYYY-MM-DD format'),
+    motivation: z.string().max(500, 'motivation must be at most 500 characters').optional().nullable(),
+  })
+    .refine(
+      (data) => new Date(data.end_date) >= new Date(data.start_date),
+      { message: 'end_date must be on or after start_date', path: ['end_date'] }
+    ),
+});
+
+// =====================================================
+// LEAVE MANAGEMENT — PUT /api/v1/leave/:id/approve
+// =====================================================
+
+const ApproveLeaveSchema = z.object({
+  params: z.object({
+    id: z.string().uuid('Invalid leave request ID: must be valid UUID'),
+  }),
+  body: z.object({
+    status: z.enum(['APPROVED', 'REJECTED'], {
+      errorMap: () => ({ message: 'status must be either APPROVED or REJECTED' }),
+    }),
+    rejection_reason: z.string().max(500, 'rejection_reason must be at most 500 characters').optional().nullable(),
+  })
+    .refine(
+      (data) => data.status !== 'REJECTED' || data.rejection_reason,
+      { message: 'rejection_reason is required when status is REJECTED', path: ['rejection_reason'] }
+    ),
+});
+
 module.exports = {
   LoginSchema,
   PostCheckinSchema,
@@ -473,5 +512,7 @@ module.exports = {
   AdminSettingsSchema,
   GetPresencesSummarySchema,
   UpdateSiteGeofenceSchema,
+  PostLeaveRequestSchema,
+  ApproveLeaveSchema,
   createValidationMiddleware,
 };
