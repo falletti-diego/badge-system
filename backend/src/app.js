@@ -70,7 +70,7 @@ app.use(helmet());
 // Dev: set CORS_ORIGIN=http://localhost:5173 in .env
 // Prod: SSM /badge/production/CORS_ORIGIN = https://badge.dataxiom.it,https://dataxiom-badge.netlify.app
 app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(',') || ['https://badge.dataxiom.it', 'https://dataxiom-badge.netlify.app'],
+  origin: process.env.CORS_ORIGIN?.split(',').map(s => s.trim()).filter(Boolean) || ['https://badge.dataxiom.it', 'https://dataxiom-badge.netlify.app'],
   credentials: true,
 }));
 
