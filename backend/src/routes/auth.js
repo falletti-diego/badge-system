@@ -50,6 +50,7 @@ const DEMO_USERS = [
     name: 'Pino',
     role: 'manager',
     client_id: '550e8400-e29b-41d4-a716-446655440001',
+    site_id: 'e1337fab-ba3f-4332-bb06-57c9df15b067', // Milano
   },
   {
     email: 'diego@badge.local',
@@ -58,7 +59,7 @@ const DEMO_USERS = [
     name: 'Diego',
     role: 'manager',
     client_id: '550e8400-e29b-41d4-a716-446655440001',
-    site_id: '550e8400-e29b-41d4-a716-446655440012',
+    site_id: '550e8400-e29b-41d4-a716-446655440012', // Torino
     employee_id: '550e8400-e29b-41d4-a716-446655440200',
   },
   {
@@ -68,15 +69,9 @@ const DEMO_USERS = [
     name: 'Maria',
     role: 'employee',
     client_id: '550e8400-e29b-41d4-a716-446655440001',
+    employee_id: '239ec99f-3204-45ca-bce2-793f52442ec6', // Maria Rossi (real employee in Torino with check-ins)
   },
-  {
-    email: 'lucia@badge.local',
-    password: process.env.DEMO_LUCIA_PASSWORD,
-    id: 'user-mvp-lucia',
-    name: 'Lucia',
-    role: 'employee',
-    client_id: '550e8400-e29b-41d4-a716-446655440001',
-  },
+  // Lucia removed — no corresponding employee record in the database
 ];
 
 // DEMO_USERS is only consulted for @badge.local emails — never for real-world domains.
