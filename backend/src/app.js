@@ -42,7 +42,6 @@ const { pool, closePool } = require('./db/pool');
 const { initializeRedis, closeRedis } = require('./db/redis');
 const { ApiError, RateLimitError } = require('./utils/errors');
 const { apiLimiter, authLimiter, csvLimiter } = require('./middleware/rateLimiter');
-const { cacheMiddleware } = require('./middleware/cache');
 const authRouter = require('./routes/auth');
 const employeesRouter = require('./routes/employees');
 const checkinsRouter = require('./routes/checkins');
@@ -149,9 +148,6 @@ app.get('/api', (req, res) => {
 app.get('/api/v1', (req, res) => {
   res.json({ message: 'Badge System API', version: '1.0.0', status: 'operational' });
 });
-
-// Cache middleware for GET requests (covers /api/ and /api/v1/ via prefix match)
-app.use('/api/', cacheMiddleware());
 
 // v1 router — canonical API prefix
 const v1Router = express.Router();
