@@ -87,63 +87,77 @@ non possono fare login senza reset manuale uno-a-uno.
 
 #### Core Tasks (MVP — 4 Critical Fixes)
 
-**Task 1: Database schema — revoked_tokens + used_tokens tables**
-- [ ] Migration 016: `CREATE TABLE revoked_tokens(id SERIAL PK, user_id UUID, revoked_at TIMESTAMP DEFAULT NOW(), revoked_by UUID, reason VARCHAR, UNIQUE(user_id))`
-- [ ] Migration 017: `CREATE TABLE used_tokens(id SERIAL PK, user_id UUID, jti VARCHAR UNIQUE, created_at TIMESTAMP DEFAULT NOW())`
-- [ ] Add TTL index on used_tokens: auto-delete dopo 7 giorni
-- [ ] Add index on revoked_tokens(user_id) per query O(1)
+**Task 1: Database schema — revoked_tokens + used_tokens tables (Fixes: #3 expiry, #6 GDPR cascade, #7 timezone, #8 TTL)**
+- [ ] Migration 016: revoked_tokens table with Fix #3 revoked_until TTL + Fix #7 TIMESTAMP WITH TIME ZONE
+  - Columns: id PK, user_id UUID UNIQUE, revoked_at TZ, revoked_by UUID, reason VARCHAR, revoked_until TZ (NULL=permanent)
+  - Cascading delete on user deletion (Fix #6 GDPR)
+- [ ] Migration 017: used_tokens table with Fix #7 timezone + Fix #8 TTL
+  - Columns: id PK, user_id UUID, jti VARCHAR UNIQUE, created_at TZ
+  - Cascading delete on user deletion (Fix #6 GDPR)
+  - TTL index: auto-delete after 7 days (Fix #8)
+- [ ] Add indexes: revoked_tokens(user_id), used_tokens(jti), used_tokens(user_id)
+- [ ] Add audit_log.jti_hash column for Fix #4 (information disclosure prevention)
 
-**Task 2: Backend POST /auth/refresh — Token rotation + reuse detection (Model 3)**
-- [ ] 2.1: Decode old_refresh_token → extract jti_old, user_id
-- [ ] 2.2: CHECK used_tokens(jti_old) — if FOUND → REPLAY DETECTED → revoke all user_id
-- [ ] 2.3: Transaction wrapper: BEGIN
-- [ ] 2.4: DELETE used_tokens WHERE jti = jti_old (FIRST, before new token generation)
-- [ ] 2.5: Generate new_access_token (15m) + new_refresh_token (7d) con jti_new (UUID)
-- [ ] 2.6: INSERT used_tokens(user_id, jti_new)
-- [ ] 2.7: INSERT audit_log(action='TOKEN_REFRESH', user_id, jti_old→jti_new)
-- [ ] 2.8: COMMIT
-- [ ] 2.9: Response: {access_token, refresh_token}
+**Task 2: Backend POST /auth/refresh — Token rotation + reuse detection (Fixes: #1 race condition, #2 audit optimization, #3 expiry check, #4 jti hashing, #5 connection safety)**
+- [ ] 2.1: Connection safety wrapper with try-finally (Fix #5)
+- [ ] 2.2: Transaction BEGIN
+- [ ] 2.3: Decode JWT, extract jti_old, user_id
+- [ ] 2.4: SELECT FOR UPDATE used_tokens WHERE jti=jti_old (Fix #1: atomic race prevention)
+  - If found → REPLAY DETECTED → INSERT revoked_tokens (Model 1) → COMMIT → 401
+- [ ] 2.5: Check revoked_tokens with expiry window (Fix #3: revoked_until > NOW())
+  - If revoked → COMMIT → 401 SESSION_REVOKED
+- [ ] 2.6: DELETE used_tokens WHERE jti=jti_old (before new token generation)
+- [ ] 2.7: Fetch user from employees
+- [ ] 2.8: Generate new access_token (15m) + new refresh_token (7d) con jti_new (UUID)
+- [ ] 2.9: INSERT used_tokens(user_id, jti_new)
+- [ ] 2.10: Audit logging (Fix #2: only log failures/replays, not routine) + Fix #4 jti_hash
+- [ ] 2.11: COMMIT + finally block releases connection (Fix #5)
+- [ ] 2.12: Response: {access_token, refresh_token}
 
-**Task 3: Backend POST /auth/revoke-session — Universal revoke (Model 1)**
-- [ ] 3.1: Require auth + RBAC (manager can revoke same-site users, admin all)
-- [ ] 3.2: Transaction wrapper: BEGIN
-- [ ] 3.3: INSERT revoked_tokens(user_id, revoked_at=NOW(), revoked_by=req.user.user_id, reason='admin_revoke')
-- [ ] 3.4: DELETE used_tokens WHERE user_id = ? (cleanup jti list)
-- [ ] 3.5: INSERT audit_log(action='SESSION_REVOKED', user_id, revoked_by, reason)
-- [ ] 3.6: COMMIT
-- [ ] 3.7: Response: {success: true, message: "Session revoked for user"}
+**Task 3: Backend POST /auth/revoke-session — Universal revoke (Fixes: #2 audit optimization, #3 expiry, #5 connection safety, #6 GDPR cascade)**
+- [ ] 3.1: RBAC check (manager same-site only, admin all) → 403 if denied
+- [ ] 3.2: Connection safety with try-finally (Fix #5)
+- [ ] 3.3: Transaction BEGIN
+- [ ] 3.4: INSERT revoked_tokens with revoked_by, reason, revoked_until=NULL (Fix #3: permanent)
+  - ON CONFLICT update timestamp (idempotent)
+- [ ] 3.5: DELETE used_tokens WHERE user_id=? (cleanup)
+- [ ] 3.6: Audit log: SESSION_REVOKED action (Fix #2: log only admin actions)
+- [ ] 3.7: COMMIT + finally releases connection (Fix #5)
+- [ ] 3.8: Response: {success: true}
 
-**Task 4: Backend middleware checkRevoked() — Pre-request revocation check**
-- [ ] 4.1: Extract user_id from JWT (verify token signed)
-- [ ] 4.2: Query: `SELECT revoked_at FROM revoked_tokens WHERE user_id = ?`
-- [ ] 4.3: If found → 401 {error: 'SESSION_REVOKED', message: 'Your session was revoked by administrator'}
-- [ ] 4.4: Integrate into `requireAuth` middleware (before API handler)
-- [ ] 4.5: Audit log: `action='REVOKED_TOKEN_ATTEMPT'` if attacker tries post-revoke
+**Task 4: Backend middleware checkRevoked() — Pre-request revocation check (Fixes: #2 audit, #3 expiry, #4 jti hashing)**
+- [ ] 4.1: Extract user_id from JWT payload
+- [ ] 4.2: SELECT revoked_at FROM revoked_tokens WHERE user_id=? AND (revoked_until IS NULL OR revoked_until > NOW())
+  - Fix #3: expiry check for temporary revokes
+- [ ] 4.3: If found → Audit log REVOKED_TOKEN_ATTEMPT with jti_hash (Fix #2, #4) → 401 SESSION_REVOKED
+- [ ] 4.4: Integrate into requireAuth middleware (call after JWT verification)
+- [ ] 4.5: Handle errors gracefully (no connection leaks)
 
-**Task 5: Tests — 10+ cases covering rotation + revoke + reuse detection + audit**
-- [ ] Test 5.1: Login → token + jti generated, used_tokens created ✓
-- [ ] Test 5.2: Refresh → new access_token, new refresh_token con jti_new ✓
-- [ ] Test 5.3: Refresh with old refresh_token after rotation → 401 EXPIRED ✓
-- [ ] Test 5.4: Replay attack: POST /refresh same jti twice → 401 REPLAY_DETECTED, user revoked ✓
-- [ ] Test 5.5: Post-revoke API call → 401 SESSION_REVOKED ✓
-- [ ] Test 5.6: Revoke-session endpoint (RBAC: manager vs non-manager) ✓
-- [ ] Test 5.7: Concurrent refresh (race condition) → one succeeds, other gets 401 ✓
-- [ ] Test 5.8: used_tokens cleanup after 7d TTL ✓
-- [ ] Test 5.9: Audit log entries: TOKEN_REFRESH, SESSION_REVOKED, REVOKED_TOKEN_ATTEMPT ✓
-- [ ] Test 5.10: Transaction rollback on error (e.g., DB connection fail during COMMIT) ✓
+**Task 5: Tests — 10+ cases (Model 3 reuse detection + Model 1 universal revoke + 8 fixes)**
+- [ ] Test 5.1: Login → jti generated, used_tokens created
+- [ ] Test 5.2: Refresh → new jti_new generated, jti_old deleted
+- [ ] Test 5.3: Replay attack (same jti twice) → REPLAY_DETECTED → user revoked → all tokens invalid (Fix #1, Model 3)
+- [ ] Test 5.4: Concurrent refresh (race condition) → SELECT FOR UPDATE prevents both succeeding (Fix #1)
+- [ ] Test 5.5: Revoke-session → all tokens → 401 on next API call (Fix #3 expiry check, Model 1)
+- [ ] Test 5.6: Temporary revoke (revoked_until=+2h) → works after 2h expiry (Fix #3)
+- [ ] Test 5.7: RBAC: manager can revoke same-site, not other-site (Fix #5 connection safety)
+- [ ] Test 5.8: Audit log: REPLAY_ATTACK_DETECTED, SESSION_REVOKED, REVOKED_TOKEN_ATTEMPT only (Fix #2)
+- [ ] Test 5.9: Audit log: jti stored as hash, not plaintext (Fix #4)
+- [ ] Test 5.10: used_tokens TTL cleanup after 7d (Fix #8)
+- [ ] Test 5.11: Delete employee → cascade deletes revoked_tokens + used_tokens + audit entries (Fix #6 GDPR)
+- [ ] Test 5.12: Connection leak prevention: connection released on error (Fix #5 try-finally)
 
-**Sforzo MVP (Tasks 1-5):** 5-6h
+**Sforzo MVP (Tasks 1-5 with 8 fixes):** 6h (1h aggiuntiva per fix integration + testing)
 
 ---
 
-#### Phase 2 Tasks (Deferred — 5-8)
+#### Phase 2 Tasks (Deferred — Optional Rate Limiting + Anomaly Detection)
 
-- **Task 6: Rate limiting** — Max 10 refresh/min per user (DoS protection)
-- **Task 7: Revoke expiry** — Optional `revoked_until` timestamp (e.g., revoke for 2 hours)
-- **Task 8: Explicit logout** — POST /api/auth/logout → DELETE used_tokens entry for graceful cleanup
-- **Task 9: Anomaly detection** — Log IP/country change on refresh (no auto-action MVP, Phase 2 alert)
+- **Task 6: Rate limiting** — Max 10 refresh/min per user (DoS protection, not MVP-critical)
+- **Task 7: Refresh token scope binding** — Bind refresh_token to device_id (Phase 2 selective revoke)
+- **Task 8: Anomaly detection** — Log IP/country change on refresh (Phase 2 alerts, no auto-action MVP)
 
-**Sforzo Phase 2 (Tasks 6-9):** 3-4h
+**Sforzo Phase 2 (Tasks 6-8):** 3-4h
 
 ### S.32.8 — 🟠 Split file monolitici
 - [ ] `AdminPage.jsx` (1455 righe) → `admin/tabs/*.jsx` + `admin/components/*.jsx`
