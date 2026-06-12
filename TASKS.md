@@ -31,16 +31,18 @@ Demo: Pino (Milano site_id aggiunto), Maria (employee_id reale aggiunto), Lucia 
 - [x] Refactor checkins GET + /stats, export GET, presences /summary con helper
 - [x] **Completato 2026-06-12** — 260/260 test verde | Spec: `docs/superpowers/specs/2026-06-12-rbac-fail-closed-design.md` | Commits: 56e1601, d9c086a, f99548b, bd266a9, cbed304, 898cf96
 
-### S.32.3 — 🔴 Cache middleware: chiave pre-auth = leak cross-tenant (CRITICO latente)
-`app.js:154`: `cacheMiddleware()` montato PRIMA di `requireAuth` → `req.user` undefined → chiave
-`client:anonymous` per tutti. Se `CACHE_ENABLED=true`: risposta di un utente servita ad altri
-utenti/tenant. Inoltre il pattern di invalidazione (`cache:api:checkins:client:X:*`) non matcha mai
-le chiavi reali (`cache::v1:checkins:client:anonymous:*`) → cache stantia per sempre.
-- [ ] Decisione: rimuovere il middleware app-level OPPURE spostarlo dopo requireAuth per-route
-- [ ] Se mantenuto: chiave deve includere client_id + role + employee_id + site_id
-- [ ] Fix pattern invalidazione per matchare le chiavi reali
-- [ ] Test: 2 utenti diversi stesso path → chiavi diverse; employee B non riceve risposta cachata di A
-- Sforzo: 1h
+### S.32.3 — ✅ Cache middleware: chiave pre-auth = leak cross-tenant (CRITICO latente)
+
+App-level cache middleware removed to eliminate cross-tenant data leak vulnerability.
+Pre-auth requests could share cached responses if CACHE_ENABLED=true. Now removed entirely.
+Redis utilities remain for future per-route caching (Phase 2).
+
+- [x] Decision: remove app-level cache entirely (safest for MVP)
+- [x] Remove cache middleware from app.js:154
+- [x] Clean up unused imports
+- [x] Smoke test: backend starts, API works, no cache logs
+- [x] Test suite: 260/260 tests passing
+- ✅ Completato 2026-06-12 — zero cross-tenant leak risk | Spec: `docs/superpowers/specs/2026-06-12-cache-removal-design.md` | Commits: 581ca32 (spec), a497826 (implementation)
 
 ### S.32.4 — 🟡 CORS trim + verifica porta 3000 esposta
 - [ ] `app.js:74`: `.split(',').map(s => s.trim()).filter(Boolean)` + unit test
