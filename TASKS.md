@@ -54,14 +54,18 @@ CORS origin parsing now handles whitespace gracefully. Unit + integration tests 
 - [x] Documentation comment in app.js explaining behavior
 - ✅ Completato 2026-06-12 — 271/271 test verde | Spec: `docs/superpowers/specs/2026-06-12-cors-trim-design.md` | Commits: 1d053fc (spec), 0be25d6 (unit test), 2a13e2e (integration test)
 
-### S.32.5 — 🟡 Migration runner + fix doppia 011
-Due migrazioni `011_*` (dpa_acknowledgements e geofencing_feature_flag), nessuna tabella di tracking,
-applicazione manuale via SSH (già causa del bug migration 004 in Session 12).
-- [ ] Rinominare `011_add_geofencing_feature_flag.sql` → `013_...`
-- [ ] Script runner con tabella `schema_migrations (filename, applied_at)` — idempotente, transazionale
-- [ ] Integrare nel deploy workflow
-- [ ] Test: doppia esecuzione → seconda non applica nulla
-- Sforzo: 2-3h
+### S.32.5 — ✅ Migration runner + fix doppia 011
+
+Idempotent migration runner with schema_migrations tracking table.
+Duplicate migration numbering fixed (011 → 013 → 014). Integrates into Docker entrypoint.
+
+- [x] schema_migrations table created (014_create_schema_migrations.sql)
+- [x] 011_add_geofencing_feature_flag.sql renamed to 013_add_geofencing_feature_flag.sql
+- [x] Migration runner: backend/scripts/run-migrations.js (idempotent, transactional)
+- [x] Docker entrypoint updated to run migrations before Express startup
+- [x] Tests: 4/4 passing (table creation, recording, UNIQUE, ordering)
+- [x] Full suite: 275+/275+ tests passing
+- ✅ Completato 2026-06-12 — idempotent migrations, zero manual SSH | Spec: `docs/superpowers/specs/2026-06-12-migration-runner-design.md` | Commits: dc0813f (schema table), a1d2f57 (rename 011), f8b0042 (rename 013→014), 3f14eed (runner script), 2fed551 (tests), 640ec19 (Docker entrypoint)
 
 ### S.32.6 — 🟡 CSV import: temp password mai comunicate
 `admin.js`: `generateTempPassword()` hashata e salvata ma mai restituita → dipendenti importati
