@@ -458,6 +458,106 @@ router.post('/refresh', async (req, res) => {
 });
 
 /**
+ * POST /api/auth/revoke-session
+ * S.32.7 Task 3: Universal revoke endpoint with RBAC
+ *
+ * Admin: can revoke any user
+ * Manager: can revoke users at same site only
+ * Employee/Viewer: forbidden
+ *
+ * Request body: { user_id: target_user_id }
+ * Response (200): { success: true, message: "Session revoked for user..." }
+ * Response (403): { error: "FORBIDDEN" }
+ * Response (404): { error: "USER_NOT_FOUND" }
+ *
+ * Security fixes:
+ * - Fix #2: Log admin actions only (session_revoked is security event)
+ * - Fix #3: Support optional revoked_until expiry (permanent if NULL)
+ * - Fix #5: Try-finally ensures connection release
+ * - Fix #6: ON CONFLICT for idempotency (re-revoke updates timestamp)
+ */
+router.post('/revoke-session', requireAuth, async (req, res, next) => {
+  const { user_id: target_user_id } = req.body;
+  const { user_id: caller_id, role, site_id } = req.user;
+
+  // Validation
+  if (!target_user_id) return next(new ValidationError('user_id is required'));
+
+  let client;
+  try {
+    // Fix #5: Connection safety with try-finally
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    try {
+      // ---- RBAC Check ----
+      if (role === 'admin') {
+        // Admin can revoke anyone
+      } else if (role === 'manager') {
+        // Manager: verify target is at same site
+        const targetUserResult = await client.query(
+          'SELECT site_id FROM employees WHERE id = $1',
+          [target_user_id]
+        );
+        if (targetUserResult.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return next(new NotFoundError('User not found'));
+        }
+        if (targetUserResult.rows[0].site_id !== site_id) {
+          await client.query('ROLLBACK');
+          return next(new ForbiddenError('You can only revoke users at your site'));
+        }
+      } else {
+        // Employee, viewer cannot revoke
+        await client.query('ROLLBACK');
+        return next(new ForbiddenError('Insufficient permissions'));
+      }
+
+      // ---- Model 1: Universal Revoke + Fix #3: optional expiry ----
+      // INSERT with ON CONFLICT: idempotent (re-revoke updates timestamp)
+      await client.query(
+        `INSERT INTO revoked_tokens(user_id, revoked_at, revoked_by, reason, revoked_until)
+         VALUES ($1, NOW(), $2, 'ADMIN_REVOKE', NULL)
+         ON CONFLICT(user_id) DO UPDATE SET revoked_at=NOW(), reason='ADMIN_REVOKE'`,
+        [target_user_id, caller_id]
+      );
+
+      // ---- Cleanup: delete all jti entries for this user ----
+      await client.query('DELETE FROM used_tokens WHERE user_id = $1', [target_user_id]);
+
+      // ---- Fix #2: Log admin actions only (not routine) ----
+      await client.query(
+        `INSERT INTO audit_log(action, user_id, details, timestamp)
+         VALUES ('SESSION_REVOKED', $1, $2, NOW())`,
+        [target_user_id, JSON.stringify({ revoked_by: caller_id, reason: 'ADMIN_REVOKE' })]
+      );
+
+      await client.query('COMMIT');
+
+      logger.info({
+        action: 'session_revoked',
+        user_id: target_user_id,
+        revoked_by: caller_id,
+        role,
+      });
+
+      res.json({ success: true, message: `Session revoked for user ${target_user_id}` });
+
+    } catch (innerErr) {
+      // Fix #5: explicit rollback on error
+      await client.query('ROLLBACK');
+      throw innerErr;
+    }
+
+  } catch (err) {
+    next(err);
+  } finally {
+    // Fix #5: Guarantee release
+    if (client) client.release();
+  }
+});
+
+/**
  * POST /api/auth/logout (optional)
  * Frontend will clear localStorage, but can call this endpoint for audit logging
  */

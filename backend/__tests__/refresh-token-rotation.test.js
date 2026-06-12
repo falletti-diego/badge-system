@@ -113,10 +113,9 @@ describe('S.32.7 Task 2 — POST /auth/refresh with Token Rotation', () => {
 
       // Should NOT have logger.info for successful refreshes
       // Only security events logged
-      const refreshSection = authModule.substring(
-        authModule.indexOf("router.post('/refresh'"),
-        authModule.indexOf("router.post('/logout'")
-      );
+      const refreshStart = authModule.indexOf("router.post('/refresh'");
+      const refreshEnd = authModule.indexOf("router.post('/revoke-session'");
+      const refreshSection = authModule.substring(refreshStart, refreshEnd);
 
       // Count warning/error logs vs info logs
       const warningCount = (refreshSection.match(/logger\.warn/g) || []).length;
@@ -299,6 +298,249 @@ describe('S.32.7 Task 2 — POST /auth/refresh with Token Rotation', () => {
 
       expect(authModule).toContain('500');
       expect(authModule).toContain('SERVER_ERROR');
+    });
+  });
+
+  describe('S.32.7 Task 3 — POST /api/auth/revoke-session (Universal Revoke)', () => {
+    describe('Endpoint structure and implementation', () => {
+      it('should have POST /revoke-session endpoint in auth.js', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        expect(authModule).toContain("router.post('/revoke-session'");
+        expect(authModule).toContain('user_id');
+      });
+
+      it('should require authentication (requireAuth middleware)', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        expect(authModule).toContain("router.post('/revoke-session', requireAuth");
+      });
+
+      it('should validate user_id parameter', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 2000
+        );
+
+        expect(revokeSection).toContain('!target_user_id');
+        expect(revokeSection).toContain('user_id is required');
+      });
+    });
+
+    describe('Test 3.1: Admin revokes user → all tokens invalid', () => {
+      it('should have RBAC check for admin role', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 3000
+        );
+
+        expect(revokeSection).toContain("role === 'admin'");
+        expect(revokeSection).toContain('INSERT INTO revoked_tokens');
+      });
+
+      it('should insert revoked_tokens with ADMIN_REVOKE reason', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 3000
+        );
+
+        expect(revokeSection).toContain('ADMIN_REVOKE');
+        expect(revokeSection).toContain('revoked_tokens');
+      });
+
+      it('should use ON CONFLICT for idempotency', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 3000
+        );
+
+        expect(revokeSection).toContain('ON CONFLICT');
+      });
+
+      it('should delete used_tokens for cleanup', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 3000
+        );
+
+        expect(revokeSection).toContain('DELETE FROM used_tokens');
+      });
+
+      it('should log SESSION_REVOKED in audit_log', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 3000
+        );
+
+        expect(revokeSection).toContain('SESSION_REVOKED');
+        expect(revokeSection).toContain('audit_log');
+      });
+
+      it('should return 200 {success: true} on success', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 3000
+        );
+
+        expect(revokeSection).toContain('res.json');
+        expect(revokeSection).toContain('success: true');
+      });
+
+      it('should use transaction (BEGIN/COMMIT/ROLLBACK)', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 3000
+        );
+
+        expect(revokeSection).toContain('BEGIN');
+        expect(revokeSection).toContain('COMMIT');
+        expect(revokeSection).toContain('ROLLBACK');
+      });
+
+      it('should use try-finally for connection cleanup', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 3500
+        );
+
+        expect(revokeSection).toContain('} finally {');
+        expect(revokeSection).toContain('client.release()');
+      });
+
+      it('should log admin actions with logger.info', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 3000
+        );
+
+        expect(revokeSection).toContain('logger.info');
+        expect(revokeSection).toContain('session_revoked');
+      });
+    });
+
+    describe('Test 3.2: Manager revokes non-same-site user → 403 FORBIDDEN', () => {
+      it('should check manager site_id matches target site_id', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 3000
+        );
+
+        expect(revokeSection).toContain("role === 'manager'");
+        expect(revokeSection).toContain('site_id');
+      });
+
+      it('should query target employee site_id from database', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 3000
+        );
+
+        expect(revokeSection).toContain('SELECT site_id FROM employees');
+      });
+
+      it('should return 403 FORBIDDEN if manager cannot access target user', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 3000
+        );
+
+        expect(revokeSection).toContain('ForbiddenError');
+        expect(revokeSection).toContain('can only revoke users at your site');
+      });
+
+      it('should return 404 NOT_FOUND if target user does not exist', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 3000
+        );
+
+        expect(revokeSection).toContain('NotFoundError');
+        expect(revokeSection).toContain('User not found');
+      });
+
+      it('should reject employee/viewer roles', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 3000
+        );
+
+        expect(revokeSection).toContain('Insufficient permissions');
+      });
+    });
+
+    describe('Model 1: Universal Revoke Implementation', () => {
+      it('should revoke all tokens for the user (not just current)', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 3000
+        );
+
+        // Should revoke entire user, not just specific token
+        expect(revokeSection).toContain('DELETE FROM used_tokens WHERE user_id');
+      });
+
+      it('should support optional revoked_until for temporary revoke', () => {
+        const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+        const authModule = fs.readFileSync(authPath, 'utf8');
+
+        const revokeSection = authModule.substring(
+          authModule.indexOf("router.post('/revoke-session'"),
+          authModule.indexOf("router.post('/revoke-session'") + 2500
+        );
+
+        expect(revokeSection).toContain('revoked_until');
+        expect(revokeSection).toContain('NULL');
+      });
     });
   });
 
