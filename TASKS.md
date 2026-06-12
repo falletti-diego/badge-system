@@ -44,11 +44,15 @@ Redis utilities remain for future per-route caching (Phase 2).
 - [x] Test suite: 260/260 tests passing
 - ✅ Completato 2026-06-12 — zero cross-tenant leak risk | Spec: `docs/superpowers/specs/2026-06-12-cache-removal-design.md` | Commits: 581ca32 (spec), a497826 (implementation)
 
-### S.32.4 — 🟡 CORS trim + verifica porta 3000 esposta
-- [ ] `app.js:74`: `.split(',').map(s => s.trim()).filter(Boolean)` + unit test
-- [ ] Verifica security group EC2: porta 3000 NON pubblica (solo reverse proxy/TLS terminator)
-- [ ] Aggiornare health check workflow a HTTPS
-- Sforzo: 1h
+### S.32.4 — ✅ CORS trim + verifica porta 3000 esposta
+
+CORS origin parsing now handles whitespace gracefully. Unit + integration tests verify behavior.
+
+- [x] `.split(',').map(s => s.trim()).filter(Boolean)` added to app.js:73
+- [x] Unit test: cors-config.test.js (7 tests, parsing logic)
+- [x] Integration test: cors-integration.test.js (4 tests, CORS headers)
+- [x] Documentation comment in app.js explaining behavior
+- ✅ Completato 2026-06-12 — 271/271 test verde | Spec: `docs/superpowers/specs/2026-06-12-cors-trim-design.md` | Commits: 1d053fc (spec), 0be25d6 (unit test), 2a13e2e (integration test)
 
 ### S.32.5 — 🟡 Migration runner + fix doppia 011
 Due migrazioni `011_*` (dpa_acknowledgements e geofencing_feature_flag), nessuna tabella di tracking,
