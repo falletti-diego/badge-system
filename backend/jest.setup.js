@@ -1,6 +1,7 @@
 // Jest setup: generate real RSA key pair for RS256 tests
 // Keys are generated fresh each test run — never stored or committed
 const { generateKeyPairSync } = require('crypto');
+require('dotenv').config();
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', {
   modulusLength: 2048,

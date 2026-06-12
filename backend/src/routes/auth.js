@@ -7,6 +7,8 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const pino = require('pino');
+const crypto = require('crypto');
+const { v4: uuid } = require('uuid');
 const { createValidationMiddleware, LoginSchema } = require('../middleware/validation');
 const { ValidationError, ForbiddenError, NotFoundError } = require('../utils/errors');
 const { verifyPassword, hashPassword } = require('../auth/password');
@@ -184,11 +186,27 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       algorithm: JWT_ALGORITHM,
       expiresIn: ACCESS_TOKEN_EXPIRY,
     });
-    const refreshPayload = { user_id: user.id, type: 'refresh' };
+
+    // Generate refresh token with jti for S.32.7 token rotation
+    const jti = uuid();
+    const refreshPayload = { user_id: user.id, type: 'refresh', jti };
     const refresh_token = jwt.sign(refreshPayload, JWT_PRIVATE_KEY, {
       algorithm: JWT_ALGORITHM,
       expiresIn: REFRESH_TOKEN_EXPIRY,
     });
+
+    // Record jti in used_tokens for replay detection
+    try {
+      await pool.query(
+        `INSERT INTO used_tokens (user_id, jti)
+         VALUES ($1, $2)
+         ON CONFLICT (jti) DO NOTHING`,
+        [user.id, jti]
+      );
+    } catch (err) {
+      // If used_tokens table doesn't exist yet (first login before migration), continue anyway
+      logger.debug({ action: 'used_tokens_insert_failed', error: err.message });
+    }
 
     logger.info({
       action: 'user_login',
@@ -225,7 +243,20 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
 
 /**
  * POST /api/auth/refresh
- * Exchange a valid refresh token for a new access token (15min)
+ * S.32.7 Task 2: Token rotation with reuse detection
+ *
+ * Request body: { refresh_token }
+ * Response: { data: { token (access), refresh_token (new refresh) } }
+ *
+ * Security fixes implemented:
+ * - Fix #1: SELECT FOR UPDATE prevents concurrent refresh race condition
+ * - Fix #2: Audit logging only for security events (replays, revokes), not routine refreshes
+ * - Fix #3: Temporary revoke support via revoked_until with expiry check
+ * - Fix #4: jti stored as SHA256 hash in audit logs (no plaintext token exposure)
+ * - Fix #5: Try-finally ensures connection release even on error
+ *
+ * Token rotation: old jti deleted, new jti generated with new tokens
+ * Replay detection: if old jti appears in used_tokens, user is revoked (Model 1 blacklist)
  */
 router.post('/refresh', async (req, res) => {
   const { refresh_token } = req.body;
@@ -234,71 +265,195 @@ router.post('/refresh', async (req, res) => {
     return res.status(400).json({ error: 'MISSING_REFRESH_TOKEN', message: 'refresh_token is required' });
   }
 
+  let client;
   try {
-    const decoded = jwt.verify(refresh_token, JWT_PUBLIC_KEY, { algorithms: [JWT_ALGORITHM] });
+    // Decode JWT to extract jti_old and user_id
+    let decoded;
+    try {
+      decoded = jwt.verify(refresh_token, JWT_PUBLIC_KEY, { algorithms: [JWT_ALGORITHM] });
+    } catch (err) {
+      logger.warn({ action: 'refresh_token_invalid', error: err.message });
+      return res.status(401).json({ error: 'INVALID_REFRESH_TOKEN', message: 'Refresh token is invalid or expired' });
+    }
 
     if (decoded.type !== 'refresh') {
       return res.status(401).json({ error: 'INVALID_TOKEN_TYPE', message: 'Token is not a refresh token' });
     }
 
-    // Step 1: Check DEMO_USERS (internal accounts)
-    const demoUser = DEMO_USERS.find((u) => u.id === decoded.user_id);
+    const jti_old = decoded.jti;
+    const user_id = decoded.user_id;
 
-    let tokenPayload;
+    // First check if this is a demo user (no DB queries needed)
+    const demoUser = DEMO_USERS.find((u) => u.id === user_id);
 
-    if (demoUser) {
-      tokenPayload = {
-        user_id: demoUser.id,
-        name: demoUser.name,
-        email: demoUser.email,
-        role: demoUser.role,
-        client_id: demoUser.client_id,
-      };
-      if (demoUser.employee_id) tokenPayload.employee_id = demoUser.employee_id;
-      if (demoUser.site_id) tokenPayload.site_id = demoUser.site_id;
-    } else {
-      // Step 2: DB lookup for real customers created via admin panel.
-      // Guard against non-UUID user_id values (e.g. legacy 'user-mvp-*' strings from
-      // tokens issued before the S.1 fix) — pg throws a 22P02 UUID cast error otherwise.
-      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!UUID_REGEX.test(decoded.user_id)) {
-        logger.warn({ action: 'refresh_invalid_user_id_format', user_id: decoded.user_id });
-        return res.status(401).json({ error: 'USER_NOT_FOUND', message: 'User not found' });
+    // Fix #5: Get explicit connection for transaction control (try-finally cleanup)
+    // Only connect to DB if needed (non-demo users or if jti needs to be checked/recorded)
+    const needsDbConnection = !demoUser || jti_old;
+
+    if (needsDbConnection) {
+      try {
+        client = await pool.connect();
+      } catch (err) {
+        logger.error({ action: 'db_connection_error', error: err.message });
+        return res.status(500).json({ error: 'SERVER_ERROR', message: 'Database connection failed' });
       }
-
-      const result = await pool.query(
-        `SELECT id, client_id, email, name, role, site_id
-         FROM employees
-         WHERE id = $1`,
-        [decoded.user_id]
-      );
-      const dbEmployee = result.rows[0];
-      if (!dbEmployee) {
-        logger.warn({ action: 'refresh_user_not_found', user_id: decoded.user_id });
-        return res.status(401).json({ error: 'USER_NOT_FOUND', message: 'User not found' });
-      }
-      tokenPayload = {
-        user_id: dbEmployee.id,
-        name: dbEmployee.name,
-        email: dbEmployee.email,
-        role: dbEmployee.role,
-        client_id: dbEmployee.client_id,
-        employee_id: dbEmployee.id,
-      };
-      if (dbEmployee.site_id) tokenPayload.site_id = dbEmployee.site_id;
     }
 
-    const token = jwt.sign(tokenPayload, JWT_PRIVATE_KEY, {
-      algorithm: JWT_ALGORITHM,
-      expiresIn: ACCESS_TOKEN_EXPIRY,
-    });
+    if (!demoUser) {
+      // Guard against non-UUID user_id values
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!UUID_REGEX.test(user_id)) {
+        if (client) client.release();
+        return res.status(401).json({ error: 'USER_NOT_FOUND', message: 'User not found' });
+      }
+    }
 
-    logger.info({ action: 'token_refreshed', user_id: decoded.user_id });
+    try {
+      // Only execute DB transactions if we have a client connection
+      if (client) {
+        // Fix #5: Use explicit transaction for atomicity
+        await client.query('BEGIN');
 
-    res.json({ data: { token } });
+        // Fix #1: SELECT FOR UPDATE prevents concurrent refresh race condition
+        // Only check replay if jti is present (backward compatibility with legacy tokens)
+        if (jti_old) {
+          const replayCheck = await client.query(
+            `SELECT 1 FROM used_tokens WHERE jti = $1 FOR UPDATE`,
+            [jti_old]
+          );
+
+          if (replayCheck.rows.length > 0) {
+            // REPLAY DETECTED: Revoke the user to prevent further damage
+            await client.query(
+              `INSERT INTO revoked_tokens (user_id, revoked_at, reason, revoked_until)
+               VALUES ($1, NOW(), $2, NULL)
+               ON CONFLICT (user_id) DO UPDATE SET revoked_at = NOW(), revoked_until = NULL`,
+              [user_id, 'REPLAY_ATTACK_DETECTED']
+            );
+
+            // Fix #4: Hash the jti for audit logging (no plaintext token exposure)
+            const jti_hash = crypto.createHash('sha256').update(jti_old).digest('hex');
+            logger.warn({
+              action: 'REPLAY_ATTACK_DETECTED',
+              user_id,
+              jti_hash,
+              timestamp: new Date().toISOString(),
+            });
+
+            await client.query('COMMIT');
+            return res.status(401).json({ error: 'SESSION_REVOKED', message: 'Token replay detected, session revoked' });
+          }
+        }
+
+        // Fix #3: Check if user is revoked (permanent or temporary revoke within window)
+        const revokeCheck = await client.query(
+          `SELECT revoked_at FROM revoked_tokens
+           WHERE user_id = $1 AND (revoked_until IS NULL OR revoked_until > NOW())`,
+          [user_id]
+        );
+
+        if (revokeCheck.rows.length > 0) {
+          await client.query('COMMIT');
+          return res.status(401).json({ error: 'SESSION_REVOKED', message: 'User session revoked' });
+        }
+
+        // Delete old jti from used_tokens (before generating new token) if jti exists
+        if (jti_old) {
+          await client.query('DELETE FROM used_tokens WHERE jti = $1', [jti_old]);
+        }
+      }
+
+      // Build token payload (Check DEMO_USERS first, then database)
+      let tokenPayload;
+
+      if (demoUser) {
+        tokenPayload = {
+          user_id: demoUser.id,
+          name: demoUser.name,
+          email: demoUser.email,
+          role: demoUser.role,
+          client_id: demoUser.client_id,
+        };
+        if (demoUser.employee_id) tokenPayload.employee_id = demoUser.employee_id;
+        if (demoUser.site_id) tokenPayload.site_id = demoUser.site_id;
+      } else {
+        const result = await client.query(
+          `SELECT id, client_id, email, name, role, site_id
+           FROM employees
+           WHERE id = $1`,
+          [user_id]
+        );
+        const dbEmployee = result.rows[0];
+        if (!dbEmployee) {
+          await client.query('COMMIT');
+          return res.status(401).json({ error: 'USER_NOT_FOUND', message: 'User not found' });
+        }
+        tokenPayload = {
+          user_id: dbEmployee.id,
+          name: dbEmployee.name,
+          email: dbEmployee.email,
+          role: dbEmployee.role,
+          client_id: dbEmployee.client_id,
+          employee_id: dbEmployee.id,
+        };
+        if (dbEmployee.site_id) tokenPayload.site_id = dbEmployee.site_id;
+      }
+
+      // Generate new jti (Fix #1: prevent replay by using new unique jti)
+      const jti_new = uuid();
+
+      // Generate new access token (15m) and refresh token (7d) with new jti
+      const token = jwt.sign(tokenPayload, JWT_PRIVATE_KEY, {
+        algorithm: JWT_ALGORITHM,
+        expiresIn: ACCESS_TOKEN_EXPIRY,
+      });
+
+      const refreshPayload = { ...tokenPayload, type: 'refresh', jti: jti_new };
+      const newRefreshToken = jwt.sign(refreshPayload, JWT_PRIVATE_KEY, {
+        algorithm: JWT_ALGORITHM,
+        expiresIn: REFRESH_TOKEN_EXPIRY,
+      });
+
+      // Insert new jti into used_tokens (if DB connection available)
+      if (client) {
+        await client.query(
+          `INSERT INTO used_tokens (user_id, jti)
+           VALUES ($1, $2)`,
+          [user_id, jti_new]
+        );
+        await client.query('COMMIT');
+      }
+
+      // Fix #2: Only log security events, not routine refreshes
+      // (Routine refreshes are expected and don't need audit trail)
+      // Actual audit logging for token events happens in requireAuth middleware
+
+      res.json({
+        data: {
+          token,
+          refresh_token: newRefreshToken,
+        },
+      });
+    } catch (err) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackErr) {
+        logger.error({ action: 'rollback_error', error: rollbackErr.message });
+      }
+      throw err;
+    }
   } catch (err) {
-    logger.warn({ action: 'refresh_token_invalid', error: err.message });
-    res.status(401).json({ error: 'INVALID_REFRESH_TOKEN', message: 'Refresh token is invalid or expired' });
+    logger.error({ action: 'refresh_error', error: err.message, stack: err.stack });
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Refresh failed, please try again' });
+  } finally {
+    // Fix #5: Always release connection in finally block (no connection leaks)
+    if (client) {
+      try {
+        client.release();
+      } catch (releaseErr) {
+        logger.error({ action: 'connection_release_error', error: releaseErr.message });
+      }
+    }
   }
 });
 
