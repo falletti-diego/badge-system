@@ -195,19 +195,6 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       expiresIn: REFRESH_TOKEN_EXPIRY,
     });
 
-    // Record jti in used_tokens for replay detection
-    try {
-      await pool.query(
-        `INSERT INTO used_tokens (user_id, jti)
-         VALUES ($1, $2)
-         ON CONFLICT (jti) DO NOTHING`,
-        [user.id, jti]
-      );
-    } catch (err) {
-      // If used_tokens table doesn't exist yet (first login before migration), continue anyway
-      logger.debug({ action: 'used_tokens_insert_failed', error: err.message });
-    }
-
     logger.info({
       action: 'user_login',
       email,
