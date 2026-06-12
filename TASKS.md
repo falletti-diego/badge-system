@@ -20,14 +20,16 @@ bloccanti per qualunque demo a clienti. Ordine di esecuzione obbligato.
 - ✅ Completato 2026-06-12 — guard fail-closed prima di withTransaction | Spec: `docs/superpowers/specs/2026-06-12-checkin-ownership-design.md` | Commits: 00cf9a0, c295b2a, 2dd57db
 - Follow-up non bloccanti (da security review): normalizzare case UUID nel confronto; allow-list esplicita ruoli su POST (oggi viewer è bloccato solo perché non ha employee_id); aggiungere `client_id` al warn log `checkin_ownership_violation`
 
-### S.32.2 — 🔴 RBAC fail-closed + helper condiviso (CRITICO — data leak intra-tenant)
-`checkins.js:178`, `/stats:310`, `presences.js`, `export.js`: pattern `if (role === 'employee' && employeeId)`
-è fail-open — token employee SENZA `employee_id` vede tutti i dati del tenant (demo Maria/Lucia inclusi).
-- [ ] Helper unico `utils/queryScope.js` → `buildScopedFilters(req.user, filters)` fail-closed by design
-- [ ] Employee senza `employee_id` nel token → 403 (non dati completi)
-- [ ] Applicare in: checkins GET, checkins/stats, presences, export
-- [ ] Test: matrice ruolo × claims → clausole WHERE attese; token employee senza employee_id → 403
-- Sforzo: 3-4h
+### S.32.2 — ✅ RBAC fail-closed + helper condiviso (CRITICO — data leak intra-tenant) 
+
+`checkins.js`, `export.js`, `presences.js`: fail-closed pattern deduplicato via `buildScopedFilters`.
+Demo: Pino (Milano site_id aggiunto), Maria (employee_id reale aggiunto), Lucia (rimossa).
+
+- [x] Helper unico `utils/queryScope.js` → `buildScopedFilters(req.user, filters)` fail-closed by design
+- [x] Test: queryScope.test.js matrice unit (14/14) + checkins-rbac.test.js integrazione (11/11)
+- [x] Demo account fix in auth.js DEMO_USERS (Pino site_id, Maria employee_id, Lucia removed)
+- [x] Refactor checkins GET + /stats, export GET, presences /summary con helper
+- [x] **Completato 2026-06-12** — 260/260 test verde | Spec: `docs/superpowers/specs/2026-06-12-rbac-fail-closed-design.md` | Commits: 56e1601, d9c086a, f99548b, bd266a9, cbed304, 898cf96
 
 ### S.32.3 — 🔴 Cache middleware: chiave pre-auth = leak cross-tenant (CRITICO latente)
 `app.js:154`: `cacheMiddleware()` montato PRIMA di `requireAuth` → `req.user` undefined → chiave
