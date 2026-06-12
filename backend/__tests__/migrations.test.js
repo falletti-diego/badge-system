@@ -11,7 +11,7 @@ const path = require('path');
 describe('Migration Runner', () => {
   // Test 1: Schema migration file exists and contains expected structure
   it('creates schema_migrations table on first run', async () => {
-    const migrationPath = path.join(__dirname, '..', 'migrations', '013_create_schema_migrations.sql');
+    const migrationPath = path.join(__dirname, '..', 'migrations', '014_create_schema_migrations.sql');
     const sql = fs.readFileSync(migrationPath, 'utf8');
 
     // Verify the migration file exists and contains the required table
@@ -24,7 +24,7 @@ describe('Migration Runner', () => {
 
   // Test 2: Schema migration supports recording migrations
   it('records migration in schema_migrations after application', async () => {
-    const migrationPath = path.join(__dirname, '..', 'migrations', '013_create_schema_migrations.sql');
+    const migrationPath = path.join(__dirname, '..', 'migrations', '014_create_schema_migrations.sql');
     const sql = fs.readFileSync(migrationPath, 'utf8');
 
     // Verify the schema_migrations table has columns required for recording
@@ -37,7 +37,7 @@ describe('Migration Runner', () => {
 
   // Test 3: Schema enforces UNIQUE constraint on filename
   it('prevents duplicate migrations (UNIQUE constraint)', async () => {
-    const migrationPath = path.join(__dirname, '..', 'migrations', '013_create_schema_migrations.sql');
+    const migrationPath = path.join(__dirname, '..', 'migrations', '014_create_schema_migrations.sql');
     const sql = fs.readFileSync(migrationPath, 'utf8');
 
     // Verify UNIQUE constraint exists on filename column
@@ -52,7 +52,7 @@ describe('Migration Runner', () => {
 
   // Test 4: Schema supports ordering by applied_at timestamp
   it('query returns migrations in applied order', async () => {
-    const migrationPath = path.join(__dirname, '..', 'migrations', '013_create_schema_migrations.sql');
+    const migrationPath = path.join(__dirname, '..', 'migrations', '014_create_schema_migrations.sql');
     const sql = fs.readFileSync(migrationPath, 'utf8');
 
     // Verify the schema has applied_at timestamp for ordering
