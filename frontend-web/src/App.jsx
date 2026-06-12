@@ -3,7 +3,7 @@
  * Sets up routing and layout for Badge System Dashboard
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import DashboardPage from './features/dashboard/pages/DashboardPage';
@@ -15,6 +15,9 @@ import { CorrectionsPage } from './features/corrections/pages/CorrectionsPage';
 import { SitesPage } from './features/sites/pages/SitesPage';
 import { AdminPage } from './features/admin/pages/AdminPage';
 import SummaryPage from './pages/SummaryPage';
+import { useTokenRefresh } from './hooks/useTokenRefresh';
+import { setupAxiosInterceptor } from './lib/axiosInterceptor';
+import apiClient from './services/apiClient';
 
 // Create Material-UI theme with design system colors
 const theme = createTheme({
@@ -74,6 +77,13 @@ const theme = createTheme({
 });
 
 function App() {
+  const tokenRefresh = useTokenRefresh();
+
+  // Setup axios interceptor for automatic token refresh on 401
+  useEffect(() => {
+    setupAxiosInterceptor(apiClient, () => tokenRefresh);
+  }, [tokenRefresh]);
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
