@@ -143,15 +143,15 @@ router.get('/pending', requireAuth, async (req, res, next) => {
 
     const params = [clientId];
 
-    // RBAC: Manager sees own store's pending requests, Admin sees all pending requests
-    if (role === 'manager' && siteId) {
+    // RBAC: Admin sees all pending requests; managers only see their own store.
+    if (role === 'admin') {
+      // No additional filter.
+    } else if (role === 'manager' && siteId) {
       query += ` AND e.site_id = $2::uuid`;
       params.push(siteId);
-    } else if (role === 'employee') {
-      // Employees cannot view pending requests for approval
-      throw new ForbiddenError('Employees cannot view pending leave requests', 'FORBIDDEN');
+    } else {
+      throw new ForbiddenError('You do not have permission to view pending leave requests', 'FORBIDDEN');
     }
-    // Admin sees all (no additional filter)
 
     query += ` ORDER BY r.created_at DESC LIMIT 100`;
 
@@ -183,6 +183,10 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveLeaveS
   const siteId = req.user.site_id;
 
   try {
+    if (role !== 'admin' && !(role === 'manager' && siteId)) {
+      throw new ForbiddenError('You do not have permission to approve leave requests', 'FORBIDDEN');
+    }
+
     const result = await withTransaction(async (client) => {
       // 1. Fetch the leave request
       const leaveResult = await client.query(
@@ -197,7 +201,7 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveLeaveS
       const leaveRequest = leaveResult.rows[0];
 
       // 2. RBAC: Manager approves employee requests in their store, Admin approves all
-      if (role === 'manager' && siteId) {
+      if (role === 'manager') {
         // Manager can only approve employees from their store
         const employeeResult = await client.query(
           `SELECT site_id FROM employees WHERE id = $1::uuid LIMIT 1`,
@@ -217,22 +221,23 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveLeaveS
           });
           throw new ForbiddenError('You can only approve requests for employees in your store', 'FORBIDDEN');
         }
-      } else if (role !== 'admin') {
-        // Non-managers and non-admins cannot approve
-        throw new ForbiddenError('You do not have permission to approve leave requests', 'FORBIDDEN');
+      }
+
+      if (leaveRequest.status !== 'PENDING') {
+        throw new ValidationError('Leave request has already been processed', { code: 'ALREADY_PROCESSED' });
       }
 
       // 3. Update leave request status
       const updateResult = await client.query(
         `UPDATE leave_requests
          SET status = $1, approved_by = $2::uuid, approved_at = NOW(), rejection_reason = $3, updated_at = NOW()
-         WHERE id = $4::uuid
+         WHERE id = $4::uuid AND status = 'PENDING'
          RETURNING *`,
         [status, userId, rejection_reason || null, id]
       );
 
       if (updateResult.rows.length === 0) {
-        throw new NotFoundError('Failed to update leave request', 'UPDATE_FAILED');
+        throw new ValidationError('Leave request has already been processed', { code: 'ALREADY_PROCESSED' });
       }
 
       const updatedLeave = updateResult.rows[0];
