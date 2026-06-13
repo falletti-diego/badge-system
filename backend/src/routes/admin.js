@@ -645,7 +645,7 @@ router.post('/employees/:id/reset-password', async (req, res, next) => {
     const passwordHash = await hashPassword(newPassword);
 
     const updateResult = await pool.query(
-      'UPDATE employees SET password_hash = $1 WHERE id = $2 RETURNING id, name, email, client_id',
+      'UPDATE employees SET password_hash = $1, must_change_password = true WHERE id = $2 RETURNING id, name, email, client_id',
       [passwordHash, id]
     );
     if (updateResult.rowCount === 0) {

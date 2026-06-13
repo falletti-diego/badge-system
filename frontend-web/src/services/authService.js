@@ -6,6 +6,7 @@ const REFRESH_TOKEN_KEY = 'badge_refresh_token';
 const USER_KEY = 'badge_user';
 const EMPLOYEE_ID_KEY = 'badge_employee_id';
 const SITE_ID_KEY = 'badge_site_id';
+const MUST_CHANGE_PASSWORD_KEY = 'badge_must_change_password';
 
 /**
  * Authentication Service
@@ -30,12 +31,19 @@ const authService = {
       logger.debug('authService', 'apiClient.post response received', { status: response.status });
 
       if (response.data.data && response.data.data.token) {
-        const { token, refresh_token, user } = response.data.data;
+        const { token, refresh_token, user, must_change_password } = response.data.data;
         logger.debug('authService', 'storing tokens in localStorage', { userId: user.id, role: user.role });
 
         localStorage.setItem(TOKEN_KEY, token);
         if (refresh_token) localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
         localStorage.setItem(USER_KEY, JSON.stringify(user));
+
+        // Store must_change_password flag (for forced password change flow)
+        if (must_change_password) {
+          localStorage.setItem(MUST_CHANGE_PASSWORD_KEY, 'true');
+        } else {
+          localStorage.removeItem(MUST_CHANGE_PASSWORD_KEY);
+        }
 
         // Store employee_id if present (for employee role users)
         if (user.employee_id) {
@@ -51,7 +59,7 @@ const authService = {
           localStorage.removeItem(SITE_ID_KEY);
         }
 
-        logger.info('authService', 'login successful', { email, role: user.role });
+        logger.info('authService', 'login successful', { email, role: user.role, mustChangePassword: must_change_password });
       }
 
       return response.data;
@@ -85,6 +93,7 @@ const authService = {
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(EMPLOYEE_ID_KEY);
     localStorage.removeItem(SITE_ID_KEY);
+    localStorage.removeItem(MUST_CHANGE_PASSWORD_KEY);
   },
 
   /**

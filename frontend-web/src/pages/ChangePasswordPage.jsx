@@ -97,18 +97,16 @@ export default function ChangePasswordPage() {
         throw new Error('Invalid response from server');
       }
 
-      // Update localStorage with new token
-      localStorage.setItem('badge_auth_token', token);
-      localStorage.setItem('badge_refresh_token', refresh_token);
-      localStorage.setItem('badge_user', JSON.stringify(user));
+      // Show success message
+      setApiSuccess('Password changed successfully! Please log in with your new password.');
 
-      // Show success message briefly, then redirect
-      setApiSuccess('Password changed successfully! Redirecting to dashboard...');
+      // Logout to clear old session and localStorage (including must_change_password flag)
+      authService.logout();
 
-      // Auto-redirect to dashboard after 1 second (let user see success message)
+      // Auto-redirect to login after 2 seconds (let user see success message)
       setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 1000);
+        navigate('/login', { replace: true });
+      }, 2000);
     } catch (err) {
       setLoading(false);
 

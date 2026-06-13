@@ -90,10 +90,8 @@ function PasswordChangeGuard({ children }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Get must_change_password from localStorage
-    const userStr = localStorage.getItem('badge_user');
-    const user = userStr ? JSON.parse(userStr) : null;
-    const mustChangePassword = user?.must_change_password === true;
+    // Get must_change_password flag from localStorage
+    const mustChangePassword = localStorage.getItem('badge_must_change_password') === 'true';
 
     // If password must be changed but user is NOT on /change-password or /login
     if (mustChangePassword && !location.pathname.startsWith('/change-password') && location.pathname !== '/login') {
