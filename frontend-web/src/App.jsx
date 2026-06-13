@@ -16,6 +16,7 @@ import { SitesPage } from './features/sites/pages/SitesPage';
 import { AdminPage } from './features/admin/pages/AdminPage';
 import { EmployeeLeaveRequest } from './features/leave/pages/EmployeeLeaveRequest';
 import { ManagerLeaveRequest } from './features/leave/pages/ManagerLeaveRequest';
+import { AdminLeaveManagement } from './features/leave/pages/AdminLeaveManagement';
 import SummaryPage from './pages/SummaryPage';
 import { useTokenRefresh } from './hooks/useTokenRefresh';
 import { setupAxiosInterceptor } from './lib/axiosInterceptor';
@@ -176,6 +177,16 @@ function App() {
             element={
               <ProtectedRoute requiredRole="admin">
                 <AdminPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Admin: Leave Management */}
+          <Route
+            path="/admin/leave"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <AdminLeaveManagement />
               </ProtectedRoute>
             }
           />

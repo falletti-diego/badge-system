@@ -162,6 +162,21 @@ const DashboardPage = () => {
               </Button>
             )}
 
+            {/* Admin Leave Management - Admin only */}
+            {userRole === 'admin' && (
+              <Button
+                color="inherit"
+                onClick={() => navigate('/admin/leave')}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '14px',
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
+                }}
+              >
+                📋 Ferie Admin
+              </Button>
+            )}
+
             {/* Summary link - Show for admin, manager, viewer */}
             {(userRole === 'admin' || userRole === 'manager' || userRole === 'viewer') && (
               <Button

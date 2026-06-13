@@ -136,10 +136,62 @@ export const useLeave = () => {
     }
   }, []);
 
+  const getAllLeaveRequests = useCallback(async (filters) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const params = new URLSearchParams();
+      if (filters?.status) params.append('status', filters.status);
+      if (filters?.employee_id) params.append('employee_id', filters.employee_id);
+      if (filters?.start_date) params.append('start_date', filters.start_date);
+      if (filters?.end_date) params.append('end_date', filters.end_date);
+
+      const query = params.toString();
+      const url = query ? `/api/v1/leave/all?${query}` : '/api/v1/leave/all';
+      const response = await apiClient.get(url);
+      return response.data.data || [];
+    } catch (err) {
+      const errorMessage =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to fetch all leave requests';
+
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const getEmployeeSaldi = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await apiClient.get('/api/v1/leave/admin/saldi');
+      return response.data.data || {};
+    } catch (err) {
+      const errorMessage =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to fetch employee saldi';
+
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   return {
     createRequest,
     getMyRequests,
     getPendingRequests,
+    getAllLeaveRequests,
+    getEmployeeSaldi,
     approveRequest,
     rejectRequest,
     loading,

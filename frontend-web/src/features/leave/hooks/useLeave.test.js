@@ -501,4 +501,147 @@ describe('useLeave Hook', () => {
       expect(result.current.error).toBe('REQUEST_ALREADY_PROCESSED');
     });
   });
+
+  describe('getAllLeaveRequests', () => {
+    it('should fetch all leave requests', async () => {
+      const mockResponse = {
+        data: {
+          data: [
+            {
+              id: 'req-001',
+              employee_id: 'emp-001',
+              employee_name: 'Maria Rossi',
+              leave_type: 'FERIE_1',
+              start_date: '2026-07-01',
+              end_date: '2026-07-05',
+              status: 'APPROVED',
+            },
+            {
+              id: 'req-002',
+              employee_id: 'emp-002',
+              employee_name: 'Luigi Bianchi',
+              leave_type: 'MALATTIA',
+              start_date: '2026-06-20',
+              end_date: '2026-06-20',
+              status: 'PENDING',
+            },
+          ],
+        },
+      };
+
+      apiClient.get.mockResolvedValue(mockResponse);
+
+      const { result } = renderHook(() => useLeave());
+
+      let requests;
+      await act(async () => {
+        requests = await result.current.getAllLeaveRequests({});
+      });
+
+      expect(apiClient.get).toHaveBeenCalledWith('/api/v1/leave/all');
+      expect(requests).toHaveLength(2);
+      expect(requests[0].employee_name).toBe('Maria Rossi');
+      expect(result.current.loading).toBe(false);
+    });
+
+    it('should filter requests by status', async () => {
+      apiClient.get.mockResolvedValue({ data: { data: [] } });
+
+      const { result } = renderHook(() => useLeave());
+
+      await act(async () => {
+        await result.current.getAllLeaveRequests({ status: 'PENDING' });
+      });
+
+      expect(apiClient.get).toHaveBeenCalledWith('/api/v1/leave/all?status=PENDING');
+    });
+
+    it('should handle error', async () => {
+      const mockError = {
+        response: {
+          data: {
+            error: 'FORBIDDEN',
+          },
+        },
+      };
+
+      apiClient.get.mockRejectedValue(mockError);
+
+      const { result } = renderHook(() => useLeave());
+
+      await act(async () => {
+        try {
+          await result.current.getAllLeaveRequests({});
+        } catch (err) {
+          // expected
+        }
+      });
+
+      expect(result.current.error).toBe('FORBIDDEN');
+    });
+  });
+
+  describe('getEmployeeSaldi', () => {
+    it('should fetch employee saldi', async () => {
+      const mockResponse = {
+        data: {
+          data: {
+            'emp-001': { FERIE_1: 15, FERIE_2: 10, FERIE_3: 5, MALATTIA: 10 },
+            'emp-002': { FERIE_1: 20, FERIE_2: 15, FERIE_3: 10, MALATTIA: 12 },
+          },
+        },
+      };
+
+      apiClient.get.mockResolvedValue(mockResponse);
+
+      const { result } = renderHook(() => useLeave());
+
+      let saldi;
+      await act(async () => {
+        saldi = await result.current.getEmployeeSaldi();
+      });
+
+      expect(apiClient.get).toHaveBeenCalledWith('/api/v1/leave/admin/saldi');
+      expect(Object.keys(saldi)).toHaveLength(2);
+      expect(saldi['emp-001'].FERIE_1).toBe(15);
+      expect(result.current.loading).toBe(false);
+    });
+
+    it('should handle empty saldi', async () => {
+      apiClient.get.mockResolvedValue({ data: { data: {} } });
+
+      const { result } = renderHook(() => useLeave());
+
+      let saldi;
+      await act(async () => {
+        saldi = await result.current.getEmployeeSaldi();
+      });
+
+      expect(saldi).toEqual({});
+    });
+
+    it('should handle error', async () => {
+      const mockError = {
+        response: {
+          data: {
+            error: 'SERVER_ERROR',
+          },
+        },
+      };
+
+      apiClient.get.mockRejectedValue(mockError);
+
+      const { result } = renderHook(() => useLeave());
+
+      await act(async () => {
+        try {
+          await result.current.getEmployeeSaldi();
+        } catch (err) {
+          // expected
+        }
+      });
+
+      expect(result.current.error).toBe('SERVER_ERROR');
+    });
+  });
 });
