@@ -118,9 +118,55 @@ MVP target remains 9 tasks, using TDD and subagent-assisted review where useful.
 
 ## Next Steps
 
-### Immediate Next Task
+### Immediate Next Task: Task 4 — EmployeeLeaveRequest Page
 
-### Task 4: Frontend — EmployeeLeaveRequest Page
+**Goal:** Build a form page where employees request leave using the newly completed `LeaveCalendar` component.
+
+**Requirements:**
+- Employee leave request form with:
+  - `LeaveCalendar` component for date range selection
+  - `leave_type` dropdown (FERIE_1, FERIE_2, FERIE_3, MALATTIA)
+  - `motivation` text area (optional, max 500 chars)
+  - Submit and Cancel buttons
+- Displays list of user's own leave requests below form (`GET /api/v1/leave/my-requests`)
+- RBAC: Only employees/viewers can access this page
+- Error handling: Show validation errors, insufficient saldo, etc.
+- Success feedback: Toast/snackbar after successful request
+
+**Key integrations:**
+- API endpoint: `POST /api/v1/leave/request` (backend ready ✓)
+- API endpoint: `GET /api/v1/leave/my-requests` (backend ready ✓)
+- Use existing patterns from `DashboardPage.jsx`, `CorrectionsPage.jsx`
+- Use MUI components: `Card`, `Button`, `TextField`, `Select`, `Snackbar`
+- Follow Italian localization patterns already in project
+
+**Test approach:**
+- Form rendering and state management
+- API call success/error cases
+- Insufficient saldo validation
+- Request list display and pagination
+- RBAC edge cases
+
+**Files to create/modify:**
+- `frontend-web/src/features/leave/pages/EmployeeLeaveRequest.jsx` (new)
+- `frontend-web/src/features/leave/hooks/useLeave.js` (new)
+- `frontend-web/src/__tests__/EmployeeLeaveRequest.test.jsx` (new)
+- `frontend-web/src/App.jsx` (add route `/leave/request`)
+
+**Suggested next commit message:**
+```
+feat: implement EmployeeLeaveRequest page with LeaveCalendar integration
+
+- Page: EmployeeLeaveRequest.jsx with form + request list
+- Hook: useLeave.js for API interactions
+- Tests: 15+ tests covering form, API, RBAC, validation
+- Integration: Routed at /leave/request (employee, viewer)
+- Status: 15/15 tests passing
+```
+
+---
+
+4. **EmployeeLeaveRequest** — Task 4 above
    - Employee leave request form using `LeaveCalendar`
    - Calls `POST /api/v1/leave/request`
    - Displays own requests from `GET /api/v1/leave/my-requests`
