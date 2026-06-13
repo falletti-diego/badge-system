@@ -15,6 +15,7 @@ import { CorrectionsPage } from './features/corrections/pages/CorrectionsPage';
 import { SitesPage } from './features/sites/pages/SitesPage';
 import { AdminPage } from './features/admin/pages/AdminPage';
 import { EmployeeLeaveRequest } from './features/leave/pages/EmployeeLeaveRequest';
+import { ManagerLeaveRequest } from './features/leave/pages/ManagerLeaveRequest';
 import SummaryPage from './pages/SummaryPage';
 import { useTokenRefresh } from './hooks/useTokenRefresh';
 import { setupAxiosInterceptor } from './lib/axiosInterceptor';
@@ -145,6 +146,16 @@ function App() {
             element={
               <ProtectedRoute requiredRole="employee">
                 <EmployeeLeaveRequest />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Manager Leave Request Route */}
+          <Route
+            path="/leave/my-request"
+            element={
+              <ProtectedRoute requiredRole="manager">
+                <ManagerLeaveRequest />
               </ProtectedRoute>
             }
           />

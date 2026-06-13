@@ -214,7 +214,7 @@ Proceed with Task 3: frontend LeaveCalendar component, using TDD and multiagent 
 | 1. Database Schema | COMPLETE | `a601c2a`, `2969493` | Schema tests passing | Spec + quality pass |
 | 2. Backend API | COMPLETE | `de9cfc9`, `fdf2b76` | `13/13` focused API tests passing | Security fixes complete |
 | 3. LeaveCalendar Component | COMPLETE | `efd2b86` | `11/11` tests passing ✓ | MUI date-range picker |
-| 4. EmployeeLeaveRequest | TODO | - | - | Next task — use LeaveCalendar |
+| 4. EmployeeLeaveRequest | COMPLETE | `2a56389` | Hook: `11/11` ✓ | Full form + history table, sorting, pagination |
 | 5. ManagerLeaveRequest | TODO | - | - | After Task 4 |
 | 6. ManagerLeaveApprovalPanel | TODO | - | - | After Task 5 |
 | 7. AdminLeaveManagement | TODO | - | - | After Task 6 |
