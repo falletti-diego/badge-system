@@ -259,6 +259,103 @@ Duplicate migration numbering fixed (011 → 013 → 014). Integrates into Docke
 
 **Sforzo Phase 2 (Tasks 6-8):** 3-4h
 
+---
+
+### Task 11 — 🔵 Leave Management QA & Frontend Testing (PRIORITY: High)
+
+**Goal:** Complete comprehensive testing of Leave Management (Ferie & Malattia) with full test data setup, test plan execution, and frontend verification on localhost.
+
+**Current Status:** Leave Management implementation COMPLETE (Session 34), Task 10 (Form redesign) COMPLETE (Session 35). **Remaining:** Full QA coverage with realistic data + frontend verification.
+
+**Phase 1: Test Data Setup (30 min)**
+- [ ] **11.1** Create CSV with test data:
+  - 2 sites: Milano (existing), Torino (new)
+  - 2 managers: Alice (Milano), Carlo (Torino)
+  - 6 employees: Maria, Francesca, Paolo (Milano) + Lucia, Giovanni, Sofia (Torino)
+  - Pre-assigned shifts: 10 days per employee in June
+  - Leave requests: 3 ferie (1 PENDING, 2 APPROVED), 1 malattia (APPROVED)
+- [ ] **11.2** Create `scripts/seed-leave-test-data.js` — import CSV via POST /api/admin/employees/import
+- [ ] **11.3** Execute import script — verify all 8 records in DB (`SELECT * FROM employees WHERE site_id IN (...)`)
+- [ ] **11.4** Manually create leave requests via POST /api/v1/leave/request (curl or Postman):
+  - Maria: FERIE_1 (6-13 giugno, status=PENDING) + MALATTIA (20-21 giugno, status=PENDING)
+  - Francesca: FERIE_1 (9-15 giugno, status=APPROVED)
+  - Lucia: MALATTIA (24-26 giugno, status=APPROVED)
+
+**Phase 2: Test Plan Execution (60 min)** — 17 test cases covering:
+- [ ] **11.5** Ferie tests (7 cases):
+  - Dipendente richiede ferie con saldo OK → 200, PENDING ✅
+  - Dipendente richiede ferie saldo insufficiente → 400, INSUFFICIENT_SALDO ✅
+  - Manager approva ferie dipendente suo → 200, APPROVED ✅
+  - Manager rifiuta ferie con motivo → 200, REJECTED, rejection_reason salvato ✅
+  - Admin vede tutte le richieste → 200, tutti client ✅
+  - Manager vede solo richieste sua sede → 200, filtered by site_id ✅
+  - Dipendente vede solo proprie richieste → 200, solo own user_id ✅
+- [ ] **11.6** Malattia tests (3 cases):
+  - Dipendente richiede malattia (NO saldo limit) → 200, PENDING, saldo check skipped ✅
+  - Dipendente richiede 100 giorni malattia (no limit) → 200, num_days=100 OK ✅
+  - Manager approva malattia dipendente suo → 200, APPROVED ✅
+- [ ] **11.7** Planning Page blocking tests (4 cases):
+  - Manager tenta turno a dipendente con FERIE APPROVED → DISABILITATO (gray, 🔒), tooltip ✅
+  - Manager tenta turno a dipendente con MALATTIA APPROVED → DISABILITATO (gray, 🔒), tooltip ✅
+  - Manager PUÒ assegnare turno a collega senza ferie/malattia → ABILITATO, salva ✅
+  - Manager salva turni: ferie bloccate rimangono 🔒 dopo reload mese → still bloccate ✅
+- [ ] **11.8** Edge case tests (3 cases):
+  - Ferie PENDING (non approvata): turno NON bloccato → ABILITATO ✅
+  - Ferie approvata poi rifiutata: turno torna ABILITATO ✅
+  - Admin modifica ferie approvata (cancella): turno sbloccato in real-time ✅
+
+**Phase 3: Frontend Manual Testing (30 min)** — on localhost:5173
+- [ ] **11.9** Start backend (npm run dev, DISABLE_AUTH=true) + frontend web (npm run dev)
+- [ ] **11.10** Test EmployeeLeaveRequest page as Maria:
+  - Form visible with "Richiedi ferie/malattia" title ✅
+  - Dropdown "Tipo Feria" (left) + "Richiedi Malattia" button (right) layout ✅
+  - File upload visible only when Malattia active ✅
+  - Calendar styling: blue range + white text + borders ✅
+  - Create FERIE_1 request (6-13 giugno) → 200 ✅
+  - Create MALATTIA request (20-21 giugno) → 200 ✅
+- [ ] **11.11** Test AdminLeaveManagement page as Admin:
+  - 5 tabs visible: Pending, Approved, Rejected, History, Saldi ✅
+  - Pending tab: Maria (FERIE_1), Francesca (FERIE_1), Lucia (MALATTIA) visible ✅
+  - Approve Maria FERIE_1 → 200, status=APPROVED, saldo decremented ✅
+  - Reject Lucia MALATTIA with reason → 200, status=REJECTED, reason saved ✅
+  - Saldi tab: Maria FERIE_1 saldo correct after approval ✅
+- [ ] **11.12** Test PlanningPage as Alice (Milano manager):
+  - Approved ferie/malattia shown as red cells with 🔒 ✅
+  - Francesca (9-15 giugno): turni DISABILITATI ✅
+  - Lucia (24-26 giugno): turni DISABILITATI ✅
+  - Paolo (no leaves): turni ABILITATI, can assign shifts ✅
+  - Assign shift to Paolo (15 giugno) → Save succeeds ✅
+  - Change month and return: locks still in place ✅
+- [ ] **11.13** Test role-based visibility:
+  - Employee Maria: vede solo proprie richieste ✅
+  - Manager Alice: vede solo richieste Milano staff ✅
+  - Admin: vede tutte richieste ✅
+  - Viewer: accesso negato (403) ✅
+
+**Deliverables:**
+- CSV file: `backend/scripts/seed-data/leave-test-data.csv` (8 employees, 2 sites, 4 leave requests)
+- Import script: `backend/scripts/seed-leave-test-data.js`
+- Test plan doc: `docs/superpowers/plans/2026-06-14-leave-testing-plan.md` (17 test cases, step-by-step)
+- Test results: Manual execution checklist with pass/fail per case
+- Bug report (if any): Documented in Sentry + git issues
+
+**Effort:** ~2h (30min setup + 60min testing + 30min documentation)
+
+**Definition of Done:**
+- ✅ All 17 test cases executed and PASSING
+- ✅ No 5xx errors in Sentry during testing
+- ✅ Ferie/Malattia blocking on PlanningPage visually verified
+- ✅ RBAC scoping verified for all 4 roles
+- ✅ CSV import script working (8/8 records)
+- ✅ Test plan documented with results
+
+**Next Steps (Post-Task 11):**
+- S.32.8 Split file monolitici (AdminPage.jsx + routes/admin.js)
+- S.32.9 GPS spoofing mitigations
+- Deploy to production with confidence
+
+---
+
 ### S.32.8 — 🟠 Split file monolitici
 - [ ] `AdminPage.jsx` (1455 righe) → `admin/tabs/*.jsx` + `admin/components/*.jsx`
 - [ ] `routes/admin.js` (954 righe) → `routes/admin/{clients,sites,employees,import,settings}.js`
