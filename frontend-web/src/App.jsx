@@ -3,11 +3,12 @@
  * Sets up routing and layout for Badge System Dashboard
  */
 
-import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import DashboardPage from './features/dashboard/pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
+import ChangePasswordPage from './pages/ChangePasswordPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { PlanningPage } from './features/planning/pages/PlanningPage';
 import { EmployeeShiftsPage } from './features/planning/pages/EmployeeShiftsPage';
@@ -79,7 +80,32 @@ const theme = createTheme({
   },
 });
 
-function App() {
+/**
+ * PasswordChangeGuard Component
+ * Watches for must_change_password flag and redirects to /change-password
+ * Allows access to /change-password and /login only when password change is required
+ */
+function PasswordChangeGuard({ children }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Get must_change_password from localStorage
+    const userStr = localStorage.getItem('badge_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const mustChangePassword = user?.must_change_password === true;
+
+    // If password must be changed but user is NOT on /change-password or /login
+    if (mustChangePassword && !location.pathname.startsWith('/change-password') && location.pathname !== '/login') {
+      // Force redirect to /change-password (fail-closed, Opzione A)
+      navigate('/change-password', { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
+  return children;
+}
+
+function AppRouter() {
   const tokenRefresh = useTokenRefresh();
 
   // Setup axios interceptor for automatic token refresh on 401
@@ -88,12 +114,11 @@ function App() {
   }, [tokenRefresh]);
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Router>
-        <Routes>
-          {/* Auth Routes */}
-          <Route path="/login" element={<LoginPage />} />
+    <PasswordChangeGuard>
+      <Routes>
+        {/* Auth Routes */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/change-password" element={<ChangePasswordPage />} />
 
           {/* Protected Routes */}
           <Route
@@ -201,9 +226,19 @@ function App() {
             }
           />
 
-          {/* Redirect unknown routes to dashboard */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
+        {/* Redirect unknown routes to dashboard */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </PasswordChangeGuard>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Router>
+        <AppRouter />
       </Router>
     </ThemeProvider>
   );
