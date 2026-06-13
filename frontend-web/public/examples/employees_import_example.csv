@@ -1,0 +1,11 @@
+name,email,site_name,role,employee_id
+Maria Rossi,maria.rossi@torino.it,Torino Store,employee,EMP001
+Giovanni Bianchi,giovanni.bianchi@torino.it,Torino Store,employee,EMP002
+Luca Verdi,luca.verdi@torino.it,Torino Store,manager,MGR001
+Sofia Moretti,sofia.moretti@milano.it,Milano Store,employee,EMP003
+Andrea Conti,andrea.conti@milano.it,Milano Store,employee,EMP004
+Francesca Gallo,francesca.gallo@milano.it,Milano Store,manager,MGR002
+Marco Ferrari,marco.ferrari@torino.it,Torino Store,employee,EMP005
+Giulia Rizzo,giulia.rizzo@milano.it,Milano Store,employee,EMP006
+Thomas Weber,thomas.weber@torino.it,Torino Store,employee,EMP007
+Valentina Russo,valentina.russo@milano.it,Milano Store,employee,EMP008
