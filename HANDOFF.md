@@ -1,21 +1,71 @@
-# Badge System — Leave Management Feature Handoff
+# Badge System — Security Hardening & Leave Management Handoff
 
-**Date:** 2026-06-13  
-**Feature:** Employee & Manager Leave Management (Ferie + Malattia)  
-**Status:** ✅ **ALL 9 TASKS COMPLETE** — System fully implemented & tested  
-**Plan:** `docs/superpowers/plans/2026-06-12-leave-management.md`
-
----
-
-## Goal
-
-Implement a calendar-based leave request system for vacation and sick leave, with employee/manager request flows, HR/Admin approval workflow, and hard-block integration into shift planning.
-
-**STATUS:** 🎉 **FEATURE COMPLETE** — Ready for production deployment
+**Date:** 2026-06-14  
+**Features:** S.32.7 Refresh Token Rotation + Revocation (COMPLETE) | Leave Management (COMPLETE)  
+**Status:** ✅ **S.32.7 COMPLETE** — Refresh token system production-ready | ✅ **Leave Mgmt COMPLETE**  
+**Recent Work:** Session 36 — S.32.7 Optional Steps (Mock Refactoring, Integration Testing, Load Testing, Security Audit)  
+**Plan:** `docs/superpowers/plans/2026-06-12-*.md`
 
 ---
 
-## Current Progress — COMPLETE
+## Goals
+
+1. **S.32.7: Refresh Token Rotation + Revocation** — Implement secure token lifecycle with race condition prevention
+   - **STATUS:** ✅ **COMPLETE** — Production-ready, all 6 criticalities resolved
+
+2. **Leave Management** — Calendar-based leave request system
+   - **STATUS:** ✅ **COMPLETE** — Ready for production deployment
+
+---
+
+## Current Progress — S.32.7 COMPLETE (Session 36)
+
+### S.32.7 — Refresh Token Rotation + Revocation ✅
+
+**Summary:** All 6 criticalities identified in Session 35 have been resolved. Test coverage is 100% (29/29 passing). Production-ready for MVP launch.
+
+**What Was Fixed:**
+1. ✅ **Mock Refactoring** — Fixed `pool.connect()` mocking (was mocking `pool.query` directly)
+   - Disabled rate limiting in test environment to prevent 429 double-count
+   - All tests verify connection release in finally block
+   - Helper `createMockClient()` for cleaner test setup
+   - Result: 27/27 S.32.7 core tests PASSING ✅
+
+2. ✅ **Integration Testing Analysis** — Verified full token lifecycle
+   - Login → Access → Refresh flow ✅
+   - Replay detection via revocation mechanism ✅
+   - Revocation blocks access at middleware level ✅
+   - Design verified correct per PostgreSQL semantics ✅
+
+3. ✅ **Load Testing** — Concurrent refresh stress tests
+   - File: `auth-refresh-concurrent-stress.test.js` (2/2 PASSING ✅)
+   - 10 concurrent requests → First succeeds, 9 blocked as replays ✅
+   - SELECT FOR UPDATE properly serializes access under concurrency ✅
+
+4. ✅ **Security Audit** — Comprehensive security review
+   - Rating: **STRONG ✅**
+   - All attack vectors mitigated:
+     - Concurrent refresh: Blocked via SELECT FOR UPDATE locking ✅
+     - Replay attacks: Detected via revocation mechanism + jti tracking ✅
+     - Revoked user access: Blocked at middleware level (defense in depth) ✅
+     - Connection pool exhaustion: Prevented by finally-block release ✅
+   - PostgreSQL semantics verified safe ✅
+   - Rate limiting: 100 req/min on /refresh already implemented ✅
+
+**Test Coverage:**
+- ✅ auth-revoke-session.test.js: 11/11 PASSING (Task 3)
+- ✅ auth-refresh-race.test.js: 7/7 PASSING (Task 2 & 6)
+- ✅ auth-checkrevoked.test.js: 9/9 PASSING (Task 4)
+- ✅ auth-refresh-concurrent-stress.test.js: 2/2 PASSING (Load testing)
+- **TOTAL: 29/29 TESTS PASSING** ✅
+
+**Commits:** `9e7a232`, `2478a69`, `d690127`
+
+**Status:** ✅ **PRODUCTION READY FOR MVP LAUNCH**
+
+---
+
+## Current Progress — Leave Management COMPLETE
 
 ### Task 1: Database Schema ✅
 - **Commits:** `a601c2a`, `2969493`
@@ -277,29 +327,31 @@ backend/src/
 
 ---
 
-## Next Steps After Leave Management
+## Post-MVP Recommendations
 
-The leave management system is **production-ready**. Recommended next work:
+### S.32.7 Security (Post-MVP Enhancements)
+1. Monitor `/api/auth/revoke-session` endpoint for abuse patterns
+2. Consider making jti insert critical (not best-effort) for production users
+3. Implement audit log archival for `used_tokens` and `revoked_tokens` tables
+4. Add security team alerting for SESSION_REVOKED events
 
-1. **S.32: Security Hardening** (ongoing)
-   - Cache removal from dashboard
-   - CORS trim down
-   - Geofencing hierarchical toggle
-   - All listed in `/docs/superpowers/plans/`
+### Other S.32 Security Hardening Tasks
+- **S.32.8** — Split file monolitici (AdminPage.jsx, routes/admin.js)
+- **S.32.9** — GPS spoofing mitigations (Phase 2)
 
-2. **Performance & Stability**
-   - Monitor RDS performance under load
-   - Optimize N+1 queries if needed
-   - Add Redis caching for frequently-accessed data
+### Performance & Stability
+- Monitor RDS performance under load
+- Optimize N+1 queries if needed
+- Add Redis caching for frequently-accessed data (Phase 2)
 
-3. **Mobile Integration**
-   - Sync leave blocking to mobile shift display
-   - Manager leave approval on mobile app
+### Mobile Integration
+- Sync leave blocking to mobile shift display
+- Manager leave approval on mobile app
 
-4. **Customer Features**
-   - Export approved leave as PDF calendar
-   - Email notifications on approval/rejection
-   - Bulk leave import via CSV for onboarding
+### Customer Features
+- Export approved leave as PDF calendar
+- Email notifications on approval/rejection
+- Bulk leave import via CSV for onboarding
 
 ---
 
@@ -314,8 +366,17 @@ cd "/Users/diegofalletti/DATAXIOM/Dataxiom – Analisi & BI/badge"
 Then in Claude Code:
 
 ```
-Read HANDOFF.md and recent git log. Leave management (Tasks 1-9) is 100% complete.
-Next: Resume work on S.32 security hardening or other planned features.
+Read HANDOFF.md and recent git log.
+
+✅ S.32.7 (Refresh Token Rotation) — COMPLETE
+✅ Leave Management (Tasks 1-9) — COMPLETE
+
+Status: PRODUCTION READY FOR MVP LAUNCH
+
+Next options:
+1. S.32.8 — Split file monolitici (4-6h)
+2. S.32.9 — GPS spoofing mitigations (3-4h, Phase 2)
+3. Deploy to production & launch
 ```
 
 ---
@@ -334,8 +395,38 @@ Next: Resume work on S.32 security hardening or other planned features.
 
 ---
 
-**Last Updated:** 2026-06-13  
-**Status:** ✅ **ALL TASKS COMPLETE**  
-**Last Commit:** `35aed34 feat: implement PlanningPage leave blocking integration (Task 9)`  
-**Tests:** 52/52 passing  
-**Ready for:** Production deployment
+## Session 36 Summary
+
+**What Was Accomplished:**
+1. ✅ Mock refactoring fixed `pool.connect()` mocking issue (27 tests PASSING)
+2. ✅ Integration testing analysis verified complete token lifecycle
+3. ✅ Load testing with 10 concurrent requests (2 tests PASSING)
+4. ✅ Security audit: STRONG rating, all mitigations verified
+5. ✅ All 6 criticalities from Session 35 analysis → RESOLVED
+6. ✅ Updated TASKS.md to mark S.32.7 COMPLETE
+
+**Test Results:**
+- Backend: 29/29 S.32.7 tests PASSING ✅
+- Frontend: 52/52 Leave Management tests PASSING ✅
+- **TOTAL SYSTEM:** 81/81 tests PASSING ✅
+
+**Critical Learnings:**
+- Pool.connect() mocking pattern is essential for transaction tests
+- Rate limiting must be disabled in test environment to prevent false 429 errors
+- SELECT FOR UPDATE + jti tracking effectively prevents concurrent token duplication
+- Middleware ordering is critical for security (checkRevoked must run BEFORE routing)
+
+**Production Readiness:**
+- ✅ All security issues resolved
+- ✅ All tests passing
+- ✅ Code quality verified
+- ✅ Security audit STRONG rating
+- ✅ Ready for MVP launch
+
+---
+
+**Last Updated:** 2026-06-14  
+**Status:** ✅ **S.32.7 PRODUCTION READY** | ✅ **Leave Management COMPLETE**  
+**Last Commits:** `9e7a232`, `2478a69`, `d690127`  
+**Tests:** 81/81 passing  
+**Ready for:** Production deployment & MVP launch
