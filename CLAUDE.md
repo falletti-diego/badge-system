@@ -293,3 +293,99 @@ If asked to "resume", read TASKS.md + recent `git log --oneline -10` instead of 
 **Last Updated:** 28 Maggio 2026  
 **Approved By:** Diego Falletti  
 **Status:** APPROVED ✅ — Ready for Development
+
+---
+
+## ⚠️ Known Bug Patterns & Prevention
+
+**These patterns have caused critical bugs. Check these before committing.**
+
+### Pattern 1: Mock Auth Hardcoded UUIDs (CRITICAL)
+**File:** `backend/src/middleware/auth.js` (DISABLE_AUTH block)
+
+**Risk:** Using hardcoded strings like `'client-1'` in UUID columns → PostgreSQL rejects with `invalid input syntax for type uuid`
+
+**Example (❌ WRONG):**
+```javascript
+req.user = {
+  user_id: 'mvp-user-1',           // ❌ String, not UUID
+  client_id: 'client-1',            // ❌ String, not UUID — will fail queries
+  role: 'admin',
+};
+```
+
+**Example (✅ CORRECT):**
+```javascript
+const { DEMO_USERS } = require('../__fixtures__/demo-users');
+const admin = DEMO_USERS.find(u => u.role === 'admin');
+req.user = {
+  user_id: admin.id,                // ✅ UUID from fixture
+  client_id: admin.client_id,       // ✅ UUID from fixture
+  role: admin.role,
+};
+```
+
+**Prevention Checklist:**
+- [ ] All mock `client_id`, `site_id`, `employee_id` are valid UUIDs (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx format)
+- [ ] UUIDs sourced from `DEMO_USERS` fixture, never hardcoded strings
+- [ ] Integration test exists: DISABLE_AUTH=true → presences endpoint returns data (not INTERNAL_ERROR)
+- [ ] No grep matches: `grep -r "(client_id|site_id|employee_id): '[^{]'" backend/src/` (catch hardcoded strings)
+
+**See:** [[critical_bugs_client_1_uuid_2026_06_13]] for full analysis
+
+---
+
+### Pattern 2: Config Environment Variable Collisions
+**Files:** `.env`, `.env.development`, `.env.test`, `src/config-loader.js`
+
+**Risk:** Wrong NODE_ENV loaded → wrong API URLs, credentials, or disabled features
+
+**Prevention Checklist:**
+- [ ] `npm run validate-env` passes before any `npm run dev` or `npm start`
+- [ ] Startup logs show which `.env.{NODE_ENV}` file was loaded
+- [ ] Health check verifies DATABASE_URL connectivity (not just TCP)
+- [ ] `.env` is gitignored (contains personal overrides only)
+
+---
+
+### Pattern 3: Silent Failures in Middleware
+**Files:** `middleware/auth.js`, `middleware/validation.js`, `middleware/rateLimit.js`
+
+**Risk:** Errors caught and silently passed to next() → user sees blank response instead of error
+
+**Prevention Checklist:**
+- [ ] All middleware logs at minimum 'warn' level when handling errors
+- [ ] Structured logging: `{ action, error, message, user_id, path, statusCode }`
+- [ ] Never silently continue if critical data is missing
+- [ ] Error tests exist for all middleware (not just happy path)
+
+---
+
+### Pattern 4: DRY Violation in Demo Data
+**Files:** `routes/auth.js`, `middleware/auth.js`, `__tests__/**`
+
+**Risk:** DEMO_USERS defined in multiple places → divergence → bugs
+
+**Solution:** Single source of truth in `backend/src/__fixtures__/demo-users.js`
+- All imports must reference this file
+- No hardcoding user IDs, emails, or UUIDs elsewhere
+- Validation script checks all DEMO_USERS at startup
+
+---
+
+## 🔍 Code Review Checklist (Auth & Config Changes)
+
+Before submitting PR that modifies:
+- `middleware/auth.js`
+- `routes/auth.js`
+- `.env*` files
+- Config loading logic
+
+**Required:**
+- [ ] `npm run validate-demo-users` passes (all UUIDs valid)
+- [ ] `npm run validate-env` passes (all required vars set)
+- [ ] `npm run test -- auth.integration` passes (real database queries)
+- [ ] Browser test: Login → Dashboard loads without INTERNAL_ERROR
+- [ ] Grep check: `grep -rn "(client_id|site_id|employee_id): '[^{]'" backend/src/` returns 0 matches
+- [ ] Middleware logs all error paths (not silent failures)
+

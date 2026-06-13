@@ -17,11 +17,13 @@
     ]
   },
   "scripts": {
-    "start": "NODE_ENV=production node src/app.js",
-    "dev": "nodemon src/app.js",
-    "test": "jest --detectOpenHandles",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
+    "validate-env": "node scripts/validate-env.js",
+    "validate-demo-users": "node scripts/validate-demo-users.js",
+    "start": "npm run validate-env && npm run validate-demo-users && NODE_ENV=production node src/app.js",
+    "dev": "npm run validate-env && npm run validate-demo-users && nodemon src/app.js",
+    "test": "npm run validate-env && npm run validate-demo-users && NODE_ENV=test jest --detectOpenHandles",
+    "test:watch": "NODE_ENV=test jest --watch",
+    "test:coverage": "NODE_ENV=test npm run validate-env && npm run validate-demo-users && jest --coverage",
     "lint": "eslint src/ --ext .js",
     "lint:fix": "eslint src/ --ext .js --fix",
     "format": "prettier --write 'src/**/*.js'",
