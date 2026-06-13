@@ -128,6 +128,7 @@ function requireAuth(req, res, next) {
  * Middleware: Optional authentication
  * Verifies JWT if present, but doesn't require it
  * Attaches user context if valid, otherwise leaves req.user undefined
+ * (S.32.7 Fix: Used BEFORE checkRevoked to extract req.user for revocation checks)
  */
 function optionalAuth(req, res, next) {
   try {
@@ -139,11 +140,29 @@ function optionalAuth(req, res, next) {
       if (decoded) {
         req.user = {
           user_id: decoded.user_id,
+          name: decoded.name || null,
           auth0_sub: decoded.auth0_sub,
           client_id: decoded.client_id,
           role: decoded.role,
         };
+
+        // Include employee_id if present
+        if (decoded.employee_id) {
+          req.user.employee_id = decoded.employee_id;
+        }
+
+        // Include site_id if present
+        if (decoded.site_id) {
+          req.user.site_id = decoded.site_id;
+        }
       }
+    } else if (process.env.DISABLE_AUTH === 'true' && process.env.NODE_ENV !== 'production') {
+      // Dev-only fallback for testing
+      req.user = {
+        user_id: 'user-mvp-pippo',
+        client_id: '550e8400-e29b-41d4-a716-446655440001',
+        role: 'admin',
+      };
     }
 
     next();

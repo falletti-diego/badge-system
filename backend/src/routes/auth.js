@@ -195,6 +195,27 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       expiresIn: REFRESH_TOKEN_EXPIRY,
     });
 
+    // S.32.7 Fix #1: Track jti in used_tokens to enable race condition protection
+    // This allows POST /auth/refresh to detect concurrent refresh attempts
+    // (best-effort: if this fails, login still succeeds, refresh will detect via normal flow)
+    if (user.id && !email.endsWith(BADGE_LOCAL_DOMAIN)) {
+      // Only track for DB users (not demo users) — demo users don't need race protection
+      // because DISABLE_AUTH always returns same tokens
+      try {
+        await pool.query(
+          'INSERT INTO used_tokens (user_id, jti) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [user.id, jti]
+        );
+      } catch (jtiErr) {
+        logger.warn({
+          action: 'jti_tracking_failed',
+          user_id: user.id,
+          error: jtiErr.message,
+        });
+        // Continue with login even if jti tracking fails (best-effort)
+      }
+    }
+
     logger.info({
       action: 'user_login',
       email,

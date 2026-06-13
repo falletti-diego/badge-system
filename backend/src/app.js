@@ -42,6 +42,7 @@ const { pool, closePool } = require('./db/pool');
 const { initializeRedis, closeRedis } = require('./db/redis');
 const { ApiError, RateLimitError } = require('./utils/errors');
 const { apiLimiter, authLimiter, csvLimiter } = require('./middleware/rateLimiter');
+const { optionalAuth } = require('./middleware/auth');
 const checkRevoked = require('./middleware/checkRevoked');
 const authRouter = require('./routes/auth');
 const employeesRouter = require('./routes/employees');
@@ -151,6 +152,20 @@ app.get('/api/v1', (req, res) => {
   res.json({ message: 'Badge System API', version: '1.0.0', status: 'operational' });
 });
 
+// S.32.7 Fix #2: Create composite middleware (optionalAuth -> checkRevoked)
+// Must run BEFORE routing to ensure checkRevoked can intercept revoked users
+// optionalAuth extracts req.user without blocking (for protected + public endpoints)
+// checkRevoked validates revocation status
+const compositeAuthMiddleware = (req, res, next) => {
+  optionalAuth(req, res, (err) => {
+    if (err) return next(err);
+    // After optionalAuth, checkRevoked can access req.user (if token was valid)
+    checkRevoked(req, res, next);
+  });
+};
+
+app.use(compositeAuthMiddleware);
+
 // v1 router — canonical API prefix
 const v1Router = express.Router();
 v1Router.use('/auth', authRouter);
@@ -172,11 +187,6 @@ app.use('/api', (req, res, next) => {
   logger.warn({ action: 'deprecated_api_path', path: req.originalUrl, method: req.method });
   next();
 }, v1Router);
-
-// Global checkRevoked middleware (runs on all /api/v1 requests after routing)
-// Safely skips unauthenticated requests (req.user will be undefined)
-// This enforces revocation on every request regardless of endpoint
-app.use(checkRevoked);
 
 // Sentry error handler — must come BEFORE custom error handler to capture exceptions
 if (process.env.SENTRY_DSN) {
