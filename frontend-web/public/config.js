@@ -1,6 +1,8 @@
 // Runtime configuration - loaded before the app starts
-// Production: direct HTTPS to api.dataxiom.it (valid Let's Encrypt cert)
-// Development (Vite): overridden to '' so vite proxy handles /api/* to localhost:3000
+// Localhost: http://localhost:3000 (backend dev server)
+// Production: https://api.dataxiom.it (valid Let's Encrypt cert)
 window.API_CONFIG = {
-  API_URL: 'https://api.dataxiom.it'
+  API_URL: window.location.hostname === 'localhost'
+    ? 'http://localhost:3000'
+    : 'https://api.dataxiom.it'
 };

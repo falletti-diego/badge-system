@@ -30,7 +30,7 @@ async function logAudit(client, {
 
   try {
     await client.query(
-      `INSERT INTO audit_log (action, entity, entity_id, old_value, new_value, user_id, timestamp)
+      `INSERT INTO audit_log (action, entity, entity_id, old_value, new_value, user_id, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
       [
         action,

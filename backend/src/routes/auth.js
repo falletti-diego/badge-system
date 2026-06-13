@@ -646,6 +646,14 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
       expiresIn: ACCESS_TOKEN_EXPIRY,
     });
 
+    // Generate refresh token
+    const jti = uuid();
+    const refreshPayload = { user_id: req.user.user_id, type: 'refresh', jti };
+    const refresh_token = jwt.sign(refreshPayload, JWT_PRIVATE_KEY, {
+      algorithm: JWT_ALGORITHM,
+      expiresIn: REFRESH_TOKEN_EXPIRY,
+    });
+
     logger.info({
       action: 'password_changed',
       user_id: req.user.user_id,
@@ -654,8 +662,16 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
     });
 
     res.status(200).json({
-      success: true,
-      data: { token }
+      data: {
+        token,
+        refresh_token,
+        user: {
+          id: req.user.user_id,
+          email: req.user.email,
+          name: req.user.name,
+          role: req.user.role,
+        },
+      },
     });
   } catch (err) {
     next(err);

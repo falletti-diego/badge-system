@@ -3,9 +3,9 @@
  * Express.js application entry point
  */
 
-// dotenv must load before any module reads process.env (local dev; prod uses SSM via entrypoint.sh)
-const dotenv = require('dotenv');
-dotenv.config();
+// Load configuration FIRST (before any module reads process.env)
+// This loads .env.{NODE_ENV} and .env files
+require('./config-loader');
 
 // Sentry must be initialized before any other require() to instrument modules correctly
 const Sentry = require('@sentry/node');

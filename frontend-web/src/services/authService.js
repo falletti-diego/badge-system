@@ -1,4 +1,6 @@
 import apiClient from './apiClient';
+import logger from '../utils/logger';
+
 const TOKEN_KEY = 'badge_auth_token';
 const REFRESH_TOKEN_KEY = 'badge_refresh_token';
 const USER_KEY = 'badge_user';
@@ -17,34 +19,44 @@ const authService = {
    * @returns {Promise} Response with token and user data
    */
   async login(email, password) {
+    logger.debug('authService', 'login called', { email });
     try {
+      logger.debug('authService', 'calling apiClient.post /api/auth/login');
       const response = await apiClient.post('/api/auth/login', {
         email,
         password,
       });
 
+      logger.debug('authService', 'apiClient.post response received', { status: response.status });
+
       if (response.data.data && response.data.data.token) {
         const { token, refresh_token, user } = response.data.data;
+        logger.debug('authService', 'storing tokens in localStorage', { userId: user.id, role: user.role });
+
         localStorage.setItem(TOKEN_KEY, token);
         if (refresh_token) localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
         localStorage.setItem(USER_KEY, JSON.stringify(user));
+
         // Store employee_id if present (for employee role users)
         if (user.employee_id) {
           localStorage.setItem(EMPLOYEE_ID_KEY, user.employee_id);
         } else {
           localStorage.removeItem(EMPLOYEE_ID_KEY);
         }
+
         // Store site_id if present (for manager role users assigned to specific store)
         if (user.site_id) {
           localStorage.setItem(SITE_ID_KEY, user.site_id);
         } else {
           localStorage.removeItem(SITE_ID_KEY);
         }
+
+        logger.info('authService', 'login successful', { email, role: user.role });
       }
 
       return response.data;
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('authService', 'login error', error);
       throw error;
     }
   },

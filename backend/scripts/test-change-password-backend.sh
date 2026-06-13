@@ -101,20 +101,67 @@ else
   exit 1
 fi
 
-# SETUP: Login to get valid token
+# SETUP: Login as admin first to create test employee
 echo ""
-echo -e "${BLUE}📌 SETUP: Obtain Valid JWT Token${NC}"
+echo -e "${BLUE}📌 SETUP: Login as Admin${NC}"
+
+ADMIN_LOGIN=$(curl -s -X POST "$BACKEND_URL/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"pippo@badge.local","password":"pippo01"}')
+
+ADMIN_TOKEN=$(echo "$ADMIN_LOGIN" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+
+if [ -z "$ADMIN_TOKEN" ]; then
+  echo -e "${RED}❌${NC} Failed to obtain admin token"
+  exit 1
+fi
+
+echo -e "${GREEN}✅${NC} Admin token obtained"
+
+# SETUP: Create test employee with unique email
+echo ""
+echo -e "${BLUE}📌 SETUP: Create Test Employee${NC}"
+
+TIMESTAMP=$(date +%s%N | cut -b1-13)
+TEST_EMAIL="testemployee.changepass.$TIMESTAMP@company.local"
+
+CREATE_EMP=$(curl -s -X POST "$BACKEND_URL/api/admin/employees" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id":"550e8400-e29b-41d4-a716-446655440001",
+    "email":"'"$TEST_EMAIL"'",
+    "name":"Test Employee Change Pass",
+    "phone":"+39-333-1234567",
+    "assigned_sites":["550e8400-e29b-41d4-a716-446655440010"],
+    "role":"employee"
+  }')
+
+TEST_EMP_ID=$(echo "$CREATE_EMP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+TEST_EMP_TEMP_PASS=$(echo "$CREATE_EMP" | grep -o '"temp_password":"[^"]*"' | cut -d'"' -f4)
+
+if [ -z "$TEST_EMP_ID" ] || [ -z "$TEST_EMP_TEMP_PASS" ]; then
+  echo -e "${RED}❌${NC} Failed to create test employee"
+  echo "Response: $CREATE_EMP"
+  exit 1
+fi
+
+echo -e "${GREEN}✅${NC} Test employee created: $TEST_EMP_ID (temp password: $TEST_EMP_TEMP_PASS)"
+
+# SETUP: Login with test employee temp password
+echo ""
+echo -e "${BLUE}📌 SETUP: Login with Test Employee (Temp Password)${NC}"
 
 LOGIN_RESPONSE=$(curl -s -X POST "$BACKEND_URL/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@company.local","password":"AdminPassword123"}')
+  -d '{"email":"'"$TEST_EMAIL"'","password":"'"$TEST_EMP_TEMP_PASS"'"}')
 
 ADMIN_TOKEN=$(echo "$LOGIN_RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 
 if [ -z "$ADMIN_TOKEN" ]; then
   echo -e "${RED}❌${NC} Failed to obtain token"
   echo "   Response: $LOGIN_RESPONSE"
-  echo "   Try: Check database has admin user with password AdminPassword123"
+  echo "   Try: Check database has admin user with password '"$TEST_EMP_TEMP_PASS"'"
   exit 1
 fi
 
@@ -132,7 +179,7 @@ test_endpoint \
   "POST /api/auth/change-password (valid credentials)" \
   "POST" \
   "/api/auth/change-password" \
-  '{"old_password":"AdminPassword123","new_password":"NewAdminPassword123"}' \
+  '{"old_password":"'"$TEST_EMP_TEMP_PASS"'","new_password":"maria02"}' \
   "200" \
   "$ADMIN_TOKEN"
 
@@ -187,7 +234,7 @@ test_endpoint \
   "New password too short (<8 chars)" \
   "POST" \
   "/api/auth/change-password" \
-  '{"old_password":"NewAdminPassword123","new_password":"Short"}' \
+  '{"old_password":"New'"$TEST_EMP_TEMP_PASS"'","new_password":"Short"}' \
   "400" \
   "$ADMIN_TOKEN"
 
@@ -196,7 +243,7 @@ test_endpoint \
   "New password equals old password" \
   "POST" \
   "/api/auth/change-password" \
-  '{"old_password":"NewAdminPassword123","new_password":"NewAdminPassword123"}' \
+  '{"old_password":"New'"$TEST_EMP_TEMP_PASS"'","new_password":"New'"$TEST_EMP_TEMP_PASS"'"}' \
   "400" \
   "$ADMIN_TOKEN"
 
@@ -214,7 +261,7 @@ test_endpoint \
   "Missing new_password field" \
   "POST" \
   "/api/auth/change-password" \
-  '{"old_password":"NewAdminPassword123"}' \
+  '{"old_password":"New'"$TEST_EMP_TEMP_PASS"'"}' \
   "400" \
   "$ADMIN_TOKEN"
 
@@ -229,7 +276,7 @@ test_endpoint \
   "Missing Authorization header" \
   "POST" \
   "/api/auth/change-password" \
-  '{"old_password":"NewAdminPassword123","new_password":"Password123"}' \
+  '{"old_password":"New'"$TEST_EMP_TEMP_PASS"'","new_password":"Password123"}' \
   "401"
 
 # Test 3.2: Invalid token
@@ -237,7 +284,7 @@ test_endpoint \
   "Invalid JWT token" \
   "POST" \
   "/api/auth/change-password" \
-  '{"old_password":"NewAdminPassword123","new_password":"Password123"}' \
+  '{"old_password":"New'"$TEST_EMP_TEMP_PASS"'","new_password":"Password123"}' \
   "401" \
   "invalid.token.here"
 
@@ -251,7 +298,7 @@ echo -e "${BLUE}📌 TEST SUITE 4: Network Resilience${NC}"
 if timeout 3 curl -s -X POST "$BACKEND_URL/api/auth/change-password" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"old_password":"NewAdminPassword123","new_password":"AnotherPassword123"}' \
+  -d '{"old_password":"New'"$TEST_EMP_TEMP_PASS"'","new_password":"AnotherPassword123"}' \
   --max-time 2 > /dev/null 2>&1; then
   echo -e "${GREEN}✅${NC} Request completes within timeout (2s)"
   ((PASSED++))

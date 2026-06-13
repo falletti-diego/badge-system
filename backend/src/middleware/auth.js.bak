@@ -55,20 +55,20 @@ function verifyToken(token) {
  */
 function requireAuth(req, res, next) {
   try {
+    // Dev-only: skip auth if DISABLE_AUTH=true AND not in production
+    if (process.env.DISABLE_AUTH === 'true' && process.env.NODE_ENV !== 'production') {
+      req.user = {
+        user_id: 'mvp-user-1',
+        client_id: 'client-1',
+        role: 'admin',
+      };
+      return next();
+    }
+
     const authHeader = req.get('Authorization');
     const token = extractToken(authHeader);
 
     if (!token) {
-      // Dev-only fallback: if no token and DISABLE_AUTH=true, use demo admin
-      if (process.env.DISABLE_AUTH === 'true' && process.env.NODE_ENV !== 'production') {
-        req.user = {
-          user_id: 'user-mvp-pippo',
-          client_id: '550e8400-e29b-41d4-a716-446655440001',
-          role: 'admin',
-        };
-        return next();
-      }
-
       return res.status(401).json({
         error: 'MISSING_TOKEN',
         message: 'Missing or invalid Authorization header',

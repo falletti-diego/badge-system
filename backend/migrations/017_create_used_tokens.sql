@@ -10,8 +10,7 @@ CREATE TABLE used_tokens (
   id SERIAL PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
   jti VARCHAR(255) UNIQUE NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  COMMENT 'used_tokens: JWT jti tracker for reuse detection. Entries auto-purged after 7 days by background job.'
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
 -- Indexes for efficient queries

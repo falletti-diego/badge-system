@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Container, Box, TextField, Button, Typography, Alert, CircularProgress } from '@mui/material';
 import authService from '../services/authService';
+import logger from '../utils/logger';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -23,26 +24,28 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    logger.debug('LoginPage', 'handleSubmit triggered', { email });
     setError(null);
     setValidationErrors({});
 
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
+      logger.warn('LoginPage', 'validation failed', errors);
       setValidationErrors(errors);
       return;
     }
 
+    logger.debug('LoginPage', 'validation passed, calling authService.login');
     setLoading(true);
 
     try {
       await authService.login(email, password);
+      logger.info('LoginPage', 'login successful', { email });
       navigate('/dashboard');
     } catch (err) {
-      setError(
-        err.response?.data?.message ||
-        err.message ||
-        'Login failed. Please try again.'
-      );
+      const errorMsg = err.response?.data?.message || err.message || 'Login failed. Please try again.';
+      logger.error('LoginPage', 'login failed', err);
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }

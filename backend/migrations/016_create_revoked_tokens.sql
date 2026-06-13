@@ -12,8 +12,7 @@ CREATE TABLE revoked_tokens (
   revoked_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   revoked_by UUID REFERENCES employees(id) ON DELETE SET NULL,
   reason VARCHAR(255),
-  revoked_until TIMESTAMP WITH TIME ZONE DEFAULT NULL,
-  COMMENT 'revoked_tokens: Blacklist of revoked users. revoked_until=NULL means permanent revoke; revoked_until=future_time means temporary revoke with auto-expiry'
+  revoked_until TIMESTAMP WITH TIME ZONE DEFAULT NULL
 );
 
 -- Indexes for efficient queries
