@@ -73,7 +73,6 @@ export const AdminLeaveManagement = () => {
   const [allRequests, setAllRequests] = useState([]);
   const [saldi, setSaldi] = useState({});
   const [loadingData, setLoadingData] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('PENDING');
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -86,6 +85,7 @@ export const AdminLeaveManagement = () => {
 
   const loadData = async () => {
     setLoadingData(true);
+    clearError();
     try {
       const [requestsData, saldiData] = await Promise.all([
         getAllLeaveRequests({}),
@@ -93,8 +93,6 @@ export const AdminLeaveManagement = () => {
       ]);
       setAllRequests(requestsData || []);
       setSaldi(saldiData || {});
-    } catch (err) {
-      // Error is handled by hook
     } finally {
       setLoadingData(false);
     }
