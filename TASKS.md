@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-12 (Session 32: analisi critica completa → piano d'azione S.32; fix submodule Netlify; ConfirmSaveDialog)  
+**Last Updated:** 2026-06-14 (Session 34: S.32.6 complete — forced password change flow + bug fixes)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -67,35 +67,46 @@ Duplicate migration numbering fixed (011 → 013 → 014). Integrates into Docke
 - [x] Full suite: 275+/275+ tests passing
 - ✅ Completato 2026-06-12 — idempotent migrations, zero manual SSH | Spec: `docs/superpowers/specs/2026-06-12-migration-runner-design.md` | Commits: dc0813f (schema table), a1d2f57 (rename 011), f8b0042 (rename 013→014), 3f14eed (runner script), 2fed551 (tests), 640ec19 (Docker entrypoint)
 
-### S.32.6 — ✅ CSV import: temp password flow complete (All 8 tasks DONE)
-`admin.js`: `generateTempPassword()` hashata e salvata, temp_password comunicata a employee
-via CSV import endpoint. Complete flow: import → temp password → login → forced change → new password.
+### S.32.6 — ✅ FORCED PASSWORD CHANGE FLOW — COMPLETE & PRODUCTION READY
+**Complete end-to-end implementation:** CSV import → temp password → forced password change → new login
+**Two triggers:** (1) CSV import assigns temp_password, (2) Admin reset password button
+**Full flow verified:** Session 34 end-to-end test ✅
 
 **Backend (Tasks 1-5): ✅ COMPLETE**
 - [x] Task 1: Migration 015 add must_change_password column ✅ (Commit 5579bfc)
 - [x] Task 2: POST /api/admin/employees/import returns {email, temp_password} in results.passwords ✅ (Commit c703d7c)
 - [x] Task 3: POST /api/auth/login includes must_change_password flag in response ✅ (Commit c703d7c)
-- [x] Task 4: POST /api/auth/change-password endpoint (requireAuth, old→new password, sets flag to false, returns token) ✅ (Commit c703d7c)
+- [x] Task 4: POST /api/auth/change-password endpoint (requireAuth, old→new password, sets flag to false, returns token + refresh_token + user) ✅ (Commit c703d7c → 8bf849f)
 - [x] Task 5: Tests (8/8 passing: migrations, auth routes, CSV import) ✅ (Commit c703d7c)
+- [x] **ADDITIONAL:** POST /api/admin/employees/:id/reset-password now sets must_change_password=true ✅ (Commit 8bf849f)
 
 **Frontend (Tasks 6-8): ✅ COMPLETE**
-- [x] Task 6: Frontend ChangePasswordPage component + full page redirect on must_change_password=true ✅ (Commit 38af0cc)
-  - Form: old_password, new_password, confirm_password with client validation
-  - Error handling (Opzione B Intelligente): distinguish validation vs server errors, allow retry
-  - Success flow (Opzione A): auto-update localStorage + auto-redirect to /dashboard
-- [x] Task 7: Auth guard in App.jsx — PasswordChangeGuard redirects to /change-password if flag is true ✅ (Commit 38af0cc)
-  - Fail-closed (Opzione A): qualunque navigazione fuori /change-password viene bloccata
+- [x] Task 6: ChangePasswordPage component with form validation + error handling ✅ (Commit 38af0cc → 8bf849f)
+  - Form: old_password, new_password, confirm_password with client-side validation
+  - Error handling (Opzione B Intelligente): 400→retry, 5xx→retry, 401→logout, network→retry
+  - Success flow: Show message → authService.logout() → auto-redirect to /login after 2s
+- [x] Task 7: PasswordChangeGuard in App.jsx — redirects to /change-password if flag=true ✅ (Commit 38af0cc → 8bf849f)
+  - Reads flag from localStorage (badge_must_change_password)
+  - Fail-closed: blocks all navigation except /change-password and /login
   - Route: /change-password element={<ChangePasswordPage />}
-- [x] Task 8: E2E test suite with complete flow documentation ✅ (Commit 38af0cc)
-  - Test placeholders for all scenarios (validation, server error, network, session revoked, success, guard redirect)
-  - Manual E2E instructions for full lifecycle (CSV import → temp password → login → change password → new login)
+- [x] Task 8: Complete E2E flow documentation + manual testing guide ✅ (Commits 38af0cc → 8bf849f)
 
-**Status: ✅ COMPLETE 283+/283 backend + frontend tests**
-- Backend 100% done (283/283 tests passing — auth, CSV import, token rotation, etc)
-- Frontend 100% done (ChangePasswordPage + guard + E2E test documented)
-- Build: ✅ Vite build successful (5.53s, no errors)
-- Design decisions: ✅ Finalized via /grill-me (4 critical UX/security decisions agreed)
-- Sforzo totale: ~3h (design clarification via /grill-me + component implementation + guard + tests)
+**Bug Fixes (Session 34): ✅ CRITICAL ISSUES RESOLVED**
+- [x] audit.js: Fixed column name audit_log.timestamp → audit_log.created_at ✅ (Commit c84aebe)
+- [x] auth.js middleware: Fixed DISABLE_AUTH logic (was shorting circuit, now extracts real tokens) ✅ (Commit c84aebe)
+- [x] auth.js change-password: Added missing refresh_token + user in response ✅ (Commit 8bf849f)
+- [x] authService.js: Save must_change_password flag to localStorage on login ✅ (Commit 8bf849f)
+- [x] App.jsx PasswordChangeGuard: Read flag from localStorage (not from user object) ✅ (Commit 8bf849f)
+- [x] ChangePasswordPage: Logout + redirect to /login (not dashboard) after success ✅ (Commit 8bf849f)
+
+**Status: ✅ PRODUCTION READY**
+- Backend tests: All passing (audit_log fixed, change-password returns complete response)
+- Frontend tests: All passing (localStorage flag save/read, guard redirect working)
+- Manual E2E test: ✅ VERIFIED (CSV import → temp password → login → force change → new login)
+- Admin reset password: ✅ VERIFIED (same flow as CSV import)
+- Build: ✅ Vite successful, no errors
+- Security: ✅ Fail-closed, RBAC enforced, logout clears session
+- Total effort: ~4h (original implementation 3h + Session 34 bug fixes + E2E verification 1h)
 
 ### S.32.7 — ✅ Refresh token rotation + revocation (Model 1 Blacklist + Model 3 Reuse Detection)
 
@@ -688,6 +699,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-11 | GDPR Blockers + Safe Implementation + Monitoring (Session 33 A→B→C) | S.24 ✅, S.25 ✅, S.26 ✅ | **Part A — Implementation:** GPS Privacy Policy IT, DPA template, GPSConsentDialog, migrations 011/012, backend + frontend endpoints for DPA + consent. All 216 tests PASS. Commit: b6684ac. **Part B — Test Coverage (Safe Path):** consent.test.js (11 comprehensive tests), coverage 36%→90.9%, total tests 216→227 all PASS. Commit: e0b24e3. **Part B.2 — Migration Instructions:** apply-migrations-011-012.sh + MIGRATION-011-012-INSTRUCTIONS.md (3 safe methods). Commit: 7ddfc4b. **Part C — Admin Monitoring:** AdminPage tab 6 "Consensi GPS" with ConsentTab component, summary cards (Total/Consented/Pending/Rate %), employee table with consent status, notify button (Phase 2). Backend: GET /api/consent/admin/employee-consents (admin-only). Commit: f34f1fd. Ready for: (1) Apply migrations RDS, (2) Build 18 mobile, (3) Notify feature Phase 2. |
 | 2026-06-13 | Leave Management Feature — COMPLETE (Session 34) | Tasks 1-9 ✅ | **All 9 tasks delivered + production ready:** Task 1: DB schema (leaves, leave_requests, leave_saldi tables + indexes). Task 2: 7 API endpoints (POST request, GET pending, PUT approve, GET my-requests, GET all, GET approved, GET admin/saldi). Task 3: LeaveCalendar component (date-range picker, MUI). Tasks 4-7: Frontend pages (EmployeeLeaveRequest, ManagerLeaveRequest, ManagerLeaveApprovalPanel, AdminLeaveManagement with 5 tabs). Task 8: GET /approved endpoint (RBAC-scoped). Task 9: PlanningPage integration (hard-block shifts on approved leave dates, visual indicators red background + lock icon + tooltip). **Testing:** 52/52 tests passing (18 backend + 28 frontend hooks + 6 blocking logic). **Build:** 100% success, no errors. **RBAC:** All endpoints fail-closed, fully scoped by role + site. **Ready for:** Production deployment, customer use. HANDOFF.md updated. Commits: 35aed34 (Task 9 final), 31537b1 (HANDOFF update). |
 | 2026-06-13 | Task 10: EmployeeLeaveRequest Form Redesign (Session 35) | ✅ COMPLETED | **Form Layout Redesign per User Feedback:** (1) Titolo: "Richiedi ferie/malattia" ✅. (2) Layout split: Dropdown "Tipo Feria" (left) + "Richiedi Malattia" button (right, green state-aware) ✅. (3) Conditional file upload: visible solo se isRequestingMalattia=true, posizionato tra calendario e note, drag-drop styling con border dashed ✅. (4) Enhanced calendar styling: striscia selezione background #3b82f6 (blue-500) + border #2563eb (blue-600), white text, hover #2563eb ✅. **Code:** EmployeeLeaveRequest.jsx (new state, handlers, layout refactor, file upload Box). LeaveCalendar.jsx (styling for isRangeDay + isSelectedDay). Test file (3 new Malattia tests). **Manual Testing:** Localhost ✅ — title visible, layout OK, button state changes, file upload conditional rendering works, calendar styling (blue range + borders visible), dropdown disabled when Malattia active. **Commit:** 4d55703. **Next:** Fix backend UUIDs + missing schema. |
+| 2026-06-14 | S.32.6 Complete — Forced Password Change Flow + Bug Fixes (Session 34) | S.32.6 ✅ | **All 8 Tasks VERIFIED END-TO-END ✅** — CSV import + Admin reset password both trigger mandatory password change. **3 CRITICAL BUG FIXES:** (1) audit_log column timestamp→created_at (transaction abort fix). (2) requireAuth middleware DISABLE_AUTH logic fixed (was ignoring real tokens, now extracts employee_id). (3) POST /change-password missing refresh_token+user in response (added). **Frontend fixes:** (4) authService saves must_change_password to localStorage, (5) PasswordChangeGuard reads from correct localStorage key, (6) ChangePasswordPage logout + redirect to /login (not dashboard). **Flow:** Admin reset password→set must_change_password=true → Employee login with temp password → auto-redirect /change-password → change password → logout → redirect /login → login with new password → dashboard. **Testing:** Manual E2E verified ✅ (CSV import flow ✅, Admin reset flow ✅). **Lessons learned:** Integration tests with real DB + DISABLE_AUTH=true must run BEFORE manual testing (Session 34 mock tests passed but real integration revealed all 3 bugs). **Commits:** c84aebe (3 backend fixes), 8bf849f (5 frontend fixes + redirect flow). **Ready for:** Production deployment, customer onboarding with mandatory password change. |
 
 ---
 
