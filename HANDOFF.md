@@ -57,6 +57,35 @@ MVP target remains 9 tasks, using TDD and subagent-assisted review where useful.
   - `backend/src/__tests__/leaves.test.js`
   - `backend/src/app.js`
 
+### Task 3: Frontend — LeaveCalendar Component — COMPLETE
+- **Commits:** `efd2b86` implementation with tests
+- **Status:** All 11 tests passing ✓
+- **Deliverables:**
+  - `LeaveCalendar.jsx`: Reusable date-range calendar picker using MUI components
+    - Navigate between months with Previous/Next buttons
+    - Select date ranges by clicking start and end dates
+    - Highlight selected ranges with visual styling
+    - Disable past dates to prevent selection errors
+    - Show day names in Italian (Lun, Mar, Mer, etc.)
+    - Display selected date range and day count
+    - Controlled component (accepts startDate/endDate as props)
+  - `LeaveCalendar.test.jsx`: Comprehensive test suite (11 tests)
+    - Calendar rendering and month navigation
+    - Date selection (single and range)
+    - Date range highlighting and clearing
+    - Past date validation
+    - Localization (Italian month/day names)
+  - `vitest.setup.js`: Jest-DOM matchers configuration
+  - `vitest.config.js`: Updated with setupFiles reference
+- **Verification:**
+  - `cd frontend-web && npm test -- LeaveCalendar.test.jsx --run`
+  - Result: `11/11` tests passing ✓
+- **Key files:**
+  - `frontend-web/src/features/leave/components/LeaveCalendar.jsx`
+  - `frontend-web/src/__tests__/LeaveCalendar.test.jsx`
+  - `frontend-web/vitest.setup.js`
+  - `frontend-web/vitest.config.js`
+
 ---
 
 ## Multiagent Notes
@@ -91,16 +120,7 @@ MVP target remains 9 tasks, using TDD and subagent-assisted review where useful.
 
 ### Immediate Next Task
 
-### Task 3: Frontend — LeaveCalendar Component
-- Build a reusable date-range calendar component.
-- Follow existing frontend patterns in `frontend-web/src/features/...`.
-- Prefer MUI components and the existing app theme.
-- Add focused tests first where feasible.
-- Integrate into the future employee/manager leave request flow.
-
-### Then Continue
-
-4. **EmployeeLeaveRequest**
+### Task 4: Frontend — EmployeeLeaveRequest Page
    - Employee leave request form using `LeaveCalendar`
    - Calls `POST /api/v1/leave/request`
    - Displays own requests from `GET /api/v1/leave/my-requests`
@@ -147,8 +167,8 @@ Proceed with Task 3: frontend LeaveCalendar component, using TDD and multiagent 
 |------|--------|---------|-------|-------|
 | 1. Database Schema | COMPLETE | `a601c2a`, `2969493` | Schema tests passing | Spec + quality pass |
 | 2. Backend API | COMPLETE | `de9cfc9`, `fdf2b76` | `13/13` focused API tests passing | Security fixes complete |
-| 3. LeaveCalendar | TODO | - | - | Next task |
-| 4. EmployeeLeaveRequest | TODO | - | - | After Task 3 |
+| 3. LeaveCalendar Component | COMPLETE | `efd2b86` | `11/11` tests passing ✓ | MUI date-range picker |
+| 4. EmployeeLeaveRequest | TODO | - | - | Next task — use LeaveCalendar |
 | 5. ManagerLeaveRequest | TODO | - | - | After Task 4 |
 | 6. ManagerLeaveApprovalPanel | TODO | - | - | After Task 5 |
 | 7. AdminLeaveManagement | TODO | - | - | After Task 6 |
@@ -171,4 +191,5 @@ Proceed with Task 3: frontend LeaveCalendar component, using TDD and multiagent 
 ---
 
 **Last Updated:** 2026-06-13  
-**Last Completed Commit:** `fdf2b76 fix: implement fail-closed RBAC and prevent double approval in leave endpoints`
+**Last Completed Commit:** `efd2b86 feat: implement LeaveCalendar component with comprehensive tests`  
+**Status:** Task 1-3 COMPLETE | Task 4-9 TODO
