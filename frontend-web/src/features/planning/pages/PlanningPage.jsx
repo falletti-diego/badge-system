@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Container,
   Box,
@@ -18,11 +18,13 @@ import {
   Toolbar,
   Button,
   CircularProgress,
+  Tooltip,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useShifts } from '../hooks/useShifts';
 import { useShiftUpdate } from '../hooks/useShiftUpdate';
+import { useLeave } from '../../leave/hooks/useLeave';
 import authService from '../../../services/authService';
 
 const SHIFT_COLORS = {
@@ -41,6 +43,10 @@ export const PlanningPage = () => {
   const [lastSavedShifts, setLastSavedShifts] = useState({}); // Track last saved state
   const [isSaving, setIsSaving] = useState(false); // Track save loading state
   const [saveError, setSaveError] = useState(null); // Track save errors
+  const [approvedLeaves, setApprovedLeaves] = useState([]); // Approved leave requests
+  const [loadingLeaves, setLoadingLeaves] = useState(false); // Leave loading state
+
+  const { getApprovedRequests } = useLeave();
 
   const handleLogout = async () => {
     await authService.logout();
@@ -49,6 +55,46 @@ export const PlanningPage = () => {
 
   const { data, loading, error } = useShifts(user?.site_id, month, year);
   const { saveShifts } = useShiftUpdate(user?.site_id, month, year);
+
+  // Load approved leaves
+  useEffect(() => {
+    const loadLeaves = async () => {
+      setLoadingLeaves(true);
+      try {
+        const leaves = await getApprovedRequests();
+        setApprovedLeaves(leaves || []);
+      } catch (err) {
+        console.error('Failed to load approved leaves:', err);
+        setApprovedLeaves([]);
+      } finally {
+        setLoadingLeaves(false);
+      }
+    };
+
+    loadLeaves();
+  }, [getApprovedRequests]);
+
+  // Helper: Check if a date is blocked by approved leave
+  const isDateBlocked = (employeeId, dateStr) => {
+    return approvedLeaves.some(leave => {
+      if (leave.user_id !== employeeId) return false;
+      const startDate = new Date(leave.start_date);
+      const endDate = new Date(leave.end_date);
+      const checkDate = new Date(dateStr);
+      return checkDate >= startDate && checkDate <= endDate;
+    });
+  };
+
+  // Helper: Get leave info for a date
+  const getLeaveInfo = (employeeId, dateStr) => {
+    return approvedLeaves.find(leave => {
+      if (leave.user_id !== employeeId) return false;
+      const startDate = new Date(leave.start_date);
+      const endDate = new Date(leave.end_date);
+      const checkDate = new Date(dateStr);
+      return checkDate >= startDate && checkDate <= endDate;
+    });
+  };
 
   // Initialize shifts from mock data (deep copy to prevent shared references)
   React.useEffect(() => {
@@ -414,11 +460,14 @@ export const PlanningPage = () => {
                           const shift = shifts?.[emp.id]?.[dateStr] || '—';
                           const color = SHIFT_COLORS[shift];
                           const isChanged = isShiftChanged(emp.id, dateStr);
+                          const blocked = isDateBlocked(emp.id, dateStr);
+                          const leaveInfo = blocked ? getLeaveInfo(emp.id, dateStr) : null;
+
                           return (
                             <TableCell
                               key={`${emp.id}-${day}`}
                               align="center"
-                              sx={{ padding: '4px 2px', position: 'relative', backgroundColor: rowBg }}
+                              sx={{ padding: '4px 2px', position: 'relative', backgroundColor: blocked ? '#FEE2E2' : rowBg }}
                             >
                               {isChanged && (
                                 <Box
@@ -434,35 +483,55 @@ export const PlanningPage = () => {
                                   }}
                                 />
                               )}
-                              <Select
-                                value={shift}
-                                disabled={isSaving}
-                                onChange={(e) => handleShiftChange(emp.id, dateStr, e.target.value)}
-                                renderValue={(val) => (val && val !== '—') ? val.toUpperCase() : '—'}
-                                sx={{
-                                  width: '52px',
-                                  height: '36px',
-                                  backgroundColor: color?.bg || '#E5E7EB',
-                                  color: 'white',
-                                  fontWeight: 'bold',
-                                  fontSize: '12px',
-                                  '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: isChanged ? '#C0392B' : 'transparent',
-                                    borderWidth: isChanged ? '2px' : '0px'
-                                  },
-                                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: isChanged ? '#C0392B' : 'transparent'
-                                  },
-                                  '& .MuiSvgIcon-root': { display: 'none' },
-                                  '& .MuiSelect-select': { padding: '0 !important', display: 'flex', alignItems: 'center', justifyContent: 'center' }
-                                }}
-                              >
-                                <MenuItem value="m" sx={{ backgroundColor: SHIFT_COLORS['m'].bg, color: 'white' }}>m - Mattino</MenuItem>
-                                <MenuItem value="p" sx={{ backgroundColor: SHIFT_COLORS['p'].bg, color: 'white' }}>p - Pomeriggio</MenuItem>
-                                <MenuItem value="s" sx={{ backgroundColor: SHIFT_COLORS['s'].bg, color: 'white' }}>s - Sera</MenuItem>
-                                <MenuItem value="R" sx={{ backgroundColor: SHIFT_COLORS['R'].bg, color: 'white' }}>R - Riposo</MenuItem>
-                                <MenuItem value="—">—</MenuItem>
-                              </Select>
+                              {blocked && (
+                                <Box
+                                  sx={{
+                                    position: 'absolute',
+                                    top: '2px',
+                                    left: '2px',
+                                    width: '7px',
+                                    height: '7px',
+                                    backgroundColor: '#DC2626',
+                                    borderRadius: '50%',
+                                    zIndex: 10
+                                  }}
+                                  title={leaveInfo ? `${leaveInfo.leave_type}` : 'Ferie'}
+                                />
+                              )}
+                              <Tooltip title={blocked ? `Bloccato da ferie: ${leaveInfo?.leave_type || 'N/A'}` : ''}>
+                                <div>
+                                  <Select
+                                    value={shift}
+                                    disabled={isSaving || blocked}
+                                    onChange={(e) => handleShiftChange(emp.id, dateStr, e.target.value)}
+                                    renderValue={(val) => (val && val !== '—') ? val.toUpperCase() : (blocked ? '🔒' : '—')}
+                                    sx={{
+                                      width: '52px',
+                                      height: '36px',
+                                      backgroundColor: blocked ? '#DC2626' : (color?.bg || '#E5E7EB'),
+                                      color: 'white',
+                                      fontWeight: 'bold',
+                                      fontSize: '12px',
+                                      opacity: blocked ? 0.7 : 1,
+                                      '& .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: isChanged ? '#C0392B' : 'transparent',
+                                        borderWidth: isChanged ? '2px' : '0px'
+                                      },
+                                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: isChanged ? '#C0392B' : 'transparent'
+                                      },
+                                      '& .MuiSvgIcon-root': { display: 'none' },
+                                      '& .MuiSelect-select': { padding: '0 !important', display: 'flex', alignItems: 'center', justifyContent: 'center' }
+                                    }}
+                                  >
+                                    <MenuItem value="m" sx={{ backgroundColor: SHIFT_COLORS['m'].bg, color: 'white' }}>m - Mattino</MenuItem>
+                                    <MenuItem value="p" sx={{ backgroundColor: SHIFT_COLORS['p'].bg, color: 'white' }}>p - Pomeriggio</MenuItem>
+                                    <MenuItem value="s" sx={{ backgroundColor: SHIFT_COLORS['s'].bg, color: 'white' }}>s - Sera</MenuItem>
+                                    <MenuItem value="R" sx={{ backgroundColor: SHIFT_COLORS['R'].bg, color: 'white' }}>R - Riposo</MenuItem>
+                                    <MenuItem value="—">—</MenuItem>
+                                  </Select>
+                                </div>
+                              </Tooltip>
                             </TableCell>
                           );
                         })}
@@ -480,19 +549,43 @@ export const PlanningPage = () => {
         {/* Legend */}
         <Card sx={{ marginTop: '30px', backgroundColor: '#F5F2ED' }}>
           <CardContent>
-            <Typography variant="h6" sx={{ fontWeight: 'bold', marginBottom: '12px' }}>
-              💡 Legenda Turni
-            </Typography>
-            <Box sx={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-              {Object.entries(SHIFT_COLORS).map(([key, { bg, label }]) => (
-                <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Box sx={{ backgroundColor: bg, color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>
-                    {key}
-                  </Box>
-                  <Typography variant="body2">{label}</Typography>
+            <Stack spacing={2}>
+              <div>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', marginBottom: '12px' }}>
+                  💡 Legenda Turni
+                </Typography>
+                <Box sx={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                  {Object.entries(SHIFT_COLORS).map(([key, { bg, label }]) => (
+                    <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Box sx={{ backgroundColor: bg, color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>
+                        {key}
+                      </Box>
+                      <Typography variant="body2">{label}</Typography>
+                    </Box>
+                  ))}
                 </Box>
-              ))}
-            </Box>
+              </div>
+
+              <div>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', marginBottom: '12px' }}>
+                  🔒 Blocchi Ferie Approvate
+                </Typography>
+                <Box sx={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Box sx={{ backgroundColor: '#DC2626', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>
+                      🔒
+                    </Box>
+                    <Typography variant="body2">Giorno bloccato da ferie approvate</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Box sx={{ backgroundColor: '#FEE2E2', border: '1px solid #DC2626', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', color: '#DC2626' }}>
+                      ⚠️
+                    </Box>
+                    <Typography variant="body2">Sfondo rosso = giorno bloccato</Typography>
+                  </Box>
+                </Box>
+              </div>
+            </Stack>
           </CardContent>
         </Card>
       </Container>
