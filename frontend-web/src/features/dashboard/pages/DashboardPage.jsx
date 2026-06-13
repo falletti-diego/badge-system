@@ -11,6 +11,7 @@ import KpiCards from '../components/KpiCards';
 import FilterBar from '../components/FilterBar';
 import PresencesTable from '../components/PresencesTable';
 import ExportButton from '../components/ExportButton';
+import { ManagerLeaveApprovalPanel } from '../../leave/components/ManagerLeaveApprovalPanel';
 import authService from '../../../services/authService';
 
 const DashboardPage = () => {
@@ -116,6 +117,21 @@ const DashboardPage = () => {
               </Button>
             )}
 
+            {/* Manager Leave Request - Show for managers */}
+            {userRole === 'manager' && (
+              <Button
+                color="inherit"
+                onClick={() => navigate('/leave/my-request')}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '14px',
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
+                }}
+              >
+                📋 Le Mie Ferie
+              </Button>
+            )}
+
             {/* Sites & QR Code - Admin only */}
             {userRole === 'admin' && (
               <Button
@@ -178,6 +194,23 @@ const DashboardPage = () => {
               </Button>
             )}
 
+            {/* Employee Leave Request Link - Show for employees */}
+            {userRole === 'employee' && (
+              <Button
+                color="inherit"
+                onClick={() => navigate('/leave/request')}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '14px',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                  },
+                }}
+              >
+                📋 Ferie
+              </Button>
+            )}
+
             <Button
               color="inherit"
               onClick={handleLogout}
@@ -220,6 +253,13 @@ const DashboardPage = () => {
 
         {/* KPI Cards */}
         <KpiCards stats={stats} />
+
+        {/* Manager Leave Approval Panel - Show for managers only */}
+        {userRole === 'manager' && (
+          <Box sx={{ marginBottom: '24px', marginTop: '24px' }}>
+            <ManagerLeaveApprovalPanel />
+          </Box>
+        )}
 
         {/* Filters */}
         <FilterBar onFilter={handleFilterChange} onClear={handleClearFilters} />

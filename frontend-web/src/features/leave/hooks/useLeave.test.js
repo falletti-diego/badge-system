@@ -292,4 +292,213 @@ describe('useLeave Hook', () => {
       expect(result.current.loading).toBe(false);
     });
   });
+
+  describe('getPendingRequests', () => {
+    it('should fetch pending leave requests', async () => {
+      const mockResponse = {
+        data: {
+          data: [
+            {
+              id: 'req-101',
+              leave_type: 'FERIE_1',
+              start_date: '2026-07-01',
+              end_date: '2026-07-05',
+              status: 'PENDING',
+              employee_name: 'Maria Rossi',
+            },
+            {
+              id: 'req-102',
+              leave_type: 'MALATTIA',
+              start_date: '2026-06-20',
+              end_date: '2026-06-20',
+              status: 'PENDING',
+              employee_name: 'Luigi Bianchi',
+            },
+          ],
+        },
+      };
+
+      apiClient.get.mockResolvedValue(mockResponse);
+
+      const { result } = renderHook(() => useLeave());
+
+      let requests;
+      await act(async () => {
+        requests = await result.current.getPendingRequests();
+      });
+
+      expect(apiClient.get).toHaveBeenCalledWith('/api/v1/leave/pending');
+      expect(requests).toHaveLength(2);
+      expect(requests[0].employee_name).toBe('Maria Rossi');
+      expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBe(null);
+    });
+
+    it('should handle empty pending requests', async () => {
+      apiClient.get.mockResolvedValue({ data: { data: [] } });
+
+      const { result } = renderHook(() => useLeave());
+
+      let requests;
+      await act(async () => {
+        requests = await result.current.getPendingRequests();
+      });
+
+      expect(requests).toHaveLength(0);
+    });
+
+    it('should handle error fetching pending requests', async () => {
+      const mockError = {
+        response: {
+          data: {
+            error: 'UNAUTHORIZED',
+          },
+        },
+      };
+
+      apiClient.get.mockRejectedValue(mockError);
+
+      const { result } = renderHook(() => useLeave());
+
+      await act(async () => {
+        try {
+          await result.current.getPendingRequests();
+        } catch (err) {
+          // expected
+        }
+      });
+
+      expect(result.current.error).toBe('UNAUTHORIZED');
+    });
+  });
+
+  describe('approveRequest', () => {
+    it('should approve a leave request', async () => {
+      const mockResponse = {
+        data: {
+          data: {
+            id: 'req-101',
+            status: 'APPROVED',
+          },
+        },
+      };
+
+      apiClient.put.mockResolvedValue(mockResponse);
+
+      const { result } = renderHook(() => useLeave());
+
+      let approvedRequest;
+      await act(async () => {
+        approvedRequest = await result.current.approveRequest('req-101');
+      });
+
+      expect(apiClient.put).toHaveBeenCalledWith('/api/v1/leave/req-101/approve', {
+        status: 'APPROVED',
+        rejection_reason: null,
+      });
+      expect(approvedRequest.status).toBe('APPROVED');
+      expect(result.current.loading).toBe(false);
+    });
+
+    it('should handle approval error', async () => {
+      const mockError = {
+        response: {
+          data: {
+            error: 'REQUEST_NOT_FOUND',
+          },
+        },
+      };
+
+      apiClient.put.mockRejectedValue(mockError);
+
+      const { result } = renderHook(() => useLeave());
+
+      await act(async () => {
+        try {
+          await result.current.approveRequest('invalid-id');
+        } catch (err) {
+          // expected
+        }
+      });
+
+      expect(result.current.error).toBe('REQUEST_NOT_FOUND');
+    });
+  });
+
+  describe('rejectRequest', () => {
+    it('should reject a leave request', async () => {
+      const mockResponse = {
+        data: {
+          data: {
+            id: 'req-101',
+            status: 'REJECTED',
+          },
+        },
+      };
+
+      apiClient.put.mockResolvedValue(mockResponse);
+
+      const { result } = renderHook(() => useLeave());
+
+      let rejectedRequest;
+      await act(async () => {
+        rejectedRequest = await result.current.rejectRequest('req-101', 'Conflicting shift');
+      });
+
+      expect(apiClient.put).toHaveBeenCalledWith('/api/v1/leave/req-101/approve', {
+        status: 'REJECTED',
+        rejection_reason: 'Conflicting shift',
+      });
+      expect(rejectedRequest.status).toBe('REJECTED');
+      expect(result.current.loading).toBe(false);
+    });
+
+    it('should use default rejection reason if not provided', async () => {
+      const mockResponse = {
+        data: {
+          data: {
+            id: 'req-101',
+            status: 'REJECTED',
+          },
+        },
+      };
+
+      apiClient.put.mockResolvedValue(mockResponse);
+
+      const { result } = renderHook(() => useLeave());
+
+      await act(async () => {
+        await result.current.rejectRequest('req-101');
+      });
+
+      expect(apiClient.put).toHaveBeenCalledWith('/api/v1/leave/req-101/approve', {
+        status: 'REJECTED',
+        rejection_reason: 'Rejected by manager',
+      });
+    });
+
+    it('should handle rejection error', async () => {
+      const mockError = {
+        response: {
+          data: {
+            error: 'REQUEST_ALREADY_PROCESSED',
+          },
+        },
+      };
+
+      apiClient.put.mockRejectedValue(mockError);
+
+      const { result } = renderHook(() => useLeave());
+
+      await act(async () => {
+        try {
+          await result.current.rejectRequest('req-101', 'Test');
+        } catch (err) {
+          // expected
+        }
+      });
+
+      expect(result.current.error).toBe('REQUEST_ALREADY_PROCESSED');
+    });
+  });
 });
