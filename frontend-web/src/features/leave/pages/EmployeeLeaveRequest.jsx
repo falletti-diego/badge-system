@@ -51,7 +51,9 @@ export const EmployeeLeaveRequest = () => {
     startDate: null,
     endDate: null,
     motivation: '',
+    uploadedFile: null,
   });
+  const [isRequestingMalattia, setIsRequestingMalattia] = useState(false);
 
   const [requests, setRequests] = useState([]);
   const [requestsLoading, setRequestsLoading] = useState(true);
@@ -82,6 +84,15 @@ export const EmployeeLeaveRequest = () => {
       ...prev,
       leave_type: e.target.value,
     }));
+    setIsRequestingMalattia(false);
+  };
+
+  const handleMalattiaRequest = () => {
+    setIsRequestingMalattia(true);
+    setFormData((prev) => ({
+      ...prev,
+      leave_type: 'MALATTIA',
+    }));
   };
 
   const handleCalendarChange = ({ startDate, endDate }) => {
@@ -98,6 +109,16 @@ export const EmployeeLeaveRequest = () => {
       setFormData((prev) => ({
         ...prev,
         motivation: value,
+      }));
+    }
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFormData((prev) => ({
+        ...prev,
+        uploadedFile: file,
       }));
     }
   };
@@ -123,7 +144,9 @@ export const EmployeeLeaveRequest = () => {
         startDate: null,
         endDate: null,
         motivation: '',
+        uploadedFile: null,
       });
+      setIsRequestingMalattia(false);
 
       setTimeout(() => {
         loadRequests();
@@ -139,7 +162,9 @@ export const EmployeeLeaveRequest = () => {
       startDate: null,
       endDate: null,
       motivation: '',
+      uploadedFile: null,
     });
+    setIsRequestingMalattia(false);
     clearError();
   };
 
@@ -180,7 +205,7 @@ export const EmployeeLeaveRequest = () => {
       <Box sx={{ py: 4, px: 2 }}>
         {/* Header */}
         <Typography variant="h2" sx={{ mb: 1 }}>
-          Richiedi Ferie
+          Richiedi ferie/malattia
         </Typography>
         <Typography variant="body1" sx={{ color: '#6B625A', mb: 4 }}>
           Gestisci le tue richieste di ferie e malattia
@@ -191,21 +216,43 @@ export const EmployeeLeaveRequest = () => {
           <CardContent sx={{ p: 3 }}>
             <form onSubmit={handleSubmit}>
               <Stack spacing={3}>
-                {/* Leave Type Dropdown */}
-                <FormControl fullWidth>
-                  <InputLabel>Tipo di Feria</InputLabel>
-                  <Select
-                    value={formData.leave_type}
-                    onChange={handleLeaveTypeChange}
-                    label="Tipo di Feria"
+                {/* Leave Type Row: Dropdown (left) + Malattia Button (right) */}
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+                  {/* Ferie Dropdown */}
+                  <FormControl sx={{ flex: 1 }}>
+                    <InputLabel>Tipo Feria</InputLabel>
+                    <Select
+                      value={!isRequestingMalattia ? formData.leave_type : ''}
+                      onChange={handleLeaveTypeChange}
+                      label="Tipo Feria"
+                      disabled={isRequestingMalattia}
+                    >
+                      {LEAVE_TYPES.filter((t) => t.value !== 'MALATTIA').map((type) => (
+                        <MenuItem key={type.value} value={type.value}>
+                          {type.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  {/* Malattia Button */}
+                  <Button
+                    variant={isRequestingMalattia ? 'contained' : 'outlined'}
+                    color={isRequestingMalattia ? 'primary' : 'inherit'}
+                    onClick={handleMalattiaRequest}
+                    sx={{
+                      minWidth: 180,
+                      backgroundColor: isRequestingMalattia ? '#2D7049' : 'transparent',
+                      color: isRequestingMalattia ? 'white' : 'inherit',
+                      border: isRequestingMalattia ? 'none' : '1px solid #ccc',
+                      '&:hover': {
+                        backgroundColor: isRequestingMalattia ? '#215a37' : '#f5f5f5',
+                      },
+                    }}
                   >
-                    {LEAVE_TYPES.map((type) => (
-                      <MenuItem key={type.value} value={type.value}>
-                        {type.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                    Richiedi Malattia
+                  </Button>
+                </Box>
 
                 {/* Calendar */}
                 <Box>
@@ -218,6 +265,64 @@ export const EmployeeLeaveRequest = () => {
                     onDateChange={handleCalendarChange}
                   />
                 </Box>
+
+                {/* File Upload (visible only for Malattia) */}
+                {isRequestingMalattia && (
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
+                      Allega Documento
+                    </Typography>
+                    <Box
+                      sx={{
+                        p: 2,
+                        border: '2px dashed #2D7049',
+                        borderRadius: 1,
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        backgroundColor: formData.uploadedFile ? '#f0f8f4' : '#fafafa',
+                        transition: 'background-color 0.2s',
+                        '&:hover': {
+                          backgroundColor: '#f0f8f4',
+                        },
+                      }}
+                    >
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={handleFileUpload}
+                        style={{ display: 'none' }}
+                        id="file-upload"
+                      />
+                      <label
+                        htmlFor="file-upload"
+                        style={{
+                          display: 'block',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {formData.uploadedFile ? (
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: '#2D7049' }}>
+                            ✓ {formData.uploadedFile.name}
+                          </Typography>
+                        ) : (
+                          <>
+                            <Typography variant="body2" sx={{ color: '#6B625A', mb: 1 }}>
+                              Carica una foto, PDF o documento della visita medica
+                            </Typography>
+                            <Button
+                              variant="contained"
+                              color="primary"
+                              size="small"
+                              sx={{ backgroundColor: '#2D7049' }}
+                            >
+                              Scegli File
+                            </Button>
+                          </>
+                        )}
+                      </label>
+                    </Box>
+                  </Box>
+                )}
 
                 {/* Motivation */}
                 <TextField

@@ -208,20 +208,21 @@ export const LeaveCalendar = ({ startDate, endDate, onDateChange }) => {
                                 minWidth: '32px',
                                 padding: 0,
                                 backgroundColor: isSelectedDay
-                                  ? '#1976D2'
+                                  ? '#1E3A5F'
                                   : isRangeDay
-                                    ? '#E3F2FD'
+                                    ? '#3b82f6'
                                     : 'transparent',
-                                color: isSelectedDay ? '#FFF' : '#000',
+                                color: isSelectedDay ? '#FFF' : isRangeDay ? '#FFF' : '#000',
                                 borderRadius: isSelectedDay ? '50%' : '4px',
-                                border: isSelectedDay ? '2px solid #1976D2' : 'none',
+                                border: isRangeDay ? '2px solid #2563eb' : isSelectedDay ? '2px solid #1E3A5F' : 'none',
+                                fontWeight: isRangeDay ? 600 : 'normal',
                                 '&:hover': {
                                   backgroundColor: isPastDate
                                     ? 'transparent'
                                     : isSelectedDay
-                                      ? '#1565C0'
+                                      ? '#1a2f4a'
                                       : isRangeDay
-                                        ? '#BBDEFB'
+                                        ? '#2563eb'
                                         : '#F5F5F5',
                                 },
                                 '&:disabled': {

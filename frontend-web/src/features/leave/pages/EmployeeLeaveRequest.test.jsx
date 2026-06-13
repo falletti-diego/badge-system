@@ -14,30 +14,37 @@ vi.mock('../../../services/authService', () => ({
 }));
 
 // Mock useLeave hook
+const mockCreateRequest = vi.fn(async () => ({
+  id: 'req-123',
+  status: 'PENDING',
+  leave_type: 'FERIE_1',
+  start_date: '2026-07-01',
+  end_date: '2026-07-05',
+}));
+
+const mockGetMyRequests = vi.fn(async () => [
+  {
+    id: 'req-1',
+    leave_type: 'FERIE_1',
+    start_date: '2026-07-01',
+    end_date: '2026-07-05',
+    status: 'APPROVED',
+    created_at: '2026-06-13T10:00:00Z',
+    num_days: 5,
+  },
+]);
+
+const mockClearError = vi.fn();
+const mockResetForm = vi.fn();
+
 vi.mock('../hooks/useLeave', () => ({
   useLeave: () => ({
-    createRequest: vi.fn(async () => ({
-      id: 'req-123',
-      status: 'PENDING',
-      leave_type: 'FERIE_1',
-      start_date: '2026-07-01',
-      end_date: '2026-07-05',
-    })),
-    getMyRequests: vi.fn(async () => [
-      {
-        id: 'req-1',
-        leave_type: 'FERIE_1',
-        start_date: '2026-07-01',
-        end_date: '2026-07-05',
-        status: 'APPROVED',
-        created_at: '2026-06-13T10:00:00Z',
-        num_days: 5,
-      },
-    ]),
+    createRequest: mockCreateRequest,
+    getMyRequests: mockGetMyRequests,
     loading: false,
     error: null,
-    clearError: vi.fn(),
-    resetForm: vi.fn(),
+    clearError: mockClearError,
+    resetForm: mockResetForm,
   }),
 }));
 
@@ -60,17 +67,23 @@ describe('EmployeeLeaveRequest Page', () => {
   });
 
   describe('Rendering', () => {
-    it('should render the page with heading', () => {
+    it('should render the page with new title "Richiedi ferie/malattia"', () => {
       renderWithRouter(<EmployeeLeaveRequest />);
 
-      expect(screen.getByText(/Richiedi Ferie/i)).toBeInTheDocument();
+      expect(screen.getByText(/Richiedi ferie\/malattia/i)).toBeInTheDocument();
     });
 
     it('should render form section with all fields', () => {
       renderWithRouter(<EmployeeLeaveRequest />);
 
-      expect(screen.getByLabelText(/Tipo di Feria/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Tipo Feria/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/Note \(opzionale\)/i)).toBeInTheDocument();
+    });
+
+    it('should render Richiedi Malattia button', () => {
+      renderWithRouter(<EmployeeLeaveRequest />);
+
+      expect(screen.getByRole('button', { name: /Richiedi Malattia/i })).toBeInTheDocument();
     });
 
     it('should render LeaveCalendar component', () => {
@@ -103,13 +116,50 @@ describe('EmployeeLeaveRequest Page', () => {
     });
   });
 
+  describe('Malattia Request', () => {
+    it('should show file upload field when Malattia button is clicked', async () => {
+      const user = userEvent.setup();
+
+      renderWithRouter(<EmployeeLeaveRequest />);
+
+      const malattiaButton = screen.getByRole('button', { name: /Richiedi Malattia/i });
+      await user.click(malattiaButton);
+
+      expect(screen.getByText(/Allega Documento/i)).toBeInTheDocument();
+      expect(screen.getByText(/Carica una foto, PDF o documento della visita medica/i)).toBeInTheDocument();
+    });
+
+    it('should not show file upload field for Ferie request', () => {
+      renderWithRouter(<EmployeeLeaveRequest />);
+
+      expect(screen.queryByText(/Allega Documento/i)).not.toBeInTheDocument();
+    });
+
+    it('should hide file upload field when switching back to Ferie', async () => {
+      const user = userEvent.setup();
+
+      renderWithRouter(<EmployeeLeaveRequest />);
+
+      const malattiaButton = screen.getByRole('button', { name: /Richiedi Malattia/i });
+      await user.click(malattiaButton);
+      expect(screen.getByText(/Allega Documento/i)).toBeInTheDocument();
+
+      const leaveTypeSelect = screen.getByLabelText(/Tipo Feria/i);
+      await user.click(leaveTypeSelect);
+      const option = screen.getByText('Ferie 1');
+      await user.click(option);
+
+      expect(screen.queryByText(/Allega Documento/i)).not.toBeInTheDocument();
+    });
+  });
+
   describe('Form Submission', () => {
     it('should submit form with valid data', async () => {
       const user = userEvent.setup();
 
       renderWithRouter(<EmployeeLeaveRequest />);
 
-      const leaveTypeSelect = screen.getByLabelText(/Tipo di Feria/i);
+      const leaveTypeSelect = screen.getByLabelText(/Tipo Feria/i);
       await user.click(leaveTypeSelect);
       const option = screen.getByText('Ferie 1');
       await user.click(option);
