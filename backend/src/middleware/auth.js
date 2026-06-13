@@ -58,8 +58,8 @@ function requireAuth(req, res, next) {
     // Dev-only: skip auth if DISABLE_AUTH=true AND not in production
     if (process.env.DISABLE_AUTH === 'true' && process.env.NODE_ENV !== 'production') {
       req.user = {
-        user_id: 'mvp-user-1',
-        client_id: 'client-1',
+        user_id: 'user-mvp-pippo',
+        client_id: '550e8400-e29b-41d4-a716-446655440001',
         role: 'admin',
       };
       return next();
