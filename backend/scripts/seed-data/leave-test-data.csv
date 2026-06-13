@@ -1,0 +1,9 @@
+email,name,phone,role,site_name,employee_id
+alice@badge.local,Alice Bianchi,+39-02-1234567,manager,Milano,ALICE001
+carlo@badge.local,Carlo Rossi,+39-011-2234567,manager,Torino,CARLO001
+maria@badge.local,Maria Rossi,+39-02-5234567,employee,Milano,MARIA001
+francesca@badge.local,Francesca Lombardi,+39-02-6234567,employee,Milano,FRAN001
+paolo@badge.local,Paolo Verdi,+39-02-7234567,employee,Milano,PAOLO001
+lucia@badge.local,Lucia Ferrari,+39-011-3234567,employee,Torino,LUCIA001
+giovanni@badge.local,Giovanni Russo,+39-011-4234567,employee,Torino,GIOV001
+sofia@badge.local,Sofia Bianchi,+39-011-5234567,employee,Torino,SOFIA001

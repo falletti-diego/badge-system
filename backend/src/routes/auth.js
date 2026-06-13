@@ -41,7 +41,7 @@ const DEMO_USERS = [
   {
     email: 'pippo@badge.local',
     password: process.env.DEMO_PIPPO_PASSWORD,
-    id: 'user-mvp-pippo',
+    id: '550e8400-e29b-41d4-a716-446655440010', // Valid UUID for admin Pippo
     name: 'Pippo',
     role: 'admin',
     client_id: '550e8400-e29b-41d4-a716-446655440001',
@@ -49,7 +49,7 @@ const DEMO_USERS = [
   {
     email: 'pino@badge.local',
     password: process.env.DEMO_PINO_PASSWORD,
-    id: 'user-mvp-pino',
+    id: '550e8400-e29b-41d4-a716-446655440011', // Valid UUID for manager Pino
     name: 'Pino',
     role: 'manager',
     client_id: '550e8400-e29b-41d4-a716-446655440001',
@@ -58,7 +58,7 @@ const DEMO_USERS = [
   {
     email: 'diego@badge.local',
     password: process.env.DEMO_DIEGO_PASSWORD,
-    id: 'user-mvp-diego',
+    id: '550e8400-e29b-41d4-a716-446655440012', // Valid UUID for manager Diego
     name: 'Diego',
     role: 'manager',
     client_id: '550e8400-e29b-41d4-a716-446655440001',
@@ -68,7 +68,7 @@ const DEMO_USERS = [
   {
     email: 'maria@badge.local',
     password: process.env.DEMO_MARIA_PASSWORD,
-    id: 'user-mvp-maria',
+    id: '550e8400-e29b-41d4-a716-446655440013', // Valid UUID for employee Maria
     name: 'Maria',
     role: 'employee',
     client_id: '550e8400-e29b-41d4-a716-446655440001',
