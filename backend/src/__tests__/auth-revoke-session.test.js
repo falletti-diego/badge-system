@@ -1,6 +1,8 @@
 /**
  * S.32.7 Task 3: POST /api/auth/revoke-session Tests
  * Tests RBAC enforcement, UUID validation, site_id scope, audit logging
+ *
+ * FIXED: Mock refactoring — pool.connect() returns mockClient with query/release
  */
 
 const request = require('supertest');
@@ -71,14 +73,29 @@ describe('POST /api/v1/auth/revoke-session', () => {
     jest.clearAllMocks();
   });
 
+  // Helper: Create mockClient with pre-configured query responses
+  function createMockClient(queryResponses) {
+    const mockClient = {
+      query: jest.fn(),
+      release: jest.fn(),
+    };
+    queryResponses.forEach((response) => {
+      mockClient.query.mockResolvedValueOnce(response);
+    });
+    return mockClient;
+  }
+
   // ===== HAPPY PATH =====
 
   test('Admin: revoke any user (happy path)', async () => {
-    pool.query.mockResolvedValueOnce({ rows: [] }); // BEGIN
-    pool.query.mockResolvedValueOnce({ rows: [] }); // INSERT revoked_tokens
-    pool.query.mockResolvedValueOnce({ rows: [] }); // DELETE used_tokens
-    pool.query.mockResolvedValueOnce({ rows: [] }); // INSERT audit_log
-    pool.query.mockResolvedValueOnce({ rows: [] }); // COMMIT
+    const mockClient = createMockClient([
+      { rows: [] }, // BEGIN
+      { rows: [] }, // INSERT revoked_tokens
+      { rows: [] }, // DELETE used_tokens
+      { rows: [] }, // INSERT audit_log
+      { rows: [] }, // COMMIT
+    ]);
+    pool.connect.mockResolvedValueOnce(mockClient);
 
     const res = await request(app)
       .post('/api/v1/auth/revoke-session')
@@ -88,6 +105,7 @@ describe('POST /api/v1/auth/revoke-session', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.message).toContain('Session revoked');
+    expect(mockClient.release).toHaveBeenCalled();
   });
 
   // ===== RBAC: Manager =====
@@ -98,12 +116,15 @@ describe('POST /api/v1/auth/revoke-session', () => {
       site_id: 'e1337fab-ba3f-4332-bb06-57c9df15b067', // Same site as manager
     };
 
-    pool.query.mockResolvedValueOnce({ rows: [] }); // BEGIN
-    pool.query.mockResolvedValueOnce({ rows: [{ site_id: targetAtSameSite.site_id }] }); // SELECT target site
-    pool.query.mockResolvedValueOnce({ rows: [] }); // INSERT revoked_tokens
-    pool.query.mockResolvedValueOnce({ rows: [] }); // DELETE used_tokens
-    pool.query.mockResolvedValueOnce({ rows: [] }); // INSERT audit_log
-    pool.query.mockResolvedValueOnce({ rows: [] }); // COMMIT
+    const mockClient = createMockClient([
+      { rows: [] }, // BEGIN
+      { rows: [{ site_id: targetAtSameSite.site_id }] }, // SELECT target site
+      { rows: [] }, // INSERT revoked_tokens
+      { rows: [] }, // DELETE used_tokens
+      { rows: [] }, // INSERT audit_log
+      { rows: [] }, // COMMIT
+    ]);
+    pool.connect.mockResolvedValueOnce(mockClient);
 
     const res = await request(app)
       .post('/api/v1/auth/revoke-session')
@@ -112,6 +133,7 @@ describe('POST /api/v1/auth/revoke-session', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
+    expect(mockClient.release).toHaveBeenCalled();
   });
 
   test('Manager: CANNOT revoke user at DIFFERENT site (403)', async () => {
@@ -120,9 +142,12 @@ describe('POST /api/v1/auth/revoke-session', () => {
       site_id: '550e8400-e29b-41d4-a716-446655440012', // Different site (Torino)
     };
 
-    pool.query.mockResolvedValueOnce({ rows: [] }); // BEGIN
-    pool.query.mockResolvedValueOnce({ rows: [{ site_id: targetAtDifferentSite.site_id }] }); // SELECT target site
-    pool.query.mockResolvedValueOnce({ rows: [] }); // ROLLBACK
+    const mockClient = createMockClient([
+      { rows: [] }, // BEGIN
+      { rows: [{ site_id: targetAtDifferentSite.site_id }] }, // SELECT target site
+      { rows: [] }, // ROLLBACK
+    ]);
+    pool.connect.mockResolvedValueOnce(mockClient);
 
     const res = await request(app)
       .post('/api/v1/auth/revoke-session')
@@ -131,6 +156,7 @@ describe('POST /api/v1/auth/revoke-session', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('FORBIDDEN');
+    expect(mockClient.release).toHaveBeenCalled();
   });
 
   test('Manager: CANNOT revoke unassigned employee (NULL site_id) (403)', async () => {
@@ -139,9 +165,12 @@ describe('POST /api/v1/auth/revoke-session', () => {
       site_id: null, // Unassigned
     };
 
-    pool.query.mockResolvedValueOnce({ rows: [] }); // BEGIN
-    pool.query.mockResolvedValueOnce({ rows: [{ site_id: unassignedTarget.site_id }] }); // SELECT target
-    pool.query.mockResolvedValueOnce({ rows: [] }); // ROLLBACK
+    const mockClient = createMockClient([
+      { rows: [] }, // BEGIN
+      { rows: [{ site_id: unassignedTarget.site_id }] }, // SELECT target
+      { rows: [] }, // ROLLBACK
+    ]);
+    pool.connect.mockResolvedValueOnce(mockClient);
 
     const res = await request(app)
       .post('/api/v1/auth/revoke-session')
@@ -149,13 +178,17 @@ describe('POST /api/v1/auth/revoke-session', () => {
       .send({ user_id: unassignedTarget.user_id });
 
     expect(res.status).toBe(403);
+    expect(mockClient.release).toHaveBeenCalled();
   });
 
   // ===== RBAC: Employee/Viewer =====
 
   test('Employee: CANNOT revoke any user (403)', async () => {
-    pool.query.mockResolvedValueOnce({ rows: [] }); // BEGIN
-    pool.query.mockResolvedValueOnce({ rows: [] }); // ROLLBACK
+    const mockClient = createMockClient([
+      { rows: [] }, // BEGIN
+      { rows: [] }, // ROLLBACK
+    ]);
+    pool.connect.mockResolvedValueOnce(mockClient);
 
     const res = await request(app)
       .post('/api/v1/auth/revoke-session')
@@ -164,6 +197,7 @@ describe('POST /api/v1/auth/revoke-session', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('FORBIDDEN');
+    expect(mockClient.release).toHaveBeenCalled();
   });
 
   // ===== VALIDATION =====
@@ -191,9 +225,12 @@ describe('POST /api/v1/auth/revoke-session', () => {
   // ===== ERROR CASES =====
 
   test('Returns 404 if target user not found (manager lookup)', async () => {
-    pool.query.mockResolvedValueOnce({ rows: [] }); // BEGIN
-    pool.query.mockResolvedValueOnce({ rows: [] }); // SELECT target (no rows)
-    pool.query.mockResolvedValueOnce({ rows: [] }); // ROLLBACK
+    const mockClient = createMockClient([
+      { rows: [] }, // BEGIN
+      { rows: [] }, // SELECT target (no rows)
+      { rows: [] }, // ROLLBACK
+    ]);
+    pool.connect.mockResolvedValueOnce(mockClient);
 
     const res = await request(app)
       .post('/api/v1/auth/revoke-session')
@@ -202,24 +239,35 @@ describe('POST /api/v1/auth/revoke-session', () => {
 
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('NOT_FOUND');
+    expect(mockClient.release).toHaveBeenCalled();
   });
 
   test('Returns 401 if no token provided', async () => {
+    // Temporarily disable DISABLE_AUTH to test actual 401 (not DISABLE_AUTH fallback)
+    const origDisableAuth = process.env.DISABLE_AUTH;
+    process.env.DISABLE_AUTH = 'false';
+
     const res = await request(app)
       .post('/api/v1/auth/revoke-session')
       .send({ user_id: targetUser.user_id });
 
     expect(res.status).toBe(401);
+    expect(res.body.error).toBe('MISSING_TOKEN');
+
+    process.env.DISABLE_AUTH = origDisableAuth;
   });
 
   // ===== AUDIT LOGGING =====
 
   test('Audit log records revocation with admin user_id and reason', async () => {
-    pool.query.mockResolvedValueOnce({ rows: [] }); // BEGIN
-    pool.query.mockResolvedValueOnce({ rows: [] }); // INSERT revoked_tokens
-    pool.query.mockResolvedValueOnce({ rows: [] }); // DELETE used_tokens
-    pool.query.mockResolvedValueOnce({ rows: [] }); // INSERT audit_log
-    pool.query.mockResolvedValueOnce({ rows: [] }); // COMMIT
+    const mockClient = createMockClient([
+      { rows: [] }, // BEGIN
+      { rows: [] }, // INSERT revoked_tokens
+      { rows: [] }, // DELETE used_tokens
+      { rows: [] }, // INSERT audit_log
+      { rows: [] }, // COMMIT
+    ]);
+    pool.connect.mockResolvedValueOnce(mockClient);
 
     await request(app)
       .post('/api/v1/auth/revoke-session')
@@ -227,7 +275,7 @@ describe('POST /api/v1/auth/revoke-session', () => {
       .send({ user_id: targetUser.user_id });
 
     // Find the INSERT audit_log call
-    const auditLogCall = pool.query.mock.calls.find(
+    const auditLogCall = mockClient.query.mock.calls.find(
       (call) => call[0].includes('INSERT INTO audit_log')
     );
 
@@ -241,11 +289,14 @@ describe('POST /api/v1/auth/revoke-session', () => {
 
   test('Revoking same user twice succeeds both times (ON CONFLICT)', async () => {
     // First revoke
-    pool.query.mockResolvedValueOnce({ rows: [] }); // BEGIN
-    pool.query.mockResolvedValueOnce({ rows: [] }); // INSERT revoked_tokens (first time)
-    pool.query.mockResolvedValueOnce({ rows: [] }); // DELETE used_tokens
-    pool.query.mockResolvedValueOnce({ rows: [] }); // INSERT audit_log
-    pool.query.mockResolvedValueOnce({ rows: [] }); // COMMIT
+    const mockClient1 = createMockClient([
+      { rows: [] }, // BEGIN
+      { rows: [] }, // INSERT revoked_tokens (first time)
+      { rows: [] }, // DELETE used_tokens
+      { rows: [] }, // INSERT audit_log
+      { rows: [] }, // COMMIT
+    ]);
+    pool.connect.mockResolvedValueOnce(mockClient1);
 
     let res = await request(app)
       .post('/api/v1/auth/revoke-session')
@@ -253,13 +304,17 @@ describe('POST /api/v1/auth/revoke-session', () => {
       .send({ user_id: targetUser.user_id });
 
     expect(res.status).toBe(200);
+    expect(mockClient1.release).toHaveBeenCalled();
 
     // Second revoke
-    pool.query.mockResolvedValueOnce({ rows: [] }); // BEGIN
-    pool.query.mockResolvedValueOnce({ rows: [] }); // INSERT revoked_tokens (ON CONFLICT UPDATE)
-    pool.query.mockResolvedValueOnce({ rows: [] }); // DELETE used_tokens
-    pool.query.mockResolvedValueOnce({ rows: [] }); // INSERT audit_log
-    pool.query.mockResolvedValueOnce({ rows: [] }); // COMMIT
+    const mockClient2 = createMockClient([
+      { rows: [] }, // BEGIN
+      { rows: [] }, // INSERT revoked_tokens (ON CONFLICT UPDATE)
+      { rows: [] }, // DELETE used_tokens
+      { rows: [] }, // INSERT audit_log
+      { rows: [] }, // COMMIT
+    ]);
+    pool.connect.mockResolvedValueOnce(mockClient2);
 
     res = await request(app)
       .post('/api/v1/auth/revoke-session')
@@ -267,5 +322,6 @@ describe('POST /api/v1/auth/revoke-session', () => {
       .send({ user_id: targetUser.user_id });
 
     expect(res.status).toBe(200); // Still 200, not 409
+    expect(mockClient2.release).toHaveBeenCalled();
   });
 });

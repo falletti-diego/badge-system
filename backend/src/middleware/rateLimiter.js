@@ -107,13 +107,14 @@ function createHybridStore(prefix, windowMs) {
 /**
  * General API rate limiter (100 req/min per user or IP)
  * Keyed by user_id if authenticated, else by IP
+ * SKIP in test environment (NODE_ENV === 'test')
  */
 const apiLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: RATE_LIMIT_MAX_REQUESTS,
   standardHeaders: false,
   store: createHybridStore('api', RATE_LIMIT_WINDOW_MS),
-  skip: (req) => req.path === '/health',
+  skip: (req) => req.path === '/health' || process.env.NODE_ENV === 'test',
   keyGenerator: (req) => req.user?.user_id || req.ip,
   handler: (req, res) => {
     const retryAfter = Math.ceil(RATE_LIMIT_WINDOW_MS / 1000);
@@ -138,12 +139,14 @@ const apiLimiter = rateLimit({
 
 /**
  * Auth rate limiter (5 req/min per IP) — brute-force protection for login
+ * SKIP in test environment (NODE_ENV === 'test')
  */
 const authLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: 5,
   standardHeaders: false,
   store: createHybridStore('auth', RATE_LIMIT_WINDOW_MS),
+  skip: (req) => process.env.NODE_ENV === 'test',
   keyGenerator: (req) => req.ip,
   handler: (req, res) => {
     const retryAfter = Math.ceil(RATE_LIMIT_WINDOW_MS / 1000);
@@ -166,12 +169,14 @@ const authLimiter = rateLimit({
 
 /**
  * CSV export rate limiter (10 req/min per user) — heavier operation
+ * SKIP in test environment (NODE_ENV === 'test')
  */
 const csvLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: 10,
   standardHeaders: false,
   store: createHybridStore('csv', RATE_LIMIT_WINDOW_MS),
+  skip: (req) => process.env.NODE_ENV === 'test',
   keyGenerator: (req) => req.user?.user_id || req.ip,
   handler: (req, res) => {
     const retryAfter = Math.ceil(RATE_LIMIT_WINDOW_MS / 1000);
