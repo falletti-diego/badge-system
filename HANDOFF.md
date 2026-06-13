@@ -1,10 +1,10 @@
 # Badge System — Security Hardening & Leave Management Handoff
 
 **Date:** 2026-06-14  
-**Features:** S.32.7 Refresh Token Rotation + Revocation (COMPLETE) | Leave Management (COMPLETE)  
-**Status:** ✅ **S.32.7 COMPLETE** — Refresh token system production-ready | ✅ **Leave Mgmt COMPLETE**  
-**Recent Work:** Session 36 — S.32.7 Optional Steps (Mock Refactoring, Integration Testing, Load Testing, Security Audit)  
-**Plan:** `docs/superpowers/plans/2026-06-12-*.md`
+**Features:** S.32.7 Refresh Token Rotation + Revocation (COMPLETE) | Leave Management (COMPLETE) | Task 11 QA Planning (COMPLETE)  
+**Status:** ✅ **S.32.7 PRODUCTION READY** | ✅ **Leave Mgmt COMPLETE** | ✅ **Task 11 Planning COMPLETE**  
+**Recent Work:** Session 37 — Task 11 Planning (DEMO_USERS UUID fix + CSV test data + import script + test plan)  
+**Plan:** `docs/superpowers/plans/2026-06-14-leave-testing-plan.md`
 
 ---
 
@@ -15,6 +15,9 @@
 
 2. **Leave Management** — Calendar-based leave request system
    - **STATUS:** ✅ **COMPLETE** — Ready for production deployment
+
+3. **Task 11: Leave Management QA & Frontend Testing** — Comprehensive testing with realistic data
+   - **STATUS:** ✅ **PLANNING COMPLETE** — Ready for execution (2h effort estimate)
 
 ---
 
@@ -179,6 +182,82 @@
 
 ---
 
+## Current Progress — Task 11 Planning COMPLETE (Session 37)
+
+### Task 11 — Leave Management QA & Frontend Testing ✅
+
+**Summary:** Complete planning and test data preparation for comprehensive Leave Management testing (17 test cases across ferie, malattia, planning blocking, and RBAC).
+
+**What Was Created:**
+
+1. ✅ **CRITICAL BUG FIX — DEMO_USERS UUID Validation**
+   - **Issue:** DEMO_USERS had hardcoded strings `id: 'user-mvp-pippo'` instead of valid UUIDs
+   - **Error:** PostgreSQL rejected with `invalid input syntax for type uuid` in checkRevoked middleware
+   - **Fix Applied:** All 4 DEMO_USERS now have valid UUIDs:
+     - pippo (admin): `550e8400-e29b-41d4-a716-446655440010`
+     - pino (manager): `550e8400-e29b-41d4-a716-446655440011`
+     - diego (manager): `550e8400-e29b-41d4-a716-446655440012`
+     - maria (employee): `550e8400-e29b-41d4-a716-446655440013`
+   - **File:** `backend/src/routes/auth.js` (lines 40-78)
+   - **Commit:** `09b5412`
+
+2. ✅ **Test Data CSV**
+   - **File:** `backend/scripts/seed-data/leave-test-data.csv`
+   - **Structure:** 8 employees (4 Milano, 4 Torino) with roles, sites, contact info
+   - **Employees:**
+     - Milano: Alice (manager), Maria (employee), Francesca (employee), Paolo (employee)
+     - Torino: Carlo (manager), Lucia (employee), Giovanni (employee), Sofia (employee)
+   - **Format:** email, name, phone, role, site_name, employee_id
+   - **Ready for:** `POST /api/admin/employees/import`
+
+3. ✅ **Import Script**
+   - **File:** `backend/scripts/seed-leave-test-data.js`
+   - **Functionality:**
+     - Reads CSV and imports via API
+     - Generates temp passwords for all 8 employees
+     - Creates leave requests (Maria FERIE_1 + MALATTIA, Francesca FERIE_1, Lucia MALATTIA)
+     - Handles login + token authentication
+     - Pretty-prints results with employee credentials
+   - **Usage:** `node scripts/seed-leave-test-data.js`
+
+4. ✅ **Comprehensive Test Plan**
+   - **File:** `docs/superpowers/plans/2026-06-14-leave-testing-plan.md`
+   - **Scope:** 17 test cases across 4 categories:
+     - **A. Ferie Tests (7 cases):** request, saldo check, approval, rejection, RBAC filtering
+     - **B. Malattia Tests (3 cases):** no saldo limit, approval, 100-day request
+     - **C. Planning Blocking (4 cases):** disabled selects, 🔒 lock icon, tooltip, persistence
+     - **D. Edge Cases (3 cases):** PENDING doesn't block, rejection unblocks, delete unblocks
+   - **Phases:**
+     - Phase 1 (30 min): CSV import + shift pre-assignment
+     - Phase 2 (60 min): API testing (17 test cases)
+     - Phase 3 (30 min): Frontend manual testing (form layout, RBAC, blocking visualization)
+   - **Definition of Done:** All 17 tests PASSING, no 5xx errors, RBAC verified
+
+**Deliverables:**
+- ✅ `backend/src/routes/auth.js` — Fixed DEMO_USERS UUIDs
+- ✅ `backend/scripts/seed-data/leave-test-data.csv` — 8 test employees
+- ✅ `backend/scripts/seed-leave-test-data.js` — Automated import + leave creation
+- ✅ `docs/superpowers/plans/2026-06-14-leave-testing-plan.md` — Complete 2h test plan
+- ✅ `TASKS.md` — Task 11 added with 13 sub-tasks + 17 test cases
+
+**Commits:**
+- `e04539e` — Add Task 11 to TASKS.md (plan + definition of done)
+- `09b5412` — Fix DEMO_USERS + add CSV + script + test plan doc
+
+**Status:** ✅ **PLANNING COMPLETE, READY FOR EXECUTION**
+
+**Next Steps for Execution:**
+1. Start backend: `cd backend && npm run dev`
+2. Run import: `node scripts/seed-leave-test-data.js`
+3. Start frontend: `cd frontend-web && npm run dev`
+4. Execute 17 test cases from `2026-06-14-leave-testing-plan.md`
+5. Document results in test plan markdown
+6. Commit results & close Task 11
+
+**Est. Effort:** 2 hours (setup + testing + documentation)
+
+---
+
 ## What Worked
 
 1. **TDD-style development** made features reliable and testable.
@@ -189,6 +268,9 @@
 6. **Visual blocking indicators** — Red background + lock icon + tooltip makes blocking clear to users.
 7. **Scoped commits** kept unrelated changes untouched.
 8. **Multi-layer testing** — Backend (Jest), Frontend hooks (Vitest), Component logic (Vitest).
+9. **Comprehensive test planning** — Writing detailed test plans (2026-06-14-leave-testing-plan.md) upfront saves debugging time and ensures no edge cases missed.
+10. **CSV-based test data** — Bulk importing test employees is faster and more realistic than manual creation, reduces false positives from incomplete setup.
+11. **UUID validation early** — Discovering and fixing DEMO_USERS UUID bug before testing prevented cascading errors during test execution.
 
 ---
 
@@ -197,6 +279,8 @@
 1. **Component rendering complexity in tests** — Initial approach tried full component rendering with complex mocks. **Solution:** Focused on core blocking logic unit tests instead of integration tests.
 2. **Hook error state synchronization** — AdminLeaveManagement had unused state variable. **Solution:** Removed unused state, added `clearError()` sync on data load.
 3. **Test expectation mismatches** — Auth middleware returns `MISSING_TOKEN`, not `UNAUTHORIZED`. **Solution:** Updated test expectations to match actual error codes.
+4. **Hardcoded mock strings in auth fixtures** — DEMO_USERS had non-UUID `id` values ("user-mvp-pippo"). **Solution:** Use proper UUID strings for all user_id fields, validate at fixture load time via `validate-demo-users.js` script (from S.32.7 prevention).
+5. **Skipping detailed test plans** — Jumping straight to manual testing without a written plan led to missed edge cases. **Solution:** Always write test plan first (even 30 min upfront saves 1h+ debugging).
 
 ---
 
@@ -368,12 +452,20 @@ Then in Claude Code:
 ```
 Read HANDOFF.md and recent git log.
 
-✅ S.32.7 (Refresh Token Rotation) — COMPLETE
+✅ S.32.7 (Refresh Token Rotation) — PRODUCTION READY
 ✅ Leave Management (Tasks 1-9) — COMPLETE
+✅ Task 11 Planning (Test Data + Plan) — COMPLETE
 
-Status: PRODUCTION READY FOR MVP LAUNCH
+Status: READY FOR TASK 11 EXECUTION
 
-Next options:
+IMMEDIATE NEXT STEP — Task 11 (2h):
+1. Start backend: cd backend && npm run dev
+2. Import test data: node scripts/seed-leave-test-data.js
+3. Start frontend: cd frontend-web && npm run dev
+4. Execute 17 test cases from docs/superpowers/plans/2026-06-14-leave-testing-plan.md
+5. Document results & close Task 11
+
+After Task 11:
 1. S.32.8 — Split file monolitici (4-6h)
 2. S.32.9 — GPS spoofing mitigations (3-4h, Phase 2)
 3. Deploy to production & launch
