@@ -644,4 +644,77 @@ describe('useLeave Hook', () => {
       expect(result.current.error).toBe('SERVER_ERROR');
     });
   });
+
+  describe('getApprovedRequests', () => {
+    it('should fetch approved leave requests', async () => {
+      const mockResponse = {
+        data: {
+          data: [
+            {
+              id: 'req-001',
+              employee_id: 'emp-001',
+              employee_name: 'Maria Rossi',
+              leave_type: 'FERIE_1',
+              start_date: '2026-07-01',
+              end_date: '2026-07-05',
+              status: 'APPROVED',
+              approved_at: '2026-06-13T10:00:00Z',
+            },
+          ],
+        },
+      };
+
+      apiClient.get.mockResolvedValue(mockResponse);
+
+      const { result } = renderHook(() => useLeave());
+
+      let requests;
+      await act(async () => {
+        requests = await result.current.getApprovedRequests();
+      });
+
+      expect(apiClient.get).toHaveBeenCalledWith('/api/v1/leave/approved');
+      expect(requests).toHaveLength(1);
+      expect(requests[0].status).toBe('APPROVED');
+      expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBe(null);
+    });
+
+    it('should handle empty approved requests', async () => {
+      apiClient.get.mockResolvedValue({ data: { data: [] } });
+
+      const { result } = renderHook(() => useLeave());
+
+      let requests;
+      await act(async () => {
+        requests = await result.current.getApprovedRequests();
+      });
+
+      expect(requests).toHaveLength(0);
+    });
+
+    it('should handle error', async () => {
+      const mockError = {
+        response: {
+          data: {
+            error: 'FORBIDDEN',
+          },
+        },
+      };
+
+      apiClient.get.mockRejectedValue(mockError);
+
+      const { result } = renderHook(() => useLeave());
+
+      await act(async () => {
+        try {
+          await result.current.getApprovedRequests();
+        } catch (err) {
+          // expected
+        }
+      });
+
+      expect(result.current.error).toBe('FORBIDDEN');
+    });
+  });
 });

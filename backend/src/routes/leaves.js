@@ -330,4 +330,57 @@ router.get('/my-requests', requireAuth, async (req, res, next) => {
   }
 });
 
+// =====================================================
+// GET /api/v1/leave/approved — Get approved leave requests (for planning integration)
+// =====================================================
+
+router.get('/approved', requireAuth, async (req, res, next) => {
+  const userId = req.user.user_id;
+  const clientId = req.user.client_id;
+  const role = req.user.role;
+  const siteId = req.user.site_id;
+
+  try {
+    let query = `
+      SELECT
+        r.id, r.client_id, r.user_id, r.leave_type, r.start_date, r.end_date,
+        r.num_days, r.status, r.approved_by, r.approved_at, r.created_at,
+        e.name as employee_name, e.email as employee_email
+      FROM leave_requests r
+      JOIN employees e ON r.user_id = e.id
+      WHERE r.status = 'APPROVED' AND r.client_id = $1::uuid
+    `;
+
+    const params = [clientId];
+
+    // RBAC: Admin sees all approved requests; managers see store employees; employees see own
+    if (role === 'admin') {
+      // No additional filter
+    } else if (role === 'manager' && siteId) {
+      query += ` AND e.site_id = $2::uuid`;
+      params.push(siteId);
+    } else if (role === 'employee' || role === 'viewer') {
+      query += ` AND r.user_id = $2::uuid`;
+      params.push(userId);
+    } else {
+      throw new ForbiddenError('You do not have permission to view approved leave requests', 'FORBIDDEN');
+    }
+
+    query += ` ORDER BY r.start_date ASC LIMIT 500`;
+
+    const result = await pool.query(query, params);
+
+    logger.info({
+      action: 'approved_leaves_viewed',
+      user_id: userId,
+      role,
+      count: result.rows.length,
+    });
+
+    res.status(200).json({ data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

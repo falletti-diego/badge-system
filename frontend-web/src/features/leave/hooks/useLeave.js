@@ -186,11 +186,33 @@ export const useLeave = () => {
     }
   }, []);
 
+  const getApprovedRequests = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await apiClient.get('/api/v1/leave/approved');
+      return response.data.data || [];
+    } catch (err) {
+      const errorMessage =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to fetch approved leave requests';
+
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   return {
     createRequest,
     getMyRequests,
     getPendingRequests,
     getAllLeaveRequests,
+    getApprovedRequests,
     getEmployeeSaldi,
     approveRequest,
     rejectRequest,

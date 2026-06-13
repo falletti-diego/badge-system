@@ -299,4 +299,131 @@ describe('Leave Request API Endpoints — Security Regression Tests', () => {
       expect(mockPool.query.mock.calls[1][0]).toContain("WHERE id = $4::uuid AND status = 'PENDING'");
     });
   });
+
+  describe('GET /api/v1/leave/approved', () => {
+    it('should return approved leave requests for admin', async () => {
+      const adminToken = makeToken({ role: 'admin', site_id: null });
+
+      mockPool.query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: TEST_LEAVE_ID,
+            client_id: TEST_CLIENT_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            leave_type: 'FERIE_1',
+            start_date: '2026-07-01',
+            end_date: '2026-07-05',
+            num_days: 5,
+            motivation: 'Summer vacation',
+            status: 'APPROVED',
+            approved_by: TEST_ADMIN_ID,
+            approved_at: '2026-06-13T10:00:00Z',
+            created_at: '2026-06-13T09:00:00Z',
+            updated_at: '2026-06-13T10:00:00Z',
+            employee_name: 'Maria Rossi',
+            employee_email: 'maria@example.com',
+          },
+        ],
+      });
+
+      const res = await request(app)
+        .get('/api/v1/leave/approved')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0].status).toBe('APPROVED');
+      expect(res.body.data[0].leave_type).toBe('FERIE_1');
+      expect(mockPool.query).toHaveBeenCalledWith(
+        expect.stringContaining('WHERE r.status = \'APPROVED\''),
+        [TEST_CLIENT_ID]
+      );
+    });
+
+    it('should return manager scoped approved requests (own store employees)', async () => {
+      const managerToken = makeToken({
+        role: 'manager',
+        site_id: TEST_SITE_ID,
+        user_id: TEST_MANAGER_ID,
+      });
+
+      mockPool.query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: TEST_LEAVE_ID,
+            client_id: TEST_CLIENT_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            leave_type: 'FERIE_1',
+            start_date: '2026-07-01',
+            end_date: '2026-07-05',
+            num_days: 5,
+            status: 'APPROVED',
+            employee_name: 'Maria Rossi',
+          },
+        ],
+      });
+
+      const res = await request(app)
+        .get('/api/v1/leave/approved')
+        .set('Authorization', `Bearer ${managerToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(mockPool.query).toHaveBeenCalledWith(
+        expect.stringContaining('e.site_id = $2::uuid'),
+        [TEST_CLIENT_ID, TEST_SITE_ID]
+      );
+    });
+
+    it('should return employee scoped approved requests (own only)', async () => {
+      const employeeToken = makeToken({
+        role: 'employee',
+        user_id: TEST_EMPLOYEE_ID,
+        site_id: TEST_SITE_ID,
+      });
+
+      mockPool.query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: TEST_LEAVE_ID,
+            client_id: TEST_CLIENT_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            leave_type: 'FERIE_1',
+            status: 'APPROVED',
+          },
+        ],
+      });
+
+      const res = await request(app)
+        .get('/api/v1/leave/approved')
+        .set('Authorization', `Bearer ${employeeToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(mockPool.query).toHaveBeenCalledWith(
+        expect.stringContaining('r.user_id = $2::uuid'),
+        [TEST_CLIENT_ID, TEST_EMPLOYEE_ID]
+      );
+    });
+
+    it('should return 401 for missing token', async () => {
+      const res = await request(app).get('/api/v1/leave/approved');
+
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('MISSING_TOKEN');
+    });
+
+    it('should return empty array when no approved requests', async () => {
+      const adminToken = makeToken({ role: 'admin' });
+
+      mockPool.query.mockResolvedValueOnce({ rows: [] });
+
+      const res = await request(app)
+        .get('/api/v1/leave/approved')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([]);
+    });
+  });
 });
