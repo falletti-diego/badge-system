@@ -18,6 +18,8 @@ import { AdminPage } from './features/admin/pages/AdminPage';
 import { EmployeeLeaveRequest } from './features/leave/pages/EmployeeLeaveRequest';
 import { ManagerLeaveRequest } from './features/leave/pages/ManagerLeaveRequest';
 import { AdminLeaveManagement } from './features/leave/pages/AdminLeaveManagement';
+import { EmployeeIllnessReport } from './features/illness/pages/EmployeeIllnessReport';
+import { AdminIllnessManagement } from './features/illness/pages/AdminIllnessManagement';
 import SummaryPage from './pages/SummaryPage';
 import { useTokenRefresh } from './hooks/useTokenRefresh';
 import { setupAxiosInterceptor } from './lib/axiosInterceptor';
@@ -210,6 +212,26 @@ function AppRouter() {
             element={
               <ProtectedRoute requiredRole="admin">
                 <AdminLeaveManagement />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Employee: Report Illness */}
+          <Route
+            path="/illnesses/report"
+            element={
+              <ProtectedRoute requiredRole="employee">
+                <EmployeeIllnessReport />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Admin: Illness Management */}
+          <Route
+            path="/admin/illnesses"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <AdminIllnessManagement />
               </ProtectedRoute>
             }
           />

@@ -226,6 +226,38 @@ const DashboardPage = () => {
               </Button>
             )}
 
+            {/* Employee Illness Report - Show for employees */}
+            {userRole === 'employee' && (
+              <Button
+                color="inherit"
+                onClick={() => navigate('/illnesses/report')}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '14px',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                  },
+                }}
+              >
+                🏥 Malattia
+              </Button>
+            )}
+
+            {/* Admin Illness Management - Admin only */}
+            {userRole === 'admin' && (
+              <Button
+                color="inherit"
+                onClick={() => navigate('/admin/illnesses')}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '14px',
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
+                }}
+              >
+                🏥 Malattie
+              </Button>
+            )}
+
             <Button
               color="inherit"
               onClick={handleLogout}

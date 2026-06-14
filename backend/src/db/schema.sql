@@ -330,6 +330,32 @@ CREATE TABLE IF NOT EXISTS leave_saldi (
 CREATE INDEX idx_leave_saldi_user_year ON leave_saldi(user_id, year);
 
 -- ============================================
+-- TABLE: Illnesses (Malattia — auto-approved communications)
+-- ============================================
+CREATE TABLE illnesses (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  num_days INT NOT NULL,
+
+  reason VARCHAR(500),
+  certificate_url VARCHAR(500),
+
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_by UUID NOT NULL REFERENCES employees(id) ON DELETE RESTRICT,
+
+  cancelled_at TIMESTAMP WITH TIME ZONE,
+  cancelled_by UUID,
+  cancellation_reason VARCHAR(500)
+);
+
+CREATE INDEX idx_illnesses_employee_id ON illnesses(employee_id);
+CREATE INDEX idx_illnesses_client_id ON illnesses(client_id);
+CREATE INDEX idx_illnesses_date_range ON illnesses(start_date, end_date);
+
+-- ============================================
 -- VERIFICATION QUERIES
 -- ============================================
 -- Uncomment to verify schema creation

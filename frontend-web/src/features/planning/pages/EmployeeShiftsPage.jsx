@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Container,
   Box,
@@ -22,6 +22,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useMySchedule } from '../hooks/useMySchedule';
+import { useIllness } from '../../illness/hooks/useIllness';
 import authService from '../../../services/authService';
 import { NotificationBell } from '../../notifications/components/NotificationBell';
 
@@ -37,6 +38,8 @@ export const EmployeeShiftsPage = () => {
   const { user, loading: userLoading } = useAuth();
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [illnesses, setIllnesses] = useState([]);
+  const [loadingIllnesses, setLoadingIllnesses] = useState(false);
 
   const handleLogout = async () => {
     await authService.logout();
@@ -45,6 +48,28 @@ export const EmployeeShiftsPage = () => {
 
   // Fetch employee's schedule from API
   const { data, loading, error } = useMySchedule(month, year);
+  const { getIllnessesByDateRange } = useIllness();
+
+  // Load illnesses for the selected month/year
+  useEffect(() => {
+    const loadIllnesses = async () => {
+      try {
+        setLoadingIllnesses(true);
+        const firstDay = `${year}-${String(month).padStart(2, '0')}-01`;
+        const lastDay = new Date(year, month, 0);
+        const endDay = `${year}-${String(month).padStart(2, '0')}-${lastDay.getDate()}`;
+
+        const data = await getIllnessesByDateRange(firstDay, endDay);
+        setIllnesses(data || []);
+      } catch (err) {
+        console.error('Errore nel caricamento delle malattie:', err);
+      } finally {
+        setLoadingIllnesses(false);
+      }
+    };
+
+    loadIllnesses();
+  }, [month, year, getIllnessesByDateRange]);
 
   if (userLoading) {
     return (
@@ -77,6 +102,15 @@ export const EmployeeShiftsPage = () => {
   const shiftsData = data?.shifts_data || {};
   const daysInMonth = new Date(year, month, 0).getDate();
 
+  // Helper function: check if date has illness
+  const isDateIll = (dateStr) => {
+    return illnesses.some((illness) => {
+      const start = new Date(illness.start_date).toISOString().split('T')[0];
+      const end = new Date(illness.end_date).toISOString().split('T')[0];
+      return dateStr >= start && dateStr <= end && !illness.cancelled_at;
+    });
+  };
+
   // Generate ALL days of the month — shift is null when not yet assigned
   const shiftsArray = Array.from({ length: daysInMonth }, (_, i) => {
     const day = i + 1;
@@ -84,7 +118,8 @@ export const EmployeeShiftsPage = () => {
     return { date: dateStr, shift: shiftsData[dateStr] || null };
   });
 
-  const assignedCount = shiftsArray.filter(({ shift }) => shift !== null).length;
+  const assignedCount = shiftsArray.filter(({ date, shift }) => shift !== null && !isDateIll(date)).length;
+  const illnessCount = shiftsArray.filter(({ date }) => isDateIll(date)).length;
   const monthLabel = new Date(year, month - 1, 1).toLocaleString('it-IT', {
     month: 'long',
     year: 'numeric'
@@ -169,10 +204,23 @@ export const EmployeeShiftsPage = () => {
                   Turni Assegnati
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                  {assignedCount}/{daysInMonth}
+                  {assignedCount}/{daysInMonth - illnessCount}
                 </Typography>
               </CardContent>
             </Card>
+
+            {illnessCount > 0 && (
+              <Card sx={{ flex: 1, borderLeft: '4px solid #DC2626' }}>
+                <CardContent>
+                  <Typography color="textSecondary" gutterBottom>
+                    Giorni di Malattia
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#DC2626' }}>
+                    {illnessCount}
+                  </Typography>
+                </CardContent>
+              </Card>
+            )}
 
             <Card sx={{ flex: 1, borderLeft: '4px solid #B45309' }}>
               <CardContent>
@@ -180,7 +228,7 @@ export const EmployeeShiftsPage = () => {
                   Giorni Liberi
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                  {daysInMonth - assignedCount}
+                  {daysInMonth - assignedCount - illnessCount}
                 </Typography>
               </CardContent>
             </Card>
@@ -200,6 +248,7 @@ export const EmployeeShiftsPage = () => {
                   month: 'long'
                 });
                 const isWeekend = [0, 6].includes(dateObj.getDay());
+                const ill = isDateIll(date);
 
                 return (
                   <Box
@@ -210,21 +259,40 @@ export const EmployeeShiftsPage = () => {
                       alignItems: 'center',
                       padding: '12px 16px',
                       borderBottom: idx < shiftsArray.length - 1 ? '1px solid #E5E7EB' : 'none',
-                      backgroundColor: isWeekend ? '#FAFAF8' : 'transparent',
-                      '&:hover': { backgroundColor: '#F9F8F6' }
+                      backgroundColor: ill ? 'rgba(220, 38, 38, 0.08)' : isWeekend ? '#FAFAF8' : 'transparent',
+                      '&:hover': { backgroundColor: ill ? 'rgba(220, 38, 38, 0.12)' : '#F9F8F6' }
                     }}
                   >
                     <Typography
                       variant="body2"
                       sx={{
-                        fontWeight: isWeekend ? '400' : '500',
-                        color: isWeekend ? '#9CA3AF' : '#2A2520',
+                        fontWeight: ill ? '600' : isWeekend ? '400' : '500',
+                        color: ill ? '#DC2626' : isWeekend ? '#9CA3AF' : '#2A2520',
                         textTransform: 'capitalize'
                       }}
                     >
                       {dateLabel}
                     </Typography>
-                    {shiftInfo ? (
+                    {ill ? (
+                      <Box
+                        sx={{
+                          backgroundColor: '#DC2626',
+                          color: '#FFFFFF',
+                          padding: '3px 12px',
+                          borderRadius: '4px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          minWidth: '90px',
+                          textAlign: 'center',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        ⚕️ Malattia
+                      </Box>
+                    ) : shiftInfo ? (
                       <Box
                         sx={{
                           backgroundColor: shiftInfo.color,
@@ -262,7 +330,7 @@ export const EmployeeShiftsPage = () => {
         <Card sx={{ marginTop: '30px', backgroundColor: '#F5F2ED' }}>
           <CardContent>
             <Typography variant="h6" sx={{ fontWeight: 'bold', marginBottom: '12px' }}>
-              💡 Legenda Turni
+              💡 Legenda
             </Typography>
             <Box sx={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               {Object.entries(SHIFT_ICONS).map(([key, info]) => (
@@ -277,6 +345,15 @@ export const EmployeeShiftsPage = () => {
                   }}
                 />
               ))}
+              <Chip
+                label="Malattia"
+                sx={{
+                  backgroundColor: '#DC2626',
+                  color: '#FFFFFF',
+                  fontWeight: '600',
+                  fontSize: '13px'
+                }}
+              />
             </Box>
           </CardContent>
         </Card>
