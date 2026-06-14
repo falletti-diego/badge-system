@@ -17,7 +17,7 @@ const DEMO_USERS = [
     // Admin user — full system access
     email: 'pippo@badge.local',
     password: process.env.DEMO_PIPPO_PASSWORD,
-    id: 'user-mvp-pippo',
+    id: '550e8400-e29b-41d4-a716-446655440010', // ✅ VALID UUID (admin)
     name: 'Pippo',
     role: 'admin',
     client_id: '550e8400-e29b-41d4-a716-446655440001', // ✅ VALID UUID
@@ -26,7 +26,7 @@ const DEMO_USERS = [
     // Manager user — store-specific access
     email: 'pino@badge.local',
     password: process.env.DEMO_PINO_PASSWORD,
-    id: 'user-mvp-pino',
+    id: '550e8400-e29b-41d4-a716-446655440011', // ✅ VALID UUID (pino)
     name: 'Pino',
     role: 'manager',
     client_id: '550e8400-e29b-41d4-a716-446655440001', // ✅ VALID UUID (same client)
@@ -36,7 +36,7 @@ const DEMO_USERS = [
     // Manager user with employee_id
     email: 'diego@badge.local',
     password: process.env.DEMO_DIEGO_PASSWORD,
-    id: 'user-mvp-diego',
+    id: '550e8400-e29b-41d4-a716-446655440020', // ✅ VALID UUID (diego)
     name: 'Diego',
     role: 'manager',
     client_id: '550e8400-e29b-41d4-a716-446655440001', // ✅ VALID UUID (same client)
@@ -47,7 +47,7 @@ const DEMO_USERS = [
     // Employee user — minimal access
     email: 'maria@badge.local',
     password: process.env.DEMO_MARIA_PASSWORD,
-    id: 'user-mvp-maria',
+    id: '550e8400-e29b-41d4-a716-446655440021', // ✅ VALID UUID (maria)
     name: 'Maria',
     role: 'employee',
     client_id: '550e8400-e29b-41d4-a716-446655440001', // ✅ VALID UUID (same client)

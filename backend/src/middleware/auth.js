@@ -6,6 +6,7 @@
 const jwt = require('jsonwebtoken');
 const pino = require('pino');
 const Sentry = require('@sentry/node');
+const { getDefaultAdminUser } = require('../__fixtures__/demo-users');
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -61,10 +62,12 @@ function requireAuth(req, res, next) {
     if (!token) {
       // Dev-only fallback: if no token and DISABLE_AUTH=true, use demo admin
       if (process.env.DISABLE_AUTH === 'true' && process.env.NODE_ENV !== 'production') {
+        const admin = getDefaultAdminUser();
         req.user = {
-          user_id: 'user-mvp-pippo',
-          client_id: '550e8400-e29b-41d4-a716-446655440001',
-          role: 'admin',
+          user_id: admin.id,
+          name: admin.name,
+          client_id: admin.client_id,
+          role: admin.role,
         };
         return next();
       }
@@ -158,10 +161,12 @@ function optionalAuth(req, res, next) {
       }
     } else if (process.env.DISABLE_AUTH === 'true' && process.env.NODE_ENV !== 'production') {
       // Dev-only fallback for testing
+      const admin = getDefaultAdminUser();
       req.user = {
-        user_id: 'user-mvp-pippo',
-        client_id: '550e8400-e29b-41d4-a716-446655440001',
-        role: 'admin',
+        user_id: admin.id,
+        name: admin.name,
+        client_id: admin.client_id,
+        role: admin.role,
       };
     }
 
