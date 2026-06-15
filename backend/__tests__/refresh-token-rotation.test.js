@@ -550,7 +550,7 @@ describe('S.32.7 Task 2 — POST /auth/refresh with Token Rotation', () => {
       const migrationPath = path.join(__dirname, '..', 'migrations', '016_create_revoked_tokens.sql');
       const sql = fs.readFileSync(migrationPath, 'utf8');
 
-      expect(sql).toContain('CREATE TABLE revoked_tokens');
+      expect(sql).toContain('CREATE TABLE IF NOT EXISTS revoked_tokens');
       expect(sql).toContain('user_id UUID');
       expect(sql).toContain('revoked_until');
     });
@@ -559,7 +559,7 @@ describe('S.32.7 Task 2 — POST /auth/refresh with Token Rotation', () => {
       const migrationPath = path.join(__dirname, '..', 'migrations', '017_create_used_tokens.sql');
       const sql = fs.readFileSync(migrationPath, 'utf8');
 
-      expect(sql).toContain('CREATE TABLE used_tokens');
+      expect(sql).toContain('CREATE TABLE IF NOT EXISTS used_tokens');
       expect(sql).toContain('jti VARCHAR');
       expect(sql).toContain('user_id UUID');
     });
