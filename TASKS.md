@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-15 (Session 39: S.32.8 COMPLETE ✅ + Task 11 COMPLETE ✅ — RBAC 6/6 verificato via API con token reali)  
+**Last Updated:** 2026-06-15 (Session 40: Code Review 10 fixes ✅ + Migration 019 notifications ✅ — sistema pronto per deploy produzione)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -436,11 +436,48 @@ Duplicate migration numbering fixed (011 → 013 → 014). Integrates into Docke
 - [x] `admin.js` thin assembler: debug route + DPA inline + monta sub-router (241 righe)
 - [x] Test aggiornato: `s326-csv-temp-password.test.js` → legge `admin/employees.js` (8/8 ✅)
 
-### S.32.9 — 🔵 Mitigazioni GPS spoofing (Phase 2)
+### S.32.9 — ✅ Code Review Sicurezza + Coerenza Pattern (Session 40, 2026-06-15)
+
+**10 fix in commit `2988200` — zero nuove regressioni (28 pre-existing failures invariati)**
+
+**Fix critici sicurezza:**
+- [x] **Fix 1:** `ViewersTab.jsx` — `handleDelete` chiamava `/api/admin/employees/` invece di `/api/admin/viewers/` (bug funzionale — delete viewers era impossibile)
+- [x] **Fix 2:** `employees.js` DELETE — aggiunto `AND client_id = $2::uuid` (preveniva cross-tenant deletion)
+- [x] **Fix 3:** `employees.js` reset-password — aggiunto `AND client_id = $3::uuid` (preveniva cross-tenant password reset)
+- [x] **Fix 4:** `illnesses.js` POST /report — guard ora blocca sia `admin` che `viewer` (prima solo admin)
+- [x] **Fix 8:** `auth.js` DISABLE_AUTH — cambiato da `!== 'production'` ad allowlist `['development','test'].includes()` (NODE_ENV undefined non bypassa più auth)
+
+**Fix UX/error handling:**
+- [x] **Fix 5:** `AdminIllnessManagement.jsx` — aggiunto `errorMessage` state + Alert su load e delete (pattern da AdminLeaveManagement)
+- [x] **Fix 6:** `SettingsTab.jsx` — rimosso `|| res.data.data[0]` fallback pericoloso (caricava settings tenant sbagliato silenziosamente)
+- [x] **Fix 7:** `EmployeesTab.jsx` — `empFetchError` esposto + Alert (coerente con ClientsTab/ViewersTab/SitesTab)
+
+**Fix pattern inconsistency:**
+- [x] **Pattern Fix 1:** `viewers.js` — aggiunto `DELETE /:id` endpoint mancante (inconsistente con clients/sites/employees; audit log incluso)
+- [x] **Pattern Fix 2:** `sites.js` + `viewers.js` — `.catch(() => {})` → `.catch((err) => logger.warn(...))` (audit failures non più silenti)
+
+**Migration 019 (commit `a5c0028`):**
+- [x] `backend/migrations/019_add_notification_columns.sql` — aggiunto `type`, `shift_date`, `new_shift`, `site_id` alla tabella notifications (schema drift locale vs produzione; fix 500 error `column "type" does not exist`)
+- ⚠️ **NOTA:** Migration 019 deve essere applicata su RDS produzione durante il prossimo deploy
+
+### S.32.10 — 🔵 Mitigazioni GPS spoofing (Phase 2)
 - [ ] Mobile: invia `isFromMockProvider` (Android) + `accuracy` GPS nel payload
 - [ ] Server: rilevazione "velocità impossibile" tra check-in consecutivi → flag in audit log
 - [ ] Test: 100 km in 10 min → flagged, non bloccato
 - Sforzo: 3-4h
+
+---
+
+## 🔲 TODO IMMEDIATO — DEPLOY PRODUZIONE
+
+**Priorità massima identificata in Session 40.** Tutte le feature sono buildate e testate in locale; nulla è live da settimane. S.32.10 GPS è Phase 2 e non blocca il deploy.
+
+### Checklist Deploy (stima ~1-2h)
+- [ ] Applicare migration 019 su RDS produzione (notifications columns)
+- [ ] Build Docker image + push su ECR
+- [ ] SSH su EC2 → docker pull + restart container
+- [ ] `/api-test` per verificare produzione sana
+- [ ] Smoke test dashboard Netlify (login → presenze → planning → admin)
 
 ---
 

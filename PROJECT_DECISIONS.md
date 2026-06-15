@@ -1,8 +1,8 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 6 Giugno 2026 (Session 8)  
-**Status:** FASE 4.1 CONFIGURATION REVIEW ✅ | FASE 4.2+ Planned ⏳  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Mobile App Ready for Production (FASE 4.1)
+**Last Updated:** 15 Giugno 2026 (Session 40)  
+**Status:** S.32 Security Track ✅ (S.32.1-S.32.9 complete) | Task 11 Leave/Malattia ✅ | Deploy produzione 🚀 NEXT  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Security hardened, ready for production deploy
 
 ---
 
@@ -212,6 +212,39 @@
 **DECIDED:** CSV export only (MVP), BI dashboard Phase 2
 - ✅ MVP: /api/export/csv endpoint
 - ✅ Phase 2: Grafana/Analytics dashboard for advanced reporting
+
+### ✅ DISABLE_AUTH — Allowlist vs Blocklist (Session 40, 2026-06-15)
+**DECIDED:** `['development','test'].includes(NODE_ENV)` — allowlist esplicita
+- ❌ Pattern precedente: `NODE_ENV !== 'production'` — se NODE_ENV è undefined (env var mancante su EC2), il bypass si attivava silenziosamente
+- ✅ Pattern adottato: `['development','test'].includes(process.env.NODE_ENV)` — solo ambienti esplicitamente consentiti
+- Rationale: Fail-closed by default. Un container con env var mancante non bypassa mai auth.
+- File: `backend/src/middleware/auth.js`
+
+### ✅ Admin sub-router pattern (Session 39, 2026-06-15)
+**DECIDED:** DPA routes restano inline in `admin.js`
+- Path con trattino (`/dpa-acknowledgement`) non montabile come sub-router prefix in Express
+- Tutti gli altri endpoint admin migrati a sub-router dedicati: `clients.js`, `sites.js`, `employees.js`, `viewers.js`, `settings.js`
+- `admin.js` è thin assembler: debug route + DPA inline + mount sub-router
+
+### ✅ GPS Spoofing mitigation — Phase 2 (Session 40, 2026-06-15)
+**DECIDED:** Non blocca il deploy MVP; rinviato a S.32.10 (Phase 2)
+- Mobile: `isFromMockProvider` + `accuracy` GPS nel payload
+- Server: velocity check (100 km in 10 min → flag audit log, non block)
+- Rationale: Non critico per prima demo cliente. Il geofencing esistente copre il caso d'uso principale.
+
+### ✅ Viewers DELETE endpoint (Session 40, 2026-06-15)
+**DECIDED:** `DELETE /api/admin/viewers/:id` con guard `role='viewer'`
+- Endpoint mancante scoperto durante code review (inconsistente con clients/sites/employees che hanno tutti DELETE)
+- Guard SQL: `WHERE id = $1 AND client_id = $2::uuid AND role = 'viewer'` — previene che un admin cancelli per errore un employee/manager con quell'endpoint
+- Audit log su ogni delete
+- File: `backend/src/routes/admin/viewers.js`
+
+### ✅ Cross-tenant isolation su admin endpoints (Session 40, 2026-06-15)
+**DECIDED:** Tutti i DELETE e UPDATE admin filtrano su `client_id` del token
+- Scoperto che `DELETE /employees/:id` e `reset-password` non avevano `AND client_id = $N::uuid`
+- Policy: ogni operazione distruttiva o di modifica credenziali DEVE includere il filtro client_id dall'utente autenticato (non dal body)
+- Rationale: Previene che un admin di tenant A, conoscendo l'UUID di un employee di tenant B, possa operare su di esso
+- Pattern da applicare a tutti i futuri endpoint distruttivi
 
 ---
 
