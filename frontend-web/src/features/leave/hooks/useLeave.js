@@ -21,8 +21,8 @@ export const useLeave = () => {
         return response.data.data;
       } catch (err) {
         const errorMessage =
-          err.response?.data?.error ||
           err.response?.data?.message ||
+          err.response?.data?.error ||
           err.message ||
           'Failed to create leave request';
 
@@ -44,8 +44,8 @@ export const useLeave = () => {
       return response.data.data || [];
     } catch (err) {
       const errorMessage =
-        err.response?.data?.error ||
         err.response?.data?.message ||
+        err.response?.data?.error ||
         err.message ||
         'Failed to fetch leave requests';
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Container,
   Box,
@@ -30,6 +31,7 @@ import {
   MenuItem,
   TableContainer,
 } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useLeave } from '../hooks/useLeave';
 
 const LEAVE_TYPE_LABELS = {
@@ -66,6 +68,7 @@ function TabPanel({ children, value, index, ...other }) {
 }
 
 export const AdminLeaveManagement = () => {
+  const navigate = useNavigate();
   const { getAllLeaveRequests, getEmployeeSaldi, approveRequest, rejectRequest, loading, error, clearError } =
     useLeave();
 
@@ -100,7 +103,6 @@ export const AdminLeaveManagement = () => {
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
-    setStatusFilter('PENDING');
   };
 
   const handleApprove = async (requestId) => {
@@ -167,12 +169,34 @@ export const AdminLeaveManagement = () => {
     <Container maxWidth="lg">
       <Box sx={{ py: 4, px: 2 }}>
         {/* Header */}
-        <Typography variant="h2" sx={{ mb: 1 }}>
-          Gestione Ferie
-        </Typography>
-        <Typography variant="body1" sx={{ color: '#6B625A', mb: 4 }}>
-          Gestisci richieste di ferie, saldi dipendenti e storico approvazioni
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4 }}>
+          <Box>
+            <Typography variant="h2" sx={{ mb: 1 }}>
+              Gestione Ferie
+            </Typography>
+            <Typography variant="body1" sx={{ color: '#6B625A' }}>
+              Gestisci richieste di ferie, saldi dipendenti e storico approvazioni
+            </Typography>
+          </Box>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/dashboard')}
+            sx={{
+              borderColor: '#374151',
+              color: '#374151',
+              fontWeight: 600,
+              mt: 0.5,
+              '&:hover': {
+                borderColor: '#111827',
+                backgroundColor: 'rgba(55, 65, 81, 0.04)',
+                color: '#111827',
+              },
+            }}
+          >
+            Dashboard
+          </Button>
+        </Box>
 
         {/* Error Alert */}
         {error && (

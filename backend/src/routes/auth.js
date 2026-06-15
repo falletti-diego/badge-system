@@ -53,7 +53,7 @@ const DEMO_USERS = [
     name: 'Pino',
     role: 'manager',
     client_id: '550e8400-e29b-41d4-a716-446655440001',
-    site_id: 'e1337fab-ba3f-4332-bb06-57c9df15b067', // Milano
+    site_id: '550e8400-e29b-41d4-a716-446655440011', // Milano Store (matches database)
   },
   {
     email: 'diego@badge.local',
@@ -68,11 +68,11 @@ const DEMO_USERS = [
   {
     email: 'maria@badge.local',
     password: process.env.DEMO_MARIA_PASSWORD,
-    id: '550e8400-e29b-41d4-a716-446655440013', // Valid UUID for employee Maria
+    id: '84ab2a73-aedd-4514-b9d4-4496a968e409', // Valid UUID for employee Maria (matches database)
     name: 'Maria',
     role: 'employee',
     client_id: '550e8400-e29b-41d4-a716-446655440001',
-    employee_id: '239ec99f-3204-45ca-bce2-793f52442ec6', // Maria Rossi (real employee in Torino with check-ins)
+    employee_id: '84ab2a73-aedd-4514-b9d4-4496a968e409', // Maria Rossi (imported from CSV)
   },
   // Lucia removed — no corresponding employee record in the database
 ];

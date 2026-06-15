@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Container,
   Box,
@@ -24,6 +25,7 @@ import {
   Stack,
   CircularProgress,
 } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { LeaveCalendar } from '../components/LeaveCalendar';
 import { useLeave } from '../hooks/useLeave';
 
@@ -44,6 +46,7 @@ const STATUS_COLORS = {
 const ITEMS_PER_PAGE = 10;
 
 export const ManagerLeaveRequest = () => {
+  const navigate = useNavigate();
   const { createRequest, getMyRequests, loading, error, clearError, resetForm } = useLeave();
 
   const [formData, setFormData] = useState({
@@ -179,12 +182,35 @@ export const ManagerLeaveRequest = () => {
     <Container maxWidth="md">
       <Box sx={{ py: 4, px: 2 }}>
         {/* Header */}
-        <Typography variant="h2" sx={{ mb: 1 }}>
-          Richiedi Ferie - Manager
-        </Typography>
-        <Typography variant="body1" sx={{ color: '#6B625A', mb: 4 }}>
-          Gestisci le tue richieste di ferie e malattia
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4 }}>
+          <Box>
+            <Typography variant="h2" sx={{ mb: 1 }}>
+              Richiedi Ferie - Manager
+            </Typography>
+            <Typography variant="body1" sx={{ color: '#6B625A' }}>
+              Gestisci le tue richieste di ferie e malattia
+            </Typography>
+          </Box>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/dashboard')}
+            disabled={loading}
+            sx={{
+              borderColor: '#374151',
+              color: '#374151',
+              fontWeight: 600,
+              mt: 0.5,
+              '&:hover': {
+                borderColor: '#111827',
+                backgroundColor: 'rgba(55, 65, 81, 0.04)',
+                color: '#111827',
+              },
+            }}
+          >
+            Dashboard
+          </Button>
+        </Box>
 
         {/* Form Card */}
         <Card sx={{ mb: 6, boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)' }}>

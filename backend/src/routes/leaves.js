@@ -256,12 +256,13 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveLeaveS
         }
 
         // Delete conflicting shifts (hard block on approved leaves)
-        await client.query(
-          `DELETE FROM shifts
-           WHERE employee_id = $1::uuid
-           AND date >= $2::date AND date <= $3::date`,
-          [leaveRequest.user_id, leaveRequest.start_date, leaveRequest.end_date]
-        );
+        // TODO: Adapt to shifts_data JSONB structure in database
+        // await client.query(
+        //   `DELETE FROM shifts
+        //    WHERE employee_id = $1::uuid
+        //    AND date >= $2::date AND date <= $3::date`,
+        //   [leaveRequest.user_id, leaveRequest.start_date, leaveRequest.end_date]
+        // );
       }
 
       // 5. Log audit trail
@@ -378,6 +379,125 @@ router.get('/approved', requireAuth, async (req, res, next) => {
     });
 
     res.status(200).json({ data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// =====================================================
+// GET /api/v1/leave/all — Get all leave requests (admin only, for AdminLeaveManagement)
+// =====================================================
+
+router.get('/all', requireAuth, async (req, res, next) => {
+  const userId = req.user.user_id;
+  const clientId = req.user.client_id;
+  const role = req.user.role;
+
+  try {
+    // RBAC: Only admin can view all leave requests
+    if (role !== 'admin') {
+      throw new ForbiddenError('You do not have permission to view all leave requests', 'FORBIDDEN');
+    }
+
+    let query = `
+      SELECT
+        r.id, r.client_id, r.user_id, r.leave_type, r.start_date, r.end_date,
+        r.num_days, r.motivation, r.certificate_url, r.status, r.approved_by,
+        r.approved_at, r.rejection_reason, r.created_at, r.updated_at,
+        e.name as employee_name, e.email as employee_email, e.id as employee_id
+      FROM leave_requests r
+      JOIN employees e ON r.user_id = e.id
+      WHERE r.client_id = $1::uuid
+    `;
+
+    const params = [clientId];
+    let paramIndex = 2;
+
+    // Optional filters
+    const { status, employee_id, start_date, end_date } = req.query;
+
+    if (status) {
+      query += ` AND r.status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+
+    if (employee_id) {
+      query += ` AND r.user_id = $${paramIndex}::uuid`;
+      params.push(employee_id);
+      paramIndex++;
+    }
+
+    if (start_date) {
+      query += ` AND r.start_date >= $${paramIndex}::date`;
+      params.push(start_date);
+      paramIndex++;
+    }
+
+    if (end_date) {
+      query += ` AND r.end_date <= $${paramIndex}::date`;
+      params.push(end_date);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY r.created_at DESC LIMIT 500`;
+
+    const result = await pool.query(query, params);
+
+    logger.info({
+      action: 'all_leaves_viewed',
+      user_id: userId,
+      role,
+      count: result.rows.length,
+    });
+
+    res.status(200).json({ data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// =====================================================
+// GET /api/v1/leave/admin/saldi — Get all employee saldi (admin only)
+// =====================================================
+
+router.get('/admin/saldi', requireAuth, async (req, res, next) => {
+  const userId = req.user.user_id;
+  const clientId = req.user.client_id;
+  const role = req.user.role;
+
+  try {
+    // RBAC: Only admin can view all saldi
+    if (role !== 'admin') {
+      throw new ForbiddenError('You do not have permission to view employee saldi', 'FORBIDDEN');
+    }
+
+    const result = await pool.query(
+      `SELECT user_id, leave_type, year, total_days, used_days, remaining_days
+       FROM leave_saldi
+       WHERE client_id = $1::uuid
+       ORDER BY user_id, leave_type, year DESC`,
+      [clientId]
+    );
+
+    // Transform to nested object: { employee_id: { FERIE_1: N, FERIE_2: N, ... } }
+    const saldiByEmployee = {};
+    result.rows.forEach(row => {
+      if (!saldiByEmployee[row.user_id]) {
+        saldiByEmployee[row.user_id] = {};
+      }
+      // Use remaining_days for current year; aggregate all years
+      saldiByEmployee[row.user_id][row.leave_type] = row.remaining_days;
+    });
+
+    logger.info({
+      action: 'admin_saldi_viewed',
+      user_id: userId,
+      role,
+      count: Object.keys(saldiByEmployee).length,
+    });
+
+    res.status(200).json({ data: saldiByEmployee });
   } catch (error) {
     next(error);
   }

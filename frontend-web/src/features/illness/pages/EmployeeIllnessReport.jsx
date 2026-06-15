@@ -12,48 +12,29 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material';
-import apiClient from '../../../services/apiClient';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { useIllness } from '../hooks/useIllness';
 
 export const EmployeeIllnessReport = () => {
   const navigate = useNavigate();
+  const { reportIllness, loading, error } = useIllness();
   const [formData, setFormData] = useState({
     startDate: null,
     endDate: null,
     reason: '',
     certificateFile: null,
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-
     try {
-      const payload = {
-        start_date: formData.startDate,
-        end_date: formData.endDate,
-        reason: formData.reason || null,
-      };
-
-      const response = await apiClient.post('/api/v1/illnesses/report', payload);
-
-      if (response.status === 201) {
-        setSuccess(true);
-        setFormData({ startDate: null, endDate: null, reason: '', certificateFile: null });
-        setTimeout(() => navigate('/dashboard'), 2000);
-      }
+      await reportIllness(formData.startDate, formData.endDate, formData.reason);
+      setSuccess(true);
+      setFormData({ startDate: null, endDate: null, reason: '', certificateFile: null });
+      setTimeout(() => navigate('/dashboard'), 2000);
     } catch (err) {
-      const errorMessage =
-        err.response?.data?.message ||
-        err.response?.data?.error ||
-        err.message ||
-        'Errore nella comunicazione della malattia';
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
+      // error handled by useIllness hook
     }
   };
 
@@ -61,23 +42,44 @@ export const EmployeeIllnessReport = () => {
     <Container maxWidth="md">
       <Box sx={{ py: 6, px: 2 }}>
         {/* Header */}
-        <Box sx={{ mb: 4 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-            <Box
-              sx={{
-                width: 12,
-                height: 12,
-                bgcolor: '#DC2626',
-                transform: 'rotate(45deg)',
-              }}
-            />
-            <Typography variant="h2" sx={{ fontSize: '2.5rem', fontWeight: 700, color: '#111' }}>
-              Comunica Malattia
+        <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+              <Box
+                sx={{
+                  width: 12,
+                  height: 12,
+                  bgcolor: '#DC2626',
+                  transform: 'rotate(45deg)',
+                }}
+              />
+              <Typography variant="h2" sx={{ fontSize: '2.5rem', fontWeight: 700, color: '#111' }}>
+                Comunica Malattia
+              </Typography>
+            </Box>
+            <Typography variant="body1" sx={{ color: '#666', fontSize: '1.1rem' }}>
+              Informa la tua assenza per motivi di salute
             </Typography>
           </Box>
-          <Typography variant="body1" sx={{ color: '#666', fontSize: '1.1rem' }}>
-            Informa la tua assenza per motivi di salute
-          </Typography>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/dashboard')}
+            disabled={loading}
+            sx={{
+              borderColor: '#DC2626',
+              color: '#DC2626',
+              fontWeight: 600,
+              mt: 0.5,
+              '&:hover': {
+                borderColor: '#991b1b',
+                backgroundColor: 'rgba(220, 38, 38, 0.04)',
+                color: '#991b1b',
+              },
+            }}
+          >
+            Dashboard
+          </Button>
         </Box>
 
         {/* Error Alert */}
