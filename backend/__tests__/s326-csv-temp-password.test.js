@@ -67,20 +67,20 @@ describe('S.32.6 — CSV Temp Password Feature', () => {
 
   describe('Admin CSV import changes', () => {
     it('should include passwords array in import results', () => {
-      const adminPath = path.join(__dirname, '..', 'src', 'routes', 'admin.js');
-      const adminModule = fs.readFileSync(adminPath, 'utf8');
+      const employeesPath = path.join(__dirname, '..', 'src', 'routes', 'admin', 'employees.js');
+      const employeesModule = fs.readFileSync(employeesPath, 'utf8');
 
-      expect(adminModule).toContain('passwords: []');
-      expect(adminModule).toContain('results.passwords.push');
-      expect(adminModule).toContain('temp_password');
+      expect(employeesModule).toContain('passwords: []');
+      expect(employeesModule).toContain('results.passwords.push');
+      expect(employeesModule).toContain('temp_password');
     });
 
     it('should collect temp passwords for each created employee', () => {
-      const adminPath = path.join(__dirname, '..', 'src', 'routes', 'admin.js');
-      const adminModule = fs.readFileSync(adminPath, 'utf8');
+      const employeesPath = path.join(__dirname, '..', 'src', 'routes', 'admin', 'employees.js');
+      const employeesModule = fs.readFileSync(employeesPath, 'utf8');
 
-      expect(adminModule).toContain('email: emp.email');
-      expect(adminModule).toContain('temp_password: item.tempPassword');
+      expect(employeesModule).toContain('email: emp.email');
+      expect(employeesModule).toContain('temp_password: item.tempPassword');
     });
   });
 });
