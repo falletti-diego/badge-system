@@ -19,7 +19,7 @@ export function EmployeesTab() {
   const { data: clients } = useFetch('/api/admin/clients');
   const { data: allSites } = useFetch('/api/admin/sites');
   const [filterClient, setFilterClient] = useState('');
-  const { data: employees, loading: empLoading, reload: reloadEmployees } = useFetch(
+  const { data: employees, loading: empLoading, error: empFetchError, reload: reloadEmployees } = useFetch(
     filterClient ? `/api/admin/employees?client_id=${filterClient}` : '/api/admin/employees'
   );
   const [form, setForm] = useState({
@@ -254,6 +254,7 @@ export function EmployeesTab() {
               </Select>
             </FormControl>
           </Stack>
+          {empFetchError && <Alert severity="error" sx={{ mb: 2 }}>{empFetchError}</Alert>}
           {empLoading ? <CircularProgress size={24} /> : (
             <TableContainer>
               <Table size="small">

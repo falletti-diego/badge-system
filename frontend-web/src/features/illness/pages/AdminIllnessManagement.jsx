@@ -25,6 +25,7 @@ export const AdminIllnessManagement = () => {
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
   const [successMessage, setSuccessMessage] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   useEffect(() => {
     loadIllnesses();
@@ -34,8 +35,9 @@ export const AdminIllnessManagement = () => {
     try {
       const response = await apiClient.get('/api/v1/illnesses/admin');
       setIllnesses(response.data.data || []);
+      setErrorMessage(null);
     } catch (err) {
-      console.error('Errore nel caricamento delle malattie:', err);
+      setErrorMessage(err.response?.data?.message || 'Errore nel caricamento delle malattie');
     } finally {
       setLoading(false);
     }
@@ -52,10 +54,11 @@ export const AdminIllnessManagement = () => {
       });
 
       setSuccessMessage('Comunicazione malattia cancellata');
+      setErrorMessage(null);
       await loadIllnesses();
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
-      console.error('Errore nella cancellazione:', err);
+      setErrorMessage(err.response?.data?.message || 'Errore nella cancellazione');
     }
   };
 
@@ -94,10 +97,15 @@ export const AdminIllnessManagement = () => {
           </Button>
         </Box>
 
-        {/* Success Alert */}
+        {/* Alerts */}
         {successMessage && (
           <Alert severity="success" sx={{ mb: 3 }}>
             {successMessage}
+          </Alert>
+        )}
+        {errorMessage && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {errorMessage}
           </Alert>
         )}
 

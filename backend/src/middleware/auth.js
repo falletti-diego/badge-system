@@ -61,7 +61,7 @@ function requireAuth(req, res, next) {
 
     if (!token) {
       // Dev-only fallback: if no token and DISABLE_AUTH=true, use demo admin
-      if (process.env.DISABLE_AUTH === 'true' && process.env.NODE_ENV !== 'production') {
+      if (process.env.DISABLE_AUTH === 'true' && ['development', 'test'].includes(process.env.NODE_ENV)) {
         const admin = getDefaultAdminUser();
         req.user = {
           user_id: admin.id,
@@ -159,7 +159,7 @@ function optionalAuth(req, res, next) {
           req.user.site_id = decoded.site_id;
         }
       }
-    } else if (process.env.DISABLE_AUTH === 'true' && process.env.NODE_ENV !== 'production') {
+    } else if (process.env.DISABLE_AUTH === 'true' && ['development', 'test'].includes(process.env.NODE_ENV)) {
       // Dev-only fallback for testing
       const admin = getDefaultAdminUser();
       req.user = {

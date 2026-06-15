@@ -27,7 +27,7 @@ export function ViewersTab() {
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      await apiClient.delete(`/api/admin/employees/${deleteTarget.id}`);
+      await apiClient.delete(`/api/admin/viewers/${deleteTarget.id}`);
       setDeleteTarget(null);
       reload();
     } catch (err) {

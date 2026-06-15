@@ -272,10 +272,10 @@ router.delete('/:id', async (req, res, next) => {
     if (!uuidCheck.success) return next(new ValidationError('Invalid employee id'));
 
     const result = await pool.query(
-      'DELETE FROM employees WHERE id = $1 RETURNING id, name, email, client_id',
-      [id]
+      'DELETE FROM employees WHERE id = $1 AND client_id = $2::uuid RETURNING id, name, email, client_id',
+      [id, req.user.client_id]
     );
-    if (result.rowCount === 0) return next(new ValidationError('Employee not found'));
+    if (result.rowCount === 0) return next(new NotFoundError('Employee not found', 'EMPLOYEE_NOT_FOUND'));
 
     const emp = result.rows[0];
     await logAudit(pool, {
@@ -306,8 +306,8 @@ router.post('/:id/reset-password', async (req, res, next) => {
     const passwordHash = await hashPassword(newPassword);
 
     const updateResult = await pool.query(
-      'UPDATE employees SET password_hash = $1, must_change_password = true WHERE id = $2 RETURNING id, name, email, client_id',
-      [passwordHash, id]
+      'UPDATE employees SET password_hash = $1, must_change_password = true WHERE id = $2 AND client_id = $3::uuid RETURNING id, name, email, client_id',
+      [passwordHash, id, req.user.client_id]
     );
     if (updateResult.rowCount === 0) {
       return next(new NotFoundError('Employee not found', 'EMPLOYEE_NOT_FOUND'));

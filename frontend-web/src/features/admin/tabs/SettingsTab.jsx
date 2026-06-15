@@ -23,14 +23,17 @@ export function SettingsTab() {
     (async () => {
       try {
         const res = await apiClient.get('/api/admin/clients');
-        if (!cancelled && res.data.data && res.data.data.length > 0) {
-          const client = res.data.data.find(c => c.id === clientId) || res.data.data[0];
-          setMealHours(client.meal_voucher_hours !== undefined && client.meal_voucher_hours !== null
-            ? String(client.meal_voucher_hours) : '5');
-          setGeofencingEnabled(client.geofencing_feature_enabled !== false);
+        if (!cancelled && res.data.data) {
+          const client = res.data.data.find(c => c.id === clientId);
+          if (client) {
+            setMealHours(client.meal_voucher_hours != null ? String(client.meal_voucher_hours) : '5');
+            setGeofencingEnabled(client.geofencing_feature_enabled !== false);
+          } else {
+            setMsg({ type: 'warning', text: 'Impostazioni cliente non trovate. Verifica la sessione.' });
+          }
         }
-      } catch {
-        // ignore — user can still type in the field
+      } catch (err) {
+        if (!cancelled) setMsg({ type: 'error', text: 'Impossibile caricare le impostazioni correnti.' });
       } finally {
         if (!cancelled) setFetching(false);
       }

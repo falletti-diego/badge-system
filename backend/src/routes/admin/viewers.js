@@ -4,7 +4,7 @@ const express = require('express');
 const { z } = require('zod');
 const { randomBytes } = require('crypto');
 const { pool } = require('../../db/pool');
-const { ValidationError } = require('../../utils/errors');
+const { ValidationError, NotFoundError } = require('../../utils/errors');
 const logger = require('../../utils/logger');
 const { logAudit } = require('../../middleware/audit');
 const { hashPassword } = require('../../auth/password');
@@ -80,6 +80,37 @@ router.get('/', async (req, res, next) => {
       params
     );
     res.json({ success: true, data: result.rows, returned: result.rows.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!z.string().uuid().safeParse(id).success) {
+      return next(new ValidationError('Invalid viewer id'));
+    }
+
+    const result = await pool.query(
+      "DELETE FROM employees WHERE id = $1 AND client_id = $2::uuid AND role = 'viewer' RETURNING id, name, email, client_id",
+      [id, req.user.client_id]
+    );
+    if (result.rowCount === 0) return next(new NotFoundError('Viewer not found', 'VIEWER_NOT_FOUND'));
+
+    const viewer = result.rows[0];
+    logger.info({ action: 'admin_delete_viewer', viewer_id: viewer.id, email: viewer.email });
+    await logAudit(pool, {
+      action: 'admin_delete_viewer',
+      entity: 'employee',
+      entityId: viewer.id,
+      clientId: viewer.client_id,
+      oldValue: { name: viewer.name, email: viewer.email, role: 'viewer' },
+      newValue: null,
+      userId: req.user.user_id,
+    }).catch((err) => logger.warn({ action: 'audit_log_failed', viewer_id: viewer.id, error: err.message }));
+
+    res.json({ success: true, message: `Commercialista "${viewer.name}" rimosso.` });
   } catch (err) {
     next(err);
   }

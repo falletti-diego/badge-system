@@ -99,7 +99,7 @@ router.delete('/:id', async (req, res, next) => {
       oldValue: { name: site.name },
       newValue: null,
       userId: req.user.user_id,
-    }).catch(() => {});
+    }).catch((err) => logger.warn({ action: 'audit_log_failed', error: err.message }));
 
     logger.info({ action: 'admin_delete_site', site_id: site.id, name: site.name });
     res.json({ success: true, message: `Sede "${site.name}" eliminata.` });
@@ -134,7 +134,7 @@ router.put('/:id', createValidationMiddleware(UpdateSiteGeofenceSchema), async (
       oldValue: null,
       newValue: { latitude, longitude, geofence_radius_meters, geofence_enabled },
       userId: req.user.user_id,
-    }).catch(() => {});
+    }).catch((err) => logger.warn({ action: 'audit_log_failed', error: err.message }));
 
     logger.info({ action: 'admin_update_site_geofence', site_id: id, geofence_enabled });
     res.json({ success: true, data: result.rows[0] });

@@ -56,11 +56,11 @@ router.post(
     const clientId = req.user.client_id;
 
     try {
-      // Only employees can report illnesses
-      if (req.user.role === 'admin') {
+      // Only employees and managers can report illnesses
+      if (req.user.role === 'admin' || req.user.role === 'viewer') {
         throw new ForbiddenError(
-          'Admin non può comunicare malattia direttamente. Contattare supporto.',
-          'ADMIN_CANNOT_REPORT'
+          'Solo dipendenti e manager possono comunicare malattia.',
+          'FORBIDDEN_ROLE'
         );
       }
 
