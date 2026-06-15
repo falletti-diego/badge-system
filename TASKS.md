@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-15 (Session 39: S.32.8 COMPLETE ✅ — AdminPage.jsx 1455→50 righe, admin.js 959→241 righe, 5 sub-router backend — Task 11.13 rimasto)  
+**Last Updated:** 2026-06-15 (Session 39: S.32.8 COMPLETE ✅ + Task 11 COMPLETE ✅ — RBAC 6/6 verificato via API con token reali)  
 **Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
 
 ---
@@ -265,7 +265,7 @@ Duplicate migration numbering fixed (011 → 013 → 014). Integrates into Docke
 
 **Goal:** Complete comprehensive testing of Leave Management (Ferie & Malattia) with full test data setup, test plan execution, and frontend verification on localhost.
 
-**Current Status:** Leave Management + Malattia implementation COMPLETE. **Phase 1 COMPLETE. Phase 2 COMPLETE (17/17 test cases PASSING).** Phase 3 Frontend Manual Testing remaining.
+**Current Status:** ✅ **TASK 11 COMPLETE** — Phase 1 ✅ | Phase 2 ✅ (17/17) | Phase 3 ✅ (11.13 RBAC verified Session 39)
 
 **Phase 1: Test Data Setup (30 min) — ✅ COMPLETE**
 - [x] **11.1** Create CSV with test data:
@@ -389,11 +389,11 @@ Duplicate migration numbering fixed (011 → 013 → 014). Integrates into Docke
 - [x] **11.12** Test PlanningPage (Pino manager) ✅ (Session 38)
   - Malattia blocca turni (overlay ▲M, modal al click con dettagli) ✅
   - Ferie approvate bloccano turni (🔒 rosso) ✅
-- [ ] **11.13** Test role-based visibility (da completare):
-  - [ ] Employee: vede solo proprie richieste ferie/malattia
-  - [ ] Manager: vede solo richieste della propria sede
-  - [ ] Admin: vede tutto
-  - [ ] Viewer: accesso negato (403)
+- [x] **11.13** Test role-based visibility ✅ (Session 39 — verificato via API con token reali):
+  - [x] Employee (Maria): /leave/my-requests → 7 records, tutti user_id=Maria ✅
+  - [x] Manager (Pino): /leave/pending → 0 PENDING nel DB (corretto), /leave/all → 403 FORBIDDEN ✅
+  - [x] Admin (Pippo): /leave/all → 9 records da 3 dipendenti (Maria, Francesca, Lucia) ✅
+  - [x] Employee → /illnesses/admin: 403 FORBIDDEN ✅ | Employee → /leave/all: 403 FORBIDDEN ✅
 
 **Deliverables:**
 - CSV file: `backend/scripts/seed-data/leave-test-data.csv` (8 employees, 2 sites, 4 leave requests)
@@ -941,7 +941,7 @@ Go-live with first paying customer (pilota).
 | 2026-06-13 | Task 10: EmployeeLeaveRequest Form Redesign (Session 35) | ✅ COMPLETED | **Form Layout Redesign per User Feedback:** (1) Titolo: "Richiedi ferie/malattia" ✅. (2) Layout split: Dropdown "Tipo Feria" (left) + "Richiedi Malattia" button (right, green state-aware) ✅. (3) Conditional file upload: visible solo se isRequestingMalattia=true, posizionato tra calendario e note, drag-drop styling con border dashed ✅. (4) Enhanced calendar styling: striscia selezione background #3b82f6 (blue-500) + border #2563eb (blue-600), white text, hover #2563eb ✅. **Code:** EmployeeLeaveRequest.jsx (new state, handlers, layout refactor, file upload Box). LeaveCalendar.jsx (styling for isRangeDay + isSelectedDay). Test file (3 new Malattia tests). **Manual Testing:** Localhost ✅ — title visible, layout OK, button state changes, file upload conditional rendering works, calendar styling (blue range + borders visible), dropdown disabled when Malattia active. **Commit:** 4d55703. **Next:** Fix backend UUIDs + missing schema. |
 | 2026-06-14 | S.32.6 Complete — Forced Password Change Flow + Bug Fixes (Session 34) | S.32.6 ✅ | **All 8 Tasks VERIFIED END-TO-END ✅** — CSV import + Admin reset password both trigger mandatory password change. **3 CRITICAL BUG FIXES:** (1) audit_log column timestamp→created_at (transaction abort fix). (2) requireAuth middleware DISABLE_AUTH logic fixed (was ignoring real tokens, now extracts employee_id). (3) POST /change-password missing refresh_token+user in response (added). **Frontend fixes:** (4) authService saves must_change_password to localStorage, (5) PasswordChangeGuard reads from correct localStorage key, (6) ChangePasswordPage logout + redirect to /login (not dashboard). **Flow:** Admin reset password→set must_change_password=true → Employee login with temp password → auto-redirect /change-password → change password → logout → redirect /login → login with new password → dashboard. **Testing:** Manual E2E verified ✅ (CSV import flow ✅, Admin reset flow ✅). **Commits:** c84aebe (3 backend fixes), 8bf849f (5 frontend fixes + redirect flow). |
 | 2026-06-14 | Task 11 Phase 2 COMPLETE + Malattia System (Session 38) | Task 11 Phase 2 ✅, Task 11 Phase 3 🟡 | **Phase 2: 17/17 test cases PASSING ✅** — F5 (admin vede tutto), F6 (manager filtra sede), F7 (employee vede solo sé), M1 (malattia auto-approvata), M2 (admin gestione), M3 (blocco Planning). **Malattia System COMPLETE:** backend (5 endpoint: POST /report, GET /admin, GET /manager, GET /by-date-range RBAC, DELETE soft), frontend (/illnesses/report employee, /admin/illnesses admin, ManagerIllnessModal, useIllness hook). **Dashboard navbar:** 🏥 Malattia (employee) + 🏥 Malattie (admin). **EmployeeShiftsPage:** giorni malattia mostrano `⚕️ Malattia` (badge rosso, background rosso), card "Giorni di Malattia". **3 Bug Fix in sessione:** (1) apiClient vs fetch raw (401 fix), (2) `updated_at` inesistente in UPDATE query (500 fix), (3) FK `cancelled_by→employees` rimossa per admin (500 fix — ALTER TABLE live). **Commit:** 9b327bc. **Rimanente:** 11.13 role-based visibility test. |
-| 2026-06-15 | S.32.8 Split file monolitici — COMPLETE (Session 39) | S.32.8 ✅ | **Frontend (9 task):** AdminPage.jsx 1455→50 righe (thin shell). 5 shared components (`admin/components/`: useFetch, ConfirmDeleteDialog, ConfirmSaveDialog, CopyButton, ResetPasswordDialog). 6 tab components (`admin/tabs/`: ConsentTab, ClientsTab, SitesTab+GeofenceDialog, EmployeesTab, ViewersTab, SettingsTab). 4 code review findings fixati prima del commit: EmployeeIllnessReport migrata a useIllness hook (rimosso apiClient.post diretto), `disabled={loading}` aggiunto a Dashboard button in 3 pagine. **Backend (5 sub-router):** admin.js 959→241 righe. `admin/clients.js` (95r), `admin/sites.js` (146r), `admin/employees.js` (341r, include CSV import + reset-password), `admin/viewers.js` (88r), `admin/settings.js` (59r). `s326-csv-temp-password.test.js` aggiornato (percorso CSV import: admin/employees.js). Zero nuove regressioni test. **Commits:** 4304966→e0f9c91 (frontend), 794ba3a (backend). |
+| 2026-06-15 | S.32.8 Split file monolitici + Task 11.13 RBAC — COMPLETE (Session 39) | S.32.8 ✅, Task 11 ✅ | **S.32.8 Frontend (9 task):** AdminPage.jsx 1455→50 righe (thin shell). 5 shared components (`admin/components/`: useFetch, ConfirmDeleteDialog, ConfirmSaveDialog, CopyButton, ResetPasswordDialog). 6 tab components (`admin/tabs/`: ConsentTab, ClientsTab, SitesTab+GeofenceDialog, EmployeesTab, ViewersTab, SettingsTab). 4 code review findings fixati prima del commit: EmployeeIllnessReport migrata a useIllness hook (rimosso apiClient.post diretto), `disabled={loading}` aggiunto a Dashboard button in 3 pagine. **S.32.8 Backend (5 sub-router):** admin.js 959→241 righe. `admin/clients.js` (95r), `admin/sites.js` (146r), `admin/employees.js` (341r, include CSV import + reset-password), `admin/viewers.js` (88r), `admin/settings.js` (59r). `s326-csv-temp-password.test.js` aggiornato. Zero nuove regressioni test. **Task 11.13 RBAC (6/6 PASS):** Employee→/leave/my-requests: 7 record solo user_id=Maria ✅. Manager→/leave/all: 403 FORBIDDEN ✅. Manager→/leave/pending: 0 PENDING (DB vuoto) ✅. Admin→/leave/all: 9 record da 3 dipendenti ✅. Employee→/illnesses/admin: 403 ✅. Employee→/leave/all: 403 ✅. **Commits:** 4304966→e0f9c91 (frontend), 794ba3a (backend), 294c94f (docs). |
 
 ---
 
