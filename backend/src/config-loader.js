@@ -39,7 +39,7 @@ if (fs.existsSync(envFilePath)) {
 if (fs.existsSync(envLocalPath)) {
   const result = dotenv.config({ path: envLocalPath });
   if (result.error) {
-    console.warn(`[config-loader] Note: .env not found or error reading it`);
+    console.warn('[config-loader] Note: .env not found or error reading it');
   } else if (Object.keys(result.parsed).length > 0) {
     console.log(`[config-loader] ✅ Loaded .env (${Object.keys(result.parsed).length} overrides)`);
   }

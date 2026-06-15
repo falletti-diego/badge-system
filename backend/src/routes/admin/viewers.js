@@ -62,7 +62,7 @@ router.get('/', async (req, res, next) => {
   try {
     const { client_id } = req.query;
     const params = [];
-    let where = "WHERE e.role = 'viewer'";
+    let where = 'WHERE e.role = \'viewer\'';
     if (client_id) {
       const uuidCheck = z.string().uuid().safeParse(client_id);
       if (!uuidCheck.success) return next(new ValidationError('Invalid client_id format'));
@@ -93,7 +93,7 @@ router.delete('/:id', async (req, res, next) => {
     }
 
     const result = await pool.query(
-      "DELETE FROM employees WHERE id = $1 AND client_id = $2::uuid AND role = 'viewer' RETURNING id, name, email, client_id",
+      'DELETE FROM employees WHERE id = $1 AND client_id = $2::uuid AND role = \'viewer\' RETURNING id, name, email, client_id',
       [id, req.user.client_id]
     );
     if (result.rowCount === 0) return next(new NotFoundError('Viewer not found', 'VIEWER_NOT_FOUND'));

@@ -16,6 +16,10 @@
  * Full integration is tested via requireAuthWithRevoke in routes.
  */
 
+// This suite tests the REAL checkRevoked middleware (jest.setup.js mocks it
+// globally to a pass-through for all other route tests). Opt out here.
+jest.unmock('../src/middleware/checkRevoked');
+
 // Bypass rate limiting in tests
 jest.mock('../src/middleware/rateLimiter', () => {
   const passThrough = (req, res, next) => next();

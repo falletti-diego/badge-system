@@ -3,6 +3,10 @@
  * Tests revocation detection, temporary revocations, error handling
  */
 
+// This suite tests the REAL checkRevoked middleware (jest.setup.js mocks it
+// globally to a pass-through for all other route tests). Opt out here.
+jest.unmock('../middleware/checkRevoked');
+
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const app = require('../app');

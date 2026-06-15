@@ -46,7 +46,12 @@ function makeRequest(method, path, body = null) {
   });
 }
 
-describe('Authentication Integration Tests', () => {
+// These tests hit a real backend on http://localhost:3000 and cannot run in the
+// unit/CI suite (no live server). Skipped by default; run locally against a
+// running backend with `RUN_INTEGRATION=1 npm test`.
+const describeIntegration = process.env.RUN_INTEGRATION ? describe : describe.skip;
+
+describeIntegration('Authentication Integration Tests', () => {
   describe('POST /api/v1/auth/login', () => {
     it('should return 400 for missing email', async () => {
       const response = await makeRequest('POST', '/api/v1/auth/login', {

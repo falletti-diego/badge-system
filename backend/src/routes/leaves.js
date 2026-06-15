@@ -147,13 +147,13 @@ router.get('/pending', requireAuth, async (req, res, next) => {
     if (role === 'admin') {
       // No additional filter.
     } else if (role === 'manager' && siteId) {
-      query += ` AND e.site_id = $2::uuid`;
+      query += ' AND e.site_id = $2::uuid';
       params.push(siteId);
     } else {
       throw new ForbiddenError('You do not have permission to view pending leave requests', 'FORBIDDEN');
     }
 
-    query += ` ORDER BY r.created_at DESC LIMIT 100`;
+    query += ' ORDER BY r.created_at DESC LIMIT 100';
 
     const result = await pool.query(query, params);
 
@@ -190,7 +190,7 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveLeaveS
     const result = await withTransaction(async (client) => {
       // 1. Fetch the leave request
       const leaveResult = await client.query(
-        `SELECT * FROM leave_requests WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1`,
+        'SELECT * FROM leave_requests WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1',
         [id, clientId]
       );
 
@@ -204,7 +204,7 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveLeaveS
       if (role === 'manager') {
         // Manager can only approve employees from their store
         const employeeResult = await client.query(
-          `SELECT site_id FROM employees WHERE id = $1::uuid LIMIT 1`,
+          'SELECT site_id FROM employees WHERE id = $1::uuid LIMIT 1',
           [leaveRequest.user_id]
         );
 
@@ -358,16 +358,16 @@ router.get('/approved', requireAuth, async (req, res, next) => {
     if (role === 'admin') {
       // No additional filter
     } else if (role === 'manager' && siteId) {
-      query += ` AND e.site_id = $2::uuid`;
+      query += ' AND e.site_id = $2::uuid';
       params.push(siteId);
     } else if (role === 'employee' || role === 'viewer') {
-      query += ` AND r.user_id = $2::uuid`;
+      query += ' AND r.user_id = $2::uuid';
       params.push(userId);
     } else {
       throw new ForbiddenError('You do not have permission to view approved leave requests', 'FORBIDDEN');
     }
 
-    query += ` ORDER BY r.start_date ASC LIMIT 500`;
+    query += ' ORDER BY r.start_date ASC LIMIT 500';
 
     const result = await pool.query(query, params);
 
@@ -440,7 +440,7 @@ router.get('/all', requireAuth, async (req, res, next) => {
       paramIndex++;
     }
 
-    query += ` ORDER BY r.created_at DESC LIMIT 500`;
+    query += ' ORDER BY r.created_at DESC LIMIT 500';
 
     const result = await pool.query(query, params);
 

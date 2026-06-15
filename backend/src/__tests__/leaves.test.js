@@ -33,11 +33,7 @@ jest.mock('../middleware/db-transaction', () => ({
       query: pool.query,
       release: jest.fn(),
     };
-    try {
-      return await cb(mockClient);
-    } catch (err) {
-      throw err;
-    }
+    return await cb(mockClient);
   }),
 }));
 
@@ -296,7 +292,7 @@ describe('Leave Request API Endpoints — Security Regression Tests', () => {
       expect(res.body.error).toBe('VALIDATION_ERROR');
       expect(res.body.message).toBe('Leave request has already been processed');
       expect(mockPool.query).toHaveBeenCalledTimes(2);
-      expect(mockPool.query.mock.calls[1][0]).toContain("WHERE id = $4::uuid AND status = 'PENDING'");
+      expect(mockPool.query.mock.calls[1][0]).toContain('WHERE id = $4::uuid AND status = \'PENDING\'');
     });
   });
 

@@ -30,14 +30,22 @@ jest.mock('../db/redis', () => ({
 }));
 
 const request = require('supertest');
+const jwt = require('jsonwebtoken');
 const app = require('../app');
 const { pool } = require('../db/pool');
 
 describe('Consent API — GDPR Art. 7 GPS consent tracking', () => {
-  const validToken = 'valid-token';
   const clientId = '550e8400-e29b-41d4-a716-446655440001';
   const employeeId = '550e8400-e29b-41d4-a716-446655440100';
   const otherEmployeeId = '550e8400-e29b-41d4-a716-446655440101';
+  // Real RS256 token (keys generated in jest.setup.js). requireAuth only uses
+  // the DISABLE_AUTH bypass when NO token is present, so route tests that act as
+  // a specific employee must send a genuinely signed token with employee claims.
+  const validToken = jwt.sign(
+    { user_id: employeeId, client_id: clientId, role: 'employee', employee_id: employeeId },
+    process.env.JWT_PRIVATE_KEY,
+    { algorithm: 'RS256', expiresIn: '1h' }
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();

@@ -194,11 +194,11 @@ router.get('/by-date-range', requireAuth, async (req, res, next) => {
       // Admin sees all
     } else if (role === 'manager' && siteId) {
       // Manager sees only their store employees
-      query += ` AND e.site_id = $4::uuid`;
+      query += ' AND e.site_id = $4::uuid';
       params.push(siteId);
     } else if (role === 'employee') {
       // Employee sees only their own illnesses
-      query += ` AND i.employee_id = $4::uuid`;
+      query += ' AND i.employee_id = $4::uuid';
       params.push(userId);
     } else {
       throw new ForbiddenError(
@@ -207,7 +207,7 @@ router.get('/by-date-range', requireAuth, async (req, res, next) => {
       );
     }
 
-    query += ` ORDER BY i.start_date ASC`;
+    query += ' ORDER BY i.start_date ASC';
 
     const result = await pool.query(query, params);
 
@@ -261,12 +261,12 @@ router.get('/admin', requireAuth, async (req, res, next) => {
     const { status } = req.query;
 
     if (status === 'active') {
-      query += ` AND i.cancelled_at IS NULL`;
+      query += ' AND i.cancelled_at IS NULL';
     } else if (status === 'cancelled') {
-      query += ` AND i.cancelled_at IS NOT NULL`;
+      query += ' AND i.cancelled_at IS NOT NULL';
     }
 
-    query += ` ORDER BY i.created_at DESC LIMIT 500`;
+    query += ' ORDER BY i.created_at DESC LIMIT 500';
 
     const result = await pool.query(query, params);
 
@@ -358,7 +358,7 @@ router.delete(
       const result = await withTransaction(async (client) => {
         // 1. Fetch the illness
         const illnessResult = await client.query(
-          `SELECT * FROM illnesses WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1`,
+          'SELECT * FROM illnesses WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1',
           [id, clientId]
         );
 

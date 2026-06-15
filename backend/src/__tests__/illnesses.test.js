@@ -17,31 +17,44 @@ jest.mock('../db/redis');
 jest.mock('../middleware/audit');
 jest.mock('../middleware/db-transaction');
 jest.mock('../utils/logger');
+// requireAuth would otherwise inject the default admin user (DISABLE_AUTH=true)
+// and clobber the per-test req.user set by createApp(). Make it a pass-through
+// so each test's chosen role drives RBAC.
+jest.mock('../middleware/auth', () => ({
+  requireAuth: (req, res, next) => next(),
+}));
 
 const { pool } = require('../db/pool');
 const { withTransaction } = require('../middleware/db-transaction');
 const { logAudit } = require('../middleware/audit');
 const illnessesRouter = require('../routes/illnesses');
 
-// Create minimal Express app for testing
-const createApp = () => {
+const DEFAULT_USER = {
+  user_id: '84ab2a73-aedd-4514-b9d4-4496a968e409', // Maria (employee)
+  client_id: '550e8400-e29b-41d4-a716-446655440001',
+  role: 'employee',
+  site_id: null,
+};
+
+// Create minimal Express app for testing. Pass a user object to drive the role.
+const createApp = (user = DEFAULT_USER) => {
   const app = express();
   app.use(express.json());
-
-  // Mock auth middleware
   app.use((req, res, next) => {
-    // Simulate authenticated user
-    req.user = {
-      user_id: '84ab2a73-aedd-4514-b9d4-4496a968e409', // Maria
-      client_id: '550e8400-e29b-41d4-a716-446655440001',
-      role: 'employee',
-      site_id: null,
-    };
+    req.user = user;
     next();
   });
-
   app.use('/api/v1/illnesses', illnessesRouter);
-
+  // Mirror the global ApiError handler (app.js) so route errors serialize to
+  // JSON { error: code, message, statusCode, details? } instead of Express's
+  // default HTML error page.
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, req, res, _next) => {
+    const statusCode = err.statusCode || 500;
+    const response = { error: err.code, message: err.message, statusCode };
+    if (err.details) response.details = err.details;
+    res.status(statusCode).json(response);
+  });
   return app;
 };
 
@@ -108,7 +121,7 @@ describe('Illnesses API', () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toContain('INVALID_DATE_RANGE');
+      expect(res.body.details.code).toBe('INVALID_DATE_RANGE');
     });
 
     test('should require start_date and end_date', async () => {
@@ -127,16 +140,11 @@ describe('Illnesses API', () => {
 
   describe('GET /api/v1/illnesses/admin — Admin views all illnesses', () => {
     test('should return 403 for non-admin user', async () => {
-      const app = createApp();
-      app.use((req, res, next) => {
-        req.user = {
-          user_id: TEST_EMPLOYEE_ID,
-          client_id: TEST_CLIENT_ID,
-          role: 'employee', // Not admin
-        };
-        next();
+      const app = createApp({
+        user_id: TEST_EMPLOYEE_ID,
+        client_id: TEST_CLIENT_ID,
+        role: 'employee', // Not admin
       });
-      app.use('/api/v1/illnesses', illnessesRouter);
 
       const res = await request(app)
         .get('/api/v1/illnesses/admin');
@@ -146,16 +154,11 @@ describe('Illnesses API', () => {
     });
 
     test('should return admin illnesses when user is admin', async () => {
-      const app = createApp();
-      app.use((req, res, next) => {
-        req.user = {
-          user_id: '550e8400-e29b-41d4-a716-446655440010', // Pippo admin
-          client_id: TEST_CLIENT_ID,
-          role: 'admin',
-        };
-        next();
+      const app = createApp({
+        user_id: '550e8400-e29b-41d4-a716-446655440010', // Pippo admin
+        client_id: TEST_CLIENT_ID,
+        role: 'admin',
       });
-      app.use('/api/v1/illnesses', illnessesRouter);
 
       const mockIllnesses = [
         {
@@ -178,16 +181,11 @@ describe('Illnesses API', () => {
     });
 
     test('should filter active illnesses when status=active', async () => {
-      const app = createApp();
-      app.use((req, res, next) => {
-        req.user = {
-          user_id: '550e8400-e29b-41d4-a716-446655440010',
-          client_id: TEST_CLIENT_ID,
-          role: 'admin',
-        };
-        next();
+      const app = createApp({
+        user_id: '550e8400-e29b-41d4-a716-446655440010',
+        client_id: TEST_CLIENT_ID,
+        role: 'admin',
       });
-      app.use('/api/v1/illnesses', illnessesRouter);
 
       pool.query.mockResolvedValue({ rows: [] });
 
@@ -211,17 +209,12 @@ describe('Illnesses API', () => {
     });
 
     test('should return illnesses for manager store', async () => {
-      const app = createApp();
-      app.use((req, res, next) => {
-        req.user = {
-          user_id: '550e8400-e29b-41d4-a716-446655440011', // Pino manager
-          client_id: TEST_CLIENT_ID,
-          role: 'manager',
-          site_id: '550e8400-e29b-41d4-a716-446655440011', // Milano
-        };
-        next();
+      const app = createApp({
+        user_id: '550e8400-e29b-41d4-a716-446655440011', // Pino manager
+        client_id: TEST_CLIENT_ID,
+        role: 'manager',
+        site_id: '550e8400-e29b-41d4-a716-446655440011', // Milano
       });
-      app.use('/api/v1/illnesses', illnessesRouter);
 
       const mockIllnesses = [
         {
@@ -251,7 +244,7 @@ describe('Illnesses API', () => {
         .get('/api/v1/illnesses/by-date-range');
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toContain('MISSING_DATES');
+      expect(res.body.details.code).toBe('MISSING_DATES');
     });
 
     test('should return illnesses in date range', async () => {
@@ -287,16 +280,11 @@ describe('Illnesses API', () => {
     });
 
     test('should cancel illness and return 200', async () => {
-      const app = createApp();
-      app.use((req, res, next) => {
-        req.user = {
-          user_id: '550e8400-e29b-41d4-a716-446655440010', // Pippo admin
-          client_id: TEST_CLIENT_ID,
-          role: 'admin',
-        };
-        next();
+      const app = createApp({
+        user_id: '550e8400-e29b-41d4-a716-446655440010', // Pippo admin
+        client_id: TEST_CLIENT_ID,
+        role: 'admin',
       });
-      app.use('/api/v1/illnesses', illnessesRouter);
 
       const mockIllness = {
         id: TEST_ILLNESS_ID,
@@ -332,16 +320,11 @@ describe('Illnesses API', () => {
     });
 
     test('should return 400 if illness already cancelled', async () => {
-      const app = createApp();
-      app.use((req, res, next) => {
-        req.user = {
-          user_id: '550e8400-e29b-41d4-a716-446655440010',
-          client_id: TEST_CLIENT_ID,
-          role: 'admin',
-        };
-        next();
+      const app = createApp({
+        user_id: '550e8400-e29b-41d4-a716-446655440010',
+        client_id: TEST_CLIENT_ID,
+        role: 'admin',
       });
-      app.use('/api/v1/illnesses', illnessesRouter);
 
       const mockIllness = {
         id: TEST_ILLNESS_ID,
@@ -361,7 +344,7 @@ describe('Illnesses API', () => {
         .send({});
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toContain('ALREADY_CANCELLED');
+      expect(res.body.details.code).toBe('ALREADY_CANCELLED');
     });
   });
 });

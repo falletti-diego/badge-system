@@ -326,7 +326,7 @@ router.post('/refresh', async (req, res) => {
         // Only check replay if jti is present (backward compatibility with legacy tokens)
         if (jti_old) {
           const replayCheck = await client.query(
-            `SELECT 1 FROM used_tokens WHERE jti = $1 FOR UPDATE`,
+            'SELECT 1 FROM used_tokens WHERE jti = $1 FOR UPDATE',
             [jti_old]
           );
 
