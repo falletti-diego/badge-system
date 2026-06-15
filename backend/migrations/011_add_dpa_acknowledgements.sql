@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS dpa_acknowledgements (
 );
 
 -- Index for fast lookups by client
-CREATE INDEX idx_dpa_acknowledgements_client_id ON dpa_acknowledgements(client_id);
-CREATE INDEX idx_dpa_acknowledgements_accepted_at ON dpa_acknowledgements(accepted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dpa_acknowledgements_client_id ON dpa_acknowledgements(client_id);
+CREATE INDEX IF NOT EXISTS idx_dpa_acknowledgements_accepted_at ON dpa_acknowledgements(accepted_at DESC);
 
 -- Audit log entry for this table
 -- (audit.js will handle insertions automatically via trigger or manual logAudit calls)

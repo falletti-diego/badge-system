@@ -6,7 +6,7 @@
 --   Fix #6: GDPR cascading deletes on user_id (ON DELETE CASCADE)
 --   Fix #7: Explicit TIMESTAMP WITH TIME ZONE for UTC consistency
 
-CREATE TABLE revoked_tokens (
+CREATE TABLE IF NOT EXISTS revoked_tokens (
   id SERIAL PRIMARY KEY,
   user_id UUID UNIQUE NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
   revoked_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
@@ -16,10 +16,10 @@ CREATE TABLE revoked_tokens (
 );
 
 -- Indexes for efficient queries
-CREATE INDEX idx_revoked_tokens_user_id ON revoked_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_revoked_tokens_user_id ON revoked_tokens(user_id);
 COMMENT ON INDEX idx_revoked_tokens_user_id IS 'Fix #1: Fast lookup when validating token ownership';
 
-CREATE INDEX idx_revoked_tokens_expiry ON revoked_tokens(revoked_until);
+CREATE INDEX IF NOT EXISTS idx_revoked_tokens_expiry ON revoked_tokens(revoked_until);
 COMMENT ON INDEX idx_revoked_tokens_expiry IS 'Fix #8: Enable TTL cleanup queries (revoked_until < NOW())';
 
 -- Table comment

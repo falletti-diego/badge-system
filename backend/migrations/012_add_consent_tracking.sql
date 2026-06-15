@@ -24,10 +24,10 @@ CREATE TABLE IF NOT EXISTS employee_consent_log (
 );
 
 -- Indexes for fast lookups
-CREATE INDEX idx_employee_consent_log_employee_id ON employee_consent_log(employee_id);
-CREATE INDEX idx_employee_consent_log_client_id ON employee_consent_log(client_id);
-CREATE INDEX idx_employee_consent_log_consent_type ON employee_consent_log(consent_type, accepted_at DESC);
-CREATE INDEX idx_employee_consent_log_accepted_at ON employee_consent_log(accepted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_employee_consent_log_employee_id ON employee_consent_log(employee_id);
+CREATE INDEX IF NOT EXISTS idx_employee_consent_log_client_id ON employee_consent_log(client_id);
+CREATE INDEX IF NOT EXISTS idx_employee_consent_log_consent_type ON employee_consent_log(consent_type, accepted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_employee_consent_log_accepted_at ON employee_consent_log(accepted_at DESC);
 
 -- Comments for documentation
 COMMENT ON COLUMN employees.gps_consent_given IS 'GDPR Art. 7: true = explicit consent given for GPS data collection; false = no consent or revoked';

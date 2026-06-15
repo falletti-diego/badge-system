@@ -6,7 +6,7 @@
 --   Fix #6: GDPR cascading deletes on user_id (ON DELETE CASCADE)
 --   Fix #7: Explicit TIMESTAMP WITH TIME ZONE for UTC consistency
 
-CREATE TABLE used_tokens (
+CREATE TABLE IF NOT EXISTS used_tokens (
   id SERIAL PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
   jti VARCHAR(255) UNIQUE NOT NULL,
@@ -14,10 +14,10 @@ CREATE TABLE used_tokens (
 );
 
 -- Indexes for efficient queries
-CREATE INDEX idx_used_tokens_user_id ON used_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_used_tokens_user_id ON used_tokens(user_id);
 COMMENT ON INDEX idx_used_tokens_user_id IS 'Fix #1: Fast lookup of all jti for a user during logout/revoke';
 
-CREATE INDEX idx_used_tokens_jti ON used_tokens(jti);
+CREATE INDEX IF NOT EXISTS idx_used_tokens_jti ON used_tokens(jti);
 COMMENT ON INDEX idx_used_tokens_jti IS 'Fix #2: Fast reuse detection on every refresh attempt';
 
 -- Table comment
