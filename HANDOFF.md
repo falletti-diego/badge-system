@@ -1,3 +1,32 @@
+# Badge System — Session 41 Handoff
+
+**Date:** 2026-06-16  
+**Session:** 41 — DEPLOY PRODUZIONE COMPLETO (backend + frontend) + riparazione CI  
+**Status:** 🎉 **PRODUZIONE LIVE E AGGIORNATA** — backend EC2 healthy (DB connected, 23/23 API test pass), frontend live su https://badge.dataxiom.it | Full backlog (S.32.3→S.32.9, Malattia, leave, admin split) ora in produzione
+
+## Cosa è successo (Session 41)
+
+Il push del backlog (~90 commit non pushati da S.32.2 del 12/06) ha innescato la **prima CI da 4 giorni**. Sono emersi 6 layer di problemi, tutti risolti:
+
+1. **Lint (21 errori)** — virgolette doppie nel backlog → `eslint --fix` + rimozione try/catch inutile. Commit `2988200`/`365d8ca`.
+2. **Test suite rossa (130 fail)** — `checkRevoked` (S.32.7) è middleware app-level che fa una SELECT `revoked_tokens` prima di ogni route; i mock pre-S.32.7 non la contavano → sequenza sfasata → 500. **Fix condiviso:** mock pass-through in `jest.setup.js` + `jest.unmock` nelle 2 suite che testano checkRevoked. Risolte 11 suite. Poi illnesses (role clobber + double-mount + error handler mancante), consent (token finto → JWT reale), auth.integration (gate `RUN_INTEGRATION`). Commit `365d8ca`.
+3. **CI env mancante** — `npm test` esegue `validate-env` (separato, prima di jest) che richiede 15 var; CI non le aveva → env block nel workflow. Commit `82c615a`.
+4. **`uuid` non dichiarato** — `require('uuid')` risolveva da `~/node_modules` (v8.3.2) sulla mia macchina ma NON in CI/Docker → avrebbe crashato anche il container prod. Aggiunto a `package.json`. Commit `a71b638`.
+5. **Migration non idempotenti** — il runner ha trovato `idx_dpa_acknowledgements_client_id` già esistente in prod (applicata a mano, non in `schema_migrations`) → `CREATE INDEX` fail-fast → **container crash-loop → prod DOWN (502)**. Aggiunto `IF NOT EXISTS` a 011/012/016/017. Commit `85ad32b` + test allineato `a1814c0`.
+6. **SSM var mancanti** — il `validate-env` allo startup del container richiedeva `APP_NAME, DATABASE_URL, DISABLE_AUTH, SEED_TEST_DATA, AWS_S3_BUCKET`, assenti in `/badge/production/*`. Aggiunte via `aws ssm put-parameter` (**`DISABLE_AUTH=false`** in prod — auth sempre attiva). Redeploy via `workflow_dispatch` → ✅ healthy.
+
+**Deploy frontend:** `netlify deploy --prod --dir dist --site 29a79b49-5571-4249-8c2b-d0813de4bf17` (serve l'ID **completo**, non quello corto). Live su https://badge.dataxiom.it.
+
+### Lezioni chiave (per non ripetere)
+- **Non lasciare accumulare commit non pushati.** 90 commit = 6 layer di rotture tutte insieme, con prod giù nel mezzo. Pushare spesso così la CI prende i problemi uno alla volta.
+- **`uuid` trap:** un `require` può risolvere da `~/node_modules` localmente e fallire ovunque altro. Verificare le dipendenze dichiarate (`npm ci` in una dir pulita).
+- **Il migration runner richiede migration idempotenti** (`IF NOT EXISTS` ovunque) perché prod ha stato pregresso applicato a mano non tracciato in `schema_migrations`.
+- **`validate-env` gira sia in CI sia allo startup del container** — ogni nuova var richiesta va aggiunta a SSM prod E all'env CI.
+
+**Commit Session 41:** `2988200`, `508b777`, `365d8ca`, `82c615a`, `a71b638`, `85ad32b`, `a1814c0` + 5 param SSM + redeploy.
+
+---
+
 # Badge System — Session 40 Handoff
 
 **Date:** 2026-06-15  

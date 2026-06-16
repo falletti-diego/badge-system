@@ -468,16 +468,22 @@ Duplicate migration numbering fixed (011 → 013 → 014). Integrates into Docke
 
 ---
 
-## 🔲 TODO IMMEDIATO — DEPLOY PRODUZIONE
+## ✅ DEPLOY PRODUZIONE — COMPLETATO (Session 41, 2026-06-16)
 
-**Priorità massima identificata in Session 40.** Tutte le feature sono buildate e testate in locale; nulla è live da settimane. S.32.10 GPS è Phase 2 e non blocca il deploy.
+**🎉 PRODUZIONE LIVE E AGGIORNATA.** Full backlog (S.32.3→S.32.9, Malattia, leave, admin split) ora in produzione.
 
-### Checklist Deploy (stima ~1-2h)
-- [ ] Applicare migration 019 su RDS produzione (notifications columns)
-- [ ] Build Docker image + push su ECR
-- [ ] SSH su EC2 → docker pull + restart container
-- [ ] `/api-test` per verificare produzione sana
-- [ ] Smoke test dashboard Netlify (login → presenze → planning → admin)
+### Checklist Deploy — DONE
+- [x] Migration 019 applicata su RDS (auto via migration runner nell'entrypoint, idempotente)
+- [x] Build Docker image + push ECR (via CI dopo riparazione lint+test)
+- [x] Deploy EC2 (docker pull + restart via workflow) — container healthy
+- [x] `/api-test` → **23/23 PASS** (auth, RBAC, checkins, shifts, export, notifications, CORS)
+- [x] Frontend deploy Netlify → https://badge.dataxiom.it
+- [x] Backend health: https://api.dataxiom.it/health → 200, DB connected
+
+### 6 blocchi risolti durante il deploy (vedi HANDOFF.md Session 41)
+1. Lint (21 errori virgolette) · 2. Test suite rossa (130 fail → checkRevoked mock condiviso) · 3. CI env var mancanti · 4. `uuid` non dichiarato (risolveva da ~/node_modules) · 5. Migration non idempotenti (prod DOWN temporaneo, fix `IF NOT EXISTS`) · 6. SSM prod var mancanti (`DISABLE_AUTH=false` etc.)
+
+**Prossimo:** S.32.10 GPS spoofing (Phase 2), e mantenere il push frequente per evitare backlog giganti.
 
 ---
 
