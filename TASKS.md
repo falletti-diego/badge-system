@@ -487,6 +487,32 @@ Duplicate migration numbering fixed (011 → 013 → 014). Integrates into Docke
 
 ---
 
+## 🔲 BACKLOG — Onboarding Cliente & Saldi
+
+### ONB.1 — Template Excel onboarding + import "concierge" (in design)
+Template Excel multi-foglio (Azienda / Sedi / Dipendenti) compilato dal cliente, importato da noi via script interno. Esempio: `backend/scripts/seed-data/onboarding-template-esempio.xlsx`. Spec in brainstorming.
+- [ ] Script `scripts/onboard-client.js` legge .xlsx → crea client → sedi → dipendenti (con password temp) → saldi ferie, in ordine, idempotente
+- [ ] Output: lista credenziali iniziali da restituire al cliente
+
+### ONB.2 — 🟡 Saldi: supporto mezze giornate / Permessi-ROL in ore (cambio schema)
+**Oggi i saldi sono in GIORNI INTERI.** Per mezze giornate (ferie) e Permessi/ROL contati in ore servono questi cambi precisi:
+
+1. **Nuova migration** (NON editare la 020 già applicata in prod) — es. `migrations/022_leave_numeric_units.sql`:
+   - `leave_saldi.total_days` / `used_days`: `INT` → `NUMERIC(6,2)`
+   - `leave_saldi.remaining_days`: è `GENERATED ALWAYS AS (total_days - used_days) STORED` → va **droppata e ricreata** come NUMERIC (non si altera il tipo di una generated column)
+   - `leave_requests.num_days`: `INT` → `NUMERIC(6,2)`
+   - (opz. per ROL-in-ore) aggiungere `leaves.unit VARCHAR(10) DEFAULT 'days'` con `'days'|'hours'` per distinguere Permessi/ROL (ore) da Ferie/ex-Festività (giorni)
+2. **Backend** `src/routes/leaves.js`:
+   - riga ~38: `numDays = Math.floor(diff/86400000)+1` calcola solo giorni interi → aggiungere flag `half_day` o campo `hours` nella richiesta
+   - righe ~61 (confronto saldo) e ~252 (`used_days = used_days + $1`): funzionano già con NUMERIC, nessuna logica da cambiare
+3. **Validazione** `src/middleware/validation.js`: schema Zod richiesta ferie → ammettere decimali (`z.number()` invece di `.int()`) o campo `hours`
+4. **Frontend** `EmployeeLeaveRequest.jsx`: toggle mezza giornata / input ore; mostrare saldi con decimali
+5. **Template onboarding**: colonne saldo decimali; se `unit=hours` per Permessi, il foglio Dipendenti accetta ore
+
+Sforzo stimato: 3-5h. Priorità: dopo il primo cliente pilota (MVP parte a giorni interi).
+
+---
+
 ## ✅ COMPLETED
 
 ### FASE 1 — Infrastructure

@@ -239,6 +239,19 @@
 - Audit log su ogni delete
 - File: `backend/src/routes/admin/viewers.js`
 
+### 🟡 Onboarding cliente via Excel multi-foglio + import concierge (Session 41, 2026-06-16)
+**DECISO (in design):** il cliente compila UN file Excel a 3 fogli (Azienda / Sedi / Dipendenti), che importiamo noi via script interno (no UI self-service per l'MVP).
+- Saldi ferie inline nel foglio Dipendenti: `ferie_giorni` (FERIE_1), `permessi_giorni` (FERIE_2 = Permessi/ROL), `exfestivita_giorni` (FERIE_3 = ex-Festività)
+- Collegamento sede↔dipendente **per nome** (no UUID lato cliente)
+- Esempio compilato: `backend/scripts/seed-data/onboarding-template-esempio.xlsx`
+- Rationale: minima frizione per il cliente retail; onboarding "concierge" controllato per i primi pilota; UI self-service rimandata a fase 2
+
+### 🟡 Saldi ferie in GIORNI INTERI per l'MVP — mezze giornate/ROL-ore rimandati (Session 41, 2026-06-16)
+**DECISO:** per l'MVP i saldi (`leave_saldi.total_days/used_days/remaining_days`) e `leave_requests.num_days` restano `INT` (giorni interi).
+- **Limite noto:** niente mezze giornate di ferie né Permessi/ROL contati in ore (in Italia i ROL sono spesso in ore).
+- **Cambio futuro (vedi TASKS ONB.2):** nuova migration che porta quelle colonne a `NUMERIC(6,2)` (la generated `remaining_days` va droppata e ricreata), + eventuale `leaves.unit ('days'|'hours')`, + Zod decimali, + UI half-day/ore. Sforzo ~3-5h.
+- Rationale: i giorni interi coprono il caso d'uso del primo pilota; il cambio NUMERIC è isolato e non blocca il lancio.
+
 ### ✅ Cross-tenant isolation su admin endpoints (Session 40, 2026-06-15)
 **DECIDED:** Tutti i DELETE e UPDATE admin filtrano su `client_id` del token
 - Scoperto che `DELETE /employees/:id` e `reset-password` non avevano `AND client_id = $N::uuid`
