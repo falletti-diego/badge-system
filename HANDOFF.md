@@ -17,6 +17,10 @@ Il push del backlog (~90 commit non pushati da S.32.2 del 12/06) ha innescato la
 
 **Deploy frontend:** `netlify deploy --prod --dir dist --site 29a79b49-5571-4249-8c2b-d0813de4bf17` (serve l'ID **completo**, non quello corto). Live su https://badge.dataxiom.it.
 
+### 7° blocco (post-deploy, da Sentry) — tabelle leave/illness mancanti in prod
+Sentry: `GET /api/v1/leave/admin/saldi` → 500 su `/admin/leave` (release `a1814c0`). **Causa:** lo schema leave era SOLO in `src/migrations/022_create_leaves_tables.sql` e la tabella `illnesses` SOLO in `src/db/schema.sql` — **nessuna delle due in `backend/migrations/`** (la cartella che il runner legge). Quindi prod non aveva `leaves`/`leave_requests`/`leave_saldi`/`illnesses` → ogni route leave/malattia faceva 500. **Fix:** create migration idempotenti `020_create_leaves_tables.sql` + `021_create_illnesses_table.sql` in `backend/migrations/`. Commit `f27f607`. Verificato: 4 endpoint leave/illness → 200.
+⚠️ **Debito tecnico:** `src/migrations/022` e la sezione illnesses di `src/db/schema.sql` ora sono duplicati da `migrations/020-021`. C'è UN solo posto che il runner usa (`backend/migrations/`): ogni nuova tabella DEVE andare lì, non in `src/migrations/` o `schema.sql`.
+
 ### Lezioni chiave (per non ripetere)
 - **Non lasciare accumulare commit non pushati.** 90 commit = 6 layer di rotture tutte insieme, con prod giù nel mezzo. Pushare spesso così la CI prende i problemi uno alla volta.
 - **`uuid` trap:** un `require` può risolvere da `~/node_modules` localmente e fallire ovunque altro. Verificare le dipendenze dichiarate (`npm ci` in una dir pulita).
