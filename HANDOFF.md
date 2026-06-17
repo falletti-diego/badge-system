@@ -1,8 +1,42 @@
 # Badge System — Session 41 Handoff
 
-**Date:** 2026-06-16  
-**Session:** 41 — DEPLOY PRODUZIONE COMPLETO (backend + frontend) + riparazione CI  
-**Status:** 🎉 **PRODUZIONE LIVE E AGGIORNATA** — backend EC2 healthy (DB connected, 23/23 API test pass), frontend live su https://badge.dataxiom.it | Full backlog (S.32.3→S.32.9, Malattia, leave, admin split) ora in produzione
+**Date:** 2026-06-16 → 18  
+**Session:** 41 — DEPLOY PRODUZIONE COMPLETO + Onboarding cliente (ONB.1)  
+**Status:** 🎉 **PRODUZIONE LIVE** (badge.dataxiom.it, 23/23 API test) | ✅ **Onboarding cliente implementato** (script concierge, 455 test verdi, merged su main, non ancora pushato)
+
+---
+
+## PARTE 2 — Onboarding cliente ONB.1 (2026-06-17→18) ✅ COMPLETO
+
+**Obiettivo:** strumento più semplice possibile per far fornire al cliente i dati di attività/sedi/dipendenti/saldi ferie, per popolare la web app.
+
+**Decisioni (via brainstorming):** Excel a 3 fogli (Azienda / Sedi / Dipendenti+saldi) compilato dal cliente → import "concierge" fatto da noi via script interno (no UI self-service per l'MVP). Saldi: FERIE_1=Ferie, FERIE_2=Permessi/ROL, FERIE_3=ex-Festività, in **giorni interi** (mezze giornate/ROL-ore → ONB.2).
+
+**Implementazione** (`backend/scripts/onboard-client.js` + 6 moduli in `scripts/onboarding/`):
+- `parseWorkbook` (Excel→normalizzato, trim+email lowercase), `validate` (errori file + warning), `validateAgainstDb` (collisioni), `apply` (upsert idempotenti + audit), `preview` (dry-run), `writeCredentials` (post-commit)
+- **Transazionale** (tutto o niente), **idempotente** (re-run sicuro: sedi find-or-create, dipendenti insert-or-update **senza resettare password**, saldi upsert solo se `used_days=0`), **doppia validazione** (file + DB), **audit** su ogni creazione
+- Output: CSV credenziali iniziali (post-commit, gitignored)
+
+**Processo qualità (subagent-driven TDD):** 8 task con subagent freschi, /test-all + analisi critica dopo ognuno. Durante il Task 4 intercettati e fixati 2 gap (geofence/buono pasto scartati). **Code-review finale** → 5 findings → **tutti fixati**:
+1. Guardie NaN (virgola decimale italiana → errore chiaro invece di crash pg)
+2. Estrazione celle rich-text/formula (niente più `[object Object]`)
+3. `assigned_sites` in merge (preserva multi-sede in-app)
+4. Conteggio saldi reale (rowCount)
+5. Guard `--client-id` senza valore
+
+**Verifica e2e** su DB locale: dry-run + real run + re-run idempotente (0 creati / 15 aggiornati, password non resettate) + cleanup. **455 test verdi** (+25 onboarding).
+
+**Artefatti:** template `backend/scripts/seed-data/onboarding-template-esempio.xlsx` (3 sedi × 5 dip, 3 responsabili) · runbook `docs/onboarding/README.md` · piano `docs/superpowers/plans/2026-06-17-client-onboarding-import.md` · spec decisioni in PROJECT_DECISIONS.md.
+
+**Stato git:** merged su `main` in locale (Opzione 1), branch eliminato, **non pushato** (parte col prossimo deploy — è tooling interno, non cambia l'app in esecuzione).
+
+**Uso:** `cd backend && node scripts/onboard-client.js <file.xlsx> --dry-run` (poi senza `--dry-run` per creare; `--client-id <uuid>` per aggiungere a cliente esistente).
+
+**Prossimo (ONB.2):** saldi NUMERIC per mezze giornate / Permessi-ROL in ore (vedi TASKS.md).
+
+---
+
+## PARTE 1 — Deploy produzione (Session 41)
 
 ## Cosa è successo (Session 41)
 
