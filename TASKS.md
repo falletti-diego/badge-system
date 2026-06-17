@@ -489,10 +489,12 @@ Duplicate migration numbering fixed (011 → 013 → 014). Integrates into Docke
 
 ## 🔲 BACKLOG — Onboarding Cliente & Saldi
 
-### ONB.1 — Template Excel onboarding + import "concierge" (in design)
-Template Excel multi-foglio (Azienda / Sedi / Dipendenti) compilato dal cliente, importato da noi via script interno. Esempio: `backend/scripts/seed-data/onboarding-template-esempio.xlsx`. Spec in brainstorming.
-- [ ] Script `scripts/onboard-client.js` legge .xlsx → crea client → sedi → dipendenti (con password temp) → saldi ferie, in ordine, idempotente
-- [ ] Output: lista credenziali iniziali da restituire al cliente
+### ONB.1 — ✅ Template Excel onboarding + import "concierge" (COMPLETO)
+Template Excel multi-foglio (Azienda / Sedi / Dipendenti) compilato dal cliente, importato da noi via script interno. Esempio: `backend/scripts/seed-data/onboarding-template-esempio.xlsx`. Runbook: `docs/onboarding/README.md`. Piano: `docs/superpowers/plans/2026-06-17-client-onboarding-import.md`.
+- [x] Script `scripts/onboard-client.js` legge .xlsx → crea client → sedi → dipendenti (password temp) → saldi, in transazione, **idempotente** (upsert) ✅
+- [x] Moduli testati: parseWorkbook, validate, validateAgainstDb, apply, preview, writeCredentials (TDD) ✅
+- [x] Verifica e2e su DB locale: dry-run + real run + re-run idempotente (0 creati / 15 aggiornati, password non resettate) ✅
+- [x] Output: CSV credenziali iniziali (post-commit, gitignored) da restituire al cliente ✅
 
 ### ONB.2 — 🟡 Saldi: supporto mezze giornate / Permessi-ROL in ore (cambio schema)
 **Oggi i saldi sono in GIORNI INTERI.** Per mezze giornate (ferie) e Permessi/ROL contati in ore servono questi cambi precisi:

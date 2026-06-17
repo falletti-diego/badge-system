@@ -145,3 +145,6 @@ vite.config.ts.timestamp-*
 
 # Local Netlify folder
 .netlify
+
+# Onboarding temp-password output (never commit plaintext credentials)
+backend/scripts/onboarding-output/
