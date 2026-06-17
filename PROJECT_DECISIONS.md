@@ -1,8 +1,8 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 15 Giugno 2026 (Session 40)  
-**Status:** S.32 Security Track ✅ (S.32.1-S.32.9 complete) | Task 11 Leave/Malattia ✅ | Deploy produzione 🚀 NEXT  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Security hardened, ready for production deploy
+**Last Updated:** 18 Giugno 2026 (Session 41)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Onboarding cliente ONB.1 ✅ implementato | Onboarding saldi NUMERIC (ONB.2) 🟡 backlog  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** In produzione, onboarding cliente pronto
 
 ---
 
@@ -239,12 +239,21 @@
 - Audit log su ogni delete
 - File: `backend/src/routes/admin/viewers.js`
 
-### 🟡 Onboarding cliente via Excel multi-foglio + import concierge (Session 41, 2026-06-16)
-**DECISO (in design):** il cliente compila UN file Excel a 3 fogli (Azienda / Sedi / Dipendenti), che importiamo noi via script interno (no UI self-service per l'MVP).
+### ✅ Onboarding cliente via Excel multi-foglio + import concierge (Session 41, IMPLEMENTATO 2026-06-18)
+**DECISO & IMPLEMENTATO:** il cliente compila UN file Excel a 3 fogli (Azienda / Sedi / Dipendenti), che importiamo noi via script interno (no UI self-service per l'MVP).
 - Saldi ferie inline nel foglio Dipendenti: `ferie_giorni` (FERIE_1), `permessi_giorni` (FERIE_2 = Permessi/ROL), `exfestivita_giorni` (FERIE_3 = ex-Festività)
 - Collegamento sede↔dipendente **per nome** (no UUID lato cliente)
 - Esempio compilato: `backend/scripts/seed-data/onboarding-template-esempio.xlsx`
+- **Implementazione:** `backend/scripts/onboard-client.js` + 6 moduli (`scripts/onboarding/`), TDD, transazionale, **idempotente** (re-run sicuro, password mai resettate), audit, dry-run con anteprima. Runbook: `docs/onboarding/README.md`. Piano: `docs/superpowers/plans/2026-06-17-client-onboarding-import.md`.
 - Rationale: minima frizione per il cliente retail; onboarding "concierge" controllato per i primi pilota; UI self-service rimandata a fase 2
+
+### ✅ Hardening onboarding contro input Excel del cliente (Session 41, 2026-06-18)
+**DECISO (da code-review):** lo strumento deve resistere a file compilati a mano in modo imperfetto. Fix applicati:
+- **Guardia NaN** su lat/long/raggio/ore: una virgola decimale italiana ("45,46") che diventa NaN viene bloccata in validazione con messaggio chiaro, invece di abortire la transazione con un errore pg criptico.
+- **Estrazione celle robusta:** celle hyperlink/rich-text/formula usano il testo visualizzato, non producono più `[object Object]`.
+- **`assigned_sites` in merge** (non sovrascrittura) all'update: un'assegnazione multi-sede fatta in-app sopravvive a un re-import.
+- **`--client-id` senza valore** → errore esplicito (non crea silenziosamente un nuovo cliente).
+- Rationale: lo scopo dello strumento è la semplicità per il cliente; l'input imperfetto va gestito con grazia, non con crash.
 
 ### 🟡 Saldi ferie in GIORNI INTERI per l'MVP — mezze giornate/ROL-ore rimandati (Session 41, 2026-06-16)
 **DECISO:** per l'MVP i saldi (`leave_saldi.total_days/used_days/remaining_days`) e `leave_requests.num_days` restano `INT` (giorni interi).

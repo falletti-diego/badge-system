@@ -1,8 +1,16 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-15 (Session 40: Code Review 10 fixes ✅ + Migration 019 notifications ✅ — sistema pronto per deploy produzione)  
-**Production:** https://dataxiom-badge.netlify.app · API: https://api.dataxiom.it
+**Last Updated:** 2026-06-18 (Session 41: DEPLOY PRODUZIONE completo ✅ + Onboarding cliente ONB.1 implementato ✅)  
+**Production:** https://badge.dataxiom.it · API: https://api.dataxiom.it
+
+---
+
+## 📋 Session Log
+
+| Sessione | Data | Sintesi |
+|---|---|---|
+| 41 | 2026-06-16→18 | **Deploy produzione completo** (full backlog S.32.3→S.32.9, Malattia, leave, admin split): 6 blocchi a cascata risolti (lint, 130 test rossi→checkRevoked mock, CI env, uuid non dichiarato, migration non idempotenti→prod 502, SSM var) + 7° fix tabelle leave/illness mancanti. Poi **Onboarding cliente ONB.1**: design (Excel 3 fogli + import concierge) → piano TDD → 8 task subagent-driven → code-review (5 findings fixati) → merge su main. 455 test verdi. Vedi HANDOFF.md. |
 
 ---
 
