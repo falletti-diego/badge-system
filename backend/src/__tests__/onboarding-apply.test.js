@@ -39,6 +39,11 @@ describe('apply', () => {
     expect(logAudit).toHaveBeenCalled();
     const saldoCall = db.query.mock.calls.find((c) => c[0].includes('INTO leave_saldi'));
     expect(saldoCall[0]).toMatch(/used_days\s*=\s*0/);
+    const clientCall = db.query.mock.calls.find((c) => c[0].includes('INSERT INTO clients'));
+    expect(clientCall[0]).toMatch(/meal_voucher_hours/);
+    const siteCall = db.query.mock.calls.find((c) => c[0].includes('INSERT INTO sites'));
+    expect(siteCall[0]).toMatch(/latitude/);
+    expect(siteCall[0]).toMatch(/longitude/);
   });
 
   it('updates an existing employee WITHOUT resetting password and skips credentials', async () => {

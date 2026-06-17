@@ -17,8 +17,9 @@ async function apply(db, data, { clientId, year }) {
 
   if (!clientId) {
     const r = await db.query(
-      'INSERT INTO clients (name, email, plan) VALUES ($1, $2, $3) RETURNING id',
-      [data.azienda.ragione_sociale, data.azienda.email_referente, 'starter']
+      'INSERT INTO clients (name, email, plan, meal_voucher_hours) VALUES ($1, $2, $3, $4) RETURNING id',
+      [data.azienda.ragione_sociale, data.azienda.email_referente, 'starter',
+        data.azienda.ore_min_buono_pasto != null ? data.azienda.ore_min_buono_pasto : 5]
     );
     clientId = r.rows[0].id;
     await logAudit(db, { action: 'onboard_create_client', entity: 'client', entityId: clientId,
@@ -35,8 +36,11 @@ async function apply(db, data, { clientId, year }) {
     const siteId = randomUUID();
     const qr = `badge://checkin?site_id=${siteId}&client_id=${clientId}&v=1`;
     const ins = await db.query(
-      'INSERT INTO sites (id, client_id, name, location, qr_code_content) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-      [siteId, clientId, s.nome_sede, s.indirizzo, qr]
+      `INSERT INTO sites (id, client_id, name, location, qr_code_content, latitude, longitude, geofence_radius_meters, geofence_enabled)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false) RETURNING id`,
+      [siteId, clientId, s.nome_sede, s.indirizzo, qr,
+        s.latitudine, s.longitudine,
+        s.raggio_geofence_m != null ? s.raggio_geofence_m : 150]
     );
     siteIdByName.set(s.nome_sede, ins.rows[0].id);
     summary.sedi += 1;
