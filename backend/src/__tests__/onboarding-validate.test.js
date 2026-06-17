@@ -1,4 +1,5 @@
 const { validate } = require('../../scripts/onboarding/validate');
+const { formatPreview } = require('../../scripts/onboarding/preview');
 
 const base = () => ({
   azienda: { ragione_sociale: 'X SRL', email_referente: 'a@x.it', ore_min_buono_pasto: 5 },
@@ -47,5 +48,24 @@ describe('validate', () => {
     expect(r.errors).toEqual([]);
     expect(r.warnings.join('\n')).toMatch(/Milano.*responsabile/i);
     expect(r.warnings.join('\n')).toMatch(/matricola.*M1/i);
+  });
+});
+
+describe('formatPreview', () => {
+  it('shows counts per site and surfaces warnings', () => {
+    const data = {
+      azienda: { ragione_sociale: 'X SRL' },
+      sedi: [{ nome_sede: 'Milano' }, { nome_sede: 'Roma' }],
+      dipendenti: [
+        { sede: 'Milano', ruolo: 'responsabile', nome_completo: 'A' },
+        { sede: 'Milano', ruolo: 'dipendente', nome_completo: 'B' },
+        { sede: 'Roma', ruolo: 'dipendente', nome_completo: 'C' },
+      ],
+    };
+    const out = formatPreview(data, ['attenzione: la sede "Roma" non ha responsabili']);
+    expect(out).toMatch(/X SRL/);
+    expect(out).toMatch(/Milano.*2/);
+    expect(out).toMatch(/Roma.*1/);
+    expect(out).toMatch(/attenzione/i);
   });
 });
