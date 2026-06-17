@@ -10,18 +10,25 @@ const { formatPreview } = require('./onboarding/preview');
 const { writeCredentials } = require('./onboarding/writeCredentials');
 
 function parseArgs(argv) {
-  const args = { file: null, dryRun: false, clientId: null };
+  const args = { file: null, dryRun: false, clientId: null, clientIdMissing: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--dry-run') args.dryRun = true;
-    else if (a === '--client-id') args.clientId = argv[++i];
-    else if (!a.startsWith('--')) args.file = a;
+    else if (a === '--client-id') {
+      const next = argv[i + 1];
+      if (!next || next.startsWith('--')) args.clientIdMissing = true;
+      else { args.clientId = next; i++; }
+    } else if (!a.startsWith('--')) args.file = a;
   }
   return args;
 }
 
 async function main() {
-  const { file, dryRun, clientId } = parseArgs(process.argv.slice(2));
+  const { file, dryRun, clientId, clientIdMissing } = parseArgs(process.argv.slice(2));
+  if (clientIdMissing) {
+    console.error('Errore: --client-id richiede un valore (uuid del cliente).');
+    process.exit(2);
+  }
   if (!file) {
     console.error('Uso: node scripts/onboard-client.js <file.xlsx> [--dry-run] [--client-id <uuid>]');
     process.exit(2);
@@ -80,4 +87,8 @@ async function main() {
   }
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+if (require.main === module) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}
+
+module.exports = { parseArgs };

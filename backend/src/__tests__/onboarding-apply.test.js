@@ -29,6 +29,7 @@ describe('apply', () => {
       ['INSERT INTO sites', { rows: [{ id: 'site-1' }] }],
       ['SELECT id FROM employees', { rows: [] }],
       ['INSERT INTO employees', { rows: [{ id: 'emp-1' }] }],
+      ['INTO leave_saldi', { rowCount: 1, rows: [] }],
     ]);
     const res = await apply(db, data, { clientId: null, year: 2026 });
     expect(res.clientId).toBe('client-1');

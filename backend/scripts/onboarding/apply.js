@@ -69,10 +69,18 @@ async function apply(db, data, { clientId, year }) {
         oldValue: null, newValue: { name: d.nome_completo, email: d.email, role }, userId: 'system' });
     } else {
       employeeId = existing.rows[0].id;
+      // Merge the onboarding site into assigned_sites instead of overwriting,
+      // so a multi-site assignment made in-app survives a re-import.
       await db.query(
-        `UPDATE employees SET name = $1, phone = $2, role = $3, site_id = $4, assigned_sites = $5::UUID[], external_employee_id = $6
+        `UPDATE employees SET name = $1, phone = $2, role = $3, site_id = $4,
+           assigned_sites = CASE
+             WHEN $5::uuid IS NULL THEN assigned_sites
+             WHEN $5::uuid = ANY(assigned_sites) THEN assigned_sites
+             ELSE array_append(assigned_sites, $5::uuid)
+           END,
+           external_employee_id = $6
          WHERE id = $7::uuid`,
-        [d.nome_completo, d.telefono, role, siteId, siteId ? [siteId] : [], d.matricola, employeeId]
+        [d.nome_completo, d.telefono, role, siteId, siteId || null, d.matricola, employeeId]
       );
       summary.dipendenti_aggiornati += 1;
     }
@@ -80,7 +88,7 @@ async function apply(db, data, { clientId, year }) {
     for (const [col, leaveType] of Object.entries(SALDO_COLUMNS)) {
       const total = d[col];
       if (!total || total <= 0) continue;
-      await db.query(
+      const saldoRes = await db.query(
         `INSERT INTO leave_saldi (client_id, user_id, leave_type, year, total_days, used_days)
          VALUES ($1, $2, $3, $4, $5, 0)
          ON CONFLICT (user_id, leave_type, year)
@@ -88,7 +96,9 @@ async function apply(db, data, { clientId, year }) {
          WHERE leave_saldi.used_days = 0`,
         [clientId, employeeId, leaveType, year, total]
       );
-      summary.saldi += 1;
+      // Count only rows actually written (the conditional upsert is a no-op when
+      // a balance is already in use), so the summary reflects reality.
+      summary.saldi += saldoRes.rowCount || 0;
     }
   }
 

@@ -69,3 +69,27 @@ describe('formatPreview', () => {
     expect(out).toMatch(/attenzione/i);
   });
 });
+
+describe('validate — NaN numeric guards', () => {
+  it('errors when a sede latitude is NaN (e.g. Italian decimal comma parsed to NaN)', () => {
+    const d = base();
+    d.sedi[0].latitudine = NaN;
+    d.sedi[0].longitudine = NaN;
+    const e = validate(d).errors.join('\n');
+    expect(e).toMatch(/latitudine non è un numero valido/i);
+  });
+
+  it('errors when ore_min_buono_pasto is NaN', () => {
+    const d = base();
+    d.azienda.ore_min_buono_pasto = NaN;
+    expect(validate(d).errors.join('\n')).toMatch(/ore_min_buono_pasto non è un numero/i);
+  });
+
+  it('accepts null numeric fields (blank cells) without error', () => {
+    const d = base();
+    d.sedi[0].latitudine = null;
+    d.sedi[0].longitudine = null;
+    d.azienda.ore_min_buono_pasto = null;
+    expect(validate(d).errors).toEqual([]);
+  });
+});

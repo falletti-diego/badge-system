@@ -24,6 +24,21 @@ function normInt(v) {
   return Number.isFinite(n) ? Math.round(n) : NaN;
 }
 
+// Robustly extract a cell's value across exceljs cell types. A plain value
+// (string/number/Date) is returned as-is; object-valued cells — hyperlink
+// ({ text, hyperlink }), rich text ({ richText }), formula ({ formula, result }),
+// error ({ error }) — fall back to the cell's computed display text, so a
+// client who bolds part of a cell or uses a formula doesn't poison the data
+// with "[object Object]".
+function extractCellValue(cell) {
+  if (!cell) return null;
+  const v = cell.value;
+  if (v !== null && v !== undefined && typeof v === 'object' && !(v instanceof Date)) {
+    return cell.text != null ? cell.text : '';
+  }
+  return v;
+}
+
 function readSheet(ws) {
   if (!ws) return [];
   const headers = (ws.getRow(1).values || []).map((h) => (h == null ? '' : String(h).trim()));
@@ -36,7 +51,7 @@ function readSheet(ws) {
       const key = headers[c];
       if (!key) continue;
       const cell = row.getCell(c);
-      const val = cell && cell.value && cell.value.text ? cell.value.text : cell.value;
+      const val = extractCellValue(cell);
       if (val !== null && val !== undefined && String(val).trim() !== '') hasValue = true;
       obj[key] = val;
     }
@@ -87,4 +102,4 @@ async function parseWorkbook(filePath) {
   return { azienda, sedi, dipendenti };
 }
 
-module.exports = { parseWorkbook, ROLE_MAP, SALDO_COLUMNS };
+module.exports = { parseWorkbook, ROLE_MAP, SALDO_COLUMNS, extractCellValue };

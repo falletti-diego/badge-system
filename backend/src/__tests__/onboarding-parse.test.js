@@ -1,5 +1,5 @@
 const path = require('path');
-const { parseWorkbook, ROLE_MAP, SALDO_COLUMNS } = require('../../scripts/onboarding/parseWorkbook');
+const { parseWorkbook, ROLE_MAP, SALDO_COLUMNS, extractCellValue } = require('../../scripts/onboarding/parseWorkbook');
 
 const EXAMPLE = path.join(__dirname, '..', '..', 'scripts', 'seed-data', 'onboarding-template-esempio.xlsx');
 
@@ -25,5 +25,21 @@ describe('parseWorkbook', () => {
     expect(ROLE_MAP.dipendente).toBe('employee');
     expect(ROLE_MAP.responsabile).toBe('manager');
     expect(SALDO_COLUMNS.ferie_giorni).toBe('FERIE_1');
+  });
+});
+
+describe('extractCellValue', () => {
+  it('returns plain string/number/Date values unchanged', () => {
+    expect(extractCellValue({ value: 'ciao' })).toBe('ciao');
+    expect(extractCellValue({ value: 18 })).toBe(18);
+    const d = new Date('2026-06-01');
+    expect(extractCellValue({ value: d })).toBe(d);
+    expect(extractCellValue(null)).toBeNull();
+  });
+
+  it('uses display text for hyperlink, rich-text and formula cells', () => {
+    expect(extractCellValue({ value: { text: 'a@x.it', hyperlink: 'mailto:a@x.it' }, text: 'a@x.it' })).toBe('a@x.it');
+    expect(extractCellValue({ value: { richText: [{ text: 'Mar' }, { text: 'io' }] }, text: 'Mario' })).toBe('Mario');
+    expect(extractCellValue({ value: { formula: 'A1&B1', result: 'X SRL' }, text: 'X SRL' })).toBe('X SRL');
   });
 });

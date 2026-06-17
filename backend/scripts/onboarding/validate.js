@@ -12,6 +12,9 @@ function validate(data) {
   if (!data.azienda.ragione_sociale) errors.push('Foglio Azienda: ragione_sociale obbligatoria.');
   if (!data.azienda.email_referente) errors.push('Foglio Azienda: email_referente obbligatoria.');
   else if (!EMAIL_RE.test(data.azienda.email_referente)) errors.push('Foglio Azienda: email_referente non valida.');
+  if (data.azienda.ore_min_buono_pasto != null && Number.isNaN(data.azienda.ore_min_buono_pasto)) {
+    errors.push('Foglio Azienda: ore_min_buono_pasto non è un numero valido (usa il punto per i decimali, non la virgola).');
+  }
 
   const sedeNames = new Set();
   for (const s of data.sedi) {
@@ -20,6 +23,13 @@ function validate(data) {
     sedeNames.add(s.nome_sede);
     const hasLat = s.latitudine != null, hasLng = s.longitudine != null;
     if (hasLat !== hasLng) errors.push(`Foglio Sedi riga ${s._row}: latitudine e longitudine vanno compilate insieme.`);
+    // NaN guard: a non-numeric (e.g. Italian decimal comma "45,46") would otherwise
+    // reach the numeric INSERT and abort the whole transaction with a cryptic pg error.
+    for (const k of ['latitudine', 'longitudine', 'raggio_geofence_m']) {
+      if (s[k] != null && Number.isNaN(s[k])) {
+        errors.push(`Foglio Sedi riga ${s._row}: ${k} non è un numero valido (usa il punto per i decimali, non la virgola).`);
+      }
+    }
   }
 
   const seenEmail = new Set();
