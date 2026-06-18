@@ -53,7 +53,7 @@ jobs:
           DB_HOST: localhost
           DB_PORT: '5432'
           DB_USER: test
-          DB_PASSWORD: test
+          DB_PASSWORD: test  # pragma: allowlist secret
           DB_NAME: test
           JWT_PRIVATE_KEY: ci-placeholder-overridden-by-jest-setup
           JWT_PUBLIC_KEY: ci-placeholder-overridden-by-jest-setup
