@@ -41,6 +41,22 @@ jobs:
 
       - name: Run backend tests
         working-directory: ./backend
+        env:
+          NODE_ENV: test
+          PORT: '3000'
+          LOG_LEVEL: silent
+          APP_NAME: badge-system-test
+          DATABASE_URL: postgres://test:test@localhost:5432/test
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_USER: test
+          DB_PASSWORD: test
+          DB_NAME: test
+          JWT_PRIVATE_KEY: ci-placeholder-overridden-by-jest-setup
+          JWT_PUBLIC_KEY: ci-placeholder-overridden-by-jest-setup
+          CORS_ORIGIN: http://localhost:5173
+          DISABLE_AUTH: 'true'
+          SEED_TEST_DATA: 'false'
         run: npm test -- --coverage
 
       - name: Upload coverage reports

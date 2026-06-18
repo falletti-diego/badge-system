@@ -1,0 +1,151 @@
+================================================================================
+  BADGE SYSTEM — ARRUOLAMENTO NUOVO CLIENTE
+  Dataxiom | Processo operativo
+================================================================================
+
+Versione: 1.0
+Data:     2026-06-18
+Stato:    MVP (limitazioni note in fondo al documento)
+
+--------------------------------------------------------------------------------
+1. COSA FA IL CLIENTE
+--------------------------------------------------------------------------------
+
+Il cliente compila il file Excel template che gli forniamo:
+
+  File: onboarding-template-esempio.xlsx
+        (in backend/scripts/seed-data/ — da inviargli via email o Drive)
+
+Il file ha tre fogli:
+
+  FOGLIO "Azienda"
+  ----------------
+  - ragione_sociale        Nome dell'azienda
+  - email_referente        Email del referente principale
+  - ore_min_buono_pasto    Ore lavorative minime per maturare il buono pasto
+                           (es. 6 — usare il punto come separatore decimale)
+
+  FOGLIO "Sedi"
+  -------------
+  - nome_sede              Nome identificativo della sede (es. "Torino Centro")
+  - indirizzo              Indirizzo completo
+  - latitudine             Coordinata GPS — opzionale, per geofencing
+  - longitudine            Coordinata GPS — opzionale, per geofencing
+  - raggio_geofence_m      Raggio in metri del perimetro virtuale (es. 150)
+
+  FOGLIO "Dipendenti"
+  -------------------
+  - nome_completo          Nome e cognome
+  - email                  Email di accesso (deve essere univoca)
+  - telefono               Numero di telefono — opzionale
+  - ruolo                  "dipendente" oppure "responsabile"
+  - sede                   Nome della sede (deve corrispondere a un nome
+                           nel foglio Sedi)
+  - matricola              Codice matricola aziendale — opzionale
+  - ferie_giorni           Giorni di FERIE residui (interi)
+  - permessi_giorni        Giorni di PERMESSI / ROL residui (interi)
+  - exfestivita_giorni     Giorni di EX-FESTIVITÀ residui (interi)
+
+Una volta compilato, il cliente ci invia il file (email, Drive, WeTransfer, ecc.)
+
+
+--------------------------------------------------------------------------------
+2. COSA FACCIAMO NOI (DATAXIOM)
+--------------------------------------------------------------------------------
+
+STEP 1 — Dry-run (verifica senza scrivere)
+------------------------------------------
+Prima di toccare il database, eseguiamo sempre un dry-run:
+
+  cd backend
+  node scripts/onboard-client.js <file.xlsx> --dry-run
+
+Lo script valida il file e mostra un riepilogo:
+  - Conteggi per sede (dipendenti, responsabili, saldi)
+  - Avvisi di business (es. sede senza responsabile, matricola duplicata)
+  - Errori bloccanti (es. email mancante, sede non trovata)
+
+Se ci sono problemi, li risolviamo con il cliente prima di procedere.
+
+
+STEP 2 — Import reale
+---------------------
+Una volta validato il file:
+
+  # Nuovo cliente (crea tutto da zero):
+  node scripts/onboard-client.js <file.xlsx>
+
+  # Aggiungere sedi/dipendenti a cliente esistente:
+  node scripts/onboard-client.js <file.xlsx> --client-id <uuid-cliente>
+
+Lo script crea in una singola transazione (tutto o niente):
+  - Azienda (clients)
+  - Sedi (sites) — con coordinate GPS se fornite
+  - Dipendenti (employees) — con password temporanea generata
+  - Saldi ferie iniziali (leave_saldi) per ogni dipendente
+  - Voci di audit log per ogni creazione
+
+
+STEP 3 — Consegna credenziali
+------------------------------
+Dopo l'import, il file CSV con le credenziali iniziali è in:
+
+  backend/scripts/onboarding-output/credenziali-<cliente>-<data>.csv
+
+  !! Consegnarlo al referente in modo sicuro (NON via email in chiaro).
+  !! Cancellare il file subito dopo la consegna.
+  !! La cartella è gitignored — non finisce mai in repository.
+
+
+STEP 4 — Attivazione geofencing
+--------------------------------
+Le coordinate GPS vengono importate ma il geofencing parte SPENTO di default.
+Si attiva in-app, sede per sede, dalla pagina Admin → Sedi, una volta che
+il cliente conferma le posizioni esatte.
+
+
+STEP 5 — Prima sessione con il cliente
+---------------------------------------
+Mostrare al referente (di persona o in videochiamata):
+  - Accesso alla dashboard: https://badge.dataxiom.it
+  - Come visualizzare le presenze giornaliere
+  - Come gestire i turni (Planning)
+  - Come consultare i saldi ferie dei dipendenti
+  - Come esportare il CSV presenze per il commercialista
+
+
+--------------------------------------------------------------------------------
+3. NOTE OPERATIVE
+--------------------------------------------------------------------------------
+
+RE-RUN SICURO (idempotenza)
+Il processo è progettato per essere ri-eseguibile senza danni:
+  - Sedi già esistenti vengono riusate (nessun duplicato)
+  - Dipendenti già presenti vengono aggiornati nel profilo
+  - Le password NON vengono mai resettate in un re-run
+  - I saldi vengono aggiornati solo se non ancora usati (used_days = 0)
+
+Se il cliente invia un file corretto e poi ne manda uno aggiornato,
+possiamo ri-eseguire lo script senza problemi.
+
+
+--------------------------------------------------------------------------------
+4. LIMITAZIONI MVP (da comunicare al cliente se rilevante)
+--------------------------------------------------------------------------------
+
+- Saldi in GIORNI INTERI — non è possibile inserire mezze giornate o
+  permessi in ore. Previsto nel roadmap (TASKS: ONB.2).
+
+- I giorni di ferie importati rappresentano il RESIDUO alla data di
+  onboarding. Non distinguiamo maturato vs. goduto (totale = residuo).
+
+- L'anno del saldo è sempre quello CORRENTE. Eventuali giorni riportati
+  dall'anno precedente confluiscono nell'anno in corso.
+
+- Il geofencing parte SPENTO anche se le coordinate sono presenti —
+  si attiva manualmente in-app.
+
+
+================================================================================
+  Per assistenza tecnica: falletti.diego2533@gmail.com
+================================================================================
