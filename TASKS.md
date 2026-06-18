@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-18 (Session 41: DEPLOY PRODUZIONE completo ✅ + Onboarding cliente ONB.1 implementato ✅)  
+**Last Updated:** 2026-06-18 (Session 42: Rinascente onboarding + Manager ferie/malattia separation + 3 code review fix)  
 **Production:** https://badge.dataxiom.it · API: https://api.dataxiom.it
 
 ---
@@ -10,6 +10,7 @@
 
 | Sessione | Data | Sintesi |
 |---|---|---|
+| 42 | 2026-06-18 | **Manager ferie/malattia separation** + Rinascente onboarding test: ManagerIllnessReport.jsx, route /illnesses/manager-report, navbar 🏥 Malattia per manager, fix critico illnesses.js (employee_id ?? user_id → manager 404 risolto), MALATTIA in LEAVE_TYPES preservato per history display, EmployeeLeaveRequest bypass rimosso → redirect. 3 code-review findings fixati. Cambiamenti uncommitted. |
 | 41 | 2026-06-16→18 | **Deploy produzione completo** (full backlog S.32.3→S.32.9, Malattia, leave, admin split): 6 blocchi a cascata risolti (lint, 130 test rossi→checkRevoked mock, CI env, uuid non dichiarato, migration non idempotenti→prod 502, SSM var) + 7° fix tabelle leave/illness mancanti. Poi **Onboarding cliente ONB.1**: design (Excel 3 fogli + import concierge) → piano TDD → 8 task subagent-driven → code-review (5 findings fixati) → merge su main. 455 test verdi. Vedi HANDOFF.md. |
 
 ---
@@ -424,6 +425,45 @@ Duplicate migration numbering fixed (011 → 013 → 014). Integrates into Docke
 - S.32.8 Split file monolitici (AdminPage.jsx + routes/admin.js)
 - S.32.9 GPS spoofing mitigations
 - Deploy to production with confidence
+
+---
+
+### Task 12 — ✅ Manager Ferie/Malattia Separation (Session 42, 2026-06-18)
+
+**Goal:** Separare la pagina ferie dalla pagina malattia per i manager, identico a quanto già fatto per i dipendenti. Due pagine distinte: una per la richiesta ferie, una per la comunicazione malattia.
+
+**Status:** ✅ Fix applicati, build passata — **DA COMMITTARE**
+
+**Lavoro svolto:**
+
+- [x] **12.1** — `ManagerIllnessReport.jsx` creato in `frontend-web/src/features/illness/pages/` (copia di `EmployeeIllnessReport.jsx`, nome componente e id file-input aggiornati)
+- [x] **12.2** — Route `/illnesses/manager-report` aggiunta in `App.jsx` con `ProtectedRoute requiredRole="manager"`
+- [x] **12.3** — Bottone 🏥 Malattia aggiunto alla navbar di `DashboardPage.jsx` per i manager (naviga a `/illnesses/manager-report`)
+- [x] **12.4** — **Fix critico backend** `illnesses.js:57`: `const employeeId = req.user.employee_id ?? req.user.user_id` — i manager hanno `user_id` ≠ `employee_id` nella tabella employees → SELECT ritornava 0 righe → 404. Ora usa `employeeId` sia per il lookup che per l'INSERT
+- [x] **12.5** — **Fix LEAVE_TYPES display** `ManagerLeaveRequest.jsx`: ripristinato `{ value: 'MALATTIA', label: 'Malattia' }` (preserva label nella history table); aggiunto `.filter((t) => t.value !== 'MALATTIA')` nel dropdown del form
+- [x] **12.6** — **Fix LEAVE_TYPES display** `EmployeeLeaveRequest.jsx`: stesso fix 12.5 (array era già filtrato nel dropdown, ma MALATTIA era stato rimosso rompendo la history)
+- [x] **12.7** — **Fix bypass malattia** `EmployeeLeaveRequest.jsx`: rimossi `isRequestingMalattia`, `handleMalattiaRequest()`, `handleFileUpload()`, sezione file upload. Bottone "Richiedi Malattia" → redirect `navigate('/illnesses/report')`. Header aggiornato a "Richiedi Ferie"
+- [x] **12.8** — ManagerLeaveRequest: subtitle aggiornato a "Gestisci le tue richieste di ferie" (rimosso "e malattia")
+
+**Onboarding La Rinascente (test ONB.1 — Session 42):**
+- [x] File Excel `Desktop/rinascente-onboarding.xlsx` creato via ExcelJS (5 sedi: Torino/Milano/Verona/Firenze/Roma, 42 dipendenti, 1 manager/sede)
+- [x] Dry-run confermato (5 sedi, 42 dipendenti, 118 saldi — 0 errori)
+- [x] Import reale eseguito dall'utente — CSV credenziali generato
+
+**File modificati (uncommitted):**
+- `backend/src/routes/illnesses.js` (Fix critico employee_id)
+- `backend/src/__fixtures__/demo-users.js` (demo user aggiornamenti session precedente)
+- `backend/src/routes/auth.js` (idem)
+- `backend/src/routes/leaves.js` (idem)
+- `frontend-web/src/features/leave/hooks/useLeave.js` (idem)
+- `frontend-web/src/features/leave/pages/AdminLeaveManagement.jsx` (idem)
+- `frontend-web/src/features/leave/pages/EmployeeLeaveRequest.jsx` (Fix 12.6+12.7)
+- `frontend-web/src/features/leave/pages/ManagerLeaveRequest.jsx` (Fix 12.5)
+- **NUOVO:** `frontend-web/src/features/illness/pages/ManagerIllnessReport.jsx`
+- `frontend-web/src/features/dashboard/pages/DashboardPage.jsx` (navbar 🏥 Malattia manager)
+- `frontend-web/src/App.jsx` (route /illnesses/manager-report)
+
+**Prossimo step:** Committare + pushare per deploy produzione.
 
 ---
 

@@ -33,7 +33,7 @@ const LEAVE_TYPES = [
   { value: 'FERIE_1', label: 'Ferie 1' },
   { value: 'FERIE_2', label: 'Ferie 2' },
   { value: 'FERIE_3', label: 'Ferie 3' },
-  { value: 'MALATTIA', label: 'Malattia' },
+  { value: 'MALATTIA', label: 'Malattia' }, // kept for history display only — not shown in form dropdown
 ];
 
 const STATUS_COLORS = {
@@ -225,7 +225,7 @@ export const ManagerLeaveRequest = () => {
                     onChange={handleLeaveTypeChange}
                     label="Tipo di Feria"
                   >
-                    {LEAVE_TYPES.map((type) => (
+                    {LEAVE_TYPES.filter((t) => t.value !== 'MALATTIA').map((type) => (
                       <MenuItem key={type.value} value={type.value}>
                         {type.label}
                       </MenuItem>

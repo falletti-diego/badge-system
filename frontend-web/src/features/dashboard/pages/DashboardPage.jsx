@@ -132,6 +132,21 @@ const DashboardPage = () => {
               </Button>
             )}
 
+            {/* Manager Illness Report - Show for managers */}
+            {userRole === 'manager' && (
+              <Button
+                color="inherit"
+                onClick={() => navigate('/illnesses/manager-report')}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '14px',
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
+                }}
+              >
+                🏥 Malattia
+              </Button>
+            )}
+
             {/* Sites & QR Code - Admin only */}
             {userRole === 'admin' && (
               <Button

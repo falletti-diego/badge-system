@@ -1,3 +1,92 @@
+# Badge System — Session 42 Handoff
+
+**Date:** 2026-06-18  
+**Session:** 42 — Manager ferie/malattia separation + Rinascente onboarding test  
+**Status:** ✅ **Fix applicati, build passata** — 🚨 **UNCOMMITTED — DA COMMITTARE E PUSHARE**
+
+---
+
+## Goal
+
+Separare la pagina ferie dalla pagina malattia per i manager, identico a come è già fatto per i dipendenti. Fix critico backend per l'illness report dei manager (404).
+
+---
+
+## Cosa è stato fatto
+
+### 1. La Rinascente onboarding (test ONB.1)
+- Creato `Desktop/rinascente-onboarding.xlsx` con ExcelJS: 5 sedi (Torino/Milano/Verona/Firenze/Roma), 1 manager/sede, 8+10+4+5+10 dipendenti = 42 totali
+- Dry-run verificato (0 errori), import reale eseguito dall'utente — CSV credenziali generato
+
+### 2. Manager ferie/malattia separation (Task 12)
+
+**Nuovo file creato:**
+- `frontend-web/src/features/illness/pages/ManagerIllnessReport.jsx` — copia di EmployeeIllnessReport, naviga back a `/dashboard`
+
+**File modificati:**
+- `frontend-web/src/App.jsx` — aggiunta route `/illnesses/manager-report` (ProtectedRoute requiredRole="manager")
+- `frontend-web/src/features/dashboard/pages/DashboardPage.jsx` — bottone 🏥 Malattia nella navbar per i manager
+- `frontend-web/src/features/leave/pages/ManagerLeaveRequest.jsx` — MALATTIA in LEAVE_TYPES mantenuto per history display; `.filter((t) => t.value !== 'MALATTIA')` aggiunto al dropdown
+- `frontend-web/src/features/leave/pages/EmployeeLeaveRequest.jsx` — stesso fix LEAVE_TYPES + rimosso `isRequestingMalattia`/`handleMalattiaRequest`/`handleFileUpload`/file upload section; bottone "Richiedi Malattia" → redirect `navigate('/illnesses/report')`; header → "Richiedi Ferie"
+- `backend/src/routes/illnesses.js:57` — Fix critico: `const employeeId = req.user.employee_id ?? req.user.user_id` — manager 404 risolto
+
+### 3. Code review (3 findings fixati)
+1. **Critico:** Manager POST /illnesses/report → 404 (`user_id` ≠ `employee_id` per i manager)
+2. **Display:** MALATTIA rimosso da LEAVE_TYPES rompeva la history table → ripristinato con filtro al dropdown
+3. **Bypass:** EmployeeLeaveRequest aveva bottone che inviava MALATTIA direttamente alla leave table → rimosso, redirect a /illnesses/report
+
+---
+
+## Stato attuale
+
+**Build:** `✓ built in 5.12s` — nessun errore
+
+**Git status (tutto uncommitted):**
+- `backend/src/__fixtures__/demo-users.js` — modifiche sessioni precedenti
+- `backend/src/routes/auth.js` — idem
+- `backend/src/routes/leaves.js` — idem
+- `frontend-web/src/features/leave/hooks/useLeave.js` — idem
+- `frontend-web/src/features/leave/pages/AdminLeaveManagement.jsx` — idem
+- `frontend-web/src/features/leave/pages/EmployeeLeaveRequest.jsx` — Fix Task 12
+- `frontend-web/src/features/leave/pages/ManagerLeaveRequest.jsx` — Fix Task 12
+- `frontend-web/src/features/illness/pages/ManagerIllnessReport.jsx` — **NUOVO**
+- `frontend-web/src/features/dashboard/pages/DashboardPage.jsx` — bottone navbar
+- `frontend-web/src/App.jsx` — route aggiunta
+- `backend/src/routes/illnesses.js` — fix critico
+
+---
+
+## Prossimi step
+
+1. **Commit + push** tutte le modifiche uncommitted
+2. **Deploy frontend** via `netlify deploy --prod --dir dist --site 29a79b49-5571-4249-8c2b-d0813de4bf17`
+3. **Deploy backend** — il push su main triggera la CI/CD GitHub Actions → ECR → EC2
+4. **ONB.2** — Saldi NUMERIC(6,2) per mezze giornate / Permessi-ROL in ore
+5. **S.32.10** — GPS spoofing mitigations Phase 2 (mobile: `isFromMockProvider` + accuracy, server: impossible speed detection)
+
+---
+
+## Pattern critici da ricordare
+
+```
+// In ogni route che serve la tabella employees con un utente autenticato:
+const employeeId = req.user.employee_id ?? req.user.user_id;
+// NON usare req.user.user_id direttamente — i manager hanno user_id ≠ employee_id
+```
+
+```
+// LEAVE_TYPES array: includere sempre MALATTIA per la history table
+const LEAVE_TYPES = [
+  { value: 'FERIE_1', label: 'Ferie 1' },
+  { value: 'FERIE_2', label: 'Ferie 2' },
+  { value: 'FERIE_3', label: 'Ferie 3' },
+  { value: 'MALATTIA', label: 'Malattia' }, // display only — not in form dropdown
+];
+// Nel form dropdown: LEAVE_TYPES.filter((t) => t.value !== 'MALATTIA').map(...)
+```
+
+---
+
 # Badge System — Session 41 Handoff
 
 **Date:** 2026-06-16 → 18  

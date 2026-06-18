@@ -1,7 +1,7 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 18 Giugno 2026 (Session 41)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Onboarding cliente ONB.1 ✅ implementato | Onboarding saldi NUMERIC (ONB.2) 🟡 backlog  
+**Last Updated:** 18 Giugno 2026 (Session 42)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Onboarding cliente ONB.1 ✅ implementato | Onboarding saldi NUMERIC (ONB.2) 🟡 backlog | Task 12 Ferie/Malattia separation ✅ (DA COMMITTARE)  
 **MVP Launch Target:** Settembre 2026 | **Current Phase:** In produzione, onboarding cliente pronto
 
 ---
@@ -260,6 +260,12 @@
 - **Limite noto:** niente mezze giornate di ferie né Permessi/ROL contati in ore (in Italia i ROL sono spesso in ore).
 - **Cambio futuro (vedi TASKS ONB.2):** nuova migration che porta quelle colonne a `NUMERIC(6,2)` (la generated `remaining_days` va droppata e ricreata), + eventuale `leaves.unit ('days'|'hours')`, + Zod decimali, + UI half-day/ore. Sforzo ~3-5h.
 - Rationale: i giorni interi coprono il caso d'uso del primo pilota; il cambio NUMERIC è isolato e non blocca il lancio.
+
+### ✅ Ferie e Malattia: pagine separate per tutti i ruoli (Session 42, 2026-06-18)
+**DECISO:** Employee e Manager hanno entrambi due pagine distinte — una per la richiesta ferie (FERIE_1/2/3), una per la comunicazione malattia.
+- **Pattern LEAVE_TYPES:** l'array include SEMPRE `{ value: 'MALATTIA', label: 'Malattia' }` per il lookup nella history table; il form dropdown esclude MALATTIA via `.filter((t) => t.value !== 'MALATTIA')`. Non rimuovere MALATTIA dall'array — causa display `'MALATTIA'` grezzo nella history delle richieste passate.
+- **JWT employee_id vs user_id:** Per i manager, `req.user.user_id` (login account) ≠ `employee_id` (record employees table). In ogni route che fa `SELECT FROM employees WHERE id = $1`, usare `const employeeId = req.user.employee_id ?? req.user.user_id`. Pattern da replicare in ogni nuovo endpoint che serve employees autenticati.
+- **Rationale:** UX separata riduce confusione (ferie = pianificazione preventiva, malattia = comunicazione urgente con upload certificato). La separazione rende anche le guardie RBAC più chiare.
 
 ### ✅ Cross-tenant isolation su admin endpoints (Session 40, 2026-06-15)
 **DECIDED:** Tutti i DELETE e UPDATE admin filtrano su `client_id` del token

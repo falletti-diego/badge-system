@@ -19,6 +19,7 @@ import { EmployeeLeaveRequest } from './features/leave/pages/EmployeeLeaveReques
 import { ManagerLeaveRequest } from './features/leave/pages/ManagerLeaveRequest';
 import { AdminLeaveManagement } from './features/leave/pages/AdminLeaveManagement';
 import { EmployeeIllnessReport } from './features/illness/pages/EmployeeIllnessReport';
+import { ManagerIllnessReport } from './features/illness/pages/ManagerIllnessReport';
 import { AdminIllnessManagement } from './features/illness/pages/AdminIllnessManagement';
 import SummaryPage from './pages/SummaryPage';
 import { useTokenRefresh } from './hooks/useTokenRefresh';
@@ -212,6 +213,16 @@ function AppRouter() {
             element={
               <ProtectedRoute requiredRole="admin">
                 <AdminLeaveManagement />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Manager: Report Illness */}
+          <Route
+            path="/illnesses/manager-report"
+            element={
+              <ProtectedRoute requiredRole="manager">
+                <ManagerIllnessReport />
               </ProtectedRoute>
             }
           />

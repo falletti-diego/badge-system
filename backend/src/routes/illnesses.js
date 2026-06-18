@@ -53,6 +53,8 @@ router.post(
   async (req, res, next) => {
     const { start_date, end_date, reason } = req.validated.body;
     const userId = req.user.user_id;
+    // Managers have a separate employee_id (their employee record) distinct from their login user_id
+    const employeeId = req.user.employee_id ?? req.user.user_id;
     const clientId = req.user.client_id;
 
     try {
@@ -84,7 +86,7 @@ router.post(
         // 1. Verify employee exists and belongs to this client
         const userResult = await client.query(
           'SELECT id, client_id FROM employees WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1',
-          [userId, clientId]
+          [employeeId, clientId]
         );
 
         if (userResult.rows.length === 0) {
@@ -104,12 +106,12 @@ router.post(
           [
             illnessId,
             clientId,
-            userId,
+            employeeId,
             start_date,
             end_date,
             numDays,
             reason || null,
-            userId, // created_by = employee themselves
+            employeeId, // created_by = employee themselves
           ]
         );
 
