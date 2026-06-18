@@ -49,7 +49,7 @@ jobs:
           PORT: '3000'
           LOG_LEVEL: silent
           APP_NAME: badge-system-test
-          DATABASE_URL: postgres://test:test@localhost:5432/test
+          DATABASE_URL: postgres://test:test@localhost:5432/test  # pragma: allowlist secret
           DB_HOST: localhost
           DB_PORT: '5432'
           DB_USER: test
