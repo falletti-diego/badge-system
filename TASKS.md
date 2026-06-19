@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-18 (Session 42: Rinascente onboarding + Manager ferie/malattia separation + 3 code review fix)  
+**Last Updated:** 2026-06-19 (Session 43: Frontend Vitest test suite — 15 failure → 0 failure)  
 **Production:** https://badge.dataxiom.it · API: https://api.dataxiom.it
 
 ---
@@ -10,6 +10,7 @@
 
 | Sessione | Data | Sintesi |
 |---|---|---|
+| 43 | 2026-06-19 | **Frontend Vitest test suite: 15 failure → 0 failure** — `vitest.setup.js`: localStorage/sessionStorage polyfill per happy-dom 20.x (tutti i metodi Storage erano non-callable). `ChangePasswordPage.test.js` + `PasswordChangeGuard.test.js` rinominati a `.test.jsx` (JSX in `.js` causava parse error). `ChangePasswordFlow.e2e.test.js` + `axiosInterceptor.test.js`: conversione completa Jest→Vitest API (`jest.*`→`vi.*`, `jest.requireActual`→`vi.importActual` async). ChangePasswordPage success flow allineato al componente reale (logout+redirect `/login` dopo 2s, non dashboard). Risultato: **164/165 frontend ✅** (1 `test.skip` intenzionale), **455/455 backend ✅** (14 skipped = integration test intenzionali, richiedono `RUN_INTEGRATION=1`). Commit: efe9567. |
 | 42 | 2026-06-18 | **Manager ferie/malattia separation** + Rinascente onboarding test: ManagerIllnessReport.jsx, route /illnesses/manager-report, navbar 🏥 Malattia per manager, fix critico illnesses.js (employee_id ?? user_id → manager 404 risolto), MALATTIA in LEAVE_TYPES preservato per history display, EmployeeLeaveRequest bypass rimosso → redirect. 3 code-review findings fixati. Cambiamenti uncommitted. |
 | 41 | 2026-06-16→18 | **Deploy produzione completo** (full backlog S.32.3→S.32.9, Malattia, leave, admin split): 6 blocchi a cascata risolti (lint, 130 test rossi→checkRevoked mock, CI env, uuid non dichiarato, migration non idempotenti→prod 502, SSM var) + 7° fix tabelle leave/illness mancanti. Poi **Onboarding cliente ONB.1**: design (Excel 3 fogli + import concierge) → piano TDD → 8 task subagent-driven → code-review (5 findings fixati) → merge su main. 455 test verdi. Vedi HANDOFF.md. |
 

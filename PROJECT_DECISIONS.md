@@ -1,8 +1,8 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 18 Giugno 2026 (Session 42)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Onboarding cliente ONB.1 ✅ implementato | Onboarding saldi NUMERIC (ONB.2) 🟡 backlog | Task 12 Ferie/Malattia separation ✅ (DA COMMITTARE)  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** In produzione, onboarding cliente pronto
+**Last Updated:** 19 Giugno 2026 (Session 43)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Onboarding cliente ONB.1 ✅ | Manager ferie/malattia separation ✅ (commit 0b5ada0) | Frontend test suite 164/165 ✅ (commit efe9567) | ONB.2 saldi NUMERIC 🟡 backlog  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** In produzione, test suite verde, onboarding cliente pronto
 
 ---
 
