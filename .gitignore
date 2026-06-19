@@ -148,3 +148,7 @@ vite.config.ts.timestamp-*
 
 # Onboarding temp-password output (never commit plaintext credentials)
 backend/scripts/onboarding-output/
+
+# Claude worktrees and nested repos (local artifacts, not part of build)
+.claude/worktrees/
+badge-system/
