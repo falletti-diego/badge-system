@@ -37,7 +37,17 @@
         "ACCESS_FINE_LOCATION"
       ]
     },
+    "updates": {
+      "url": "https://u.expo.dev/7a913808-3c12-418c-ac23-59538898acff",
+      "enabled": true,
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "plugins": [
+      "expo-updates",
       [
         "expo-local-authentication",
         {
