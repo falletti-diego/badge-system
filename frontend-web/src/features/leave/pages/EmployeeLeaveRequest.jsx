@@ -113,10 +113,20 @@ export const EmployeeLeaveRequest = () => {
     }
 
     try {
+      // Convert Date objects to YYYY-MM-DD format
+      const formatDate = (date) => {
+        if (!date) return null;
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
       await createRequest(
         formData.leave_type,
-        formData.startDate,
-        formData.endDate,
+        formatDate(formData.startDate),
+        formatDate(formData.endDate),
         formData.motivation
       );
 
