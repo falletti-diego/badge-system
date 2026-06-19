@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-19 (Session 43: Frontend Vitest test suite — 15 failure → 0 failure)  
+**Last Updated:** 2026-06-19 (Session 44: Phase 2 Advanced Planning — P.1 Copia Settimana + P.2 PDF + P.3 warning + P.4 Vista Settimana)  
 **Production:** https://badge.dataxiom.it · API: https://api.dataxiom.it
 
 ---
@@ -10,6 +10,7 @@
 
 | Sessione | Data | Sintesi |
 |---|---|---|
+| 44 | 2026-06-19 | **Phase 2 Advanced Planning (P.1–P.4)** — `PlanningPage.jsx` riscritta con: **P.4** Vista Settimana (ToggleButtonGroup Mese/Settimana, navigazione ←/→, auto-select settimana corrente), **P.1** Copia Settimana (Dialog con selettori sorgente/destinazione, match per giorno-della-settimana), **P.3** Conflict warning (Dialog con lista turni da sovrascrivere + "Sovrascrivi N Turni"), **P.2** PDF via `window.print()` + `GlobalStyles` `@media print` (A4 landscape, nasconde navbar/card/button, mostra print-title). 164/165 frontend ✅. |
 | 43 | 2026-06-19 | **Frontend Vitest test suite: 15 failure → 0 failure** — `vitest.setup.js`: localStorage/sessionStorage polyfill per happy-dom 20.x (tutti i metodi Storage erano non-callable). `ChangePasswordPage.test.js` + `PasswordChangeGuard.test.js` rinominati a `.test.jsx` (JSX in `.js` causava parse error). `ChangePasswordFlow.e2e.test.js` + `axiosInterceptor.test.js`: conversione completa Jest→Vitest API (`jest.*`→`vi.*`, `jest.requireActual`→`vi.importActual` async). ChangePasswordPage success flow allineato al componente reale (logout+redirect `/login` dopo 2s, non dashboard). Risultato: **164/165 frontend ✅** (1 `test.skip` intenzionale), **455/455 backend ✅** (14 skipped = integration test intenzionali, richiedono `RUN_INTEGRATION=1`). Commit: efe9567. |
 | 42 | 2026-06-18 | **Manager ferie/malattia separation** + Rinascente onboarding test: ManagerIllnessReport.jsx, route /illnesses/manager-report, navbar 🏥 Malattia per manager, fix critico illnesses.js (employee_id ?? user_id → manager 404 risolto), MALATTIA in LEAVE_TYPES preservato per history display, EmployeeLeaveRequest bypass rimosso → redirect. 3 code-review findings fixati. Cambiamenti uncommitted. |
 | 41 | 2026-06-16→18 | **Deploy produzione completo** (full backlog S.32.3→S.32.9, Malattia, leave, admin split): 6 blocchi a cascata risolti (lint, 130 test rossi→checkRevoked mock, CI env, uuid non dichiarato, migration non idempotenti→prod 502, SSM var) + 7° fix tabelle leave/illness mancanti. Poi **Onboarding cliente ONB.1**: design (Excel 3 fogli + import concierge) → piano TDD → 8 task subagent-driven → code-review (5 findings fixati) → merge su main. 455 test verdi. Vedi HANDOFF.md. |
@@ -997,10 +998,10 @@ Go-live with first paying customer (pilota).
 - [ ] **A.6** User management UI (Auth0 dashboard or custom)
 
 ### Advanced Planning Features (~5h)
-- [ ] **P.1** "Copia Settimana" button — copy week's shifts to next week
-- [ ] **P.2** PDF export of monthly planning (printable format)
-- [ ] **P.3** Double-shift warning (same employee assigned twice in one day)
-- [ ] **P.4** Weekly view (7 days instead of full month)
+- [x] **P.1** "Copia Settimana" button — copy week's shifts to next week ✅ Session 44
+- [x] **P.2** PDF export of monthly planning (printable format) ✅ Session 44
+- [x] **P.3** Double-shift warning (same employee assigned twice in one day) ✅ Session 44
+- [x] **P.4** Weekly view (7 days instead of full month) ✅ Session 44
 
 ### Offline Mode (~10h)
 - [ ] **O.1** Service Worker for mobile app offline caching

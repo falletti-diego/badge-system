@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Container,
   Box,
@@ -19,6 +19,14 @@ import {
   Button,
   CircularProgress,
   Tooltip,
+  ToggleButton,
+  ToggleButtonGroup,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Alert,
+  GlobalStyles,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
@@ -30,258 +38,290 @@ import { ManagerIllnessModal } from '../../illness/components/ManagerIllnessModa
 import authService from '../../../services/authService';
 
 const SHIFT_COLORS = {
-  'm': { bg: '#1E3A5F', label: 'Mattino' },
-  'p': { bg: '#B45309', label: 'Pomeriggio' },
-  's': { bg: '#7C3AED', label: 'Sera' },
-  'R': { bg: '#6B7280', label: 'Riposo' }
+  m: { bg: '#1E3A5F', label: 'Mattino' },
+  p: { bg: '#B45309', label: 'Pomeriggio' },
+  s: { bg: '#7C3AED', label: 'Sera' },
+  R: { bg: '#6B7280', label: 'Riposo' },
+};
+
+const pad = (n) => String(n).padStart(2, '0');
+
+// Returns array-of-arrays: each inner array = day numbers for a Mon-anchored week
+const getWeeksOfMonth = (year, month) => {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const weeks = [];
+  let current = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dow = new Date(year, month - 1, day).getDay(); // 0=Sun 1=Mon
+    if (dow === 1 && current.length > 0) {
+      weeks.push([...current]);
+      current = [];
+    }
+    current.push(day);
+  }
+  if (current.length > 0) weeks.push([...current]);
+  return weeks;
+};
+
+const formatWeekLabel = (year, month, week) => {
+  if (!week?.length) return '';
+  const fmt = (d) => new Date(year, month - 1, d).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+  return `${fmt(week[0])} – ${fmt(week[week.length - 1])}`;
 };
 
 export const PlanningPage = () => {
   const navigate = useNavigate();
   const { user, loading: userLoading } = useAuth();
+
+  // ── Core state ────────────────────────────────────────────────────────────
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
-  const [shifts, setShifts] = useState({}); // Local state for edits
-  const [lastSavedShifts, setLastSavedShifts] = useState({}); // Track last saved state
-  const [isSaving, setIsSaving] = useState(false); // Track save loading state
-  const [saveError, setSaveError] = useState(null); // Track save errors
-  const [approvedLeaves, setApprovedLeaves] = useState([]); // Approved leave requests
-  const [loadingLeaves, setLoadingLeaves] = useState(false); // Leave loading state
-  const [illnesses, setIllnesses] = useState([]); // Reported illnesses
-  const [loadingIllnesses, setLoadingIllnesses] = useState(false); // Illness loading state
-  const [selectedIllness, setSelectedIllness] = useState(null); // For modal
-  const [illnessModalOpen, setIllnessModalOpen] = useState(false); // Modal state
+  const [shifts, setShifts] = useState({});
+  const [lastSavedShifts, setLastSavedShifts] = useState({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [approvedLeaves, setApprovedLeaves] = useState([]);
+  const [illnesses, setIllnesses] = useState([]);
+  const [selectedIllness, setSelectedIllness] = useState(null);
+  const [illnessModalOpen, setIllnessModalOpen] = useState(false);
 
+  // P.4 ── View mode
+  const [viewMode, setViewMode] = useState('month'); // 'month' | 'week'
+  const [weekOffset, setWeekOffset] = useState(0);   // index into weeksOfMonth
+
+  // P.1+P.3 ── Copy week
+  const [copyWeekOpen, setCopyWeekOpen] = useState(false);
+  const [copySource, setCopySource] = useState(0);
+  const [copyDest, setCopyDest] = useState(1);
+  const [copyConflicts, setCopyConflicts] = useState([]);
+  const [copyWarningOpen, setCopyWarningOpen] = useState(false);
+  const [pendingCopyShifts, setPendingCopyShifts] = useState(null);
+
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const weeksOfMonth = useMemo(() => getWeeksOfMonth(year, month), [year, month]);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const allDays = useMemo(
+    () => Array.from({ length: daysInMonth }, (_, i) => i + 1),
+    [daysInMonth]
+  );
+  const visibleDays = viewMode === 'month' ? allDays : (weeksOfMonth[weekOffset] || allDays);
+
+  // ── Hooks ─────────────────────────────────────────────────────────────────
   const { getApprovedRequests } = useLeave();
   const { getIllnessesByDateRange } = useIllness();
-
-  const handleLogout = async () => {
-    await authService.logout();
-    navigate('/login');
-  };
-
   const { data, loading, error } = useShifts(user?.site_id, month, year);
   const { saveShifts } = useShiftUpdate(user?.site_id, month, year);
 
-  // Load approved leaves
+  // Auto-select current week when entering week mode
   useEffect(() => {
-    const loadLeaves = async () => {
-      setLoadingLeaves(true);
-      try {
-        const leaves = await getApprovedRequests();
-        setApprovedLeaves(leaves || []);
-      } catch (err) {
-        console.error('Failed to load approved leaves:', err);
-        setApprovedLeaves([]);
-      } finally {
-        setLoadingLeaves(false);
-      }
-    };
+    if (viewMode !== 'week') return;
+    const today = new Date();
+    if (today.getFullYear() === year && today.getMonth() + 1 === month) {
+      const idx = weeksOfMonth.findIndex((w) => w.includes(today.getDate()));
+      setWeekOffset(idx >= 0 ? idx : 0);
+    } else {
+      setWeekOffset(0);
+    }
+  }, [viewMode, year, month]); // weeksOfMonth excluded intentionally: recomputed on year/month change
 
-    loadLeaves();
+  useEffect(() => {
+    (async () => {
+      try {
+        setApprovedLeaves((await getApprovedRequests()) || []);
+      } catch {
+        setApprovedLeaves([]);
+      }
+    })();
   }, [getApprovedRequests]);
 
-  // Load illnesses for the month
   useEffect(() => {
-    const loadIllnesses = async () => {
-      setLoadingIllnesses(true);
+    if (!user?.site_id) return;
+    (async () => {
       try {
-        const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
         const lastDay = new Date(year, month, 0).getDate();
-        const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
-
-        const illnessData = await getIllnessesByDateRange(startDate, endDate);
-        setIllnesses(illnessData || []);
-      } catch (err) {
-        console.error('Failed to load illnesses:', err);
+        const result = await getIllnessesByDateRange(
+          `${year}-${pad(month)}-01`,
+          `${year}-${pad(month)}-${lastDay}`
+        );
+        setIllnesses(result || []);
+      } catch {
         setIllnesses([]);
-      } finally {
-        setLoadingIllnesses(false);
       }
-    };
-
-    if (user?.site_id) {
-      loadIllnesses();
-    }
+    })();
   }, [month, year, user?.site_id, getIllnessesByDateRange]);
 
-  // Helper: Check if a date is blocked by approved leave
-  const isDateBlocked = (employeeId, dateStr) => {
-    return approvedLeaves.some(leave => {
-      if (leave.user_id !== employeeId) return false;
-      const startDate = new Date(leave.start_date);
-      const endDate = new Date(leave.end_date);
-      const checkDate = new Date(dateStr);
-      return checkDate >= startDate && checkDate <= endDate;
-    });
-  };
-
-  // Helper: Get leave info for a date
-  const getLeaveInfo = (employeeId, dateStr) => {
-    return approvedLeaves.find(leave => {
-      if (leave.user_id !== employeeId) return false;
-      const startDate = new Date(leave.start_date);
-      const endDate = new Date(leave.end_date);
-      const checkDate = new Date(dateStr);
-      return checkDate >= startDate && checkDate <= endDate;
-    });
-  };
-
-  // Helper: Check if a date is blocked by illness (for day rendering)
-  const isDateIll = (employeeId, dateStr) => {
-    return illnesses.some(illness => {
-      if (illness.employee_id !== employeeId) return false;
-      const startDate = new Date(illness.start_date);
-      const endDate = new Date(illness.end_date);
-      const checkDate = new Date(dateStr);
-      return checkDate >= startDate && checkDate <= endDate;
-    });
-  };
-
-  // Helper: Get illness info for a date
-  const getIllnessInfo = (employeeId, dateStr) => {
-    return illnesses.find(illness => {
-      if (illness.employee_id !== employeeId) return false;
-      const startDate = new Date(illness.start_date);
-      const endDate = new Date(illness.end_date);
-      const checkDate = new Date(dateStr);
-      return checkDate >= startDate && checkDate <= endDate;
-    });
-  };
-
-  // Initialize shifts from mock data (deep copy to prevent shared references)
-  React.useEffect(() => {
+  useEffect(() => {
     if (data?.shifts_data) {
-      const deepCopy = structuredClone(data.shifts_data);
-      setShifts(deepCopy);
-      setLastSavedShifts(deepCopy);
+      const copy = structuredClone(data.shifts_data);
+      setShifts(copy);
+      setLastSavedShifts(copy);
     }
   }, [data]);
 
-  // Handle shift change
-  const handleShiftChange = (employeeId, date, newShift) => {
-    setShifts(prev => {
-      const updated = {
-        ...prev,
-        [employeeId]: {
-          ...prev[employeeId]
-        }
-      };
+  // ── Date helpers ──────────────────────────────────────────────────────────
+  const inRange = (dateStr, start, end) => {
+    const d = new Date(dateStr);
+    return d >= new Date(start) && d <= new Date(end);
+  };
 
-      // FIXED: If shift is "—" (empty), remove the key instead of setting it
+  const isDateBlocked = (empId, dateStr) =>
+    approvedLeaves.some((l) => l.user_id === empId && inRange(dateStr, l.start_date, l.end_date));
+
+  const getLeaveInfo = (empId, dateStr) =>
+    approvedLeaves.find((l) => l.user_id === empId && inRange(dateStr, l.start_date, l.end_date));
+
+  const isDateIll = (empId, dateStr) =>
+    illnesses.some((i) => i.employee_id === empId && inRange(dateStr, i.start_date, i.end_date));
+
+  const getIllnessInfo = (empId, dateStr) =>
+    illnesses.find((i) => i.employee_id === empId && inRange(dateStr, i.start_date, i.end_date));
+
+  // ── Shift helpers ─────────────────────────────────────────────────────────
+  const handleShiftChange = (empId, date, newShift) => {
+    setShifts((prev) => {
+      const updated = { ...prev, [empId]: { ...prev[empId] } };
       if (newShift === '—') {
-        delete updated[employeeId][date];
+        delete updated[empId][date];
       } else {
-        updated[employeeId][date] = newShift;
+        updated[empId][date] = newShift;
       }
-
       return updated;
     });
   };
 
-  // Check if shift was changed from last saved state
-  const isShiftChanged = (employeeId, date) => {
-    const saved = lastSavedShifts?.[employeeId]?.[date];
-    const current = shifts?.[employeeId]?.[date];
-    // FIXED: Compare values OR check if key was added/removed
-    // If either is undefined but not both, the key was added/removed = changed
-    if ((saved === undefined) !== (current === undefined)) {
-      return true;
-    }
-    return saved !== current;
+  const isShiftChanged = (empId, date) => {
+    const saved = lastSavedShifts?.[empId]?.[date];
+    const curr = shifts?.[empId]?.[date];
+    return (saved === undefined) !== (curr === undefined) || saved !== curr;
   };
 
-  // Get count of changed shifts (including removed shifts)
-  const changedCount = (() => {
-    let count = 0;
-    // Check all employees
-    Object.keys(shifts || {}).forEach(empId => {
-      const daysInMonth = new Date(year, month, 0).getDate();
-      // Check all days in month
+  const changedCount = useMemo(() => {
+    let n = 0;
+    Object.keys(shifts || {}).forEach((empId) => {
       for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        if (isShiftChanged(empId, dateStr)) {
-          count++;
-        }
+        const d = `${year}-${pad(month)}-${pad(day)}`;
+        const saved = lastSavedShifts?.[empId]?.[d];
+        const curr = shifts?.[empId]?.[d];
+        if ((saved === undefined) !== (curr === undefined) || saved !== curr) n++;
       }
     });
-    return count;
-  })();
+    return n;
+  }, [shifts, lastSavedShifts, year, month, daysInMonth]);
 
-  // Handle save
+  const getShiftCount = (empId) => Object.keys(shifts?.[empId] || {}).length;
+
+  // ── Save / Reset ──────────────────────────────────────────────────────────
   const handleSaveShifts = async () => {
     try {
       setIsSaving(true);
       setSaveError(null);
-
-      // Call real API
-      const result = await saveShifts(shifts);
-
-      // Update saved state so badges disappear
+      await saveShifts(shifts);
       setLastSavedShifts(structuredClone(shifts));
       alert(`✅ ${changedCount} turni salvati con successo!`);
-
-    } catch (error) {
-      console.error('❌ Save failed:', error);
-      setSaveError(error.message || 'Errore nel salvataggio');
-      alert(`❌ ${error.message || 'Errore nel salvataggio'}`);
+    } catch (err) {
+      setSaveError(err.message || 'Errore nel salvataggio');
+      alert(`❌ ${err.message || 'Errore nel salvataggio'}`);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Handle reset
   const handleResetShifts = () => {
     if (window.confirm('Sei sicuro? Perderai tutti i cambiamenti non salvati.')) {
-      // FIXED: Reset to lastSavedShifts (last save), not original data
       setShifts(structuredClone(lastSavedShifts));
     }
   };
 
-  // Get shift count for employee
-  const getShiftCount = (employeeId) => {
-    const empShifts = shifts?.[employeeId] || {};
-    return Object.keys(empShifts).length;
-  };
-
-  // Handle CSV export
+  // P.2 ── CSV export
   const handleExportCSV = () => {
-    const lines = [];
-
-    // Header row
-    lines.push('Dipendente,Data,Giorno,Turno');
-
-    // Data rows
-    (data.employees || []).forEach(emp => {
+    const lines = ['Dipendente,Data,Giorno,Turno'];
+    (data?.employees || []).forEach((emp) => {
       Object.entries(shifts?.[emp.id] || {}).forEach(([date, shift]) => {
-        const dateObj = new Date(date);
-        const dayName = dateObj.toLocaleString('it-IT', { weekday: 'long' });
-        const formattedDate = dateObj.toLocaleDateString('it-IT');
-        lines.push(`"${emp.name}","${formattedDate}","${dayName}","${shift}"`);
+        const d = new Date(date);
+        lines.push(`"${emp.name}","${d.toLocaleDateString('it-IT')}","${d.toLocaleString('it-IT', { weekday: 'long' })}","${shift}"`);
       });
     });
-
-    // Create blob and download
-    const csv = lines.join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-
-    // FIXED: Use selected month/year in filename
-    const monthName = new Date(year, month - 1).toLocaleString('it-IT', { month: 'long' });
-    const filename = `planning_${monthName}_${year}.csv`;
-
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
+    link.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' }));
+    const mName = new Date(year, month - 1).toLocaleString('it-IT', { month: 'long' });
+    link.download = `planning_${mName}_${year}.csv`;
     link.style.visibility = 'hidden';
-
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
-    alert('✅ CSV esportato con successo!');
   };
 
+  // P.2 ── PDF via browser print
+  const handleExportPDF = () => window.print();
+
+  // P.1+P.3 ── Copy week
+  const computeWeekCopy = (srcIdx, destIdx) => {
+    const srcWeek = weeksOfMonth[srcIdx] || [];
+    const destWeek = weeksOfMonth[destIdx] || [];
+    const destByDow = {};
+    destWeek.forEach((day) => { destByDow[new Date(year, month - 1, day).getDay()] = day; });
+
+    const newShifts = structuredClone(shifts);
+    const conflicts = [];
+
+    (data?.employees || []).forEach((emp) => {
+      srcWeek.forEach((srcDay) => {
+        const dow = new Date(year, month - 1, srcDay).getDay();
+        const destDay = destByDow[dow];
+        if (!destDay) return;
+
+        const srcDate = `${year}-${pad(month)}-${pad(srcDay)}`;
+        const destDate = `${year}-${pad(month)}-${pad(destDay)}`;
+        const srcShift = newShifts[emp.id]?.[srcDate];
+        const existingDest = newShifts[emp.id]?.[destDate];
+
+        if (existingDest && existingDest !== '—' && existingDest !== srcShift) {
+          conflicts.push({ empName: emp.name, date: destDate, from: existingDest, to: srcShift || '–' });
+        }
+
+        if (srcShift && srcShift !== '—') {
+          if (!newShifts[emp.id]) newShifts[emp.id] = {};
+          newShifts[emp.id][destDate] = srcShift;
+        } else {
+          delete newShifts[emp.id]?.[destDate];
+        }
+      });
+    });
+
+    return { newShifts, conflicts };
+  };
+
+  const handleOpenCopyWeek = () => {
+    const defaultSrc = viewMode === 'week' ? weekOffset : 0;
+    const defaultDest = Math.min(defaultSrc + 1, weeksOfMonth.length - 1);
+    setCopySource(defaultSrc);
+    setCopyDest(defaultDest !== defaultSrc ? defaultDest : (defaultSrc === 0 ? 1 : 0));
+    setCopyConflicts([]);
+    setPendingCopyShifts(null);
+    setCopyWeekOpen(true);
+  };
+
+  const handleConfirmCopyWeek = () => {
+    const { newShifts, conflicts } = computeWeekCopy(copySource, copyDest);
+    if (conflicts.length > 0) {
+      setCopyConflicts(conflicts);
+      setPendingCopyShifts(newShifts);
+      setCopyWarningOpen(true);
+    } else {
+      setShifts(newShifts);
+      setCopyWeekOpen(false);
+    }
+  };
+
+  const handleApplyCopyWithOverwrite = () => {
+    if (pendingCopyShifts) setShifts(pendingCopyShifts);
+    setCopyWarningOpen(false);
+    setCopyWeekOpen(false);
+    setCopyConflicts([]);
+    setPendingCopyShifts(null);
+  };
+
+  // ── Auth guard ────────────────────────────────────────────────────────────
   if (userLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
@@ -289,33 +329,40 @@ export const PlanningPage = () => {
       </Box>
     );
   }
-
   if (!user?.site_id) {
     return <Container sx={{ p: 4 }}><Typography color="error">Accesso negato: nessun negozio assegnato.</Typography></Container>;
   }
 
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-linen">
+
+      {/* P.2: Print styles */}
+      <GlobalStyles styles={`
+        @media print {
+          .no-print { display: none !important; }
+          @page { size: A4 landscape; margin: 10mm; }
+          .MuiAppBar-root { display: none !important; }
+          .MuiButton-root { display: none !important; }
+          .MuiCard-root { display: none !important; }
+          .MuiToggleButtonGroup-root { display: none !important; }
+          .MuiSelect-root { display: none !important; }
+          .MuiTableCell-root { padding: 2px 4px !important; font-size: 9px !important; border: 1px solid #ccc !important; }
+          .MuiPaper-root { box-shadow: none !important; }
+          .print-title { display: block !important; font-size: 14px; font-weight: bold; margin-bottom: 8px; }
+        }
+        .print-title { display: none; }
+      `} />
+
       {/* Navbar */}
-      <AppBar position="static" sx={{ backgroundColor: '#1E3A5F' }}>
+      <AppBar position="static" sx={{ backgroundColor: '#1E3A5F' }} className="no-print">
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h1 style={{ color: 'white', fontSize: '20px', fontWeight: 600 }}>📅 Planning Turni</h1>
           <Box sx={{ display: 'flex', gap: '12px' }}>
-            <Button
-              color="inherit"
-              onClick={() => navigate('/dashboard')}
-              sx={{ textTransform: 'none', fontSize: '14px' }}
-            >
-              ← Back to Dashboard
+            <Button color="inherit" onClick={() => navigate('/dashboard')} sx={{ textTransform: 'none', fontSize: '14px' }}>
+              ← Dashboard
             </Button>
-            <Button
-              color="inherit"
-              onClick={handleLogout}
-              sx={{ textTransform: 'none', fontSize: '14px' }}
-            >
+            <Button color="inherit" onClick={async () => { await authService.logout(); navigate('/login'); }} sx={{ textTransform: 'none', fontSize: '14px' }}>
               Logout
             </Button>
           </Box>
@@ -323,19 +370,21 @@ export const PlanningPage = () => {
       </AppBar>
 
       <Container maxWidth="lg" sx={{ paddingY: '32px' }}>
+
+        {/* Print-only title */}
+        <div className="print-title">
+          📅 Planning Turni — {new Date(year, month - 1).toLocaleString('it-IT', { month: 'long' })} {year}
+        </div>
+
         {/* Header */}
-        <Box sx={{ marginBottom: '32px' }}>
+        <Box sx={{ marginBottom: '24px' }} className="no-print">
           <Typography variant="h3" sx={{ fontFamily: 'Cormorant', fontWeight: 'bold', marginBottom: '16px' }}>
             Turni di {new Date(year, month - 1).toLocaleString('it-IT', { month: 'long' })} {year}
           </Typography>
 
-          {/* Month/Year Selector */}
-          <Box sx={{ display: 'flex', gap: '16px', marginBottom: '20px' }}>
-            <Select
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              sx={{ width: '150px' }}
-            >
+          {/* Month/Year selectors + P.4 view toggle */}
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', mb: 2 }}>
+            <Select value={month} onChange={(e) => setMonth(e.target.value)} sx={{ width: '150px' }}>
               {Array.from({ length: 12 }, (_, i) => (
                 <MenuItem key={i + 1} value={i + 1}>
                   {new Date(2026, i, 1).toLocaleString('it-IT', { month: 'long' })}
@@ -346,49 +395,85 @@ export const PlanningPage = () => {
               <MenuItem value={2026}>2026</MenuItem>
               <MenuItem value={2027}>2027</MenuItem>
             </Select>
+
+            {/* P.4: View mode toggle */}
+            <ToggleButtonGroup
+              value={viewMode}
+              exclusive
+              onChange={(_, v) => { if (v) setViewMode(v); }}
+              size="small"
+              sx={{ ml: 'auto' }}
+            >
+              <ToggleButton value="month" sx={{ px: 2, textTransform: 'none' }}>📅 Mese</ToggleButton>
+              <ToggleButton value="week" sx={{ px: 2, textTransform: 'none' }}>🗓 Settimana</ToggleButton>
+            </ToggleButtonGroup>
           </Box>
+
+          {/* P.4: Week navigation bar */}
+          {viewMode === 'week' && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={weekOffset === 0}
+                onClick={() => setWeekOffset((w) => w - 1)}
+                sx={{ textTransform: 'none', minWidth: 120 }}
+              >
+                ← Precedente
+              </Button>
+              <Typography sx={{ fontWeight: 600, minWidth: 240, textAlign: 'center' }}>
+                Settimana {weekOffset + 1}
+                <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                  ({formatWeekLabel(year, month, weeksOfMonth[weekOffset])})
+                </Typography>
+              </Typography>
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={weekOffset >= weeksOfMonth.length - 1}
+                onClick={() => setWeekOffset((w) => w + 1)}
+                sx={{ textTransform: 'none', minWidth: 120 }}
+              >
+                Successiva →
+              </Button>
+            </Box>
+          )}
         </Box>
 
         {/* KPI Cards */}
         {data && (
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ marginBottom: '20px' }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }} className="no-print">
             <Card sx={{ flex: 1, borderLeft: '4px solid #1E3A5F' }}>
               <CardContent>
                 <Typography color="textSecondary">Dipendenti</Typography>
-                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                  {data.employees?.length || 0}
-                </Typography>
+                <Typography variant="h5" fontWeight="bold">{data.employees?.length || 0}</Typography>
               </CardContent>
             </Card>
-
             <Card sx={{ flex: 1, borderLeft: '4px solid #B45309' }}>
               <CardContent>
                 <Typography color="textSecondary">Turni Assegnati</Typography>
-                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                  {(data.employees || []).reduce((sum, emp) => sum + getShiftCount(emp.id), 0)}/{(data.employees?.length || 0) * daysInMonth}
+                <Typography variant="h5" fontWeight="bold">
+                  {(data.employees || []).reduce((s, emp) => s + getShiftCount(emp.id), 0)}/{(data.employees?.length || 0) * daysInMonth}
                 </Typography>
               </CardContent>
             </Card>
-
             <Card sx={{ flex: 1, borderLeft: '4px solid #7C3AED' }}>
               <CardContent>
-                <Typography color="textSecondary">Giorni del Mese</Typography>
-                <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                  {daysInMonth}
-                </Typography>
+                <Typography color="textSecondary">{viewMode === 'week' ? 'Giorni visibili' : 'Giorni del mese'}</Typography>
+                <Typography variant="h5" fontWeight="bold">{visibleDays.length}</Typography>
               </CardContent>
             </Card>
           </Stack>
         )}
 
-        {/* Save/Reset/Export Buttons */}
-        <Box sx={{ marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+        {/* Action buttons */}
+        <Box sx={{ mb: 2, display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }} className="no-print">
           {changedCount > 0 && (
             <>
               <Button
                 variant="contained"
                 disabled={isSaving}
-                sx={{ backgroundColor: '#2D7049', '&:hover': { backgroundColor: '#1e5034' } }}
+                sx={{ backgroundColor: '#2D7049', '&:hover': { backgroundColor: '#1e5034' }, textTransform: 'none' }}
                 onClick={handleSaveShifts}
               >
                 {isSaving ? '⏳ Salvataggio...' : `💾 Salva ${changedCount} Turni`}
@@ -396,75 +481,91 @@ export const PlanningPage = () => {
               <Button
                 variant="outlined"
                 disabled={isSaving}
-                sx={{ borderColor: '#C0392B', color: '#C0392B' }}
+                sx={{ borderColor: '#C0392B', color: '#C0392B', textTransform: 'none' }}
                 onClick={handleResetShifts}
               >
                 🔄 Ripristina
               </Button>
             </>
           )}
-          <Button
-            variant="outlined"
-            disabled={isSaving}
-            sx={{ borderColor: '#1E3A5F', color: '#1E3A5F', marginLeft: 'auto' }}
-            onClick={handleExportCSV}
-          >
-            📥 Esporta CSV
-          </Button>
+
+          <Box sx={{ ml: changedCount > 0 ? 0 : 'auto', display: 'flex', gap: 1 }}>
+            {/* P.1: Copy week */}
+            <Tooltip title={weeksOfMonth.length < 2 ? 'Il mese ha una sola settimana' : ''}>
+              <span>
+                <Button
+                  variant="outlined"
+                  disabled={isSaving || weeksOfMonth.length < 2}
+                  sx={{ borderColor: '#7C3AED', color: '#7C3AED', textTransform: 'none' }}
+                  onClick={handleOpenCopyWeek}
+                >
+                  📋 Copia Settimana
+                </Button>
+              </span>
+            </Tooltip>
+
+            {/* P.2: PDF */}
+            <Button
+              variant="outlined"
+              disabled={isSaving}
+              sx={{ borderColor: '#1E3A5F', color: '#1E3A5F', textTransform: 'none' }}
+              onClick={handleExportPDF}
+            >
+              🖨️ PDF
+            </Button>
+
+            <Button
+              variant="outlined"
+              disabled={isSaving}
+              sx={{ borderColor: '#1E3A5F', color: '#1E3A5F', textTransform: 'none' }}
+              onClick={handleExportCSV}
+            >
+              📥 CSV
+            </Button>
+          </Box>
         </Box>
 
-        {/* Shifts Table */}
+        {/* Error banner */}
         {error && (
           <Box sx={{ p: 3, backgroundColor: '#FEE2E2', borderRadius: 2, mb: 2 }}>
             <Typography color="error" fontWeight="bold">Errore nel caricamento turni</Typography>
             <Typography color="error" variant="body2">{error.message || String(error)}</Typography>
           </Box>
         )}
+
+        {/* Loading */}
         {loading && !data && (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
             <CircularProgress />
           </Box>
         )}
+
+        {/* Shifts table */}
         {data ? (
           <Paper sx={{ overflow: 'hidden' }}>
             <Box sx={{ overflowX: 'auto' }}>
               <Table size="small" sx={{ borderCollapse: 'separate', borderSpacing: 0 }}>
                 <TableHead>
                   <TableRow sx={{ backgroundColor: '#1E3A5F' }}>
-                    <TableCell
-                      sx={{
-                        color: '#FFFFFF',
-                        fontWeight: 'bold',
-                        whiteSpace: 'nowrap',
-                        width: '210px',
-                        minWidth: '210px',
-                        position: 'sticky',
-                        left: 0,
-                        backgroundColor: '#1E3A5F',
-                        zIndex: 3,
-                        boxShadow: '4px 0 6px -2px rgba(0,0,0,0.18)'
-                      }}
-                    >
+                    <TableCell sx={{
+                      color: '#FFF', fontWeight: 'bold', whiteSpace: 'nowrap',
+                      width: '210px', minWidth: '210px',
+                      position: 'sticky', left: 0,
+                      backgroundColor: '#1E3A5F', zIndex: 3,
+                      boxShadow: '4px 0 6px -2px rgba(0,0,0,0.18)',
+                    }}>
                       Dipendente
                     </TableCell>
-                    {days.map(day => {
+                    {visibleDays.map((day) => {
                       const dateObj = new Date(year, month - 1, day);
-                      const dayName = dateObj.toLocaleString('it-IT', { weekday: 'short' });
                       const isWeekend = [0, 6].includes(dateObj.getDay());
                       return (
-                        <TableCell
-                          key={day}
-                          align="center"
-                          sx={{
-                            color: isWeekend ? '#A5C0DC' : '#FFFFFF',
-                            fontWeight: 'bold',
-                            minWidth: '58px',
-                            fontSize: '11px',
-                            padding: '6px 2px',
-                            whiteSpace: 'nowrap'
-                          }}
-                        >
-                          {day} {dayName}
+                        <TableCell key={day} align="center" sx={{
+                          color: isWeekend ? '#A5C0DC' : '#FFF',
+                          fontWeight: 'bold', minWidth: '58px', fontSize: '11px',
+                          padding: '6px 2px', whiteSpace: 'nowrap',
+                        }}>
+                          {day} {dateObj.toLocaleString('it-IT', { weekday: 'short' })}
                         </TableCell>
                       );
                     })}
@@ -473,43 +574,30 @@ export const PlanningPage = () => {
                 <TableBody>
                   {(data.employees || []).map((emp, rowIdx) => {
                     const shiftCount = getShiftCount(emp.id);
-                    const isComplete = shiftCount === daysInMonth;
                     const rowBg = rowIdx % 2 === 0 ? '#FFFFFF' : '#FAFAF8';
                     return (
                       <TableRow key={emp.id} sx={{ '&:hover td': { backgroundColor: '#EEF2F7' } }}>
-                        <TableCell
-                          sx={{
-                            position: 'sticky',
-                            left: 0,
-                            backgroundColor: rowBg,
-                            zIndex: 2,
-                            boxShadow: '4px 0 6px -2px rgba(0,0,0,0.18)',
-                            whiteSpace: 'nowrap',
-                            padding: '8px 12px'
-                          }}
-                        >
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }}>
-                            <span style={{ fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap' }}>
-                              {emp.name}
-                            </span>
-                            <Box
-                              sx={{
-                                fontSize: '11px',
-                                backgroundColor: isComplete ? '#D4EDDA' : '#F5F2ED',
-                                color: isComplete ? '#155724' : '#6B625A',
-                                padding: '2px 6px',
-                                borderRadius: '4px',
-                                fontWeight: 'bold',
-                                border: isComplete ? '1px solid #28A745' : 'none',
-                                flexShrink: 0
-                              }}
-                            >
+                        <TableCell sx={{
+                          position: 'sticky', left: 0, backgroundColor: rowBg, zIndex: 2,
+                          boxShadow: '4px 0 6px -2px rgba(0,0,0,0.18)',
+                          whiteSpace: 'nowrap', padding: '8px 12px',
+                        }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <span style={{ fontWeight: 600, fontSize: '13px' }}>{emp.name}</span>
+                            <Box sx={{
+                              fontSize: '11px',
+                              backgroundColor: shiftCount === daysInMonth ? '#D4EDDA' : '#F5F2ED',
+                              color: shiftCount === daysInMonth ? '#155724' : '#6B625A',
+                              padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', flexShrink: 0,
+                              border: shiftCount === daysInMonth ? '1px solid #28A745' : 'none',
+                            }}>
                               {shiftCount}/{daysInMonth}
                             </Box>
                           </Box>
                         </TableCell>
-                        {days.map(day => {
-                          const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+                        {visibleDays.map((day) => {
+                          const dateStr = `${year}-${pad(month)}-${pad(day)}`;
                           const shift = shifts?.[emp.id]?.[dateStr] || '—';
                           const color = SHIFT_COLORS[shift];
                           const isChanged = isShiftChanged(emp.id, dateStr);
@@ -519,104 +607,69 @@ export const PlanningPage = () => {
                           const illnessInfo = ill ? getIllnessInfo(emp.id, dateStr) : null;
 
                           return (
-                            <TableCell
-                              key={`${emp.id}-${day}`}
-                              align="center"
-                              sx={{ padding: '4px 2px', position: 'relative', backgroundColor: ill ? 'rgba(220, 38, 38, 0.1)' : (blocked ? '#FEE2E2' : rowBg) }}
-                            >
+                            <TableCell key={`${emp.id}-${day}`} align="center" sx={{
+                              padding: '4px 2px', position: 'relative',
+                              backgroundColor: ill ? 'rgba(220,38,38,0.1)' : (blocked ? '#FEE2E2' : rowBg),
+                            }}>
+                              {/* Red dot = unsaved change */}
                               {isChanged && (
-                                <Box
-                                  sx={{
-                                    position: 'absolute',
-                                    top: '2px',
-                                    right: '2px',
-                                    width: '7px',
-                                    height: '7px',
-                                    backgroundColor: '#C0392B',
-                                    borderRadius: '50%',
-                                    zIndex: 10
-                                  }}
-                                />
+                                <Box sx={{
+                                  position: 'absolute', top: '2px', right: '2px',
+                                  width: '7px', height: '7px',
+                                  backgroundColor: '#C0392B', borderRadius: '50%', zIndex: 10,
+                                }} />
                               )}
+                              {/* Green dot = leave */}
                               {blocked && (
-                                <Box
-                                  sx={{
-                                    position: 'absolute',
-                                    top: '2px',
-                                    left: '2px',
-                                    width: '7px',
-                                    height: '7px',
-                                    backgroundColor: '#2D7049',
-                                    borderRadius: '50%',
-                                    zIndex: 10
-                                  }}
-                                  title={leaveInfo ? `${leaveInfo.leave_type}` : 'Ferie'}
-                                />
+                                <Box sx={{
+                                  position: 'absolute', top: '2px', left: '2px',
+                                  width: '7px', height: '7px',
+                                  backgroundColor: '#2D7049', borderRadius: '50%', zIndex: 10,
+                                }} title={leaveInfo?.leave_type || 'Ferie'} />
                               )}
+                              {/* Illness overlay */}
                               {ill && (
-                                <Box
-                                  onClick={() => {
-                                    setSelectedIllness(illnessInfo);
-                                    setIllnessModalOpen(true);
-                                  }}
+                                <Box onClick={() => { setSelectedIllness(illnessInfo); setIllnessModalOpen(true); }}
                                   sx={{
-                                    position: 'absolute',
-                                    top: 0,
-                                    left: 0,
-                                    right: 0,
-                                    bottom: 0,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
-                                    backgroundColor: 'transparent',
-                                    zIndex: 5,
-                                  }}
-                                >
-                                  <Box
-                                    sx={{
-                                      fontSize: '1.2rem',
-                                      fontWeight: 900,
-                                      color: '#DC2626',
-                                      opacity: 0.6,
-                                      transform: 'scaleY(0.8)',
-                                    }}
-                                    title="Malattia comunicata"
-                                  >
+                                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    cursor: 'pointer', zIndex: 5,
+                                  }}>
+                                  <Box sx={{ fontSize: '1.2rem', fontWeight: 900, color: '#DC2626', opacity: 0.6, transform: 'scaleY(0.8)' }}>
                                     ▲ M
                                   </Box>
                                 </Box>
                               )}
-                              <Tooltip title={ill ? 'Malattia comunicata' : (blocked ? `Bloccato da ferie: ${leaveInfo?.leave_type || 'N/A'}` : '')}>
+
+                              <Tooltip title={ill ? 'Malattia comunicata' : (blocked ? `Bloccato: ${leaveInfo?.leave_type || 'Ferie'}` : '')}>
                                 <div>
                                   <Select
                                     value={shift}
                                     disabled={isSaving || blocked || ill}
                                     onChange={(e) => handleShiftChange(emp.id, dateStr, e.target.value)}
-                                    renderValue={(val) => (val && val !== '—') ? val.toUpperCase() : (blocked || ill ? '🔒' : '—')}
+                                    renderValue={(val) =>
+                                      (val && val !== '—') ? val.toUpperCase() : (blocked || ill ? '🔒' : '—')
+                                    }
                                     sx={{
-                                      width: '52px',
-                                      height: '36px',
+                                      width: '52px', height: '36px',
                                       backgroundColor: blocked ? '#DC2626' : (color?.bg || '#E5E7EB'),
-                                      color: 'white',
-                                      fontWeight: 'bold',
-                                      fontSize: '12px',
+                                      color: 'white', fontWeight: 'bold', fontSize: '12px',
                                       opacity: blocked ? 0.7 : 1,
                                       '& .MuiOutlinedInput-notchedOutline': {
                                         borderColor: isChanged ? '#C0392B' : 'transparent',
-                                        borderWidth: isChanged ? '2px' : '0px'
+                                        borderWidth: isChanged ? '2px' : '0px',
                                       },
                                       '&:hover .MuiOutlinedInput-notchedOutline': {
-                                        borderColor: isChanged ? '#C0392B' : 'transparent'
+                                        borderColor: isChanged ? '#C0392B' : 'transparent',
                                       },
                                       '& .MuiSvgIcon-root': { display: 'none' },
-                                      '& .MuiSelect-select': { padding: '0 !important', display: 'flex', alignItems: 'center', justifyContent: 'center' }
+                                      '& .MuiSelect-select': { padding: '0 !important', display: 'flex', alignItems: 'center', justifyContent: 'center' },
                                     }}
                                   >
-                                    <MenuItem value="m" sx={{ backgroundColor: SHIFT_COLORS['m'].bg, color: 'white' }}>m - Mattino</MenuItem>
-                                    <MenuItem value="p" sx={{ backgroundColor: SHIFT_COLORS['p'].bg, color: 'white' }}>p - Pomeriggio</MenuItem>
-                                    <MenuItem value="s" sx={{ backgroundColor: SHIFT_COLORS['s'].bg, color: 'white' }}>s - Sera</MenuItem>
-                                    <MenuItem value="R" sx={{ backgroundColor: SHIFT_COLORS['R'].bg, color: 'white' }}>R - Riposo</MenuItem>
+                                    <MenuItem value="m" sx={{ backgroundColor: SHIFT_COLORS.m.bg, color: 'white' }}>m - Mattino</MenuItem>
+                                    <MenuItem value="p" sx={{ backgroundColor: SHIFT_COLORS.p.bg, color: 'white' }}>p - Pomeriggio</MenuItem>
+                                    <MenuItem value="s" sx={{ backgroundColor: SHIFT_COLORS.s.bg, color: 'white' }}>s - Sera</MenuItem>
+                                    <MenuItem value="R" sx={{ backgroundColor: SHIFT_COLORS.R.bg, color: 'white' }}>R - Riposo</MenuItem>
                                     <MenuItem value="—">—</MenuItem>
                                   </Select>
                                 </div>
@@ -632,45 +685,34 @@ export const PlanningPage = () => {
             </Box>
           </Paper>
         ) : (
-          <Typography>Caricamento...</Typography>
+          !loading && <Typography>Caricamento...</Typography>
         )}
 
         {/* Legend */}
-        <Card sx={{ marginTop: '30px', backgroundColor: '#F5F2ED' }}>
+        <Card sx={{ mt: 4, backgroundColor: '#F5F2ED' }} className="no-print">
           <CardContent>
             <Stack spacing={2}>
               <div>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', marginBottom: '12px' }}>
-                  💡 Legenda Turni
-                </Typography>
-                <Box sx={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                <Typography variant="h6" fontWeight="bold" sx={{ mb: 1.5 }}>💡 Legenda Turni</Typography>
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   {Object.entries(SHIFT_COLORS).map(([key, { bg, label }]) => (
-                    <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Box sx={{ backgroundColor: bg, color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>
-                        {key}
-                      </Box>
+                    <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={{ backgroundColor: bg, color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>{key}</Box>
                       <Typography variant="body2">{label}</Typography>
                     </Box>
                   ))}
                 </Box>
               </div>
-
               <div>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', marginBottom: '12px' }}>
-                  🔒 Blocchi Ferie Approvate
-                </Typography>
-                <Box sx={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Box sx={{ backgroundColor: '#DC2626', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>
-                      🔒
-                    </Box>
-                    <Typography variant="body2">Giorno bloccato da ferie approvate</Typography>
+                <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>🔒 Blocchi Ferie / Malattia</Typography>
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ backgroundColor: '#DC2626', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>🔒</Box>
+                    <Typography variant="body2">Ferie approvate — turno bloccato</Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Box sx={{ backgroundColor: '#FEE2E2', border: '1px solid #DC2626', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', color: '#DC2626' }}>
-                      ⚠️
-                    </Box>
-                    <Typography variant="body2">Sfondo rosso = giorno bloccato</Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ backgroundColor: 'rgba(220,38,38,0.15)', border: '1px solid #DC2626', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', color: '#DC2626' }}>▲ M</Box>
+                    <Typography variant="body2">Malattia comunicata — clicca per dettagli</Typography>
                   </Box>
                 </Box>
               </div>
@@ -678,7 +720,83 @@ export const PlanningPage = () => {
           </CardContent>
         </Card>
 
-        {/* Illness Modal */}
+        {/* P.1: Copy Week dialog */}
+        <Dialog open={copyWeekOpen} onClose={() => setCopyWeekOpen(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>📋 Copia Settimana</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+              Copia i turni da una settimana a un'altra. I giorni vengono abbinati per giorno della settimana (Lunedì→Lunedì, ecc.). I giorni non presenti nella settimana destinazione vengono ignorati.
+            </Typography>
+            <Stack spacing={2.5}>
+              <Box>
+                <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>Settimana sorgente</Typography>
+                <Select fullWidth value={copySource} onChange={(e) => setCopySource(e.target.value)} size="small">
+                  {weeksOfMonth.map((week, idx) => (
+                    <MenuItem key={idx} value={idx}>
+                      Settimana {idx + 1} — {formatWeekLabel(year, month, week)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </Box>
+              <Box>
+                <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>Settimana destinazione</Typography>
+                <Select fullWidth value={copyDest} onChange={(e) => setCopyDest(e.target.value)} size="small">
+                  {weeksOfMonth.map((week, idx) => (
+                    <MenuItem key={idx} value={idx} disabled={idx === copySource}>
+                      Settimana {idx + 1} — {formatWeekLabel(year, month, week)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </Box>
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setCopyWeekOpen(false)} sx={{ textTransform: 'none' }}>Annulla</Button>
+            <Button
+              variant="contained"
+              onClick={handleConfirmCopyWeek}
+              disabled={copySource === copyDest}
+              sx={{ backgroundColor: '#7C3AED', '&:hover': { backgroundColor: '#5b21b6' }, textTransform: 'none' }}
+            >
+              Copia Turni
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* P.3: Conflict overwrite warning */}
+        <Dialog open={copyWarningOpen} onClose={() => setCopyWarningOpen(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>⚠️ Conflitti di Sovrascrittura</DialogTitle>
+          <DialogContent>
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              La settimana destinazione ha già <strong>{copyConflicts.length}</strong> turni assegnati che verranno sostituiti.
+            </Alert>
+            <Box sx={{ maxHeight: 200, overflowY: 'auto' }}>
+              {copyConflicts.slice(0, 20).map((c, i) => (
+                <Typography key={i} variant="body2" sx={{ py: 0.25 }}>
+                  <strong>{c.empName}</strong> · {new Date(c.date).toLocaleDateString('it-IT')} · {c.from} → {c.to}
+                </Typography>
+              ))}
+              {copyConflicts.length > 20 && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  ... e altri {copyConflicts.length - 20} conflitti
+                </Typography>
+              )}
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setCopyWarningOpen(false)} sx={{ textTransform: 'none' }}>Annulla</Button>
+            <Button
+              variant="contained"
+              color="warning"
+              onClick={handleApplyCopyWithOverwrite}
+              sx={{ textTransform: 'none' }}
+            >
+              Sovrascrivi {copyConflicts.length} Turni
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Illness detail modal */}
         <ManagerIllnessModal
           open={illnessModalOpen}
           onClose={() => setIllnessModalOpen(false)}
