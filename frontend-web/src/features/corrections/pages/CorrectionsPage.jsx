@@ -31,6 +31,7 @@ import { useNavigate } from 'react-router-dom';
 import { usePresences } from '../../dashboard/hooks/usePresences';
 import { useCheckinCorrection } from '../hooks/useCheckinCorrection';
 import authService from '../../../services/authService';
+import { pad } from '../../../utils/dateUtils';
 
 const CORRECTION_WINDOW_DAYS = 7;
 
@@ -42,7 +43,6 @@ const isEditable = (timestamp) => {
 const toDatetimeLocal = (isoString) => {
   if (!isoString) return '';
   const d = new Date(isoString);
-  const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 

@@ -36,6 +36,7 @@ import { useLeave } from '../../leave/hooks/useLeave';
 import { useIllness } from '../../illness/hooks/useIllness';
 import { ManagerIllnessModal } from '../../illness/components/ManagerIllnessModal';
 import authService from '../../../services/authService';
+import { pad, inDateRange } from '../../../utils/dateUtils';
 
 const SHIFT_COLORS = {
   m: { bg: '#1E3A5F', label: 'Mattino' },
@@ -43,8 +44,6 @@ const SHIFT_COLORS = {
   s: { bg: '#7C3AED', label: 'Sera' },
   R: { bg: '#6B7280', label: 'Riposo' },
 };
-
-const pad = (n) => String(n).padStart(2, '0');
 
 // Returns array-of-arrays: each inner array = day numbers for a Mon-anchored week
 const getWeeksOfMonth = (year, month) => {
@@ -80,6 +79,7 @@ export const PlanningPage = () => {
   const [lastSavedShifts, setLastSavedShifts] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [dataLoadError, setDataLoadError] = useState(null);
   const [approvedLeaves, setApprovedLeaves] = useState([]);
   const [illnesses, setIllnesses] = useState([]);
   const [selectedIllness, setSelectedIllness] = useState(null);
@@ -104,7 +104,10 @@ export const PlanningPage = () => {
     () => Array.from({ length: daysInMonth }, (_, i) => i + 1),
     [daysInMonth]
   );
-  const visibleDays = viewMode === 'month' ? allDays : (weeksOfMonth[weekOffset] || allDays);
+  // Clamp weekOffset to valid range so a stale offset after month change
+  // never produces a flash of allDays before the reset effect runs.
+  const safeWeekOffset = Math.min(weekOffset, Math.max(0, weeksOfMonth.length - 1));
+  const visibleDays = viewMode === 'month' ? allDays : (weeksOfMonth[safeWeekOffset] || allDays);
 
   // ── Hooks ─────────────────────────────────────────────────────────────────
   const { getApprovedRequests } = useLeave();
@@ -127,9 +130,12 @@ export const PlanningPage = () => {
   useEffect(() => {
     (async () => {
       try {
+        setDataLoadError(null);
         setApprovedLeaves((await getApprovedRequests()) || []);
-      } catch {
+      } catch (err) {
+        console.error('[PlanningPage] Failed to load approved leaves:', err);
         setApprovedLeaves([]);
+        setDataLoadError('Impossibile caricare le ferie approvate. I blocchi ferie potrebbero non essere visibili.');
       }
     })();
   }, [getApprovedRequests]);
@@ -144,8 +150,10 @@ export const PlanningPage = () => {
           `${year}-${pad(month)}-${lastDay}`
         );
         setIllnesses(result || []);
-      } catch {
+      } catch (err) {
+        console.error('[PlanningPage] Failed to load illnesses:', err);
         setIllnesses([]);
+        setDataLoadError('Impossibile caricare i dati malattia. Le celle potrebbero non mostrare i blocchi corretti.');
       }
     })();
   }, [month, year, user?.site_id, getIllnessesByDateRange]);
@@ -159,22 +167,17 @@ export const PlanningPage = () => {
   }, [data]);
 
   // ── Date helpers ──────────────────────────────────────────────────────────
-  const inRange = (dateStr, start, end) => {
-    const d = new Date(dateStr);
-    return d >= new Date(start) && d <= new Date(end);
-  };
-
   const isDateBlocked = (empId, dateStr) =>
-    approvedLeaves.some((l) => l.user_id === empId && inRange(dateStr, l.start_date, l.end_date));
+    approvedLeaves.some((l) => l.user_id === empId && inDateRange(dateStr, l.start_date, l.end_date));
 
   const getLeaveInfo = (empId, dateStr) =>
-    approvedLeaves.find((l) => l.user_id === empId && inRange(dateStr, l.start_date, l.end_date));
+    approvedLeaves.find((l) => l.user_id === empId && inDateRange(dateStr, l.start_date, l.end_date));
 
   const isDateIll = (empId, dateStr) =>
-    illnesses.some((i) => i.employee_id === empId && inRange(dateStr, i.start_date, i.end_date));
+    illnesses.some((i) => i.employee_id === empId && inDateRange(dateStr, i.start_date, i.end_date));
 
   const getIllnessInfo = (empId, dateStr) =>
-    illnesses.find((i) => i.employee_id === empId && inRange(dateStr, i.start_date, i.end_date));
+    illnesses.find((i) => i.employee_id === empId && inDateRange(dateStr, i.start_date, i.end_date));
 
   // ── Shift helpers ─────────────────────────────────────────────────────────
   const handleShiftChange = (empId, date, newShift) => {
@@ -249,6 +252,7 @@ export const PlanningPage = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
   };
 
   // P.2 ── PDF via browser print
@@ -362,7 +366,10 @@ export const PlanningPage = () => {
             <Button color="inherit" onClick={() => navigate('/dashboard')} sx={{ textTransform: 'none', fontSize: '14px' }}>
               ← Dashboard
             </Button>
-            <Button color="inherit" onClick={async () => { await authService.logout(); navigate('/login'); }} sx={{ textTransform: 'none', fontSize: '14px' }}>
+            <Button color="inherit" onClick={async () => {
+              try { await authService.logout(); } catch (e) { console.error('Logout error:', e); }
+              navigate('/login');
+            }} sx={{ textTransform: 'none', fontSize: '14px' }}>
               Logout
             </Button>
           </Box>
@@ -415,23 +422,23 @@ export const PlanningPage = () => {
               <Button
                 variant="outlined"
                 size="small"
-                disabled={weekOffset === 0}
-                onClick={() => setWeekOffset((w) => w - 1)}
+                disabled={safeWeekOffset === 0}
+                onClick={() => setWeekOffset((w) => Math.max(0, w - 1))}
                 sx={{ textTransform: 'none', minWidth: 120 }}
               >
                 ← Precedente
               </Button>
               <Typography sx={{ fontWeight: 600, minWidth: 240, textAlign: 'center' }}>
-                Settimana {weekOffset + 1}
+                Settimana {safeWeekOffset + 1}
                 <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                  ({formatWeekLabel(year, month, weeksOfMonth[weekOffset])})
+                  ({formatWeekLabel(year, month, weeksOfMonth[safeWeekOffset])})
                 </Typography>
               </Typography>
               <Button
                 variant="outlined"
                 size="small"
-                disabled={weekOffset >= weeksOfMonth.length - 1}
-                onClick={() => setWeekOffset((w) => w + 1)}
+                disabled={safeWeekOffset >= weeksOfMonth.length - 1}
+                onClick={() => setWeekOffset((w) => Math.min(weeksOfMonth.length - 1, w + 1))}
                 sx={{ textTransform: 'none', minWidth: 120 }}
               >
                 Successiva →
@@ -525,12 +532,21 @@ export const PlanningPage = () => {
           </Box>
         </Box>
 
-        {/* Error banner */}
+        {/* Error banners */}
         {error && (
-          <Box sx={{ p: 3, backgroundColor: '#FEE2E2', borderRadius: 2, mb: 2 }}>
-            <Typography color="error" fontWeight="bold">Errore nel caricamento turni</Typography>
-            <Typography color="error" variant="body2">{error.message || String(error)}</Typography>
-          </Box>
+          <Alert severity="error" sx={{ mb: 2 }}>
+            <strong>Errore nel caricamento turni:</strong> {error.message || String(error)}
+          </Alert>
+        )}
+        {dataLoadError && (
+          <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setDataLoadError(null)}>
+            {dataLoadError}
+          </Alert>
+        )}
+        {saveError && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setSaveError(null)}>
+            <strong>Errore nel salvataggio:</strong> {saveError}
+          </Alert>
         )}
 
         {/* Loading */}
