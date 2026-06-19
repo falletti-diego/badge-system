@@ -176,6 +176,47 @@
 
 ---
 
+## 3.5 BACKLOG — Da Completare (post-sessione 43)
+
+### 🔴 Alta Priorità (pre-lancio primo cliente reale)
+
+#### TestFlight Build 17 — Geofencing su mobile (task 10.9)
+- Il backend geofencing è live in produzione, ma la build mobile con `expo-location` non è ancora su TestFlight.
+- **Azione:** `cd frontend-mobile && eas build --platform ios --profile production`, poi submit su TestFlight.
+- **Effort:** ~30 min di build (EAS cloud), poi review Apple ~24h.
+- **Blocco se non fatto:** I dipendenti non possono testare il geofencing sull'app iPhone reale.
+
+#### GDPR Blockers S.24 / S.25 / S.26 — Verifica stato in produzione
+- Il session log Session 33 indica che S.24 (GPS Privacy Policy), S.25 (DPA template), S.26 (GPS Consent dialog) sono stati implementati (commit `b6684ac`, `e0b24e3`, `f34f1fd`).
+- Le checkbox in TASKS.md sono ancora `[ ]` — verificare se le migration 011/012 e i relativi endpoint sono in produzione su RDS.
+- **Azione:** `GET /api/consent/admin/employee-consents` da `api.dataxiom.it` — se risponde 200, è live. Se 404, applicare migration e deploy.
+- **Effort:** 30 min verifica + eventuale deploy.
+- **Blocco se non fatto:** Commercializzazione in Italia esposta a sanzione GDPR fino a €20M.
+
+---
+
+### 🟡 Media Priorità (dopo primo cliente pilota)
+
+#### ONB.2 — Saldi ferie: `INT → NUMERIC(6,2)` per mezze giornate / Permessi in ore
+- **Problema:** Oggi i saldi sono giorni interi. Niente mezza giornata di ferie né Permessi/ROL in ore.
+- **Cambi richiesti (vedi TASKS.md §ONB.2 per dettaglio completo):**
+  1. Nuova migration: `leave_saldi.total_days/used_days` → `NUMERIC(6,2)`, droppare e ricreare `remaining_days` generated column
+  2. `leave_requests.num_days` → `NUMERIC(6,2)`
+  3. Zod: ammettere decimali (non solo `.int()`)
+  4. Frontend: toggle mezza giornata / input ore in `EmployeeLeaveRequest.jsx`
+- **Effort:** 3-5h.
+- **Decisione rinviata a:** dopo pilota (i giorni interi coprono il caso d'uso del primo cliente).
+
+#### S.32.10 — GPS Spoofing mitigations (Phase 2)
+- **Problema:** Un dipendente può falsificare le coordinate GPS con app di mock location.
+- **Cambi:**
+  - Mobile: invia `isFromMockProvider` (Android) + `accuracy` GPS nel payload POST /checkins
+  - Backend: velocity check tra check-in consecutivi (>100 km in 10 min → flag `suspicious` in audit log, non blocco)
+- **Effort:** 3-4h.
+- **Non bloccante MVP:** Il geofencing reale scoraggia già la maggior parte dei casi.
+
+---
+
 ## 4. DECISION POINTS APERTI
 
 ### ✅ Multitenancy Strategy
