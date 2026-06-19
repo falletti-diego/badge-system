@@ -28,30 +28,40 @@ async function logAudit(client, {
   // user_id is UUID referencing employees — only store when caller passes a valid UUID
   const auditUserId = UUID_REGEX.test(userId) ? userId : null;
 
-  try {
+  // PoolClient objects (from pool.connect() / withTransaction) have a release() method;
+  // the Pool object itself does not. SAVEPOINT is only valid inside a transaction block,
+  // so we use it only when we have a real transaction client.
+  const inTransaction = typeof client.release === 'function';
+
+  if (inTransaction) {
     // SAVEPOINT ensures an audit failure cannot abort the calling business transaction.
     // Without SAVEPOINT, a failed INSERT would put the pg client in aborted state,
     // causing the outer COMMIT to silently become a ROLLBACK (data loss, no error).
-    await client.query('SAVEPOINT audit_log_sp');
-    await client.query(
-      `INSERT INTO audit_log (action, entity, entity_id, old_value, new_value, user_id, timestamp)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-      [
-        action,
-        entity,
-        entityId,
-        oldValue ? JSON.stringify(oldValue) : null,
-        JSON.stringify(newValue),
-        auditUserId,
-      ]
-    );
-    await client.query('RELEASE SAVEPOINT audit_log_sp');
-    logger.debug({ action: 'audit_log_created', auditAction: action, entityId, userId: auditUserId });
-  } catch (err) {
-    // Best-effort: audit failure must not abort the main business transaction.
-    // Roll back only the audit savepoint, leaving the outer transaction valid.
-    try { await client.query('ROLLBACK TO SAVEPOINT audit_log_sp'); } catch (_) { /* ignore */ }
-    logger.error({ action: 'audit_log_error', error: err.message, entityId });
+    try {
+      await client.query('SAVEPOINT audit_log_sp');
+      await client.query(
+        `INSERT INTO audit_log (action, entity, entity_id, old_value, new_value, user_id, timestamp)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+        [action, entity, entityId, oldValue ? JSON.stringify(oldValue) : null, JSON.stringify(newValue), auditUserId]
+      );
+      await client.query('RELEASE SAVEPOINT audit_log_sp');
+      logger.debug({ action: 'audit_log_created', auditAction: action, entityId, userId: auditUserId });
+    } catch (err) {
+      try { await client.query('ROLLBACK TO SAVEPOINT audit_log_sp'); } catch (_) { /* ignore */ }
+      logger.error({ action: 'audit_log_error', error: err.message, entityId });
+    }
+  } else {
+    // Outside a transaction (pool passed directly): simple best-effort INSERT.
+    try {
+      await client.query(
+        `INSERT INTO audit_log (action, entity, entity_id, old_value, new_value, user_id, timestamp)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+        [action, entity, entityId, oldValue ? JSON.stringify(oldValue) : null, JSON.stringify(newValue), auditUserId]
+      );
+      logger.debug({ action: 'audit_log_created', auditAction: action, entityId, userId: auditUserId });
+    } catch (err) {
+      logger.error({ action: 'audit_log_error', error: err.message, entityId });
+    }
   }
 }
 
