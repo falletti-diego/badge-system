@@ -22,7 +22,7 @@ export function SettingsTab() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await apiClient.get('/api/admin/clients');
+        const res = await apiClient.get('/api/v1/admin/clients');
         if (!cancelled && res.data.data) {
           const client = res.data.data.find(c => c.id === clientId);
           if (client) {
@@ -55,7 +55,7 @@ export function SettingsTab() {
     setLoading(true);
     setMsg(null);
     try {
-      await apiClient.put('/api/admin/settings', {
+      await apiClient.put('/api/v1/admin/settings', {
         meal_voucher_hours: parsed,
         geofencing_feature_enabled: geofencingEnabled,
       });

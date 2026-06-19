@@ -30,7 +30,7 @@ export const SitesPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await apiClient.get('/api/sites');
+      const response = await apiClient.get('/api/v1/sites');
       setSites(response.data.data || []);
     } catch (err) {
       setError(err.response?.data?.message || 'Errore nel caricamento delle sedi');

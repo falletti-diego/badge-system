@@ -12,7 +12,7 @@ import { useFetch } from '../components/useFetch';
 import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
 
 export function ClientsTab() {
-  const { data: clients, loading, error: fetchError, reload } = useFetch('/api/admin/clients');
+  const { data: clients, loading, error: fetchError, reload } = useFetch('/api/v1/admin/clients');
   const [form, setForm] = useState({ name: '', email: '', plan: 'starter' });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -38,7 +38,7 @@ export function ClientsTab() {
     setSaving(true);
     setMsg(null);
     try {
-      await apiClient.post('/api/admin/clients', form);
+      await apiClient.post('/api/v1/admin/clients', form);
       setMsg({ type: 'success', text: `Cliente "${form.name}" creato.` });
       setForm({ name: '', email: '', plan: 'starter' });
       reload();

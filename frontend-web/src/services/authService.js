@@ -23,7 +23,7 @@ const authService = {
     logger.debug('authService', 'login called', { email });
     try {
       logger.debug('authService', 'calling apiClient.post /api/auth/login');
-      const response = await apiClient.post('/api/auth/login', {
+      const response = await apiClient.post('/api/v1/auth/login', {
         email,
         password,
       });
@@ -80,7 +80,7 @@ const authService = {
     // Optional: Call backend logout endpoint for audit logging
     if (token) {
       try {
-        await apiClient.post('/api/auth/logout', {});
+        await apiClient.post('/api/v1/auth/logout', {});
       } catch (error) {
         console.warn('Logout endpoint call failed:', error);
         // Continue with local cleanup even if endpoint fails
@@ -124,7 +124,7 @@ const authService = {
   async refreshAccessToken() {
     const refresh_token = this.getRefreshToken();
     if (!refresh_token) throw new Error('No refresh token');
-    const response = await apiClient.post('/api/auth/refresh', { refresh_token });
+    const response = await apiClient.post('/api/v1/auth/refresh', { refresh_token });
     const { token } = response.data.data;
     localStorage.setItem(TOKEN_KEY, token);
     return token;

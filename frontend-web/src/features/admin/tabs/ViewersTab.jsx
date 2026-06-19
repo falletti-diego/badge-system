@@ -13,10 +13,10 @@ import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
 import { CopyButton } from '../components/CopyButton';
 
 export function ViewersTab() {
-  const { data: clients } = useFetch('/api/admin/clients');
+  const { data: clients } = useFetch('/api/v1/admin/clients');
   const [filterClient, setFilterClient] = useState('');
   const { data: viewers, loading, error: fetchError, reload } = useFetch(
-    filterClient ? `/api/admin/viewers?client_id=${filterClient}` : '/api/admin/viewers'
+    filterClient ? `/api/admin/viewers?client_id=${filterClient}` : '/api/v1/admin/viewers'
   );
   const [form, setForm] = useState({ client_id: '', email: '', name: '', password: '' });
   const [saving, setSaving] = useState(false);
@@ -49,7 +49,7 @@ export function ViewersTab() {
         name: form.name,
         ...(form.password && { password: form.password }),
       };
-      const res = await apiClient.post('/api/admin/viewers', payload);
+      const res = await apiClient.post('/api/v1/admin/viewers', payload);
       const viewer = res.data.data;
       const tempPwd = res.data.temp_password;
       setMsg({ type: 'success', text: `Commercialista "${viewer.name}" aggiunto.`, tempPwd });

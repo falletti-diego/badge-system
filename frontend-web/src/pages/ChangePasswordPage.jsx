@@ -85,7 +85,7 @@ export default function ChangePasswordPage() {
 
     try {
       // Call backend to change password
-      const response = await apiClient.post('/api/auth/change-password', {
+      const response = await apiClient.post('/api/v1/auth/change-password', {
         old_password: formData.oldPassword,
         new_password: formData.newPassword,
       });

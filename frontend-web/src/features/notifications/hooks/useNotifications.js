@@ -11,7 +11,7 @@ export const useNotifications = (enabled = true) => {
   const fetchNotifications = useCallback(async () => {
     if (!enabled) return;
     try {
-      const response = await apiClient.get('/api/notifications');
+      const response = await apiClient.get('/api/v1/notifications');
       setNotifications(response.data.data || []);
       setUnreadCount(response.data.unread_count || 0);
     } catch {
@@ -21,7 +21,7 @@ export const useNotifications = (enabled = true) => {
 
   const markAllRead = useCallback(async () => {
     try {
-      await apiClient.put('/api/notifications/read-all');
+      await apiClient.put('/api/v1/notifications/read-all');
       setUnreadCount(0);
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     } catch {

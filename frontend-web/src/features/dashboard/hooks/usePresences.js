@@ -25,7 +25,7 @@ export const usePresences = (filters = {}) => {
       setLoading(true);
       setError(null);
 
-      const response = await apiClient.get('/api/checkins', { params: filters });
+      const response = await apiClient.get('/api/v1/checkins', { params: filters });
       setData({
         rows: response.data.data || [],
         total: response.data.pagination?.total || 0,
@@ -43,7 +43,7 @@ export const usePresences = (filters = {}) => {
    */
   const fetchStats = useCallback(async () => {
     try {
-      const response = await apiClient.get('/api/checkins/stats', { params: filters });
+      const response = await apiClient.get('/api/v1/checkins/stats', { params: filters });
       setStats(response.data.data || {});
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to fetch stats');
@@ -76,7 +76,7 @@ export const usePresences = (filters = {}) => {
   useEffect(() => {
     const pollStats = async () => {
       try {
-        const response = await apiClient.get('/api/checkins/stats', { params: filtersRef.current });
+        const response = await apiClient.get('/api/v1/checkins/stats', { params: filtersRef.current });
         setStats(response.data.data || {});
       } catch (err) {
         console.error('Error polling stats:', err);

@@ -35,7 +35,7 @@ const ExportButton = ({ filters = {} }) => {
 
       const { limit, offset, ...exportFilters } = filters;
 
-      const response = await apiClient.get('/api/export/csv', {
+      const response = await apiClient.get('/api/v1/export/csv', {
         params: { ...exportFilters, format },
         responseType: 'blob',
       });

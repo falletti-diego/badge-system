@@ -73,7 +73,7 @@ describe('S.32.6 Task 8: Full Lifecycle Integration — CSV Import → Change Pa
 
       apiClient.post.mockResolvedValue(newResponse);
 
-      const response = await apiClient.post('/api/auth/change-password', {
+      const response = await apiClient.post('/api/v1/auth/change-password', {
         old_password: 'TempPassword123',
         new_password: 'NewPassword123',
       });
@@ -103,7 +103,7 @@ describe('S.32.6 Task 8: Full Lifecycle Integration — CSV Import → Change Pa
 
       apiClient.post.mockResolvedValue(newResponse);
 
-      const response = await apiClient.post('/api/auth/change-password', {
+      const response = await apiClient.post('/api/v1/auth/change-password', {
         old_password: 'OldPassword',
         new_password: 'NewPassword',
       });
@@ -154,7 +154,7 @@ describe('S.32.6 Task 8: Full Lifecycle Integration — CSV Import → Change Pa
       apiClient.post.mockRejectedValue({ response: { status: 400, data: { message: 'Current password is incorrect' } } });
 
       try {
-        await apiClient.post('/api/auth/change-password', { old_password: 'WrongPassword', new_password: 'NewPassword123' });
+        await apiClient.post('/api/v1/auth/change-password', { old_password: 'WrongPassword', new_password: 'NewPassword123' });
       } catch (error) {
         expect(error.response.status).toBe(400);
       }
@@ -170,7 +170,7 @@ describe('S.32.6 Task 8: Full Lifecycle Integration — CSV Import → Change Pa
       apiClient.post.mockRejectedValue({ response: { status: 500, data: { message: 'Internal server error' } } });
 
       try {
-        await apiClient.post('/api/auth/change-password', { old_password: 'OldPassword123', new_password: 'NewPassword123' });
+        await apiClient.post('/api/v1/auth/change-password', { old_password: 'OldPassword123', new_password: 'NewPassword123' });
       } catch (error) {
         expect(error.response.status).toBe(500);
       }
@@ -185,7 +185,7 @@ describe('S.32.6 Task 8: Full Lifecycle Integration — CSV Import → Change Pa
       apiClient.post.mockRejectedValue({ request: {} });
 
       try {
-        await apiClient.post('/api/auth/change-password', { old_password: 'OldPassword123', new_password: 'NewPassword123' });
+        await apiClient.post('/api/v1/auth/change-password', { old_password: 'OldPassword123', new_password: 'NewPassword123' });
       } catch (error) {
         expect(error.request).toBeDefined();
       }
@@ -200,7 +200,7 @@ describe('S.32.6 Task 8: Full Lifecycle Integration — CSV Import → Change Pa
       apiClient.post.mockRejectedValue({ response: { status: 401, data: { message: 'Session revoked' } } });
 
       try {
-        await apiClient.post('/api/auth/change-password', { old_password: 'OldPassword123', new_password: 'NewPassword123' });
+        await apiClient.post('/api/v1/auth/change-password', { old_password: 'OldPassword123', new_password: 'NewPassword123' });
       } catch (error) {
         expect(error.response.status).toBe(401);
         authService.logout();
@@ -228,7 +228,7 @@ describe('S.32.6 Task 8: Full Lifecycle Integration — CSV Import → Change Pa
 
       apiClient.post.mockResolvedValue(loginResponse);
 
-      const response = await apiClient.post('/api/auth/login', {
+      const response = await apiClient.post('/api/v1/auth/login', {
         email: 'new.employee@company.local',
         password: 'NewPassword123',
       });
@@ -250,7 +250,7 @@ describe('S.32.6 Task 8: Full Lifecycle Integration — CSV Import → Change Pa
       apiClient.post.mockRejectedValue({ response: { status: 400, data: { message: 'Invalid credentials' } } });
 
       try {
-        await apiClient.post('/api/auth/login', { email: 'new.employee@company.local', password: 'TempPassword123' });
+        await apiClient.post('/api/v1/auth/login', { email: 'new.employee@company.local', password: 'TempPassword123' });
       } catch (error) {
         expect(error.response.status).toBe(400);
       }
@@ -281,7 +281,7 @@ describe('S.32.6 Task 8: Full Lifecycle Integration — CSV Import → Change Pa
 
       apiClient.post.mockResolvedValue(loginStep1Response);
 
-      const login1 = await apiClient.post('/api/auth/login', { email: 'new.employee@company.local', password: 'TempPassword123' });
+      const login1 = await apiClient.post('/api/v1/auth/login', { email: 'new.employee@company.local', password: 'TempPassword123' });
 
       localStorage.setItem('badge_auth_token', login1.data.token);
       localStorage.setItem('badge_user', JSON.stringify(login1.data.user));
@@ -301,7 +301,7 @@ describe('S.32.6 Task 8: Full Lifecycle Integration — CSV Import → Change Pa
 
       apiClient.post.mockResolvedValue(changePasswordResponse);
 
-      const changeResponse = await apiClient.post('/api/auth/change-password', { old_password: 'TempPassword123', new_password: 'NewPassword123' });
+      const changeResponse = await apiClient.post('/api/v1/auth/change-password', { old_password: 'TempPassword123', new_password: 'NewPassword123' });
 
       localStorage.setItem('badge_auth_token', changeResponse.data.token);
       localStorage.setItem('badge_user', JSON.stringify(changeResponse.data.user));
@@ -324,7 +324,7 @@ describe('S.32.6 Task 8: Full Lifecycle Integration — CSV Import → Change Pa
 
       apiClient.post.mockResolvedValue(loginStep6Response);
 
-      const login6 = await apiClient.post('/api/auth/login', { email: 'new.employee@company.local', password: 'NewPassword123' });
+      const login6 = await apiClient.post('/api/v1/auth/login', { email: 'new.employee@company.local', password: 'NewPassword123' });
 
       localStorage.setItem('badge_auth_token', login6.data.token);
       localStorage.setItem('badge_user', JSON.stringify(login6.data.user));

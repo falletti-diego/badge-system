@@ -16,11 +16,11 @@ import { ResetPasswordDialog } from '../components/ResetPasswordDialog';
 import { CopyButton } from '../components/CopyButton';
 
 export function EmployeesTab() {
-  const { data: clients } = useFetch('/api/admin/clients');
-  const { data: allSites } = useFetch('/api/admin/sites');
+  const { data: clients } = useFetch('/api/v1/admin/clients');
+  const { data: allSites } = useFetch('/api/v1/admin/sites');
   const [filterClient, setFilterClient] = useState('');
   const { data: employees, loading: empLoading, error: empFetchError, reload: reloadEmployees } = useFetch(
-    filterClient ? `/api/admin/employees?client_id=${filterClient}` : '/api/admin/employees'
+    filterClient ? `/api/admin/employees?client_id=${filterClient}` : '/api/v1/admin/employees'
   );
   const [form, setForm] = useState({
     client_id: '', email: '', name: '', phone: '',
@@ -66,7 +66,7 @@ export function EmployeesTab() {
         ...(form.site_id && { site_id: form.site_id }),
         ...(form.password && { password: form.password }),
       };
-      const res = await apiClient.post('/api/admin/employees', payload);
+      const res = await apiClient.post('/api/v1/admin/employees', payload);
       const emp = res.data.data;
       const tempPwd = res.data.temp_password;
       setMsg({
@@ -92,7 +92,7 @@ export function EmployeesTab() {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('client_id', csvClientId);
-      const res = await apiClient.post('/api/admin/employees/import', fd, {
+      const res = await apiClient.post('/api/v1/admin/employees/import', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       const { created, skipped, errors } = res.data.data;

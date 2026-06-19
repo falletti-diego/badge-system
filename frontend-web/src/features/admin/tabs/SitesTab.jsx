@@ -152,7 +152,7 @@ function GeofenceDialog({ site, clientGeofencingEnabled = true, onClose, onSaved
 }
 
 export function SitesTab() {
-  const { data: clients } = useFetch('/api/admin/clients');
+  const { data: clients } = useFetch('/api/v1/admin/clients');
   const [selectedClient, setSelectedClient] = useState('');
 
   const selectedClientObj = selectedClient
@@ -163,7 +163,7 @@ export function SitesTab() {
     : true;
 
   const { data: sites, loading, error: fetchError, reload } = useFetch(
-    selectedClient ? `/api/admin/sites?client_id=${selectedClient}` : '/api/admin/sites'
+    selectedClient ? `/api/admin/sites?client_id=${selectedClient}` : '/api/v1/admin/sites'
   );
   const [form, setForm] = useState({ client_id: '', name: '', location: '' });
   const [saving, setSaving] = useState(false);
@@ -191,7 +191,7 @@ export function SitesTab() {
     setSaving(true);
     setMsg(null);
     try {
-      const res = await apiClient.post('/api/admin/sites', form);
+      const res = await apiClient.post('/api/v1/admin/sites', form);
       setMsg({ type: 'success', text: `Sede "${form.name}" creata. QR: ${res.data.data.qr_code_content}` });
       setForm({ ...form, name: '', location: '' });
       reload();

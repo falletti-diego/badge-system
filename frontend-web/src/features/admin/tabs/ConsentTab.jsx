@@ -7,7 +7,7 @@ import {
 import { useFetch } from '../components/useFetch';
 
 export function ConsentTab() {
-  const { data: response, loading, error: fetchError, reload } = useFetch('/api/consent/admin/employee-consents');
+  const { data: response, loading, error: fetchError, reload } = useFetch('/api/v1/consent/admin/employee-consents');
   const [msg, setMsg] = useState(null);
   const data = response?.data || [];
   const summary = response?.summary || { total_employees: 0, consented: 0, pending: 0, consent_rate_percent: 0 };

@@ -206,7 +206,7 @@ describe('ChangePasswordPage Component', () => {
       fireEvent.click(screen.getByRole('button', { name: /change password/i }));
 
       await waitFor(() => {
-        expect(apiClient.post).toHaveBeenCalledWith('/api/auth/change-password', {
+        expect(apiClient.post).toHaveBeenCalledWith('/api/v1/auth/change-password', {
           old_password: 'OldPassword123',
           new_password: 'NewPassword123',
         });

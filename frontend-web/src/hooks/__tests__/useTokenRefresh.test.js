@@ -141,7 +141,7 @@ describe('useTokenRefresh Hook (S.32.7 Task 5)', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/auth/refresh'),
+        expect.stringContaining('/api/v1/auth/refresh'),
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({

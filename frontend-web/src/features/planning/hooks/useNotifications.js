@@ -12,7 +12,7 @@ export const useNotifications = (enabled = true) => {
 
     const pollNotifications = async () => {
       try {
-        const response = await apiClient.get('/api/notifications');
+        const response = await apiClient.get('/api/v1/notifications');
         setNotifications(response.data.data || []);
         setUnreadCount(response.data.unread_count || 0);
       } catch (err) {

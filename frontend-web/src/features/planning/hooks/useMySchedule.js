@@ -21,7 +21,7 @@ export const useMySchedule = (month, year) => {
       setError(null);
 
       try {
-        const response = await apiClient.get('/api/shifts/my-schedule', {
+        const response = await apiClient.get('/api/v1/shifts/my-schedule', {
           params: { month, year },
         });
 
