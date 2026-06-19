@@ -29,8 +29,12 @@ async function logAudit(client, {
   const auditUserId = UUID_REGEX.test(userId) ? userId : null;
 
   try {
+    // SAVEPOINT ensures an audit failure cannot abort the calling business transaction.
+    // Without SAVEPOINT, a failed INSERT would put the pg client in aborted state,
+    // causing the outer COMMIT to silently become a ROLLBACK (data loss, no error).
+    await client.query('SAVEPOINT audit_log_sp');
     await client.query(
-      `INSERT INTO audit_log (action, entity, entity_id, old_value, new_value, user_id, created_at)
+      `INSERT INTO audit_log (action, entity, entity_id, old_value, new_value, user_id, timestamp)
        VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
       [
         action,
@@ -41,10 +45,12 @@ async function logAudit(client, {
         auditUserId,
       ]
     );
-
+    await client.query('RELEASE SAVEPOINT audit_log_sp');
     logger.debug({ action: 'audit_log_created', auditAction: action, entityId, userId: auditUserId });
   } catch (err) {
-    // Best-effort: audit failure must not abort the main business transaction
+    // Best-effort: audit failure must not abort the main business transaction.
+    // Roll back only the audit savepoint, leaving the outer transaction valid.
+    try { await client.query('ROLLBACK TO SAVEPOINT audit_log_sp'); } catch (_) { /* ignore */ }
     logger.error({ action: 'audit_log_error', error: err.message, entityId });
   }
 }
