@@ -14,7 +14,9 @@ describe('Axios Interceptor (S.32.7 Task 5)', () => {
   let mockUseTokenRefresh;
 
   beforeEach(() => {
-    localStorage.clear();
+    // happy-dom does not implement localStorage.clear(); remove known keys instead
+    localStorage.removeItem('badge_auth_token');
+    localStorage.removeItem('badge_refresh_token');
     vi.clearAllMocks();
 
     // Create a mock axios instance with interceptors
@@ -28,7 +30,8 @@ describe('Axios Interceptor (S.32.7 Task 5)', () => {
   });
 
   afterEach(() => {
-    localStorage.clear();
+    localStorage.removeItem('badge_auth_token');
+    localStorage.removeItem('badge_refresh_token');
   });
 
   describe('1. Success responses pass through unchanged', () => {
