@@ -1,8 +1,8 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 19 Giugno 2026 (Session 43)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Onboarding cliente ONB.1 ✅ | Manager ferie/malattia separation ✅ (commit 0b5ada0) | Frontend test suite 164/165 ✅ (commit efe9567) | ONB.2 saldi NUMERIC 🟡 backlog  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** In produzione, test suite verde, onboarding cliente pronto
+**Last Updated:** 19 Giugno 2026 (Session 44)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Phase 2 Advanced Planning ✅ (commit 6bb90ea) | Code-review 8 fix ✅ (commit 0c64840) | Frontend test suite 164/165 ✅ | ONB.2 saldi NUMERIC 🟡 backlog  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** In produzione, Phase 2 planning completa, test suite verde
 
 ---
 
@@ -173,6 +173,49 @@
   - Error messages localization (i18n)
   - Settings screen (if required)
   - Offline queue implementation (Phase 2)
+
+---
+
+## 3.6 PHASE 2 ADVANCED PLANNING — Completata (Session 44, 2026-06-19)
+
+### Decisioni implementate
+
+**P.4 — Vista Settimana**
+- `ToggleButtonGroup` Mese/Settimana in `PlanningPage.jsx`
+- Navigazione ←/→ con label range (es. "02 giu – 08 giu")
+- `safeWeekOffset = clamp(weekOffset, 0, weeks-1)` previene flash di allDays al cambio mese
+- Auto-select settimana corrente quando si attiva week mode
+- Settimane calcolate con anchor Lunedì (standard IT), `getWeeksOfMonth()` module-level
+
+**P.1 — Copia Settimana**
+- Dialog con selettori sorgente/destinazione (default: settimana corrente → successiva)
+- `computeWeekCopy()` abbina giorni per day-of-week (Lun→Lun, Mar→Mar, ecc.)
+- Gestisce settimane parziali (fine/inizio mese) tramite `destByDow` map
+
+**P.3 — Conflict Warning**
+- Se destinazione ha turni esistenti che differiscono: secondo Dialog con lista completa
+- "Sovrascrivi N Turni" richiede conferma esplicita prima di applicare
+- Giorni sorgente vuoti che sovrascrivono giorni pieni appaiono nella lista (comportamento corretto: avvisa che il turno verrà cancellato)
+
+**P.2 — PDF Export**
+- `window.print()` + `GlobalStyles` con `@media print`
+- A4 landscape, 10mm margin, nasconde AppBar/card/button/toggle
+- Print-only title mostrato solo in stampa
+
+### Code-review findings fixati (commit 0c64840)
+
+| # | Finding | Fix |
+|---|---------|-----|
+| F1 | Logout senza try/catch | try/catch → navigate sempre eseguita |
+| F2 | saveError mai renderizzato | `<Alert>` persistente per saveError e dataLoadError |
+| F3 | catch silenzioso ferie/malattia | console.error + banner warning visibile al manager |
+| F4 | URL.revokeObjectURL mancante | Aggiunto dopo link.click() in handleExportCSV |
+| F5/6 | weekOffset stale al cambio mese | safeWeekOffset = clamp → niente flash |
+| F7 | Timezone bug in inRange | Sostituita con inDateRange() da dateUtils.js (slice(0,10) string compare) |
+| F8 | pad() duplicata | Estratta in src/utils/dateUtils.js, importata da PlanningPage e CorrectionsPage |
+
+**Commits:** `6bb90ea` (P.1–P.4) · `0c64840` (8 fix)  
+**Test:** 164/165 frontend ✅ invariato
 
 ---
 
