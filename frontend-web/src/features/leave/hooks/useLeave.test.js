@@ -75,7 +75,7 @@ describe('useLeave Hook', () => {
         }
       });
 
-      expect(result.current.error).toBe('INSUFFICIENT_SALDO');
+      expect(result.current.error).toBe('Insufficient vacation days remaining');
       expect(result.current.loading).toBe(false);
     });
 
