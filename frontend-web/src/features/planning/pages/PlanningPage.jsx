@@ -625,8 +625,30 @@ export const PlanningPage = () => {
                           return (
                             <TableCell key={`${emp.id}-${day}`} align="center" sx={{
                               padding: '4px 2px', position: 'relative',
-                              backgroundColor: ill ? 'rgba(220,38,38,0.1)' : (blocked ? '#FEE2E2' : rowBg),
+                              backgroundColor: ill ? '#DC2626' : (blocked ? '#0EA5E9' : rowBg),
                             }}>
+                              {/* Illness or Leave full-cell overlay with icon + label */}
+                              {(ill || blocked) && (
+                                <Box onClick={ill ? () => { setSelectedIllness(illnessInfo); setIllnessModalOpen(true); } : undefined}
+                                  sx={{
+                                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                    cursor: ill ? 'pointer' : 'default',
+                                    zIndex: 5,
+                                  }}>
+                                  <Box sx={{ fontSize: '1.4rem' }}>
+                                    {ill ? '🏥' : '🏖️'}
+                                  </Box>
+                                  <Box sx={{
+                                    fontSize: '10px', fontWeight: 700, color: 'white',
+                                    textTransform: 'uppercase', letterSpacing: '0.5px',
+                                    marginTop: '2px',
+                                  }}>
+                                    {ill ? 'Malattia' : 'Ferie'}
+                                  </Box>
+                                </Box>
+                              )}
+
                               {/* Red dot = unsaved change */}
                               {isChanged && (
                                 <Box sx={{
@@ -635,42 +657,21 @@ export const PlanningPage = () => {
                                   backgroundColor: '#C0392B', borderRadius: '50%', zIndex: 10,
                                 }} />
                               )}
-                              {/* Green dot = leave */}
-                              {blocked && (
-                                <Box sx={{
-                                  position: 'absolute', top: '2px', left: '2px',
-                                  width: '7px', height: '7px',
-                                  backgroundColor: '#2D7049', borderRadius: '50%', zIndex: 10,
-                                }} title={leaveInfo?.leave_type || 'Ferie'} />
-                              )}
-                              {/* Illness overlay */}
-                              {ill && (
-                                <Box onClick={() => { setSelectedIllness(illnessInfo); setIllnessModalOpen(true); }}
-                                  sx={{
-                                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    cursor: 'pointer', zIndex: 5,
-                                  }}>
-                                  <Box sx={{ fontSize: '1.2rem', fontWeight: 900, color: '#DC2626', opacity: 0.6, transform: 'scaleY(0.8)' }}>
-                                    ▲ M
-                                  </Box>
-                                </Box>
-                              )}
 
-                              <Tooltip title={ill ? 'Malattia comunicata' : (blocked ? `Bloccato: ${leaveInfo?.leave_type || 'Ferie'}` : '')}>
+                              <Tooltip title={ill ? 'Malattia comunicata — clicca per dettagli' : (blocked ? `Bloccato: ${leaveInfo?.leave_type || 'Ferie'}` : '')}>
                                 <div>
                                   <Select
                                     value={shift}
                                     disabled={isSaving || blocked || ill}
                                     onChange={(e) => handleShiftChange(emp.id, dateStr, e.target.value)}
                                     renderValue={(val) =>
-                                      (val && val !== '—') ? val.toUpperCase() : (blocked || ill ? '🔒' : '—')
+                                      (val && val !== '—') ? val.toUpperCase() : (blocked || ill ? '—' : '—')
                                     }
                                     sx={{
                                       width: '52px', height: '36px',
-                                      backgroundColor: blocked ? '#DC2626' : (color?.bg || '#E5E7EB'),
+                                      backgroundColor: (blocked || ill) ? 'transparent' : (color?.bg || '#E5E7EB'),
                                       color: 'white', fontWeight: 'bold', fontSize: '12px',
-                                      opacity: blocked ? 0.7 : 1,
+                                      visibility: (blocked || ill) ? 'hidden' : 'visible',
                                       '& .MuiOutlinedInput-notchedOutline': {
                                         borderColor: isChanged ? '#C0392B' : 'transparent',
                                         borderWidth: isChanged ? '2px' : '0px',
@@ -720,15 +721,15 @@ export const PlanningPage = () => {
                 </Box>
               </div>
               <div>
-                <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>🔒 Blocchi Ferie / Malattia</Typography>
+                <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>🏥 / 🏖️ Assenze</Typography>
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ backgroundColor: '#DC2626', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>🔒</Box>
-                    <Typography variant="body2">Ferie approvate — turno bloccato</Typography>
+                    <Box sx={{ backgroundColor: '#DC2626', color: 'white', padding: '6px 8px', borderRadius: '4px', fontSize: '14px', fontWeight: 'bold', minHeight: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '50px' }}>🏥<span style={{ fontSize: '10px', marginTop: '2px' }}>MAL.</span></Box>
+                    <Typography variant="body2">Malattia comunicata — clicca per dettagli</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ backgroundColor: 'rgba(220,38,38,0.15)', border: '1px solid #DC2626', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', color: '#DC2626' }}>▲ M</Box>
-                    <Typography variant="body2">Malattia comunicata — clicca per dettagli</Typography>
+                    <Box sx={{ backgroundColor: '#0EA5E9', color: 'white', padding: '6px 8px', borderRadius: '4px', fontSize: '14px', fontWeight: 'bold', minHeight: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '50px' }}>🏖️<span style={{ fontSize: '10px', marginTop: '2px' }}>FER.</span></Box>
+                    <Typography variant="body2">Ferie approvate — turno bloccato</Typography>
                   </Box>
                 </Box>
               </div>
