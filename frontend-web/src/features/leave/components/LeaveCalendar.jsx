@@ -68,22 +68,28 @@ export const LeaveCalendar = ({ startDate, endDate, onDateChange }) => {
     }
 
     if (!startDate) {
-      onDateChange({ startDate: clickedDateStr, endDate: null });
-    } else if (!endDate) {
-      const start = stringToDate(startDate);
-      if (clickedDate.getTime() === start.getTime()) {
-        onDateChange({ startDate: null, endDate: null });
-      } else if (clickedDate > start) {
-        onDateChange({ startDate, endDate: clickedDateStr });
-      } else {
-        onDateChange({ startDate: clickedDateStr, endDate: startDate });
-      }
+      // First day selected: set both startDate and endDate to same day (single day)
+      onDateChange({ startDate: clickedDateStr, endDate: clickedDateStr });
     } else {
+      // Already have startDate (and endDate = startDate for single day)
       const start = stringToDate(startDate);
+      const end = stringToDate(endDate);
+
       if (clickedDate.getTime() === start.getTime()) {
+        // Clicking start date deselects all
         onDateChange({ startDate: null, endDate: null });
+      } else if (clickedDate.getTime() === end.getTime()) {
+        // Clicking end date deselects all
+        onDateChange({ startDate: null, endDate: null });
+      } else if (clickedDate > end) {
+        // Extending range to the right
+        onDateChange({ startDate, endDate: clickedDateStr });
+      } else if (clickedDate < start) {
+        // Extending range to the left
+        onDateChange({ startDate: clickedDateStr, endDate });
       } else {
-        onDateChange({ startDate: clickedDateStr, endDate: null });
+        // Clicking within range: change end date
+        onDateChange({ startDate, endDate: clickedDateStr });
       }
     }
   };
