@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-19 (Session 44: Phase 2 Advanced Planning — P.1 Copia Settimana + P.2 PDF + P.3 warning + P.4 Vista Settimana)  
+**Last Updated:** 2026-06-20 (Session 45: Leave management bug cascade fix + decisione staging)  
 **Production:** https://badge.dataxiom.it · API: https://api.dataxiom.it
 
 ---
@@ -10,6 +10,7 @@
 
 | Sessione | Data | Sintesi |
 |---|---|---|
+| 45 | 2026-06-20 | **Leave management bug cascade (4 bug) + EmployeeShiftsPage ferie fix** — (1) `audit.js` colonna `created_at`→`timestamp`: abort PostgreSQL silenzioso → COMMIT diventava ROLLBACK → dati ferie mai salvati. (2) SAVEPOINT condizionale: solo dentro PoolClient (non Pool nudo), altrimenti "SAVEPOINT can only be used in transaction blocks". (3) Diego `id` era UUID del sito Torino (copy-paste) → FK violation su `approved_by` → 500 approve. (4) Maria aveva 2 record employee: `84ab2a73` (demo login) vs `239ec99f` (planning) → `isDateBlocked()` non matchava mai → migration 022 merge. (5) EmployeeShiftsPage non caricava `getApprovedRequests()` → malattia visibile, ferie no → fix import + fetch + render 🏖️. Commits: 40b4025, 014354c, 401b13a, 86e44b5, 13bd618. Decisione sessione: staging obbligatorio al lancio con primo cliente reale. |
 | 44 | 2026-06-19 | **Phase 2 Advanced Planning (P.1–P.4) + code-review 8 fix** — `PlanningPage.jsx`: P.4 Vista Settimana (ToggleButtonGroup, nav ←/→, safeWeekOffset clamp), P.1 Copia Settimana (Dialog sorgente/dest, match day-of-week), P.3 Conflict warning (lista turni sovrascrivibili + conferma esplicita), P.2 PDF (`window.print()` + GlobalStyles @media print A4 landscape). Code-review: 8 finding fixati — logout try/catch, saveError/dataLoadError renderizzati, catch silenzioso ferie/malattia, revokeObjectURL, weekOffset clamp, inRange timezone → `inDateRange()` string-compare, `pad()` estratta in `src/utils/dateUtils.js`. Testato su localhost. 164/165 frontend ✅. Commits: 6bb90ea, 0c64840. Push via HTTPS (SSH port 22 bloccato). |
 | 43 | 2026-06-19 | **Frontend Vitest test suite: 15 failure → 0 failure** — `vitest.setup.js`: localStorage/sessionStorage polyfill per happy-dom 20.x (tutti i metodi Storage erano non-callable). `ChangePasswordPage.test.js` + `PasswordChangeGuard.test.js` rinominati a `.test.jsx` (JSX in `.js` causava parse error). `ChangePasswordFlow.e2e.test.js` + `axiosInterceptor.test.js`: conversione completa Jest→Vitest API (`jest.*`→`vi.*`, `jest.requireActual`→`vi.importActual` async). ChangePasswordPage success flow allineato al componente reale (logout+redirect `/login` dopo 2s, non dashboard). Risultato: **164/165 frontend ✅** (1 `test.skip` intenzionale), **455/455 backend ✅** (14 skipped = integration test intenzionali, richiedono `RUN_INTEGRATION=1`). Commit: efe9567. |
 | 42 | 2026-06-18 | **Manager ferie/malattia separation** + Rinascente onboarding test: ManagerIllnessReport.jsx, route /illnesses/manager-report, navbar 🏥 Malattia per manager, fix critico illnesses.js (employee_id ?? user_id → manager 404 risolto), MALATTIA in LEAVE_TYPES preservato per history display, EmployeeLeaveRequest bypass rimosso → redirect. 3 code-review findings fixati. Cambiamenti uncommitted. |
@@ -1063,6 +1064,32 @@ Go-live with first paying customer (pilota).
 | 2026-06-14 | S.32.6 Complete — Forced Password Change Flow + Bug Fixes (Session 34) | S.32.6 ✅ | **All 8 Tasks VERIFIED END-TO-END ✅** — CSV import + Admin reset password both trigger mandatory password change. **3 CRITICAL BUG FIXES:** (1) audit_log column timestamp→created_at (transaction abort fix). (2) requireAuth middleware DISABLE_AUTH logic fixed (was ignoring real tokens, now extracts employee_id). (3) POST /change-password missing refresh_token+user in response (added). **Frontend fixes:** (4) authService saves must_change_password to localStorage, (5) PasswordChangeGuard reads from correct localStorage key, (6) ChangePasswordPage logout + redirect to /login (not dashboard). **Flow:** Admin reset password→set must_change_password=true → Employee login with temp password → auto-redirect /change-password → change password → logout → redirect /login → login with new password → dashboard. **Testing:** Manual E2E verified ✅ (CSV import flow ✅, Admin reset flow ✅). **Commits:** c84aebe (3 backend fixes), 8bf849f (5 frontend fixes + redirect flow). |
 | 2026-06-14 | Task 11 Phase 2 COMPLETE + Malattia System (Session 38) | Task 11 Phase 2 ✅, Task 11 Phase 3 🟡 | **Phase 2: 17/17 test cases PASSING ✅** — F5 (admin vede tutto), F6 (manager filtra sede), F7 (employee vede solo sé), M1 (malattia auto-approvata), M2 (admin gestione), M3 (blocco Planning). **Malattia System COMPLETE:** backend (5 endpoint: POST /report, GET /admin, GET /manager, GET /by-date-range RBAC, DELETE soft), frontend (/illnesses/report employee, /admin/illnesses admin, ManagerIllnessModal, useIllness hook). **Dashboard navbar:** 🏥 Malattia (employee) + 🏥 Malattie (admin). **EmployeeShiftsPage:** giorni malattia mostrano `⚕️ Malattia` (badge rosso, background rosso), card "Giorni di Malattia". **3 Bug Fix in sessione:** (1) apiClient vs fetch raw (401 fix), (2) `updated_at` inesistente in UPDATE query (500 fix), (3) FK `cancelled_by→employees` rimossa per admin (500 fix — ALTER TABLE live). **Commit:** 9b327bc. **Rimanente:** 11.13 role-based visibility test. |
 | 2026-06-15 | S.32.8 Split file monolitici + Task 11.13 RBAC — COMPLETE (Session 39) | S.32.8 ✅, Task 11 ✅ | **S.32.8 Frontend (9 task):** AdminPage.jsx 1455→50 righe (thin shell). 5 shared components (`admin/components/`: useFetch, ConfirmDeleteDialog, ConfirmSaveDialog, CopyButton, ResetPasswordDialog). 6 tab components (`admin/tabs/`: ConsentTab, ClientsTab, SitesTab+GeofenceDialog, EmployeesTab, ViewersTab, SettingsTab). 4 code review findings fixati prima del commit: EmployeeIllnessReport migrata a useIllness hook (rimosso apiClient.post diretto), `disabled={loading}` aggiunto a Dashboard button in 3 pagine. **S.32.8 Backend (5 sub-router):** admin.js 959→241 righe. `admin/clients.js` (95r), `admin/sites.js` (146r), `admin/employees.js` (341r, include CSV import + reset-password), `admin/viewers.js` (88r), `admin/settings.js` (59r). `s326-csv-temp-password.test.js` aggiornato. Zero nuove regressioni test. **Task 11.13 RBAC (6/6 PASS):** Employee→/leave/my-requests: 7 record solo user_id=Maria ✅. Manager→/leave/all: 403 FORBIDDEN ✅. Manager→/leave/pending: 0 PENDING (DB vuoto) ✅. Admin→/leave/all: 9 record da 3 dipendenti ✅. Employee→/illnesses/admin: 403 ✅. Employee→/leave/all: 403 ✅. **Commits:** 4304966→e0f9c91 (frontend), 794ba3a (backend), 294c94f (docs). |
+
+---
+
+## 🏗️ PRE-LANCIO PRIMO CLIENTE REALE — Requisiti Obbligatori
+
+> Questi task NON bloccano l'MVP demo interno, ma sono **obbligatori** prima di dare accesso a qualunque cliente pagante.
+
+### STAGING — Ambiente di staging obbligatorio (post-MVP demo)
+**Decisione (Session 45, 2026-06-20):** Per l'MVP demo interno non introduciamo staging. È obbligatorio prima del lancio con il primo cliente reale.
+
+**Razionale:** La cascata di bug in Session 45 (4 bug di integrazione successivi, tutti invisibili ai test unitari) ha dimostrato che il gap "test unitari verdi → produzione" è critico. Con un cliente reale che usa il sistema, questi bug causerebbero churn immediato.
+
+- [ ] **STG.1** Provisioning ambiente staging: EC2 t3.micro (~€15/mese) + RDS t3.micro separato + Netlify preview branch `staging`
+- [ ] **STG.2** GitHub Actions: aggiungere job `deploy-staging` che si attiva su push `develop` (main rimane produzione)
+- [ ] **STG.3** SSM staging: replicare tutti i parametri `/badge/production/*` sotto `/badge/staging/*` con credenziali separate
+- [ ] **STG.4** Script smoke test E2E: bash script che esercita il golden path completo contro staging:
+  - Login Maria → richiesta ferie → logout
+  - Login Diego → approva ferie → logout
+  - Login Maria → verifica ferie visibili in "I Miei Turni" → logout
+  - Login Diego → verifica planning mostra 🏖️ Ferie → logout
+- [ ] **STG.5** Gate CI: ogni PR su `develop` deve superare lo smoke test E2E su staging prima del merge in `main`
+- [ ] **STG.6** Runbook staging: documentare la procedura "deploy su staging → smoke test → promuovi a main"
+
+**Stima effort:** 4-6 ore (infrastruttura + CI + smoke test script)
+**Costo mensile aggiunto:** ~€30-40/mese (EC2 micro + RDS micro staging)
+**Trigger:** Da avviare 2-3 settimane prima dell'onboarding del primo cliente reale
 
 ---
 

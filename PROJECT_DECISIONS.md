@@ -1,6 +1,6 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 19 Giugno 2026 (Session 44)  
+**Last Updated:** 20 Giugno 2026 (Session 45)  
 **Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Phase 2 Advanced Planning ✅ (commit 6bb90ea) | Code-review 8 fix ✅ (commit 0c64840) | Frontend test suite 164/165 ✅ | ONB.2 saldi NUMERIC 🟡 backlog  
 **MVP Launch Target:** Settembre 2026 | **Current Phase:** In produzione, Phase 2 planning completa, test suite verde
 
@@ -344,6 +344,26 @@
 - **Limite noto:** niente mezze giornate di ferie né Permessi/ROL contati in ore (in Italia i ROL sono spesso in ore).
 - **Cambio futuro (vedi TASKS ONB.2):** nuova migration che porta quelle colonne a `NUMERIC(6,2)` (la generated `remaining_days` va droppata e ricreata), + eventuale `leaves.unit ('days'|'hours')`, + Zod decimali, + UI half-day/ore. Sforzo ~3-5h.
 - Rationale: i giorni interi coprono il caso d'uso del primo pilota; il cambio NUMERIC è isolato e non blocca il lancio.
+
+### ✅ Ambiente Staging — Obbligatorio al lancio con primo cliente reale (Session 45, 2026-06-20)
+**DECIDED:** Nessuno staging per l'MVP demo interno. Staging **obbligatorio** prima del lancio con qualunque cliente pagante.
+
+**Contesto — cascata di 4 bug (Session 45):**
+Tutti e 4 i bug erano al _seam di integrazione_ tra sistemi che passavano i test unitari individualmente:
+1. `audit.js` colonna `created_at` (inesistente; corretta: `timestamp`) → abort PostgreSQL silenzioso → COMMIT diventava ROLLBACK → dati mai salvati (nessun errore lanciato)
+2. SAVEPOINT chiamato su `Pool` nudo (non dentro transazione) → errore PostgreSQL "SAVEPOINT can only be used in transaction blocks"
+3. Diego `id` in demo-users.js era il UUID del sito Torino (copy-paste) → FK violation su `approved_by` → 500 su approve
+4. Maria aveva 2 record employee con UUID diversi (demo login vs planning) → `isDateBlocked()` non matchava mai
+
+Nessuno di questi sarebbe stato rilevato da un test unitario isolato. Tutti sarebbero stati catturati da uno smoke test E2E sul golden path "richiedi ferie → approva → verifica planning".
+
+**Decisione:**
+- ✅ **MVP demo interno:** no staging, deploy diretto `main → produzione` come oggi
+- ✅ **Primo cliente reale:** staging obbligatorio con golden path E2E automatizzato come gate pre-deploy
+- ✅ **Architettura staging:** EC2 t3.micro + RDS t3.micro separati, branch `develop`, SSM `/badge/staging/*`
+- ✅ **Gate CI:** smoke test E2E su staging deve passare prima di ogni promozione a `main`
+
+**Vedi TASKS.md §"PRE-LANCIO PRIMO CLIENTE REALE" per la lista task STG.1–STG.6**
 
 ### ✅ Ferie e Malattia: pagine separate per tutti i ruoli (Session 42, 2026-06-18)
 **DECISO:** Employee e Manager hanno entrambi due pagine distinte — una per la richiesta ferie (FERIE_1/2/3), una per la comunicazione malattia.
