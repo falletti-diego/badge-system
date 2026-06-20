@@ -635,8 +635,18 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
 
     const employee = empResult.rows[0];
 
-    // Verify old password matches
-    const passwordMatch = await verifyPassword(old_password, employee.password_hash);
+    // Verify old password matches.
+    // @badge.local accounts have password_hash = NULL (password lives in env var) — verify via plaintext.
+    // All other accounts use bcrypt hash from DB.
+    let passwordMatch;
+    if (!employee.password_hash) {
+      const demoUser = DEMO_USERS.find(
+        (u) => u.employee_id === employee_id || u.id === employee_id
+      );
+      passwordMatch = demoUser != null && demoUser.password === old_password;
+    } else {
+      passwordMatch = await verifyPassword(old_password, employee.password_hash);
+    }
     if (!passwordMatch) {
       return next(new ValidationError('Current password is incorrect'));
     }

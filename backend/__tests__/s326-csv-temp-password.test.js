@@ -56,6 +56,19 @@ describe('S.32.6 — CSV Temp Password Feature', () => {
       expect(authModule).toContain('new_password');
     });
 
+    it('should handle badge.local accounts (password_hash = NULL) in change-password', () => {
+      // Bug fix: @badge.local accounts have password_hash = NULL in DB (password lives in env var).
+      // change-password must verify old_password against DEMO_USERS plaintext, not bcrypt.
+      const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
+      const authModule = fs.readFileSync(authPath, 'utf8');
+
+      // Must have a branch that handles null password_hash
+      expect(authModule).toContain('employee.password_hash');
+      // Must fall back to DEMO_USERS plaintext comparison
+      expect(authModule).toContain('DEMO_USERS.find');
+      expect(authModule).toContain('demoUser.password === old_password');
+    });
+
     it('should include must_change_password in login response', () => {
       const authPath = path.join(__dirname, '..', 'src', 'routes', 'auth.js');
       const authModule = fs.readFileSync(authPath, 'utf8');
