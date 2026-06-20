@@ -1102,9 +1102,37 @@ c6a7ae4 refactor: consolidate mobile app configuration into single source of tru
 - ✅ **7.5 Manager training checklist:** 7 parti with step-by-step + support table
 - ✅ **7.6 Welcome email template:** responsive HTML con credenziali, CTA login, GDPR footer
 
+### Session 46: Account cleanup + @badge.local change-password fix + Migration 023 (20 Giugno 2026)
+**Outcome:** Sistema di autenticazione pulito (3 account demo), bug change-password risolto, 6 employee rimossi via migrazione
+
+**Decisione: Demo account policy — 3 account permanenti**
+- **Regola:** Pippo (admin), Pino (manager, site Torino), Maria (employee, site Torino). Nessun altro account demo ammesso.
+- **Razionale:** 8 account causavano confusione in test, divergenza DEMO_USERS vs DB, bug UUID da hardcoded strings. 3 account coprono tutti i ruoli necessari per testare qualunque flow.
+- **Applicare:** Prima di aggiungere nuovi account demo, aggiornare fixture + migration + SSM in modo coordinato.
+
+**Decisione: @badge.local change-password usa confronto plaintext (password_hash = NULL)**
+- **Pattern:** Se `employee.password_hash` è NULL → l'account è @badge.local → cerca in DEMO_USERS → confronta `demoUser.password === old_password`.
+- **Razionale:** @badge.local non usa bcrypt DB (autenticazione via env var). `verifyPassword(pw, null)` → false sempre → "Current password is incorrect" per tutti gli account demo. 
+- **File:** `backend/src/routes/auth.js` handler `change-password`.
+- **Commit:** 2704835
+
+**Decisione: Pattern FK constraint pre-delete per bulk employee delete**
+- **Regola:** Prima di `DELETE FROM employees WHERE id = ANY(ids)`, analizzare ogni FK su employees:
+  1. `ON DELETE CASCADE` → automatico, niente da fare
+  2. `ON DELETE SET NULL` → verificare CHECK constraint; se `approved_by + approved_at` devono essere entrambi NULL/NOT NULL, fare UPDATE a un ID valido prima della delete
+  3. `ON DELETE RESTRICT` + `NOT NULL` (es. `checkins.created_by`) → fare UPDATE a `employee_id` per la riga stessa prima della delete
+  4. Controllare se la tabella ha la colonna (`shifts` non ha `employee_id` — JSONB per-site)
+- **Razionale:** Migration 023 ha richiesto 3 iterazioni per questi edge case. La checklist evita regressioni future.
+- **Commit:** a9c243f + 2d906ae
+
+**Decisione: SSM Parameter Store — rimuovere parametri per account eliminati**
+- **Regola:** Quando un @badge.local account viene rimosso dal codice, rimuovere immediatamente il parametro SSM corrispondente da `/badge/production/DEMO_*`. 
+- **Razionale:** Parametri orfani in SSM causano confusione e aumentano superficie di attacco.
+- **Rimossi questa sessione:** `DEMO_DIEGO_PASSWORD`, `DEMO_LUCIA_PASSWORD` (orfana da sessione precedente)
+
 ---
 
-**Last Updated:** 14 Giugno 2026  
-**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | S.32.7 PRODUCTION READY  
-**Created By:** Claude Code Sessions 1-37  
-**Next Review:** After Task 11 execution (Leave Management QA & Frontend Testing)
+**Last Updated:** 20 Giugno 2026  
+**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | 3 demo accounts | Migration 023 applied  
+**Created By:** Claude Code Sessions 1-46  
+**Next Review:** After first real customer onboarding

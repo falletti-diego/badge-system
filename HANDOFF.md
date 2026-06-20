@@ -1,277 +1,119 @@
-# Badge System — Session 42 Handoff
+# Badge System — Session 46 Handoff
 
-**Date:** 2026-06-18  
-**Session:** 42 — Manager ferie/malattia separation + Rinascente onboarding test  
-**Status:** ✅ **Fix applicati, build passata** — 🚨 **UNCOMMITTED — DA COMMITTARE E PUSHARE**
+**Date:** 2026-06-20  
+**Session:** 46 — @badge.local change-password fix + account cleanup 8→3 + migration 023  
+**Status:** ✅ **Tutto committato e deployato in produzione** — backend healthy, 3 account demo attivi
 
 ---
 
 ## Goal
 
-Separare la pagina ferie dalla pagina malattia per i manager, identico a come è già fatto per i dipendenti. Fix critico backend per l'illness report dei manager (404).
+Tre task indipendenti:
+1. Fix "Current password is incorrect" per Maria (`maria@badge.local`) nel flow voluntario change-password
+2. Pulizia account demo: da 8 a 3 (pippo/pino/maria)
+3. Aggiornamento documenti sessione (TASKS.md, PROJECT_DECISIONS.md, HANDOFF.md)
 
 ---
 
 ## Cosa è stato fatto
 
-### 1. La Rinascente onboarding (test ONB.1)
-- Creato `Desktop/rinascente-onboarding.xlsx` con ExcelJS: 5 sedi (Torino/Milano/Verona/Firenze/Roma), 1 manager/sede, 8+10+4+5+10 dipendenti = 42 totali
-- Dry-run verificato (0 errori), import reale eseguito dall'utente — CSV credenziali generato
+### 1. Fix change-password per @badge.local (Commit: 2704835)
 
-### 2. Manager ferie/malattia separation (Task 12)
+**Root cause:** `password_hash = NULL` per tutti gli account `@badge.local` (l'auth avviene via env var plaintext, non bcrypt DB). Il handler `change-password` in `backend/src/routes/auth.js` chiamava `verifyPassword(old_password, null)` che restituiva sempre `false` → 400 "Current password is incorrect".
 
-**Nuovo file creato:**
-- `frontend-web/src/features/illness/pages/ManagerIllnessReport.jsx` — copia di EmployeeIllnessReport, naviga back a `/dashboard`
+**Fix:** Branch condizionale nel handler:
+```javascript
+let passwordMatch;
+if (!employee.password_hash) {
+  const demoUser = DEMO_USERS.find(
+    (u) => u.employee_id === employee_id || u.id === employee_id
+  );
+  passwordMatch = demoUser != null && demoUser.password === old_password;
+} else {
+  passwordMatch = await verifyPassword(old_password, employee.password_hash);
+}
+```
+
+**Test aggiunto:** `backend/__tests__/s326-csv-temp-password.test.js` — nuovo test case verifica che il codice contenga il branch per `password_hash = NULL`. 9/9 test passano.
+
+### 2. Account cleanup 8→3 (Commits: fff17be, a9c243f, 2d906ae)
+
+**Account rimossi:**
+- `diego@badge.local` (manager) — due record nel DB (migration 005 UUID `446655440200` + migration 018 UUID `446655440020`)
+- `luca.verdi@employee.it` — mai usato in frontend
+- `alice.neri@employee.it` — mai usato in frontend  
+- `carlo.rossi@employee.it` — mai usato in frontend
+- `paolo.sordo@employee.it` — mai usato in frontend
 
 **File modificati:**
-- `frontend-web/src/App.jsx` — aggiunta route `/illnesses/manager-report` (ProtectedRoute requiredRole="manager")
-- `frontend-web/src/features/dashboard/pages/DashboardPage.jsx` — bottone 🏥 Malattia nella navbar per i manager
-- `frontend-web/src/features/leave/pages/ManagerLeaveRequest.jsx` — MALATTIA in LEAVE_TYPES mantenuto per history display; `.filter((t) => t.value !== 'MALATTIA')` aggiunto al dropdown
-- `frontend-web/src/features/leave/pages/EmployeeLeaveRequest.jsx` — stesso fix LEAVE_TYPES + rimosso `isRequestingMalattia`/`handleMalattiaRequest`/`handleFileUpload`/file upload section; bottone "Richiedi Malattia" → redirect `navigate('/illnesses/report')`; header → "Richiedi Ferie"
-- `backend/src/routes/illnesses.js:57` — Fix critico: `const employeeId = req.user.employee_id ?? req.user.user_id` — manager 404 risolto
+- `backend/src/__fixtures__/demo-users.js` — rimosso blocco Diego
+- `backend/src/routes/auth.js` — rimosso Diego da inline DEMO_USERS
+- `backend/src/__tests__/auth.test.js` — test "manager with site_id" aggiornato: `diego@badge.local` → `pino@badge.local`
+- `backend/.env.example` — rimosso `DEMO_DIEGO_PASSWORD`
+- `backend/.env.development` (gitignored) — rimosso `DEMO_DIEGO_PASSWORD`
+- `backend/migrations/023_remove_unused_demo_accounts.sql` — nuova migration
 
-### 3. Code review (3 findings fixati)
-1. **Critico:** Manager POST /illnesses/report → 404 (`user_id` ≠ `employee_id` per i manager)
-2. **Display:** MALATTIA rimosso da LEAVE_TYPES rompeva la history table → ripristinato con filtro al dropdown
-3. **Bypass:** EmployeeLeaveRequest aveva bottone che inviava MALATTIA direttamente alla leave table → rimosso, redirect a /illnesses/report
+**SSM Parameter Store (EC2):**
+- Rimosso `/badge/production/DEMO_DIEGO_PASSWORD`
+- Rimosso `/badge/production/DEMO_LUCIA_PASSWORD` (orfana — Lucia rimossa in sessione precedente)
+- Rimangono: `DEMO_PIPPO_PASSWORD`, `DEMO_PINO_PASSWORD`, `DEMO_MARIA_PASSWORD`
 
----
+**Migration 023 — 3 iterazioni per FK constraints:**
+1. **Iterazione 1 fail:** `DELETE FROM shifts WHERE employee_id = ANY(removed_ids)` → `column "employee_id" does not exist` — `shifts` usa JSONB per-site, non ha colonna employee_id. Fix: rimosso il DELETE shifts.
+2. **Iterazione 2 fail:** `leave_requests` CHECK constraint violato — `approved_by ON DELETE SET NULL` avrebbe lasciato `approved_at` non-null con `approved_by = NULL`. Fix: `UPDATE leave_requests SET approved_by = Pippo WHERE approved_by = ANY(removed_ids)`.
+3. **Iterazione 3 OK:** `checkins.created_by ON DELETE RESTRICT NOT NULL` → `UPDATE checkins SET created_by = employee_id WHERE created_by = ANY(removed_ids)`. Poi `DELETE FROM employees`.
 
-## Stato attuale
+### 3. Node.js 20 deprecation su GitHub Actions
 
-**Build:** `✓ built in 5.12s` — nessun errore
+GitHub annotation: `Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4`
 
-**Git status (tutto uncommitted):**
-- `backend/src/__fixtures__/demo-users.js` — modifiche sessioni precedenti
-- `backend/src/routes/auth.js` — idem
-- `backend/src/routes/leaves.js` — idem
-- `frontend-web/src/features/leave/hooks/useLeave.js` — idem
-- `frontend-web/src/features/leave/pages/AdminLeaveManagement.jsx` — idem
-- `frontend-web/src/features/leave/pages/EmployeeLeaveRequest.jsx` — Fix Task 12
-- `frontend-web/src/features/leave/pages/ManagerLeaveRequest.jsx` — Fix Task 12
-- `frontend-web/src/features/illness/pages/ManagerIllnessReport.jsx` — **NUOVO**
-- `frontend-web/src/features/dashboard/pages/DashboardPage.jsx` — bottone navbar
-- `frontend-web/src/App.jsx` — route aggiunta
-- `backend/src/routes/illnesses.js` — fix critico
+**Conclusione:** Cosmetic/non-bloccante. GitHub forza la compatibilità. `actions/checkout@v4` non ha una versione `@v5` pubblica. Nessuna azione richiesta.
 
 ---
 
-## Prossimi step
+## Cosa ha funzionato
 
-1. **Commit + push** tutte le modifiche uncommitted
-2. **Deploy frontend** via `netlify deploy --prod --dir dist --site 29a79b49-5571-4249-8c2b-d0813de4bf17`
-3. **Deploy backend** — il push su main triggera la CI/CD GitHub Actions → ECR → EC2
-4. **ONB.2** — Saldi NUMERIC(6,2) per mezze giornate / Permessi-ROL in ore
-5. **S.32.10** — GPS spoofing mitigations Phase 2 (mobile: `isFromMockProvider` + accuracy, server: impossible speed detection)
+- La logica di branch `password_hash = NULL` è pulita e non rompe i test esistenti
+- Migration 023 finale è robusta e auto-documentata con commenti sui constraint FK
+- La suite di test è rimasta verde (455 backend, 164 frontend) attraverso tutti i commit
 
 ---
 
-## Pattern critici da ricordare
+## Cosa NON ha funzionato (da non ripetere)
 
-```
-// In ogni route che serve la tabella employees con un utente autenticato:
-const employeeId = req.user.employee_id ?? req.user.user_id;
-// NON usare req.user.user_id direttamente — i manager hanno user_id ≠ employee_id
-```
-
-```
-// LEAVE_TYPES array: includere sempre MALATTIA per la history table
-const LEAVE_TYPES = [
-  { value: 'FERIE_1', label: 'Ferie 1' },
-  { value: 'FERIE_2', label: 'Ferie 2' },
-  { value: 'FERIE_3', label: 'Ferie 3' },
-  { value: 'MALATTIA', label: 'Malattia' }, // display only — not in form dropdown
-];
-// Nel form dropdown: LEAVE_TYPES.filter((t) => t.value !== 'MALATTIA').map(...)
-```
+- **Non assumere che `shifts` abbia `employee_id`** — la tabella è JSONB per-site/month, non per-employee. Controllare sempre lo schema prima di bulk delete.
+- **Non assumere che `ON DELETE SET NULL` sia sicuro** — se c'è un CHECK constraint che lega `approved_by + approved_at`, SET NULL viola il constraint. Sempre riassegnare prima.
+- **Le migration fallite bloccano l'avvio del container** — il migration runner esegue a startup e se fallisce il container crasha → 502 su api.dataxiom.it. Testare sempre la logica migration su DB locale o in CI prima di pushare.
 
 ---
 
-# Badge System — Session 41 Handoff
+## Stato attuale del sistema
 
-**Date:** 2026-06-16 → 18  
-**Session:** 41 — DEPLOY PRODUZIONE COMPLETO + Onboarding cliente (ONB.1)  
-**Status:** 🎉 **PRODUZIONE LIVE** (badge.dataxiom.it, 23/23 API test) | ✅ **Onboarding cliente implementato** (script concierge, 455 test verdi, merged su main, non ancora pushato)
+| Componente | Stato |
+|-----------|-------|
+| Backend (api.dataxiom.it) | ✅ Healthy (HTTP 200) |
+| Frontend (badge.dataxiom.it) | ✅ Live |
+| Migration 023 | ✅ Applicata in produzione |
+| Account demo | ✅ 3 account (pippo/pino/maria) |
+| SSM params demo | ✅ Puliti (3 rimasti: PIPPO/PINO/MARIA) |
+| Test suite | ✅ 455 backend + 164 frontend |
 
----
-
-## PARTE 2 — Onboarding cliente ONB.1 (2026-06-17→18) ✅ COMPLETO
-
-**Obiettivo:** strumento più semplice possibile per far fornire al cliente i dati di attività/sedi/dipendenti/saldi ferie, per popolare la web app.
-
-**Decisioni (via brainstorming):** Excel a 3 fogli (Azienda / Sedi / Dipendenti+saldi) compilato dal cliente → import "concierge" fatto da noi via script interno (no UI self-service per l'MVP). Saldi: FERIE_1=Ferie, FERIE_2=Permessi/ROL, FERIE_3=ex-Festività, in **giorni interi** (mezze giornate/ROL-ore → ONB.2).
-
-**Implementazione** (`backend/scripts/onboard-client.js` + 6 moduli in `scripts/onboarding/`):
-- `parseWorkbook` (Excel→normalizzato, trim+email lowercase), `validate` (errori file + warning), `validateAgainstDb` (collisioni), `apply` (upsert idempotenti + audit), `preview` (dry-run), `writeCredentials` (post-commit)
-- **Transazionale** (tutto o niente), **idempotente** (re-run sicuro: sedi find-or-create, dipendenti insert-or-update **senza resettare password**, saldi upsert solo se `used_days=0`), **doppia validazione** (file + DB), **audit** su ogni creazione
-- Output: CSV credenziali iniziali (post-commit, gitignored)
-
-**Processo qualità (subagent-driven TDD):** 8 task con subagent freschi, /test-all + analisi critica dopo ognuno. Durante il Task 4 intercettati e fixati 2 gap (geofence/buono pasto scartati). **Code-review finale** → 5 findings → **tutti fixati**:
-1. Guardie NaN (virgola decimale italiana → errore chiaro invece di crash pg)
-2. Estrazione celle rich-text/formula (niente più `[object Object]`)
-3. `assigned_sites` in merge (preserva multi-sede in-app)
-4. Conteggio saldi reale (rowCount)
-5. Guard `--client-id` senza valore
-
-**Verifica e2e** su DB locale: dry-run + real run + re-run idempotente (0 creati / 15 aggiornati, password non resettate) + cleanup. **455 test verdi** (+25 onboarding).
-
-**Artefatti:** template `backend/scripts/seed-data/onboarding-template-esempio.xlsx` (3 sedi × 5 dip, 3 responsabili) · runbook `docs/onboarding/README.md` · piano `docs/superpowers/plans/2026-06-17-client-onboarding-import.md` · spec decisioni in PROJECT_DECISIONS.md.
-
-**Stato git:** merged su `main` in locale (Opzione 1), branch eliminato, **non pushato** (parte col prossimo deploy — è tooling interno, non cambia l'app in esecuzione).
-
-**Uso:** `cd backend && node scripts/onboard-client.js <file.xlsx> --dry-run` (poi senza `--dry-run` per creare; `--client-id <uuid>` per aggiungere a cliente esistente).
-
-**Prossimo (ONB.2):** saldi NUMERIC per mezze giornate / Permessi-ROL in ore (vedi TASKS.md).
+**Account attivi:**
+| Account | Ruolo | Password |
+|---------|-------|----------|
+| `pippo@badge.local` | admin | SSM `DEMO_PIPPO_PASSWORD` (dev: `pippo01`) |
+| `pino@badge.local` | manager (Torino) | SSM `DEMO_PINO_PASSWORD` (dev: `pino01`) |
+| `maria@badge.local` | employee (Torino) | SSM `DEMO_MARIA_PASSWORD` (dev: `maria01`) |
 
 ---
 
-## PARTE 1 — Deploy produzione (Session 41)
+## Next Steps
 
-## Cosa è successo (Session 41)
+Non ci sono task critici aperti da questa sessione. I prossimi lavori prioritari dal TASKS.md:
 
-Il push del backlog (~90 commit non pushati da S.32.2 del 12/06) ha innescato la **prima CI da 4 giorni**. Sono emersi 6 layer di problemi, tutti risolti:
+1. **C.5.3** (Phase 2): Migrazione JWT localStorage → httpOnly cookie
+2. **5.5** (Phase 2): Rotate QR code functionality
+3. **Staging environment**: Obbligatorio prima del lancio con primo cliente reale (decisione Session 45)
+4. **First real customer onboarding**: La Rinascente era un test ONB.1 (dummy data). Il prossimo è un onboarding reale.
 
-1. **Lint (21 errori)** — virgolette doppie nel backlog → `eslint --fix` + rimozione try/catch inutile. Commit `2988200`/`365d8ca`.
-2. **Test suite rossa (130 fail)** — `checkRevoked` (S.32.7) è middleware app-level che fa una SELECT `revoked_tokens` prima di ogni route; i mock pre-S.32.7 non la contavano → sequenza sfasata → 500. **Fix condiviso:** mock pass-through in `jest.setup.js` + `jest.unmock` nelle 2 suite che testano checkRevoked. Risolte 11 suite. Poi illnesses (role clobber + double-mount + error handler mancante), consent (token finto → JWT reale), auth.integration (gate `RUN_INTEGRATION`). Commit `365d8ca`.
-3. **CI env mancante** — `npm test` esegue `validate-env` (separato, prima di jest) che richiede 15 var; CI non le aveva → env block nel workflow. Commit `82c615a`.
-4. **`uuid` non dichiarato** — `require('uuid')` risolveva da `~/node_modules` (v8.3.2) sulla mia macchina ma NON in CI/Docker → avrebbe crashato anche il container prod. Aggiunto a `package.json`. Commit `a71b638`.
-5. **Migration non idempotenti** — il runner ha trovato `idx_dpa_acknowledgements_client_id` già esistente in prod (applicata a mano, non in `schema_migrations`) → `CREATE INDEX` fail-fast → **container crash-loop → prod DOWN (502)**. Aggiunto `IF NOT EXISTS` a 011/012/016/017. Commit `85ad32b` + test allineato `a1814c0`.
-6. **SSM var mancanti** — il `validate-env` allo startup del container richiedeva `APP_NAME, DATABASE_URL, DISABLE_AUTH, SEED_TEST_DATA, AWS_S3_BUCKET`, assenti in `/badge/production/*`. Aggiunte via `aws ssm put-parameter` (**`DISABLE_AUTH=false`** in prod — auth sempre attiva). Redeploy via `workflow_dispatch` → ✅ healthy.
-
-**Deploy frontend:** `netlify deploy --prod --dir dist --site 29a79b49-5571-4249-8c2b-d0813de4bf17` (serve l'ID **completo**, non quello corto). Live su https://badge.dataxiom.it.
-
-### 7° blocco (post-deploy, da Sentry) — tabelle leave/illness mancanti in prod
-Sentry: `GET /api/v1/leave/admin/saldi` → 500 su `/admin/leave` (release `a1814c0`). **Causa:** lo schema leave era SOLO in `src/migrations/022_create_leaves_tables.sql` e la tabella `illnesses` SOLO in `src/db/schema.sql` — **nessuna delle due in `backend/migrations/`** (la cartella che il runner legge). Quindi prod non aveva `leaves`/`leave_requests`/`leave_saldi`/`illnesses` → ogni route leave/malattia faceva 500. **Fix:** create migration idempotenti `020_create_leaves_tables.sql` + `021_create_illnesses_table.sql` in `backend/migrations/`. Commit `f27f607`. Verificato: 4 endpoint leave/illness → 200.
-⚠️ **Debito tecnico:** `src/migrations/022` e la sezione illnesses di `src/db/schema.sql` ora sono duplicati da `migrations/020-021`. C'è UN solo posto che il runner usa (`backend/migrations/`): ogni nuova tabella DEVE andare lì, non in `src/migrations/` o `schema.sql`.
-
-### Lezioni chiave (per non ripetere)
-- **Non lasciare accumulare commit non pushati.** 90 commit = 6 layer di rotture tutte insieme, con prod giù nel mezzo. Pushare spesso così la CI prende i problemi uno alla volta.
-- **`uuid` trap:** un `require` può risolvere da `~/node_modules` localmente e fallire ovunque altro. Verificare le dipendenze dichiarate (`npm ci` in una dir pulita).
-- **Il migration runner richiede migration idempotenti** (`IF NOT EXISTS` ovunque) perché prod ha stato pregresso applicato a mano non tracciato in `schema_migrations`.
-- **`validate-env` gira sia in CI sia allo startup del container** — ogni nuova var richiesta va aggiunta a SSM prod E all'env CI.
-
-**Commit Session 41:** `2988200`, `508b777`, `365d8ca`, `82c615a`, `a71b638`, `85ad32b`, `a1814c0` + 5 param SSM + redeploy.
-
----
-
-# Badge System — Session 40 Handoff
-
-**Date:** 2026-06-15  
-**Session:** 40 — Code Review Security Fixes + Migration 019  
-**Status:** ✅ **10 fix applicati** (sicurezza cross-tenant, RBAC, error handling, pattern) | ✅ **Migration 019 notifications** | 🚀 **PRONTO PER DEPLOY PRODUZIONE**  
-**Commits:** `a5c0028` (migration 019) → `2988200` (10 code review fixes)
-
----
-
-## Cosa è stato fatto questa sessione
-
-### 1. Migration 019 — Notifications schema drift (commit `a5c0028`)
-
-La tabella `notifications` locale era stata creata con lo schema vecchio: mancavano le colonne `type`, `shift_date`, `new_shift`, `site_id`. Causava `500 Internal Error` su `GET /api/v1/notifications`.
-
-**Fix applicato:**
-- Creato `backend/migrations/019_add_notification_columns.sql`
-- Applicato manualmente sul DB locale
-- ⚠️ **Deve essere applicato su RDS produzione al prossimo deploy**
-
-```sql
-ALTER TABLE notifications
-  ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'shift_updated',
-  ADD COLUMN IF NOT EXISTS shift_date TEXT,
-  ADD COLUMN IF NOT EXISTS new_shift TEXT,
-  ADD COLUMN IF NOT EXISTS site_id UUID REFERENCES sites(id) ON DELETE SET NULL;
-```
-
----
-
-### 2. Code Review — 10 fix (commit `2988200`)
-
-**Fix critici (sicurezza):**
-
-| # | File | Fix |
-|---|------|-----|
-| 1 | `frontend-web/.../admin/tabs/ViewersTab.jsx` | `handleDelete` chiamava `/api/admin/employees/` invece di `/api/admin/viewers/` — delete viewers era completamente rotto |
-| 2 | `backend/src/routes/admin/employees.js` | `DELETE /:id` senza `AND client_id = $2::uuid` → cross-tenant deletion possibile |
-| 3 | `backend/src/routes/admin/employees.js` | `reset-password` senza `AND client_id = $3::uuid` → cross-tenant password reset possibile |
-| 4 | `backend/src/routes/illnesses.js` | Guard `POST /report` bloccava solo `admin`; ora blocca anche `viewer` |
-| 8 | `backend/src/middleware/auth.js` | `DISABLE_AUTH` usava `!== 'production'` (NODE_ENV undefined bypass auth); ora usa allowlist `['development','test'].includes()` |
-
-**Fix error handling / UX:**
-
-| # | File | Fix |
-|---|------|-----|
-| 5 | `frontend-web/.../illness/pages/AdminIllnessManagement.jsx` | Aggiunto `errorMessage` state + Alert su load/delete (prima: `console.error` silenzioso) |
-| 6 | `frontend-web/.../admin/tabs/SettingsTab.jsx` | Rimosso `|| res.data.data[0]` fallback — caricava settings del tenant sbagliato in caso di mismatch `client_id` |
-| 7 | `frontend-web/.../admin/tabs/EmployeesTab.jsx` | `empFetchError` ora esposto + Alert (pattern coerente con ViewersTab/ClientsTab) |
-
-**Fix pattern inconsistency:**
-
-| # | File | Fix |
-|---|------|-----|
-| P1 | `backend/src/routes/admin/viewers.js` | Aggiunto `DELETE /:id` mancante — filtro `role='viewer'` + `client_id` + audit log + `NotFoundError` |
-| P2 | `backend/src/routes/admin/sites.js` + `viewers.js` | `.catch(() => {})` → `.catch((err) => logger.warn(...))` — audit log failures non più silenti |
-
-**Test:** 28 fallimenti pre-esistenti prima e dopo — zero nuove regressioni.
-
----
-
-## Stato attuale (fine Session 40)
-
-| Area | Status |
-|------|--------|
-| Backend sicurezza | ✅ Cross-tenant protetto, RBAC corretto, DISABLE_AUTH safe |
-| Frontend error handling | ✅ Tutti i tab admin mostrano errori visibili |
-| Notifications | ✅ Fix locale applicato (500 risolto) |
-| Test suite | ✅ 28 pre-existing failures, zero nuovi |
-| Deploy produzione | 🚀 **PRONTO** — nessun blocco tecnico |
-
----
-
-## Prossimo Step — Deploy Produzione (~1-2h)
-
-**Ordine obbligato:**
-
-```bash
-# 1. Applicare migration 019 su RDS produzione
-PGPASSWORD=... psql -h <RDS_HOST> -U postgres -d badge_db \
-  -f backend/migrations/019_add_notification_columns.sql
-
-# 2. Build + push Docker image
-/deploy   # oppure manualmente: docker build → ECR push → EC2 restart
-
-# 3. Verifica
-/api-test  # default: testa https://api.dataxiom.it
-```
-
-**Smoke test post-deploy:**
-- Login come pippo admin → Dashboard carica ✅
-- Admin tab → Notifiche → nessun 500 ✅
-- Admin tab → Commercialisti → Rimuovi accesso funziona ✅
-- Manager login → Planning → Turni visibili ✅
-
----
-
-## Pattern inconsistencies NON fixate (note per sessioni future)
-
-Identificate ma non cambiate in questa sessione (sono scelte di design, non bug):
-
-1. **`EmployeeIllnessReport.jsx`** usa `Alert` (inline, persistente); `EmployeeLeaveRequest` e `ManagerLeaveRequest` usano `Snackbar` (auto-hide). Diverso ma intenzionale per gravità diversa.
-2. **`ManagerLeaveRequest.jsx`** mostra `MALATTIA` nel dropdown ma non ha widget file upload (solo `EmployeeLeaveRequest` ce l'ha). Da valutare se i manager devono poter caricare certificati.
-3. **`EmployeeIllnessReport.jsx`** non mostra storico comunicazioni passate (le altre pagine leave mostrano lista richieste). Da aggiungere in future sprint.
-
----
-
-## File chiave modificati questa sessione
-
-| File | Modifica |
-|------|---------|
-| `backend/migrations/019_add_notification_columns.sql` | NUOVO — fix schema drift notifications |
-| `backend/src/middleware/auth.js` | DISABLE_AUTH allowlist (sicurezza) |
-| `backend/src/routes/illnesses.js` | Guard viewer su POST /report |
-| `backend/src/routes/admin/employees.js` | client_id filter su DELETE + reset-password |
-| `backend/src/routes/admin/viewers.js` | DELETE /:id endpoint aggiunto |
-| `backend/src/routes/admin/sites.js` | audit .catch logger.warn |
-| `frontend-web/src/features/admin/tabs/ViewersTab.jsx` | endpoint DELETE corretto |
-| `frontend-web/src/features/admin/tabs/EmployeesTab.jsx` | empFetchError + Alert |
-| `frontend-web/src/features/admin/tabs/SettingsTab.jsx` | rimosso fallback pericoloso |
-| `frontend-web/src/features/illness/pages/AdminIllnessManagement.jsx` | errorMessage state + Alert |
+Per riprendere: leggi `TASKS.md` + `git log --oneline -10`.
