@@ -111,7 +111,7 @@ describe('POST /api/auth/login — badge.local accounts', () => {
   test('manager with site_id gets site_id in token', async () => {
     const res = await request(app)
       .post('/api/v1/auth/login')
-      .send({ email: 'diego@badge.local', password: 'diego01' });
+      .send({ email: 'pino@badge.local', password: process.env.DEMO_PINO_PASSWORD });
 
     expect(res.status).toBe(200);
     const decoded = jwt.verify(res.body.data.token, process.env.JWT_PUBLIC_KEY, {

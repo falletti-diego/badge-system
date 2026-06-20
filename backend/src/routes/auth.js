@@ -56,16 +56,6 @@ const DEMO_USERS = [
     site_id: '550e8400-e29b-41d4-a716-446655440011', // Milano Store (matches database)
   },
   {
-    email: 'diego@badge.local',
-    password: process.env.DEMO_DIEGO_PASSWORD,
-    id: '550e8400-e29b-41d4-a716-446655440200', // Valid UUID for manager Diego (matches employees.id from migration 005)
-    name: 'Diego',
-    role: 'manager',
-    client_id: '550e8400-e29b-41d4-a716-446655440001',
-    site_id: '550e8400-e29b-41d4-a716-446655440012', // Torino
-    employee_id: '550e8400-e29b-41d4-a716-446655440200',
-  },
-  {
     email: 'maria@badge.local',
     password: process.env.DEMO_MARIA_PASSWORD,
     id: '239ec99f-3204-45ca-bce2-793f52442ec6', // Valid UUID for employee Maria (real planning record)
