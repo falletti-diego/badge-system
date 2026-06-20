@@ -389,3 +389,20 @@ Before submitting PR that modifies:
 - [ ] Grep check: `grep -rn "(client_id|site_id|employee_id): '[^{]'" backend/src/` returns 0 matches
 - [ ] Middleware logs all error paths (not silent failures)
 
+---
+
+## Verification
+
+After database schema or foreign-key changes, re-run the affected queries to confirm the constraint is actually resolved before declaring success. After backend changes, test the live API endpoints with a valid token.
+
+---
+
+## Deployment Notes
+
+For dashboard/landing-page deploys, account for HTTPS/CORS upfront: use a trusted cert (Let's Encrypt) rather than self-signed to avoid ERR_CERT_AUTHORITY_INVALID and mixed-content errors.
+
+---
+
+## Session Handoffs
+
+At the end of every working session, update TASKS.md, PROJECT_DECISIONS.md, and HANDOFF.md using the handoff skill, then create a commit. Claude has no memory of prior sessions—rely on these files for context.
