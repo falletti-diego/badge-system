@@ -23,6 +23,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useMySchedule } from '../hooks/useMySchedule';
 import { useIllness } from '../../illness/hooks/useIllness';
+import { useLeave } from '../../leave/hooks/useLeave';
 import authService from '../../../services/authService';
 import { NotificationBell } from '../../notifications/components/NotificationBell';
 
@@ -40,6 +41,7 @@ export const EmployeeShiftsPage = () => {
   const [year, setYear] = useState(new Date().getFullYear());
   const [illnesses, setIllnesses] = useState([]);
   const [loadingIllnesses, setLoadingIllnesses] = useState(false);
+  const [approvedLeaves, setApprovedLeaves] = useState([]);
 
   const handleLogout = async () => {
     await authService.logout();
@@ -49,6 +51,7 @@ export const EmployeeShiftsPage = () => {
   // Fetch employee's schedule from API
   const { data, loading, error } = useMySchedule(month, year);
   const { getIllnessesByDateRange } = useIllness();
+  const { getApprovedRequests } = useLeave();
 
   // Load illnesses for the selected month/year
   useEffect(() => {
@@ -70,6 +73,18 @@ export const EmployeeShiftsPage = () => {
 
     loadIllnesses();
   }, [month, year, getIllnessesByDateRange]);
+
+  // Load approved leave requests for this employee
+  useEffect(() => {
+    (async () => {
+      try {
+        const leaves = await getApprovedRequests();
+        setApprovedLeaves(leaves || []);
+      } catch (err) {
+        console.error('Errore nel caricamento delle ferie approvate:', err);
+      }
+    })();
+  }, [getApprovedRequests]);
 
   if (userLoading) {
     return (
@@ -111,6 +126,15 @@ export const EmployeeShiftsPage = () => {
     });
   };
 
+  // Helper function: check if date is an approved leave day
+  const isDateLeave = (dateStr) => {
+    return approvedLeaves.some((l) => {
+      const start = new Date(l.start_date).toISOString().split('T')[0];
+      const end = new Date(l.end_date).toISOString().split('T')[0];
+      return dateStr >= start && dateStr <= end;
+    });
+  };
+
   // Generate ALL days of the month — shift is null when not yet assigned
   const shiftsArray = Array.from({ length: daysInMonth }, (_, i) => {
     const day = i + 1;
@@ -118,8 +142,9 @@ export const EmployeeShiftsPage = () => {
     return { date: dateStr, shift: shiftsData[dateStr] || null };
   });
 
-  const assignedCount = shiftsArray.filter(({ date, shift }) => shift !== null && !isDateIll(date)).length;
   const illnessCount = shiftsArray.filter(({ date }) => isDateIll(date)).length;
+  const leaveCount = shiftsArray.filter(({ date }) => !isDateIll(date) && isDateLeave(date)).length;
+  const assignedCount = shiftsArray.filter(({ date, shift }) => shift !== null && !isDateIll(date) && !isDateLeave(date)).length;
   const monthLabel = new Date(year, month - 1, 1).toLocaleString('it-IT', {
     month: 'long',
     year: 'numeric'
@@ -204,7 +229,7 @@ export const EmployeeShiftsPage = () => {
                   Turni Assegnati
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                  {assignedCount}/{daysInMonth - illnessCount}
+                  {assignedCount}/{daysInMonth - illnessCount - leaveCount}
                 </Typography>
               </CardContent>
             </Card>
@@ -222,13 +247,26 @@ export const EmployeeShiftsPage = () => {
               </Card>
             )}
 
+            {leaveCount > 0 && (
+              <Card sx={{ flex: 1, borderLeft: '4px solid #0EA5E9' }}>
+                <CardContent>
+                  <Typography color="textSecondary" gutterBottom>
+                    Giorni di Ferie
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#0EA5E9' }}>
+                    {leaveCount}
+                  </Typography>
+                </CardContent>
+              </Card>
+            )}
+
             <Card sx={{ flex: 1, borderLeft: '4px solid #B45309' }}>
               <CardContent>
                 <Typography color="textSecondary" gutterBottom>
                   Giorni Liberi
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-                  {daysInMonth - assignedCount - illnessCount}
+                  {daysInMonth - assignedCount - illnessCount - leaveCount}
                 </Typography>
               </CardContent>
             </Card>
@@ -249,6 +287,7 @@ export const EmployeeShiftsPage = () => {
                 });
                 const isWeekend = [0, 6].includes(dateObj.getDay());
                 const ill = isDateIll(date);
+                const leave = !ill && isDateLeave(date);
 
                 return (
                   <Box
@@ -259,15 +298,15 @@ export const EmployeeShiftsPage = () => {
                       alignItems: 'center',
                       padding: '12px 16px',
                       borderBottom: idx < shiftsArray.length - 1 ? '1px solid #E5E7EB' : 'none',
-                      backgroundColor: ill ? 'rgba(220, 38, 38, 0.08)' : isWeekend ? '#FAFAF8' : 'transparent',
-                      '&:hover': { backgroundColor: ill ? 'rgba(220, 38, 38, 0.12)' : '#F9F8F6' }
+                      backgroundColor: ill ? 'rgba(220, 38, 38, 0.08)' : leave ? 'rgba(14, 165, 233, 0.08)' : isWeekend ? '#FAFAF8' : 'transparent',
+                      '&:hover': { backgroundColor: ill ? 'rgba(220, 38, 38, 0.12)' : leave ? 'rgba(14, 165, 233, 0.12)' : '#F9F8F6' }
                     }}
                   >
                     <Typography
                       variant="body2"
                       sx={{
-                        fontWeight: ill ? '600' : isWeekend ? '400' : '500',
-                        color: ill ? '#DC2626' : isWeekend ? '#9CA3AF' : '#2A2520',
+                        fontWeight: (ill || leave) ? '600' : isWeekend ? '400' : '500',
+                        color: ill ? '#DC2626' : leave ? '#0284C7' : isWeekend ? '#9CA3AF' : '#2A2520',
                         textTransform: 'capitalize'
                       }}
                     >
@@ -291,6 +330,25 @@ export const EmployeeShiftsPage = () => {
                         }}
                       >
                         ⚕️ Malattia
+                      </Box>
+                    ) : leave ? (
+                      <Box
+                        sx={{
+                          backgroundColor: '#0EA5E9',
+                          color: '#FFFFFF',
+                          padding: '3px 12px',
+                          borderRadius: '4px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          minWidth: '90px',
+                          textAlign: 'center',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        🏖️ Ferie
                       </Box>
                     ) : shiftInfo ? (
                       <Box
@@ -349,6 +407,15 @@ export const EmployeeShiftsPage = () => {
                 label="Malattia"
                 sx={{
                   backgroundColor: '#DC2626',
+                  color: '#FFFFFF',
+                  fontWeight: '600',
+                  fontSize: '13px'
+                }}
+              />
+              <Chip
+                label="Ferie"
+                sx={{
+                  backgroundColor: '#0EA5E9',
                   color: '#FFFFFF',
                   fontWeight: '600',
                   fontSize: '13px'
