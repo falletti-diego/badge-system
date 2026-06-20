@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Container, Box, Alert, AppBar, Toolbar, Button } from '@mui/material';
+import { Container, Box, Alert, Button } from '@mui/material';
 import { usePresences } from '../hooks/usePresences';
 import KpiCards from '../components/KpiCards';
 import FilterBar from '../components/FilterBar';
@@ -13,6 +13,7 @@ import PresencesTable from '../components/PresencesTable';
 import ExportButton from '../components/ExportButton';
 import { ManagerLeaveApprovalPanel } from '../../leave/components/ManagerLeaveApprovalPanel';
 import authService from '../../../services/authService';
+import { NavBar } from '../../../components/NavBar';
 
 const DashboardPage = () => {
   const navigate = useNavigate();
@@ -31,11 +32,6 @@ const DashboardPage = () => {
     limit: 50,
     offset: 0,
   });
-
-  const handleLogout = async () => {
-    await authService.logout();
-    navigate('/login');
-  };
 
   // Memoize filters to prevent infinite refetch loops
   const memoizedFilters = useMemo(() => filters, [
@@ -82,213 +78,139 @@ const DashboardPage = () => {
   return (
     <div className="min-h-screen bg-linen">
       {/* Navbar */}
-      <AppBar position="static" sx={{ backgroundColor: '#1E3A5F' }}>
-        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1 style={{ color: 'white', fontSize: '20px', fontWeight: 600 }}>Badge System</h1>
+      <NavBar title="Badge System">
+        {/* Planning Button - Show for managers and admins */}
+        {(userRole === 'manager' || userRole === 'admin') && (
+          <Button
+            color="inherit"
+            onClick={() => navigate('/planning')}
+            sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+          >
+            📅 Planning
+          </Button>
+        )}
 
-          <Box sx={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            {/* Planning Button - Show for managers and admins */}
-            {(userRole === 'manager' || userRole === 'admin') && (
-              <Button
-                color="inherit"
-                onClick={() => navigate('/planning')}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '14px',
-                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
-                }}
-              >
-                📅 Planning
-              </Button>
-            )}
+        {/* Corrections Button - Show for managers and admins */}
+        {(userRole === 'manager' || userRole === 'admin') && (
+          <Button
+            color="inherit"
+            onClick={() => navigate('/corrections')}
+            sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+          >
+            ✏️ Correzioni
+          </Button>
+        )}
 
-            {/* Corrections Button - Show for managers and admins */}
-            {(userRole === 'manager' || userRole === 'admin') && (
-              <Button
-                color="inherit"
-                onClick={() => navigate('/corrections')}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '14px',
-                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
-                }}
-              >
-                ✏️ Correzioni
-              </Button>
-            )}
+        {/* Manager Leave Request - Show for managers */}
+        {userRole === 'manager' && (
+          <Button
+            color="inherit"
+            onClick={() => navigate('/leave/my-request')}
+            sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+          >
+            📋 Le Mie Ferie
+          </Button>
+        )}
 
-            {/* Manager Leave Request - Show for managers */}
-            {userRole === 'manager' && (
-              <Button
-                color="inherit"
-                onClick={() => navigate('/leave/my-request')}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '14px',
-                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
-                }}
-              >
-                📋 Le Mie Ferie
-              </Button>
-            )}
+        {/* Manager Illness Report - Show for managers */}
+        {userRole === 'manager' && (
+          <Button
+            color="inherit"
+            onClick={() => navigate('/illnesses/manager-report')}
+            sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+          >
+            🏥 Malattia
+          </Button>
+        )}
 
-            {/* Manager Illness Report - Show for managers */}
-            {userRole === 'manager' && (
-              <Button
-                color="inherit"
-                onClick={() => navigate('/illnesses/manager-report')}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '14px',
-                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
-                }}
-              >
-                🏥 Malattia
-              </Button>
-            )}
+        {/* Sites & QR Code - Admin only */}
+        {userRole === 'admin' && (
+          <Button
+            color="inherit"
+            onClick={() => navigate('/admin/sites')}
+            sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+          >
+            🏪 Sedi & QR
+          </Button>
+        )}
 
-            {/* Sites & QR Code - Admin only */}
-            {userRole === 'admin' && (
-              <Button
-                color="inherit"
-                onClick={() => navigate('/admin/sites')}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '14px',
-                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
-                }}
-              >
-                🏪 Sedi & QR
-              </Button>
-            )}
+        {/* Admin panel - Admin only */}
+        {userRole === 'admin' && (
+          <Button
+            color="inherit"
+            onClick={() => navigate('/admin')}
+            sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+          >
+            ⚙️ Admin
+          </Button>
+        )}
 
-            {/* Admin panel - Admin only */}
-            {userRole === 'admin' && (
-              <Button
-                color="inherit"
-                onClick={() => navigate('/admin')}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '14px',
-                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
-                }}
-              >
-                ⚙️ Admin
-              </Button>
-            )}
+        {/* Admin Leave Management - Admin only */}
+        {userRole === 'admin' && (
+          <Button
+            color="inherit"
+            onClick={() => navigate('/admin/leave')}
+            sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+          >
+            📋 Ferie Admin
+          </Button>
+        )}
 
-            {/* Admin Leave Management - Admin only */}
-            {userRole === 'admin' && (
-              <Button
-                color="inherit"
-                onClick={() => navigate('/admin/leave')}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '14px',
-                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
-                }}
-              >
-                📋 Ferie Admin
-              </Button>
-            )}
+        {/* Summary link - Show for admin, manager, viewer */}
+        {(userRole === 'admin' || userRole === 'manager' || userRole === 'viewer') && (
+          <Button
+            color="inherit"
+            onClick={() => navigate('/summary')}
+            sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+          >
+            📊 Riepilogo
+          </Button>
+        )}
 
-            {/* Summary link - Show for admin, manager, viewer */}
-            {(userRole === 'admin' || userRole === 'manager' || userRole === 'viewer') && (
-              <Button
-                color="inherit"
-                onClick={() => navigate('/summary')}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '14px',
-                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
-                }}
-              >
-                📊 Riepilogo
-              </Button>
-            )}
+        {/* Employee Schedule Link - Show for employees */}
+        {userRole === 'employee' && (
+          <Button
+            color="inherit"
+            onClick={() => navigate('/planning/my-schedule')}
+            sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+          >
+            📆 I Miei Turni
+          </Button>
+        )}
 
-            {/* Employee Schedule Link - Show for employees */}
-            {userRole === 'employee' && (
-              <Button
-                color="inherit"
-                onClick={() => navigate('/planning/my-schedule')}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '14px',
-                  '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.1)',
-                  },
-                }}
-              >
-                📆 I Miei Turni
-              </Button>
-            )}
+        {/* Employee Leave Request Link - Show for employees */}
+        {userRole === 'employee' && (
+          <Button
+            color="inherit"
+            onClick={() => navigate('/leave/request')}
+            sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+          >
+            📋 Ferie
+          </Button>
+        )}
 
-            {/* Employee Leave Request Link - Show for employees */}
-            {userRole === 'employee' && (
-              <Button
-                color="inherit"
-                onClick={() => navigate('/leave/request')}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '14px',
-                  '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.1)',
-                  },
-                }}
-              >
-                📋 Ferie
-              </Button>
-            )}
+        {/* Employee Illness Report - Show for employees */}
+        {userRole === 'employee' && (
+          <Button
+            color="inherit"
+            onClick={() => navigate('/illnesses/report')}
+            sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+          >
+            🏥 Malattia
+          </Button>
+        )}
 
-            {/* Employee Illness Report - Show for employees */}
-            {userRole === 'employee' && (
-              <Button
-                color="inherit"
-                onClick={() => navigate('/illnesses/report')}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '14px',
-                  '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.1)',
-                  },
-                }}
-              >
-                🏥 Malattia
-              </Button>
-            )}
-
-            {/* Admin Illness Management - Admin only */}
-            {userRole === 'admin' && (
-              <Button
-                color="inherit"
-                onClick={() => navigate('/admin/illnesses')}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '14px',
-                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' },
-                }}
-              >
-                🏥 Malattie
-              </Button>
-            )}
-
-            <Button
-              color="inherit"
-              onClick={handleLogout}
-              sx={{
-                textTransform: 'none',
-                fontSize: '14px',
-                '&:hover': {
-                  backgroundColor: 'rgba(255,255,255,0.1)',
-                },
-              }}
-            >
-              Logout
-            </Button>
-          </Box>
-        </Toolbar>
-      </AppBar>
+        {/* Admin Illness Management - Admin only */}
+        {userRole === 'admin' && (
+          <Button
+            color="inherit"
+            onClick={() => navigate('/admin/illnesses')}
+            sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+          >
+            🏥 Malattie
+          </Button>
+        )}
+      </NavBar>
 
       <Container maxWidth="lg" sx={{ paddingTop: '40px', paddingBottom: '40px' }}>
         {/* Page Header */}
