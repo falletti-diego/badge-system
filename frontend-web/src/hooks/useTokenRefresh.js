@@ -69,7 +69,7 @@ export function useTokenRefresh() {
       }
 
       const apiBaseUrl = getApiBaseUrl();
-      const url = `${apiBaseUrl}/api/auth/refresh`;
+      const url = `${apiBaseUrl}/api/v1/auth/refresh`;
 
       const response = await fetch(url, {
         method: 'POST',

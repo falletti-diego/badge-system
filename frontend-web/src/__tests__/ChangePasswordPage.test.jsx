@@ -47,7 +47,7 @@ describe('ChangePasswordPage Component', () => {
         </Router>
       );
 
-      expect(screen.getByRole('heading', { name: /change password/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /cambio password|cambia password/i })).toBeInTheDocument();
       expect(screen.getByLabelText(/current password/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/^new password/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/confirm new password/i)).toBeInTheDocument();
@@ -213,7 +213,7 @@ describe('ChangePasswordPage Component', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText(/password changed successfully/i)).toBeInTheDocument();
+        expect(screen.getByText(/password cambiata/i)).toBeInTheDocument();
       });
 
       await waitFor(() => {
