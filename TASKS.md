@@ -917,14 +917,15 @@ Go-live with first paying customer (pilota).
 ### 🚨 GDPR/Privacy Findings from Session 31 Security Review
 **Bloccanti per commercializzazione in Italia — PRIORITÀ MASSIMA**
 
-- [ ] **S.24** Missing GDPR Disclosure for GPS Data Collection (HIGH, Confidence 0.95)
-  - **Issue:** Geofencing feature raccoglie coordinate GPS sensibili (latitude, longitude). Privacy Policy è insufficiente (GDPR Art. 13-14 richiede disclosure esplicita su: base legale, retention, diritti dipendenti, controller/processor). Impact: Violazione regolatori, multa fino €20M o 4% fatturato globale.
-  - **TODO:** 
-    1. Creare `docs/privacy-policy-IT.md` — sezione GPS: base legale (Art. 6(1)(b) esecuzione contratto OR Art. 6(1)(f) legittimo interesse), retention policy (90 giorni), diritti, sub-processor AWS
-    2. In-app disclosure (frontend-mobile/src/screens): prima del primo checkin con GPS, dialog "Questo app raccoglie la tua localizzazione per verificare sei in sede. Dati cancellati dopo 90 giorni. [Accetto] [Rifiuto]"
-    3. Aggiornare Privacy Policy pubblica (`frontend-web/public/privacy-policy.html`) con sezione GPS
-  - **Effort:** 3-4 ore
-  - **Success:** Privacy Policy covers GPS processing, in-app dialog mostrato al primo GPS checkin, non c'è ambiguità su base legale
+- [ ] **S.24** Missing GDPR Disclosure for GPS Data Collection (HIGH, Confidence 0.95) — **⏸️ DEFERRED: implementare solo quando il primo cliente richiede il geofencing GPS**
+  - **Issue:** Geofencing feature raccoglie coordinate GPS sensibili. Privacy Policy è insufficiente (GDPR Art. 13-14). Geofencing oggi è in produzione ma **disabilitato per default** — nessun cliente lo usa ancora.
+  - **Decisione Session 46:** Il geofencing GPS è una feature opzionale. Il rischio GDPR è attivo solo quando un cliente abilita `geofence_enabled=true` su una sede. Finché nessun cliente lo usa, la feature è dormiente e il rischio è teorico. Si implementa S.24 contestualmente all'attivazione del primo geofencing reale.
+  - **Piano pronto:** `docs/superpowers/plans/2026-06-20-s24-gdpr-gps-disclosure.md` — 4 task (~3-4h):
+    1. Fix `GPSConsentDialog` (AlertDialog → Modal nativo React Native — bug fatale)
+    2. Pagina pubblica `privacy-policy-it.html` + `_redirects` Netlify
+    3. Script `gps-retention.js` + cron EC2 (cancellazione coordinate dopo 90gg)
+    4. Test per `GET /admin/employee-consents` (coverage gap)
+  - **Trigger:** Primo cliente che chiede geofencing → esegui il piano → deploy → poi abilita geofencing sulla sede
 
 - [ ] **S.25** Missing Data Processing Agreement (DPA) — GDPR Art. 28 (HIGH, Confidence 0.90)
   - **Issue:** Dataxiom (Data Processor) deve avere DPA scritto con ogni cliente (Data Controller). Mancanza di DPA = violazione Art. 28, fini fino €20M. Impact: Blocco legale su onboarding cliente, compliance audit fallisce.
