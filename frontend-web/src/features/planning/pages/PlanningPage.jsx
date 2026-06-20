@@ -14,8 +14,6 @@ import {
   Paper,
   Select,
   MenuItem,
-  AppBar,
-  Toolbar,
   Button,
   CircularProgress,
   Tooltip,
@@ -35,7 +33,7 @@ import { useShiftUpdate } from '../hooks/useShiftUpdate';
 import { useLeave } from '../../leave/hooks/useLeave';
 import { useIllness } from '../../illness/hooks/useIllness';
 import { ManagerIllnessModal } from '../../illness/components/ManagerIllnessModal';
-import authService from '../../../services/authService';
+import { NavBar } from '../../../components/NavBar';
 import { pad, inDateRange } from '../../../utils/dateUtils';
 
 const SHIFT_COLORS = {
@@ -359,22 +357,11 @@ export const PlanningPage = () => {
       `} />
 
       {/* Navbar */}
-      <AppBar position="static" sx={{ backgroundColor: '#1E3A5F' }} className="no-print">
-        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1 style={{ color: 'white', fontSize: '20px', fontWeight: 600 }}>📅 Planning Turni</h1>
-          <Box sx={{ display: 'flex', gap: '12px' }}>
-            <Button color="inherit" onClick={() => navigate('/dashboard')} sx={{ textTransform: 'none', fontSize: '14px' }}>
-              ← Dashboard
-            </Button>
-            <Button color="inherit" onClick={async () => {
-              try { await authService.logout(); } catch (e) { console.error('Logout error:', e); }
-              navigate('/login');
-            }} sx={{ textTransform: 'none', fontSize: '14px' }}>
-              Logout
-            </Button>
-          </Box>
-        </Toolbar>
-      </AppBar>
+      <NavBar title="📅 Planning Turni">
+        <Button color="inherit" onClick={() => navigate('/dashboard')} sx={{ textTransform: 'none', fontSize: '14px' }}>
+          ← Dashboard
+        </Button>
+      </NavBar>
 
       <Container maxWidth="lg" sx={{ paddingY: '32px' }}>
 
