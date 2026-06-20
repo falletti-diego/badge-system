@@ -58,7 +58,7 @@ const DEMO_USERS = [
   {
     email: 'diego@badge.local',
     password: process.env.DEMO_DIEGO_PASSWORD,
-    id: '550e8400-e29b-41d4-a716-446655440012', // Valid UUID for manager Diego
+    id: '550e8400-e29b-41d4-a716-446655440200', // Valid UUID for manager Diego (matches employees.id from migration 005)
     name: 'Diego',
     role: 'manager',
     client_id: '550e8400-e29b-41d4-a716-446655440001',
