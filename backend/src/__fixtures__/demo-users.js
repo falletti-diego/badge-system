@@ -47,11 +47,11 @@ const DEMO_USERS = [
     // Employee user — minimal access
     email: 'maria@badge.local',
     password: process.env.DEMO_MARIA_PASSWORD,
-    id: '84ab2a73-aedd-4514-b9d4-4496a968e409', // ✅ VALID UUID (matches database)
+    id: '239ec99f-3204-45ca-bce2-793f52442ec6', // ✅ VALID UUID (real planning employee record)
     name: 'Maria',
     role: 'employee',
     client_id: '550e8400-e29b-41d4-a716-446655440001', // ✅ VALID UUID (same client)
-    employee_id: '84ab2a73-aedd-4514-b9d4-4496a968e409', // Maria Rossi ✅ VALID UUID (matches database)
+    employee_id: '239ec99f-3204-45ca-bce2-793f52442ec6', // Maria Rossi ✅ matches planning employee id
   },
   // Note: Lucia removed — no corresponding employee record in database
 ];

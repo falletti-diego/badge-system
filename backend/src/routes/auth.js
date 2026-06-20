@@ -68,11 +68,11 @@ const DEMO_USERS = [
   {
     email: 'maria@badge.local',
     password: process.env.DEMO_MARIA_PASSWORD,
-    id: '84ab2a73-aedd-4514-b9d4-4496a968e409', // Valid UUID for employee Maria (matches database)
+    id: '239ec99f-3204-45ca-bce2-793f52442ec6', // Valid UUID for employee Maria (real planning record)
     name: 'Maria',
     role: 'employee',
     client_id: '550e8400-e29b-41d4-a716-446655440001',
-    employee_id: '84ab2a73-aedd-4514-b9d4-4496a968e409', // Maria Rossi (imported from CSV)
+    employee_id: '239ec99f-3204-45ca-bce2-793f52442ec6', // Maria Rossi — real employee id (matches planning)
   },
   // Lucia removed — no corresponding employee record in the database
 ];
