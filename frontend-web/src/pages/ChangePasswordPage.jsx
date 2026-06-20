@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Box, Button, TextField, Alert, CircularProgress, Container, Paper, Typography } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import apiClient from '../services/apiClient';
 import authService from '../services/authService';
 
@@ -184,6 +185,30 @@ export default function ChangePasswordPage() {
             borderRadius: 2,
           }}
         >
+          {/* Back button — visible only in voluntary flow */}
+          {isVoluntary && (
+            <Box sx={{ mb: 2 }}>
+              <Button
+                variant="text"
+                startIcon={<ArrowBackIcon sx={{ transition: 'transform 0.15s ease' }} />}
+                onClick={() => navigate('/dashboard')}
+                disabled={loading}
+                sx={{
+                  color: '#1E3A5F',
+                  textTransform: 'none',
+                  fontWeight: 500,
+                  pl: 0,
+                  '&:hover': {
+                    background: 'none',
+                    '& .MuiButton-startIcon': { transform: 'translateX(-3px)' },
+                  },
+                }}
+              >
+                Dashboard
+              </Button>
+            </Box>
+          )}
+
           <Typography
             variant="h4"
             component="h1"

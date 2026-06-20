@@ -11,11 +11,13 @@ vi.mock('../services/apiClient', () => ({
 }));
 
 const mockNavigate = vi.fn();
+const mockLocation = { state: null };
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
     ...actual,
     useNavigate: () => mockNavigate,
+    useLocation: () => mockLocation,
   };
 });
 
@@ -355,7 +357,65 @@ describe('ChangePasswordPage Component', () => {
   });
 
   // =========================================================================
-  // Test 5: Loading State
+  // Test 5: Back Button (voluntary flow only)
+  // =========================================================================
+  describe('Back to Dashboard Button', () => {
+    test('should NOT show back button in forced flow (default)', () => {
+      mockLocation.state = null;
+      render(
+        <Router>
+          <ChangePasswordPage />
+        </Router>
+      );
+      expect(screen.queryByRole('button', { name: /dashboard/i })).not.toBeInTheDocument();
+    });
+
+    test('should show back button in voluntary flow (state.voluntary=true)', () => {
+      mockLocation.state = { voluntary: true };
+      render(
+        <Router>
+          <ChangePasswordPage />
+        </Router>
+      );
+      expect(screen.getByRole('button', { name: /dashboard/i })).toBeInTheDocument();
+    });
+
+    test('should navigate to /dashboard when back button is clicked', () => {
+      mockLocation.state = { voluntary: true };
+      render(
+        <Router>
+          <ChangePasswordPage />
+        </Router>
+      );
+      fireEvent.click(screen.getByRole('button', { name: /dashboard/i }));
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
+    });
+
+    test('should disable back button while form is submitting', async () => {
+      mockLocation.state = { voluntary: true };
+      apiClient.post.mockImplementation(
+        () => new Promise(resolve => setTimeout(resolve, 100))
+      );
+
+      render(
+        <Router>
+          <ChangePasswordPage />
+        </Router>
+      );
+
+      fireEvent.change(screen.getByLabelText(/current password/i), { target: { value: 'OldPassword123' } });
+      fireEvent.change(screen.getByLabelText(/^new password/i), { target: { value: 'NewPassword123' } });
+      fireEvent.change(screen.getByLabelText(/confirm new password/i), { target: { value: 'NewPassword123' } });
+      fireEvent.click(screen.getByRole('button', { name: /change password/i }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /dashboard/i })).toBeDisabled();
+      });
+    });
+  });
+
+  // =========================================================================
+  // Test 6: Loading State
   // =========================================================================
   describe('Loading State', () => {
     test('should show loading text while submitting', async () => {
