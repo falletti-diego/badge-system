@@ -27,6 +27,14 @@ DECLARE
     '550e8400-e29b-41d4-a716-446655440116'::uuid   -- paolo.sordo@employee.it
   ];
 BEGIN
+  -- leave_requests.approved_by is ON DELETE SET NULL, but a CHECK constraint requires
+  -- that approved_by and approved_at are both NULL or both NOT NULL. If a removed employee
+  -- approved a leave request, SET NULL would leave approved_at set while approved_by goes
+  -- NULL → check violation. Reassign to Pippo (admin) to keep the constraint satisfied.
+  UPDATE leave_requests
+  SET approved_by = '550e8400-e29b-41d4-a716-446655440010'  -- Pippo (admin)
+  WHERE approved_by = ANY(removed_ids);
+
   -- checkins.created_by is ON DELETE RESTRICT (NOT NULL).
   -- For any checkin owned by a non-removed employee but "created by" a removed one
   -- (e.g. manager Diego creating a checkin for Maria), reassign created_by to the
