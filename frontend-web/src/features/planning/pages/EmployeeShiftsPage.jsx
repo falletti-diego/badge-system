@@ -12,8 +12,6 @@ import {
   ListItemIcon,
   Stack,
   Chip,
-  AppBar,
-  Toolbar,
   Button,
   Select,
   MenuItem,
@@ -24,7 +22,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { useMySchedule } from '../hooks/useMySchedule';
 import { useIllness } from '../../illness/hooks/useIllness';
 import { useLeave } from '../../leave/hooks/useLeave';
-import authService from '../../../services/authService';
+import { NavBar } from '../../../components/NavBar';
 import { NotificationBell } from '../../notifications/components/NotificationBell';
 
 const SHIFT_ICONS = {
@@ -42,11 +40,6 @@ export const EmployeeShiftsPage = () => {
   const [illnesses, setIllnesses] = useState([]);
   const [loadingIllnesses, setLoadingIllnesses] = useState(false);
   const [approvedLeaves, setApprovedLeaves] = useState([]);
-
-  const handleLogout = async () => {
-    await authService.logout();
-    navigate('/login');
-  };
 
   // Fetch employee's schedule from API
   const { data, loading, error } = useMySchedule(month, year);
@@ -97,14 +90,7 @@ export const EmployeeShiftsPage = () => {
   if (!user?.employee_id) {
     return (
       <div className="min-h-screen bg-linen">
-        <AppBar position="static" sx={{ backgroundColor: '#1E3A5F' }}>
-          <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
-            <h1 style={{ color: 'white', fontSize: '20px', fontWeight: 600 }}>📆 I Miei Turni</h1>
-            <Button color="inherit" onClick={handleLogout} sx={{ textTransform: 'none', fontSize: '14px' }}>
-              Logout
-            </Button>
-          </Toolbar>
-        </AppBar>
+        <NavBar title="📆 I Miei Turni" />
         <Container>
           <Alert severity="error" sx={{ marginTop: '20px' }}>
             Accesso negato. Solo i dipendenti possono accedere a questa pagina.
@@ -153,28 +139,16 @@ export const EmployeeShiftsPage = () => {
   return (
     <div className="min-h-screen bg-linen">
       {/* Navbar */}
-      <AppBar position="static" sx={{ backgroundColor: '#1E3A5F' }}>
-        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          <h1 style={{ color: 'white', fontSize: '20px', fontWeight: 600 }}>📆 I Miei Turni</h1>
-          <Box sx={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <NotificationBell enabled={true} />
-            <Button
-              color="inherit"
-              onClick={() => navigate('/dashboard')}
-              sx={{ textTransform: 'none', fontSize: '14px' }}
-            >
-              ← Dashboard
-            </Button>
-            <Button
-              color="inherit"
-              onClick={handleLogout}
-              sx={{ textTransform: 'none', fontSize: '14px' }}
-            >
-              Logout
-            </Button>
-          </Box>
-        </Toolbar>
-      </AppBar>
+      <NavBar title="📆 I Miei Turni">
+        <NotificationBell enabled={true} />
+        <Button
+          color="inherit"
+          onClick={() => navigate('/dashboard')}
+          sx={{ textTransform: 'none', fontSize: '14px' }}
+        >
+          ← Dashboard
+        </Button>
+      </NavBar>
 
       <Container maxWidth="md" sx={{ paddingY: '32px' }}>
         {/* Header */}
