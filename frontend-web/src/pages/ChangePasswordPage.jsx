@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Box, Button, TextField, Alert, CircularProgress, Container, Paper, Typography } from '@mui/material';
 import apiClient from '../services/apiClient';
 import authService from '../services/authService';
@@ -26,6 +26,8 @@ import authService from '../services/authService';
 
 export default function ChangePasswordPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isVoluntary = location.state?.voluntary === true;
 
   const [formData, setFormData] = useState({
     oldPassword: '',
@@ -98,7 +100,7 @@ export default function ChangePasswordPage() {
       }
 
       // Show success message
-      setApiSuccess('Password changed successfully! Please log in with your new password.');
+      setApiSuccess("Password cambiata. Effettua di nuovo l'accesso con la nuova password.");
 
       // Logout to clear old session and localStorage (including must_change_password flag)
       authService.logout();
@@ -192,7 +194,7 @@ export default function ChangePasswordPage() {
               color: '#1a237e',
             }}
           >
-            Change Password
+            {isVoluntary ? 'Cambia password' : 'Cambio password obbligatorio'}
           </Typography>
 
           <Typography
@@ -203,7 +205,9 @@ export default function ChangePasswordPage() {
               color: '#666',
             }}
           >
-            For security reasons, you must change your password before you can continue.
+            {isVoluntary
+              ? 'Inserisci la password attuale e scegli una nuova password.'
+              : 'Per motivi di sicurezza, devi cambiare la password prima di continuare.'}
           </Typography>
 
           {/* Success Message */}
