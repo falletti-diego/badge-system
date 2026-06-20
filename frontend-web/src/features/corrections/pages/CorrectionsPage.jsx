@@ -3,8 +3,6 @@ import {
   Container,
   Box,
   Typography,
-  AppBar,
-  Toolbar,
   Button,
   Table,
   TableHead,
@@ -32,6 +30,7 @@ import { usePresences } from '../../dashboard/hooks/usePresences';
 import { useCheckinCorrection } from '../hooks/useCheckinCorrection';
 import authService from '../../../services/authService';
 import { pad } from '../../../utils/dateUtils';
+import { NavBar } from '../../../components/NavBar';
 
 const CORRECTION_WINDOW_DAYS = 7;
 
@@ -78,11 +77,6 @@ export const CorrectionsPage = () => {
 
   const { data, loading, error, refetch } = usePresences(memoizedFilters);
   const { correctCheckin, loading: saving } = useCheckinCorrection();
-
-  const handleLogout = async () => {
-    await authService.logout();
-    navigate('/login');
-  };
 
   const handleApplyFilters = () => {
     setFilters(prev => ({
@@ -147,21 +141,12 @@ export const CorrectionsPage = () => {
 
   return (
     <div className="min-h-screen bg-linen">
-      <AppBar position="static" sx={{ backgroundColor: '#1E3A5F' }}>
-        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          <h1 style={{ color: 'white', fontSize: '20px', fontWeight: 600 }}>✏️ Correzioni</h1>
-          <Box sx={{ display: 'flex', gap: '12px' }}>
-            <Button color="inherit" onClick={() => navigate('/dashboard')}
-              sx={{ textTransform: 'none', fontSize: '14px' }}>
-              ← Back to Dashboard
-            </Button>
-            <Button color="inherit" onClick={handleLogout}
-              sx={{ textTransform: 'none', fontSize: '14px' }}>
-              Logout
-            </Button>
-          </Box>
-        </Toolbar>
-      </AppBar>
+      <NavBar title="✏️ Correzioni">
+        <Button color="inherit" onClick={() => navigate('/dashboard')}
+          sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}>
+          ← Dashboard
+        </Button>
+      </NavBar>
 
       <Container maxWidth="xl" sx={{ paddingY: '32px' }}>
         <Box sx={{ marginBottom: '24px' }}>

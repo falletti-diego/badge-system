@@ -3,8 +3,6 @@ import {
   Container,
   Box,
   Typography,
-  AppBar,
-  Toolbar,
   Button,
   Card,
   CardContent,
@@ -16,8 +14,8 @@ import {
 import QRCode from 'react-qr-code';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-import authService from '../../../services/authService';
 import apiClient from '../../../services/apiClient';
+import { NavBar } from '../../../components/NavBar';
 
 export const SitesPage = () => {
   const navigate = useNavigate();
@@ -45,11 +43,6 @@ export const SitesPage = () => {
       fetchSites();
     }
   }, [userLoading, fetchSites]);
-
-  const handleLogout = async () => {
-    await authService.logout();
-    navigate('/login');
-  };
 
   // Download QR as PNG by rendering SVG → canvas
   const downloadQRPng = (siteId, siteName) => {
@@ -92,27 +85,15 @@ export const SitesPage = () => {
   return (
     <div className="min-h-screen bg-linen">
       {/* Navbar */}
-      <AppBar position="static" sx={{ backgroundColor: '#1E3A5F' }}>
-        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          <h1 style={{ color: 'white', fontSize: '20px', fontWeight: 600 }}>🏪 Sedi & QR Code</h1>
-          <Box sx={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <Button
-              color="inherit"
-              onClick={() => navigate('/dashboard')}
-              sx={{ textTransform: 'none', fontSize: '14px' }}
-            >
-              ← Dashboard
-            </Button>
-            <Button
-              color="inherit"
-              onClick={handleLogout}
-              sx={{ textTransform: 'none', fontSize: '14px' }}
-            >
-              Logout
-            </Button>
-          </Box>
-        </Toolbar>
-      </AppBar>
+      <NavBar title="🏪 Sedi & QR Code">
+        <Button
+          color="inherit"
+          onClick={() => navigate('/dashboard')}
+          sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+        >
+          ← Dashboard
+        </Button>
+      </NavBar>
 
       <Container maxWidth="md" sx={{ paddingY: '32px' }}>
         {/* Header */}

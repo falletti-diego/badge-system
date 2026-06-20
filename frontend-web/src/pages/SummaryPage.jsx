@@ -6,10 +6,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Container, Box, AppBar, Toolbar, Button, Typography,
+  Container, Box, Button, Typography,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, CircularProgress, Alert, Chip, IconButton, Tooltip,
 } from '@mui/material';
+import { NavBar } from '../components/NavBar';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -99,34 +100,26 @@ const SummaryPage = () => {
   return (
     <div className="min-h-screen bg-linen">
       {/* Navbar */}
-      <AppBar position="static" sx={{ backgroundColor: '#1E3A5F' }}>
-        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1 style={{ color: 'white', fontSize: '20px', fontWeight: 600 }}>Badge System</h1>
-          <Box sx={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <Button color="inherit" onClick={() => navigate('/dashboard')} sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}>
-              📋 Presenze
-            </Button>
-            {(userRole === 'manager' || userRole === 'admin') && (
-              <Button color="inherit" onClick={() => navigate('/planning')} sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}>
-                📅 Planning
-              </Button>
-            )}
-            {(userRole === 'manager' || userRole === 'admin') && (
-              <Button color="inherit" onClick={() => navigate('/corrections')} sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}>
-                ✏️ Correzioni
-              </Button>
-            )}
-            {userRole === 'admin' && (
-              <Button color="inherit" onClick={() => navigate('/admin')} sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}>
-                ⚙️ Admin
-              </Button>
-            )}
-            <Button color="inherit" onClick={async () => { await authService.logout(); navigate('/login'); }} sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}>
-              Esci
-            </Button>
-          </Box>
-        </Toolbar>
-      </AppBar>
+      <NavBar title="Badge System">
+        <Button color="inherit" onClick={() => navigate('/dashboard')} sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}>
+          📋 Presenze
+        </Button>
+        {(userRole === 'manager' || userRole === 'admin') && (
+          <Button color="inherit" onClick={() => navigate('/planning')} sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}>
+            📅 Planning
+          </Button>
+        )}
+        {(userRole === 'manager' || userRole === 'admin') && (
+          <Button color="inherit" onClick={() => navigate('/corrections')} sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}>
+            ✏️ Correzioni
+          </Button>
+        )}
+        {userRole === 'admin' && (
+          <Button color="inherit" onClick={() => navigate('/admin')} sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}>
+            ⚙️ Admin
+          </Button>
+        )}
+      </NavBar>
 
       <Container maxWidth="xl" sx={{ py: 3 }}>
         {/* Header row */}
