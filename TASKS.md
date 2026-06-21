@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-20 (Session 46: @badge.local change-password fix + account cleanup 8→3 + migration 023)  
+**Last Updated:** 2026-06-21 (Session 47: S.25 GDPR DPA — piano + implementazione completa)  
 **Production:** https://badge.dataxiom.it · API: https://api.dataxiom.it
 
 ---
@@ -10,6 +10,7 @@
 
 | Sessione | Data | Sintesi |
 |---|---|---|
+| 47 | 2026-06-21 | **S.25 GDPR DPA — implementazione completa** — Fix bug silenzioso `req.user.id` → `req.user.user_id` in `admin.js:158,172` (undefined → FK violation su `created_by`). 8 test TDD in `admin-dpa.test.js` (POST 201/400/403/401, GET 200/empty/403). Pagina HTML pubblica `dpa-template-it.html` + `_redirects` entry prima del SPA catch-all. DpaTab (Tab 7) in AdminPage con status banner, download link, form registra firma, storico. Build frontend ✅. Suite 478/478. Commits: a67f3aa, ea2d708, 75ac619. Pushato su main → CI/CD in corso. |
 | 46 | 2026-06-20 | **@badge.local change-password fix + account cleanup 8→3 + migration 023** — (1) Maria `change-password` → "Current password is incorrect": `password_hash = NULL` per @badge.local, `verifyPassword(pw, null)` → false; fix: if `!password_hash` → cerca in DEMO_USERS e confronta plaintext. (2) Node.js 20 deprecation su GitHub Actions: cosmetic/non-bloccante, GitHub forza compatibilità. (3) Account cleanup: da 8 a 3 (pippo/pino/maria); rimosso diego@badge.local + 4 @employee.it; SSM: rimosso `/badge/production/DEMO_DIEGO_PASSWORD` + `/badge/production/DEMO_LUCIA_PASSWORD` (orfana). (4) Migration 023: 3 iterazioni — shifts non ha `employee_id` (JSONB per-site), `leave_requests.approved_by` ON DELETE SET NULL violava CHECK → reassign a Pippo, `checkins.created_by` ON DELETE RESTRICT → reassign a `employee_id`. Backend tornato healthy dopo fix. Commits: 2704835, fff17be, a9c243f, 2d906ae. |
 | 45 | 2026-06-20 | **Leave management bug cascade (4 bug) + EmployeeShiftsPage ferie fix** — (1) `audit.js` colonna `created_at`→`timestamp`: abort PostgreSQL silenzioso → COMMIT diventava ROLLBACK → dati ferie mai salvati. (2) SAVEPOINT condizionale: solo dentro PoolClient (non Pool nudo), altrimenti "SAVEPOINT can only be used in transaction blocks". (3) Diego `id` era UUID del sito Torino (copy-paste) → FK violation su `approved_by` → 500 approve. (4) Maria aveva 2 record employee: `84ab2a73` (demo login) vs `239ec99f` (planning) → `isDateBlocked()` non matchava mai → migration 022 merge. (5) EmployeeShiftsPage non caricava `getApprovedRequests()` → malattia visibile, ferie no → fix import + fetch + render 🏖️. Commits: 40b4025, 014354c, 401b13a, 86e44b5, 13bd618. Decisione sessione: staging obbligatorio al lancio con primo cliente reale. |
 | 44 | 2026-06-19 | **Phase 2 Advanced Planning (P.1–P.4) + code-review 8 fix** — `PlanningPage.jsx`: P.4 Vista Settimana (ToggleButtonGroup, nav ←/→, safeWeekOffset clamp), P.1 Copia Settimana (Dialog sorgente/dest, match day-of-week), P.3 Conflict warning (lista turni sovrascrivibili + conferma esplicita), P.2 PDF (`window.print()` + GlobalStyles @media print A4 landscape). Code-review: 8 finding fixati — logout try/catch, saveError/dataLoadError renderizzati, catch silenzioso ferie/malattia, revokeObjectURL, weekOffset clamp, inRange timezone → `inDateRange()` string-compare, `pad()` estratta in `src/utils/dateUtils.js`. Testato su localhost. 164/165 frontend ✅. Commits: 6bb90ea, 0c64840. Push via HTTPS (SSH port 22 bloccato). |
@@ -927,15 +928,13 @@ Go-live with first paying customer (pilota).
     4. Test per `GET /admin/employee-consents` (coverage gap)
   - **Trigger:** Primo cliente che chiede geofencing → esegui il piano → deploy → poi abilita geofencing sulla sede
 
-- [ ] **S.25** Missing Data Processing Agreement (DPA) — GDPR Art. 28 (HIGH, Confidence 0.90) — **⏸️ DEFERRED: implementare prima del primo contratto cliente reale**
-  - **Issue:** Dataxiom (Data Processor) deve avere DPA scritto con ogni cliente (Data Controller). Mancanza di DPA = violazione Art. 28, fini fino €20M.
-  - **Già implementato:** template `docs/DPA_GDPR_Art28_IT.md` ✅, migration `011_add_dpa_acknowledgements.sql` ✅, endpoint `POST /api/v1/admin/dpa-acknowledgement` e `GET /api/v1/admin/dpa-acknowledgements` in `admin.js:143-210` ✅
-  - **Gap residui:** bug `req.user.id` → `req.user.user_id` in `admin.js:158,172`, zero test per endpoint DPA, nessuna pagina pubblica HTML scaricabile, nessun tab DPA nell'AdminPage
-  - **Piano pronto:** `docs/superpowers/plans/2026-06-21-s25-gdpr-dpa.md` — 3 task (~2-3h):
-    1. Fix bug `req.user.id` + 8 test TDD per POST/GET dpa-acknowledgement
-    2. Pagina pubblica `frontend-web/public/dpa-template-it.html` + `_redirects` entry `/dpa-template-it`
-    3. `DpaTab.jsx` in AdminPage (tab 7 "DPA": status, download link, form firma, storico)
-  - **Trigger:** Prima firma contratto con qualunque cliente reale → esegui il piano → fai firmare DPA → registra nel tab DPA → archivio PDF firmato
+- [x] **S.25** Missing Data Processing Agreement (DPA) — GDPR Art. 28 (HIGH) — ✅ **COMPLETATO Session 47 (2026-06-21)**
+  - **Fix:** `req.user.id` → `req.user.user_id` in `admin.js:158,172` — bug silenzioso che avrebbe causato FK violation in produzione
+  - **Test:** 8 test TDD in `backend/src/__tests__/admin-dpa.test.js` (POST 201/400/403/401, GET 200/empty/403)
+  - **Pagina HTML:** `frontend-web/public/dpa-template-it.html` — template DPA v2.0 stampabile, accessibile su `badge.dataxiom.it/dpa-template-it`
+  - **Frontend:** Tab 7 "DPA" in AdminPage (`DpaTab.jsx`) — status banner, download link, form registra firma, storico
+  - **Commits:** a67f3aa (fix+test), ea2d708 (HTML+redirects), 75ac619 (DpaTab)
+  - **Da fare prima del primo contratto:** aprire tab DPA → scaricare template → farlo firmare al cliente → registrare firma nel tab → archiviare PDF
 
 - [ ] **S.26** Missing Explicit Consent Mechanism for GPS Data Collection — GDPR Art. 7 (HIGH, Confidence 0.85)
   - **Issue:** Geofencing abilitato per default (migration 010 `DEFAULT true`) senza consenso dipendente. GDPR Art. 7 richiede consenso: freely given, specific, informed, unambiguous. Se base legale è consenso (non contratto), senza consenso dichiarato è illegittimo. Impact: Privacy violazione, regolatore può forzare disabilitazione feature.
