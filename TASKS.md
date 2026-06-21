@@ -927,14 +927,15 @@ Go-live with first paying customer (pilota).
     4. Test per `GET /admin/employee-consents` (coverage gap)
   - **Trigger:** Primo cliente che chiede geofencing → esegui il piano → deploy → poi abilita geofencing sulla sede
 
-- [ ] **S.25** Missing Data Processing Agreement (DPA) — GDPR Art. 28 (HIGH, Confidence 0.90)
-  - **Issue:** Dataxiom (Data Processor) deve avere DPA scritto con ogni cliente (Data Controller). Mancanza di DPA = violazione Art. 28, fini fino €20M. Impact: Blocco legale su onboarding cliente, compliance audit fallisce.
-  - **TODO:**
-    1. Creare `docs/DPA_GDPR_Art28_IT.md` template — sezioni: Data Controller (cliente), Processor (Dataxiom), data subjects (dipendenti), processing descrizione (GPS + Face ID + timbrature), retention (coordinate GPS 90gg, checkins 24m, audit log 3a), sub-processor AWS (RDS+EC2 eu-west-1), diritti controller (audit, accesso, cancellazione)
-    2. Backend: endpoint `POST /api/admin/dpa-acknowledgement` — registra firma cliente su DPA versione X (audit trail per compliance)
-    3. Onboarding flow: HR Director vede alert "DPA richiesto" → download/firmi DPA → upload scansione → sblocca geofencing
-  - **Effort:** 2-3 ore
-  - **Success:** DPA template in repo, cliente firma DPA prima di abilitare geofencing, audit trail registrato
+- [ ] **S.25** Missing Data Processing Agreement (DPA) — GDPR Art. 28 (HIGH, Confidence 0.90) — **⏸️ DEFERRED: implementare prima del primo contratto cliente reale**
+  - **Issue:** Dataxiom (Data Processor) deve avere DPA scritto con ogni cliente (Data Controller). Mancanza di DPA = violazione Art. 28, fini fino €20M.
+  - **Già implementato:** template `docs/DPA_GDPR_Art28_IT.md` ✅, migration `011_add_dpa_acknowledgements.sql` ✅, endpoint `POST /api/v1/admin/dpa-acknowledgement` e `GET /api/v1/admin/dpa-acknowledgements` in `admin.js:143-210` ✅
+  - **Gap residui:** bug `req.user.id` → `req.user.user_id` in `admin.js:158,172`, zero test per endpoint DPA, nessuna pagina pubblica HTML scaricabile, nessun tab DPA nell'AdminPage
+  - **Piano pronto:** `docs/superpowers/plans/2026-06-21-s25-gdpr-dpa.md` — 3 task (~2-3h):
+    1. Fix bug `req.user.id` + 8 test TDD per POST/GET dpa-acknowledgement
+    2. Pagina pubblica `frontend-web/public/dpa-template-it.html` + `_redirects` entry `/dpa-template-it`
+    3. `DpaTab.jsx` in AdminPage (tab 7 "DPA": status, download link, form firma, storico)
+  - **Trigger:** Prima firma contratto con qualunque cliente reale → esegui il piano → fai firmare DPA → registra nel tab DPA → archivio PDF firmato
 
 - [ ] **S.26** Missing Explicit Consent Mechanism for GPS Data Collection — GDPR Art. 7 (HIGH, Confidence 0.85)
   - **Issue:** Geofencing abilitato per default (migration 010 `DEFAULT true`) senza consenso dipendente. GDPR Art. 7 richiede consenso: freely given, specific, informed, unambiguous. Se base legale è consenso (non contratto), senza consenso dichiarato è illegittimo. Impact: Privacy violazione, regolatore può forzare disabilitazione feature.

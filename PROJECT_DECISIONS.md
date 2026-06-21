@@ -1,7 +1,7 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 20 Giugno 2026 (Session 45)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Phase 2 Advanced Planning ✅ (commit 6bb90ea) | Code-review 8 fix ✅ (commit 0c64840) | Frontend test suite 164/165 ✅ | ONB.2 saldi NUMERIC 🟡 backlog  
+**Last Updated:** 21 Giugno 2026 (Session 47)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Phase 2 Advanced Planning ✅ | Frontend test suite 164/165 ✅ | S.24 + S.25 plans ready (deferred until first GPS customer + first contract)  
 **MVP Launch Target:** Settembre 2026 | **Current Phase:** In produzione, Phase 2 planning completa, test suite verde
 
 ---
@@ -1133,17 +1133,30 @@ c6a7ae4 refactor: consolidate mobile app configuration into single source of tru
 **Decisione: S.24 / S.25 / S.26 GDPR GPS — deferred fino al primo cliente con geofencing**
 - **Regola:** Le finding GDPR S.24 (GPS disclosure), S.25 (DPA), S.26 (consenso esplicito) sono deferred. Non si implementano fino a quando il primo cliente reale non abilita `geofence_enabled = true` su almeno una sede.
 - **Razionale:** Il geofencing è una feature opzionale e disabilitata per default. Nessun cliente la usa oggi. Il rischio GDPR è attivo solo quando è attiva la raccolta GPS. Implementare la compliance adesso sarebbe YAGNI — meglio avere il piano pronto e implementarlo contestualmente all'attivazione reale.
-- **Piano pronto:** `docs/superpowers/plans/2026-06-20-s24-gdpr-gps-disclosure.md` — 4 task, ~3-4h totali:
+- **Piano S.24 pronto:** `docs/superpowers/plans/2026-06-20-s24-gdpr-gps-disclosure.md` — 4 task, ~3-4h totali:
   1. Fix `GPSConsentDialog` (AlertDialog → Modal React Native — bug fatale bloccante)
   2. Pagina pubblica `privacy-policy-it.html` + redirect Netlify
   3. Script `gps-retention.js` + cron EC2 (cancellazione GPS dopo 90 giorni)
   4. 5 test per `GET /admin/employee-consents`
-- **Trigger obbligatorio:** Prima di abilitare `geofence_enabled = true` su qualunque sede di un cliente reale → eseguire il piano → deploy → poi abilitare. Non invertire l'ordine.
+- **Trigger obbligatorio S.24:** Prima di abilitare `geofence_enabled = true` su qualunque sede di un cliente reale → eseguire il piano → deploy → poi abilitare. Non invertire l'ordine.
 - **Decisione presa:** Session 46, 20 Giugno 2026
+
+### Session 47: S.25 DPA — Piano completo (21 Giugno 2026)
+
+**Decisione: S.25 DPA — deferred fino al primo contratto cliente reale**
+- **Regola:** Il DPA (GDPR Art. 28) non è bloccante finché non si firma il primo contratto con un cliente pagante reale. Il rischio Art. 28 è attivo solo in presenza di un contratto di fornitura in essere.
+- **Razionale:** Template DPA e backend endpoint già esistono in codebase. Mancano: fix di un bug silenzioso nel backend, 8 test, pagina HTML scaricabile, tab DPA nell'AdminPage. Il lavoro è 2-3h e può essere eseguito in una sessione immediata prima del primo contratto.
+- **Piano S.25 pronto:** `docs/superpowers/plans/2026-06-21-s25-gdpr-dpa.md` — 3 task, ~2-3h totali:
+  1. Fix bug `req.user.id` → `req.user.user_id` in `admin.js:158,172` + 8 test TDD per POST/GET dpa-acknowledgement
+  2. Pagina pubblica `frontend-web/public/dpa-template-it.html` + `_redirects` entry `/dpa-template-it`
+  3. `DpaTab.jsx` in AdminPage (tab 7 "DPA": status, download, form firma, storico)
+- **Nota tecnica:** Il gap più importante è il bug `req.user.id` (undefined → FK violation silenzioso sull'INSERT). Qualunque chiamata all'endpoint esistente senza il fix causerebbe un 500. Il piano lo fixa come primo step.
+- **Trigger obbligatorio S.25:** Prima della firma del primo contratto con qualunque cliente reale → eseguire il piano → fare firmare DPA fisicamente → registrare firma nel tab DPA → archiviare PDF. Non firmare contratti senza DPA.
+- **Decisione presa:** Session 47, 21 Giugno 2026
 
 ---
 
-**Last Updated:** 20 Giugno 2026 (Session 46)
-**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | 3 demo accounts | Migration 023 applied | S.24 plan ready (deferred)
-**Created By:** Claude Code Sessions 1-46  
+**Last Updated:** 21 Giugno 2026 (Session 47)
+**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | 3 demo accounts | Migration 023 applied | S.24 plan ready (deferred) | S.25 plan ready (deferred)
+**Created By:** Claude Code Sessions 1-47  
 **Next Review:** After first real customer onboarding
