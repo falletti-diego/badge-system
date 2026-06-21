@@ -1,8 +1,8 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 21 Giugno 2026 (Session 47)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Phase 2 Advanced Planning ✅ | Frontend test suite 164/165 ✅ | S.24 + S.25 plans ready (deferred until first GPS customer + first contract)  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** In produzione, Phase 2 planning completa, test suite verde
+**Last Updated:** 21 Giugno 2026 (Session 49)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile tab bar + LeaveRequestScreen + IllnessReportScreen ✅ codice pronto | Codemagic Build 17 ⏳ setup in corso (bloccato su code signing)  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Mobile features complete, Codemagic iOS build setup in corso
 
 ---
 
