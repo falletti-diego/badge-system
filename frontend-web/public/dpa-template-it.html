@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DPA — Accordo Trattamento Dati | Badge System</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Georgia, 'Times New Roman', serif; color: #1a1a1a; background: #fff; }
+    .wrapper { max-width: 860px; margin: 0 auto; padding: 40px 32px 80px; }
+    .header { border-bottom: 3px solid #1E3A5F; padding-bottom: 24px; margin-bottom: 32px; }
+    .header h1 { font-size: 1.6rem; color: #1E3A5F; font-weight: 700; }
+    .header p { margin-top: 8px; color: #666; font-size: 0.9rem; font-family: Arial, sans-serif; }
+    .badge { display: inline-block; background: #1E3A5F; color: #fff; font-size: 0.75rem;
+             font-family: Arial, sans-serif; padding: 3px 10px; border-radius: 3px; margin-top: 6px; }
+    .download-bar { background: #F0F4F8; border: 1px solid #CBD5E0; border-radius: 6px;
+                    padding: 16px 20px; margin-bottom: 32px; display: flex;
+                    align-items: center; gap: 16px; font-family: Arial, sans-serif; flex-wrap: wrap; }
+    .download-bar span { flex: 1; min-width: 200px; font-size: 0.9rem; color: #444; }
+    .btn-print { background: #1E3A5F; color: #fff; border: none; padding: 10px 20px;
+                 border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-family: Arial, sans-serif; }
+    .btn-print:hover { background: #162D47; }
+    h2 { font-size: 1.15rem; color: #1E3A5F; margin: 36px 0 12px; border-bottom: 1px solid #E2E8F0; padding-bottom: 6px; }
+    h3 { font-size: 1rem; color: #1E3A5F; margin: 20px 0 8px; }
+    p { line-height: 1.7; margin-bottom: 12px; font-size: 0.95rem; }
+    ul, ol { padding-left: 24px; margin-bottom: 12px; }
+    li { line-height: 1.7; font-size: 0.95rem; margin-bottom: 4px; }
+    strong { color: #1E3A5F; }
+    .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+    @media (max-width: 600px) { .parties { grid-template-columns: 1fr; } }
+    .party-box { border: 1px solid #CBD5E0; border-radius: 6px; padding: 16px 20px; }
+    .party-box h4 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;
+                    color: #888; margin-bottom: 10px; font-family: Arial, sans-serif; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0 20px; font-size: 0.88rem; font-family: Arial, sans-serif; }
+    th { background: #1E3A5F; color: #fff; padding: 10px 12px; text-align: left; font-weight: 600; }
+    td { padding: 9px 12px; border-bottom: 1px solid #E2E8F0; vertical-align: top; }
+    tr:hover td { background: #F7FAFC; }
+    .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 40px; }
+    @media (max-width: 600px) { .signatures { grid-template-columns: 1fr; } }
+    .sig-box { border-top: 2px solid #1E3A5F; padding-top: 16px; }
+    .sig-line { border-bottom: 1px solid #666; height: 40px; margin: 16px 0 8px; }
+    .sig-label { font-size: 0.82rem; color: #666; font-family: Arial, sans-serif; margin-bottom: 6px; }
+    .footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid #E2E8F0;
+              font-family: Arial, sans-serif; font-size: 0.8rem; color: #888; text-align: center; }
+    @media print {
+      .download-bar { display: none !important; }
+      body { font-size: 11pt; }
+      h2 { page-break-before: auto; }
+      .wrapper { max-width: 100%; padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <div class="header">
+    <h1>Accordo di Trattamento dei Dati (DPA)</h1>
+    <p>GDPR Art. 28 — Allegato 1: Descrizione del Trattamento</p>
+    <span class="badge">Versione 2.0 · 11 Giugno 2026</span>
+  </div>
+
+  <div class="download-bar">
+    <span>📄 Stampa questo documento e firmalo entrambi (Cliente + Dataxiom) per completare il DPA.</span>
+    <button class="btn-print" onclick="window.print()">🖨️ Stampa / Salva PDF</button>
+  </div>
+
+  <h2>1. Parti</h2>
+  <div class="parties">
+    <div class="party-box">
+      <h4>Data Controller (Titolare del Trattamento)</h4>
+      <p><strong>Nome Legale:</strong> [RAGIONE SOCIALE CLIENTE]<br>
+         <strong>Forma Giuridica:</strong> [SRL/SPA/ALTRO]<br>
+         <strong>Indirizzo:</strong> [SEDE LEGALE CLIENTE]<br>
+         <strong>Contatto Privacy:</strong> [EMAIL CLIENTE HR/LEGAL]<br>
+         <strong>Rappresentante:</strong> [NOME DIRETTORE/LEGALE RAPPRESENTANTE]<br>
+         <strong>Numero Dipendenti:</strong> [X dipendenti]</p>
+    </div>
+    <div class="party-box">
+      <h4>Data Processor (Responsabile del Trattamento)</h4>
+      <p><strong>Nome Legale:</strong> Dataxiom S.r.l.<br>
+         <strong>Forma Giuridica:</strong> Società a Responsabilità Limitata<br>
+         <strong>Contatto Privacy:</strong> privacy@dataxiom.it<br>
+         <strong>Rappresentante:</strong> Diego Falletti (Amministratore)<br>
+         <strong>Website:</strong> https://www.dataxiom.it</p>
+    </div>
+  </div>
+
+  <h2>2. Descrizione del Trattamento</h2>
+  <p>Dataxiom fornisce il servizio <strong>Badge System</strong> — piattaforma cloud di tracciamento presenze e gestione turni per dipendenti retail.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Categoria Dati</th>
+        <th>Finalità</th>
+        <th>Durata Conservazione</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Identificativi</strong><br>(nome, email, matricola, telefono)</td>
+        <td>Autenticazione, reporting presenze</td>
+        <td>Durata rapporto + 12 mesi</td>
+      </tr>
+      <tr>
+        <td><strong>Biometrici</strong><br>(Face ID — solo su dispositivo)</td>
+        <td>Autenticazione sicura, verifica identità</td>
+        <td>Durata rapporto + 12 mesi<br><em>Memorizzato localmente, mai su server</em></td>
+      </tr>
+      <tr>
+        <td><strong>Geolocalizzazione GPS</strong><br>(latitude, longitude)</td>
+        <td>Verifica presenza fisica in sede (geofencing)</td>
+        <td><strong>90 giorni</strong> poi cancellazione automatica</td>
+      </tr>
+      <tr>
+        <td><strong>Timbrature</strong><br>(data, ora, tipo IN/OUT, sede)</td>
+        <td>Registro presenze, calcolo ore, paghe</td>
+        <td>24 mesi (obbligo fiscale)</td>
+      </tr>
+      <tr>
+        <td><strong>Log di Audit</strong><br>(modifiche, correzioni, azioni admin)</td>
+        <td>Traccia compliance, investigazioni</td>
+        <td>3 anni (obbligo legale)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>3. Localizzazione e Infrastruttura</h2>
+  <p><strong>Nessun trasferimento extra-UE.</strong> Tutti i dati sono conservati su infrastruttura AWS nella regione <strong>eu-west-1 (Irlanda)</strong>.</p>
+  <ul>
+    <li><strong>Database:</strong> Amazon RDS PostgreSQL (Irlanda) — encryption at rest AES-256</li>
+    <li><strong>API Backend:</strong> Amazon EC2 (Irlanda) — HTTPS TLS 1.3</li>
+    <li><strong>Backup:</strong> AWS automated (7-day retention, point-in-time recovery)</li>
+  </ul>
+
+  <h3>Sub-Processori</h3>
+  <table>
+    <thead>
+      <tr><th>Sub-Processore</th><th>Servizio</th><th>Ubicazione</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Amazon Web Services (AWS)</strong></td>
+        <td>RDS, EC2, Secrets Manager</td>
+        <td>UE (Irlanda, eu-west-1)</td>
+      </tr>
+      <tr>
+        <td><strong>Sentry.io</strong></td>
+        <td>Error tracking (solo log di errore, nessun PII)</td>
+        <td>UE</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>4. Obblighi di Dataxiom (Art. 32 GDPR)</h2>
+  <ul>
+    <li>Controllo d'accesso MFA per admin Dataxiom; access log registrati</li>
+    <li>Crittografia TLS 1.3 in transit, AES-256 at rest; chiavi in AWS Secrets Manager</li>
+    <li>Coordinate GPS cancellate automaticamente dopo 90 giorni</li>
+    <li>Backup automatici giornalieri; disaster recovery RTO 2h</li>
+    <li>Notifica breach: entro 2 ore da scoperta → report scritto al Cliente entro 24 ore</li>
+    <li>Monitoraggio CloudWatch + Sentry + audit log per tutte le modifiche</li>
+    <li>OWASP Top 10 code review pre-deployment; npm audit su ogni deploy</li>
+    <li><strong>Vietato:</strong> condividere dati con terzi non autorizzati, usare dati per scopi propri, trasferire extra-UE, usare per training AI senza consenso</li>
+  </ul>
+
+  <h2>5. Obblighi del Cliente (Art. 6 GDPR)</h2>
+  <ul>
+    <li>Garantire base legale per il trattamento (contratto di lavoro, obbligo legale)</li>
+    <li>Fornire Privacy Policy ai dipendenti PRIMA di usare Badge System</li>
+    <li>Raccogliere consenso esplicito (Art. 9) per Face ID; consenso (Art. 7) per geofencing GPS</li>
+    <li>Notificare Dataxiom entro 24h da qualsiasi breach (credenziali compromesse, accesso non autorizzato)</li>
+    <li>Cooperare con audit su richiesta di Dataxiom</li>
+  </ul>
+
+  <h2>6. Diritti degli Interessati</h2>
+  <ul>
+    <li><strong>Accesso (Art. 15):</strong> Dataxiom fornisce export CSV entro 10 giorni</li>
+    <li><strong>Cancellazione (Art. 17):</strong> Dataxiom cancella entro 7 giorni (salvo retention obbligatoria)</li>
+    <li><strong>Rettifica (Art. 16):</strong> Manager/Admin corregge via dashboard entro 2 giorni</li>
+    <li><strong>Portabilità (Art. 20):</strong> Export CSV/JSON entro 10 giorni</li>
+  </ul>
+
+  <h2>7. Post-Risoluzione Contratto</h2>
+  <p>Entro <strong>30 giorni</strong> dalla risoluzione, Dataxiom:</p>
+  <ul>
+    <li>Esporta tutti i dati personali in formato CSV/JSON (portabilità Art. 20)</li>
+    <li>Cancella tutti i dati dal database di produzione</li>
+    <li>Fornisce certificato di cancellazione firmato dal CTO Dataxiom</li>
+    <li>Conserva audit log per 7 giorni aggiuntivi (compliance finale)</li>
+  </ul>
+
+  <h2>8. Validità</h2>
+  <p><strong>Versione DPA:</strong> 2.0 &nbsp;|&nbsp; <strong>Data:</strong> 11 Giugno 2026</p>
+  <p>Questo DPA è allegato al Contratto di Fornitura Badge System e ha la medesima durata e termini di modifica.</p>
+
+  <div class="signatures">
+    <div class="sig-box">
+      <strong>Per conto di CLIENTE:</strong>
+      <div class="sig-line"></div>
+      <p class="sig-label">Nome Legale Cliente: _________________________</p>
+      <p class="sig-label">Firma Rappresentante Legale: _________________</p>
+      <p class="sig-label">Nome e Titolo: ________________________________</p>
+      <p class="sig-label">Data: ________________________________________</p>
+    </div>
+    <div class="sig-box">
+      <strong>Per conto di DATAXIOM:</strong>
+      <div class="sig-line"></div>
+      <p class="sig-label">Firma Amministratore: _________________________</p>
+      <p class="sig-label">Nome: Diego Falletti</p>
+      <p class="sig-label">Data: ________________________________________</p>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>DPA © Dataxiom S.r.l. — Versione 2.0 — privacy@dataxiom.it — https://www.dataxiom.it</p>
+    <p>Redatto secondo GDPR (Regolamento UE 2016/679) e conformità italiana</p>
+  </div>
+
+</div>
+</body>
+</html>

@@ -2,5 +2,8 @@
 # Must come before the SPA catch-all
 /api/*  https://api.dataxiom.it/api/:splat  200
 
+# Static legal pages — must come before SPA catch-all
+/dpa-template-it  /dpa-template-it.html  200
+
 # SPA catch-all: all other routes → React app
 /*  /index.html  200
