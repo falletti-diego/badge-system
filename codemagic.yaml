@@ -27,6 +27,7 @@ workflows:
 
       - name: Build IPA
         script: |
+          xcode-project use-profiles
           xcode-project build-ipa \
             --workspace "ios/Badge System.xcworkspace" \
             --scheme "Badge System"
