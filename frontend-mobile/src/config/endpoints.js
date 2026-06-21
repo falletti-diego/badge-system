@@ -21,9 +21,25 @@ export const ENDPOINTS = {
   // Shifts
   SHIFTS_MY_SCHEDULE: '/api/v1/shifts/my-schedule',
 
+  // Leaves (ferie)
+  LEAVES_LIST: '/api/v1/leaves',
+  LEAVES_CREATE: '/api/v1/leaves',
+  LEAVES_BALANCE: '/api/v1/leaves/balance',
+
+  // Illnesses (malattia)
+  ILLNESS_REPORT: '/api/v1/illnesses/report',
+  ILLNESS_LIST: '/api/v1/illnesses/by-date-range',
+
   // Health
   HEALTH: '/health',
 };
+
+// Leave types — all three shown
+export const LEAVE_TYPES = [
+  { value: 'FERIE_1', label: 'Ferie ordinarie' },
+  { value: 'FERIE_2', label: 'Ex-festività' },
+  { value: 'FERIE_3', label: 'Permessi ROL' },
+];
 
 // Shift configuration (for Planning page and schedule views)
 export const SHIFTS_CONFIG = {
@@ -58,25 +74,25 @@ export const CHECKINS_CONFIG = {
     OUT: '←',
   },
   DEFAULTS: {
-    LIMIT: 50, // Default checkins per fetch
+    LIMIT: 50,
   },
 };
 
-// Demo account emails for development/testing.
-// Passwords are never stored client-side — set them via DEMO_*_PASSWORD env vars
-// on the backend (see backend/.env.example section 11).
+// Demo account emails (post-Session-46 cleanup)
+// Passwords are never stored client-side — set via DEMO_*_PASSWORD env vars on the backend
 export const DEMO_ACCOUNTS = {
-  employee: { email: 'alice.neri@employee.it' },
-  manager: { email: 'diego@badge.local' },
-  // Legacy alias (kept for backwards compatibility in LoginScreen)
-  email: 'alice.neri@employee.it',
+  employee: { email: 'maria@badge.local' },
+  manager: { email: 'pino@badge.local' },
+  admin: { email: 'pippo@badge.local' },
+  // Legacy alias used by LoginScreen __DEV__ hint
+  email: 'maria@badge.local',
 };
 
 // Timing configuration (in milliseconds)
 export const TIMING = {
-  API_TIMEOUT: 15000,           // API request timeout
-  CLOCK_TICK: 1000,              // Clock update frequency
-  SUCCESS_AUTO_RETURN: 5000,     // Auto-return delay on success screen
+  API_TIMEOUT: 15000,
+  CLOCK_TICK: 1000,
+  SUCCESS_AUTO_RETURN: 5000,
 };
 
 // Storage keys for AsyncStorage persistence
@@ -86,4 +102,4 @@ export const STORAGE_KEYS = {
   USER_DATA: 'badge_user',
 };
 
-export default { API_BASE, ENDPOINTS, SHIFTS_CONFIG, CHECKINS_CONFIG, DEMO_ACCOUNTS, TIMING, STORAGE_KEYS };
+export default { API_BASE, ENDPOINTS, LEAVE_TYPES, SHIFTS_CONFIG, CHECKINS_CONFIG, DEMO_ACCOUNTS, TIMING, STORAGE_KEYS };
