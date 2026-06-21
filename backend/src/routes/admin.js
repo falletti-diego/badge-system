@@ -155,7 +155,7 @@ router.post('/dpa-acknowledgement', async (req, res, next) => {
       `INSERT INTO dpa_acknowledgements (client_id, dpa_version, accepted_by, notes, created_by)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, client_id, dpa_version, accepted_at, accepted_by, notes`,
-      [client_id, dpaVersion, accepted_by.trim(), notes || null, req.user.id]
+      [client_id, dpaVersion, accepted_by.trim(), notes || null, req.user.user_id]
     );
 
     await logAudit(pool, {
@@ -169,7 +169,7 @@ router.post('/dpa-acknowledgement', async (req, res, next) => {
         accepted_by: accepted_by.trim(),
         accepted_at: result.rows[0].accepted_at,
       }),
-      user_id: req.user.id,
+      user_id: req.user.user_id,
       client_id,
     }).catch((err) => logger.warn('Audit log DPA acknowledgement failed:', err));
 
