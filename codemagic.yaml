@@ -3,13 +3,12 @@ workflows:
     name: Badge System iOS — TestFlight
     max_build_duration: 60
     instance_type: mac_mini_m1
+    integrations:
+      app_store_connect: Badge Production
     environment:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: it.dataxiom.badge
-        # API key name must match the one configured in:
-        # Codemagic → Team → Integrations → App Store Connect API Keys
-        api_key: Badge Production
       node: v20.x
       xcode: latest
       cocoapods: default
@@ -28,9 +27,6 @@ workflows:
 
       - name: Build IPA
         script: |
-          # Workspace name is set by expo prebuild from app.json "name" field.
-          # For "Badge System" this generates "Badge System.xcworkspace".
-          # If build fails here, run locally: cd frontend-mobile && npx expo prebuild --platform ios --clean && ls ios/*.xcworkspace
           xcode-project build-ipa \
             --workspace "ios/Badge System.xcworkspace" \
             --scheme "Badge System"
