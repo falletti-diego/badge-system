@@ -8,6 +8,7 @@ import { EmployeesTab } from '../tabs/EmployeesTab';
 import { ViewersTab } from '../tabs/ViewersTab';
 import { SettingsTab } from '../tabs/SettingsTab';
 import { ConsentTab } from '../tabs/ConsentTab';
+import { DpaTab } from '../tabs/DpaTab';
 
 export function AdminPage() {
   const [tab, setTab] = useState(0);
@@ -37,6 +38,7 @@ export function AdminPage() {
         <Tab label="Commercialisti" />
         <Tab label="Impostazioni" />
         <Tab label="Consensi GPS" />
+        <Tab label="DPA" />
       </Tabs>
 
       {tab === 0 && <ClientsTab />}
@@ -45,6 +47,7 @@ export function AdminPage() {
       {tab === 3 && <ViewersTab />}
       {tab === 4 && <SettingsTab />}
       {tab === 5 && <ConsentTab />}
+      {tab === 6 && <DpaTab />}
     </Box>
   );
 }
