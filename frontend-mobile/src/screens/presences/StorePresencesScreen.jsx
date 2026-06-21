@@ -4,7 +4,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiClient from '../../services/apiClient';
-import authService from '../../services/authService';
 import { ENDPOINTS, CHECKINS_CONFIG } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SkeletonLoader from '../../components/SkeletonLoader';
@@ -71,12 +70,6 @@ export default function StorePresencesScreen({ navigation }) {
   };
 
   useEffect(() => {
-    authService.getUser().then(u => {
-      if (u?.role !== 'manager') navigation.replace('CheckIn');
-    });
-  }, []);
-
-  useEffect(() => {
     fetchCheckins(activeFilter);
     return () => abortControllerRef.current?.abort();
   }, [activeFilter]);
@@ -126,12 +119,8 @@ export default function StorePresencesScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.back}>← Indietro</Text>
-        </TouchableOpacity>
+      <View style={[styles.header, { justifyContent: 'center' }]}>
         <Text style={styles.title}>Presenze Store</Text>
-        <View style={{ width: 80 }} />
       </View>
 
       <View style={styles.filterBar}>
@@ -206,7 +195,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 20, paddingVertical: 12, backgroundColor: '#1E3A5F',
   },
-  back: { color: '#93C5FD', fontSize: 16, width: 80 },
   title: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
 
   filterBar: {

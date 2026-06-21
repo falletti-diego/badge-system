@@ -22,7 +22,7 @@ export default function LoginScreen({ navigation }) {
     try {
       await authService.login(email.trim(), password);
       try {
-        navigation.navigate('CheckIn');
+        navigation.navigate('Main');
       } catch (navErr) {
         console.warn('Navigation failed:', navErr);
         Alert.alert('Errore', 'Navigazione fallita. Riprova.');

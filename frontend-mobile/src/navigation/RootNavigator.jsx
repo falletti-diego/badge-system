@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/endpoints';
 import { navigationRef } from '../utils/navigationRef';
@@ -11,20 +13,66 @@ import CheckInScreen from '../screens/checkin/CheckInScreen';
 import QRScannerScreen from '../screens/checkin/QRScannerScreen';
 import SuccessScreen from '../screens/checkin/SuccessScreen';
 import MyScheduleScreen from '../screens/schedule/MyScheduleScreen';
-import MyPresencesScreen from '../screens/presences/MyPresencesScreen';
-import StorePresencesScreen from '../screens/presences/StorePresencesScreen';
+import PresenzaTabScreen from '../screens/presences/PresenzaTabScreen';
+import LeaveRequestScreen from '../screens/leave/LeaveRequestScreen';
+import IllnessReportScreen from '../screens/illness/IllnessReportScreen';
 
-const Stack = createNativeStackNavigator();
+const RootStack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
+const CheckInStack = createNativeStackNavigator();
+
+function CheckInStackNavigator() {
+  return (
+    <CheckInStack.Navigator screenOptions={{ headerShown: false }}>
+      <CheckInStack.Screen name="CheckInMain" component={CheckInScreen} />
+      <CheckInStack.Screen name="QRScanner" component={QRScannerScreen} />
+      <CheckInStack.Screen name="Success" component={SuccessScreen} />
+    </CheckInStack.Navigator>
+  );
+}
+
+const TAB_ICONS = {
+  Badge: 'qr-code-outline',
+  Ferie: 'calendar-outline',
+  Malattia: 'medical-outline',
+  Turni: 'time-outline',
+  Presenze: 'people-outline',
+};
+
+function MainTabs() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarActiveTintColor: '#1E3A5F',
+        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarStyle: {
+          backgroundColor: '#FFFFFF',
+          borderTopColor: '#E5E7EB',
+          borderTopWidth: 1,
+        },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarIcon: ({ color, size }) => (
+          <Ionicons name={TAB_ICONS[route.name] || 'ellipse-outline'} size={size} color={color} />
+        ),
+      })}
+    >
+      <Tab.Screen name="Badge" component={CheckInStackNavigator} options={{ title: 'Badge' }} />
+      <Tab.Screen name="Ferie" component={LeaveRequestScreen} />
+      <Tab.Screen name="Malattia" component={IllnessReportScreen} />
+      <Tab.Screen name="Turni" component={MyScheduleScreen} />
+      <Tab.Screen name="Presenze" component={PresenzaTabScreen} />
+    </Tab.Navigator>
+  );
+}
 
 export default function RootNavigator() {
   const [initialRoute, setInitialRoute] = useState(null);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const hasToken = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
-      setInitialRoute(hasToken ? 'CheckIn' : 'Login');
-    };
-    checkAuth();
+    AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN).then(token => {
+      setInitialRoute(token ? 'Main' : 'Login');
+    });
   }, []);
 
   if (initialRoute === null) {
@@ -37,18 +85,10 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer ref={navigationRef}>
-      <Stack.Navigator
-        screenOptions={{ headerShown: false }}
-        initialRouteName={initialRoute}
-      >
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="CheckIn" component={CheckInScreen} />
-        <Stack.Screen name="QRScanner" component={QRScannerScreen} />
-        <Stack.Screen name="Success" component={SuccessScreen} />
-        <Stack.Screen name="MySchedule" component={MyScheduleScreen} />
-        <Stack.Screen name="MyPresences" component={MyPresencesScreen} />
-        <Stack.Screen name="StorePresences" component={StorePresencesScreen} />
-      </Stack.Navigator>
+      <RootStack.Navigator screenOptions={{ headerShown: false }} initialRouteName={initialRoute}>
+        <RootStack.Screen name="Login" component={LoginScreen} />
+        <RootStack.Screen name="Main" component={MainTabs} />
+      </RootStack.Navigator>
     </NavigationContainer>
   );
 }

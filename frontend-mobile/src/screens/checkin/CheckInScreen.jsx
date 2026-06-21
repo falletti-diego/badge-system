@@ -86,33 +86,6 @@ export default function CheckInScreen({ navigation }) {
           </Text>
         </TouchableOpacity>
 
-        <View style={styles.secondaryButtons}>
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => navigation.navigate('MySchedule')}
-          >
-            <Text style={styles.secondaryIcon}>📅</Text>
-            <Text style={styles.secondaryText}>I Miei Turni</Text>
-          </TouchableOpacity>
-
-          {user?.role === 'manager' ? (
-            <TouchableOpacity
-              style={[styles.secondaryButton, styles.secondaryButtonManager]}
-              onPress={() => navigation.navigate('StorePresences')}
-            >
-              <Text style={styles.secondaryIcon}>👥</Text>
-              <Text style={[styles.secondaryText, styles.secondaryTextManager]}>Presenze Store</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => navigation.navigate('MyPresences')}
-            >
-              <Text style={styles.secondaryIcon}>📋</Text>
-              <Text style={styles.secondaryText}>Le Mie Presenze</Text>
-            </TouchableOpacity>
-          )}
-        </View>
       </View>
     </SafeAreaView>
   );
@@ -144,15 +117,4 @@ const styles = StyleSheet.create({
   checkinIcon: { fontSize: 48, marginBottom: 12 },
   checkinButtonText: { color: '#FFFFFF', fontSize: 22, fontWeight: '700' },
   checkinSubtext: { color: '#93C5FD', fontSize: 14, marginTop: 6 },
-  secondaryButtons: { flexDirection: 'row', gap: 12 },
-  secondaryButton: {
-    flex: 1, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20,
-    alignItems: 'center', elevation: 2,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08, shadowRadius: 4,
-  },
-  secondaryIcon: { fontSize: 32, marginBottom: 8 },
-  secondaryText: { color: '#1E3A5F', fontSize: 14, fontWeight: '600', textAlign: 'center' },
-  secondaryButtonManager: { borderWidth: 2, borderColor: '#0F4C2A' },
-  secondaryTextManager: { color: '#0F4C2A' },
 });
