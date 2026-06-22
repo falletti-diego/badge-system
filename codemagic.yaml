@@ -30,7 +30,8 @@ workflows:
           xcode-project use-profiles
           xcode-project build-ipa \
             --workspace "ios/BadgeSystem.xcworkspace" \
-            --scheme "BadgeSystem"
+            --scheme "BadgeSystem" \
+            --export-options-plist "ExportOptions.plist"
 
     artifacts:
       - build/ios/ipa/*.ipa
