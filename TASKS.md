@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-21 (Session 49: Codemagic iOS setup — bloccato su code signing)  
+**Last Updated:** 2026-06-22 (Session 50: Codemagic Build 18 — primo upload TestFlight via Codemagic riuscito ✅)  
 **Production:** https://badge.dataxiom.it · API: https://api.dataxiom.it
 
 ---
@@ -10,6 +10,7 @@
 
 | Sessione | Data | Sintesi |
 |---|---|---|
+| 50 | 2026-06-22 | **Codemagic Build 18 — primo upload TestFlight via CI riuscito** — 7 errori yaml risolti in cascata: .p12 creato da zero (certificato Apple Distribution nuovo + intermedio AppleWWDRCAG3), provisioning profile rigenerato linkato al nuovo cert, Node v20.x→20.17.0, workspace BadgeSystem (no spazio), ExportOptions.plist manuale, SENTRY_DISABLE_AUTO_UPLOAD, App Store Connect key rigenerata (58VXN7ATGV), buildNumber 17→18 (duplicato). Build 18 in "Processing" su App Store Connect (10:42 PM). Commits: db8c94c, b9e71c4, 5d6cd76, 2933581, 6858fa8, 8cbb995, 5d9f36d. **Pipeline Codemagic ora funzionante.** |
 | 49 | 2026-06-21 | **Codemagic iOS Build 17 setup** — 3 errori yaml corretti (mac_mini_m2→m1, api_key rimosso da ios_signing, integrations spostato a livello workflow, xcode-project use-profiles aggiunto). Errore finale bloccante: `No matching profiles found for it.dataxiom.badge / app_store` — signing automatico via API key non trova il profilo EAS. Soluzione: signing manuale (upload .p12 + .mobileprovision in Codemagic). Utente deve: (1) aprire Keychain Access → cercare "Apple Distribution" → esportare .p12, (2) caricare .p12 + .mobileprovision in Codemagic Settings → Code signing identities, (3) riavviare build. Commits: 3a45a90, 074401b, 1d98d2b. **⏳ DA COMPLETARE DOMANI.** |
 | 48 | 2026-06-21 | **Mobile tab bar + LeaveRequestScreen + IllnessReportScreen + dateUtils TDD** — Piano v2 corretto (12 fix: timezone bug toISO UTC→locale, TODAY stale module-level, StorePresencesScreen crash tab context, back button rimossi). `dateUtils.js` (toISO/formatDateIT/today) + 13 unit test TDD (npm test). `@react-navigation/bottom-tabs` + `@react-native-community/datetimepicker` installati. 5 tab (Badge/Ferie/Malattia/Turni/Presenze). `LeaveRequestScreen.jsx` (saldo, chip tipo, date picker, storico). `IllnessReportScreen.jsx` (date picker, storico 3 mesi). Fix: LoginScreen → `'Main'`, CheckInScreen secondaryButtons rimossi, back button rimossi da 3 schermate, role redirect StorePresencesScreen rimosso. `codemagic.yaml` + buildNumber 17. Suite 13/13 verde. Push su main. Commits: 91af9cf, 61e6768, 219fec7, b4651ae, f091aab, bb65870, 87fb53a. **TODO utente: test Expo Go + Codemagic setup (istruzioni in HANDOFF.md).** |
 | 47 | 2026-06-21 | **S.25 GDPR DPA — implementazione completa** — Fix bug silenzioso `req.user.id` → `req.user.user_id` in `admin.js:158,172` (undefined → FK violation su `created_by`). 8 test TDD in `admin-dpa.test.js` (POST 201/400/403/401, GET 200/empty/403). Pagina HTML pubblica `dpa-template-it.html` + `_redirects` entry prima del SPA catch-all. DpaTab (Tab 7) in AdminPage con status banner, download link, form registra firma, storico. Build frontend ✅. Suite 478/478. Commits: a67f3aa, ea2d708, 75ac619. Pushato su main → CI/CD in corso. |
