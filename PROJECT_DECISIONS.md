@@ -1,8 +1,8 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 21 Giugno 2026 (Session 49)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile tab bar + LeaveRequestScreen + IllnessReportScreen ✅ codice pronto | Codemagic Build 17 ⏳ setup in corso (bloccato su code signing)  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Mobile features complete, Codemagic iOS build setup in corso
+**Last Updated:** 22 Giugno 2026 (Session 50)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 18 ✅ su TestFlight (Processing) | Pipeline Codemagic ✅ funzionante  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Mobile CI pipeline attiva, prossimo: staging environment + ONB.2
 
 ---
 
@@ -223,11 +223,18 @@
 
 ### 🔴 Alta Priorità (pre-lancio primo cliente reale)
 
-#### TestFlight Build 17 — Geofencing su mobile (task 10.9)
-- Il backend geofencing è live in produzione, ma la build mobile con `expo-location` non è ancora su TestFlight.
-- **Azione:** `cd frontend-mobile && eas build --platform ios --profile production`, poi submit su TestFlight.
-- **Effort:** ~30 min di build (EAS cloud), poi review Apple ~24h.
-- **Blocco se non fatto:** I dipendenti non possono testare il geofencing sull'app iPhone reale.
+#### TestFlight Build 18 — Pipeline Codemagic attiva ✅ (Session 50, 2026-06-22)
+- Build 18 caricata su App Store Connect (Processing al 22/06 ore 22:42).
+- **Pipeline Codemagic:** ogni `git push` su `main` → build automatica → upload TestFlight.
+- **Codemagic workflow:** `badge-ios-testflight` su `mac_mini_m1`, signing manuale (.p12 + .mobileprovision caricati in Settings).
+- **Decisioni chiave Codemagic (Session 49-50):**
+  - Signing manuale (non automatico via EAS API) — profilo EAS non visibile all'API key Codemagic
+  - `ExportOptions.plist` committato nel repo (`frontend-mobile/ExportOptions.plist`) — `use-profiles` non generava il plist automaticamente
+  - `SENTRY_DISABLE_AUTO_UPLOAD=true` in env group `default` — Sentry CLI bloccava l'archive senza auth token
+  - Node `20.17.0` (non `v20.x` — formato non supportato da Codemagic)
+  - Workspace: `BadgeSystem.xcworkspace` / scheme: `BadgeSystem` (Expo genera senza spazio)
+  - App Store Connect key rigenerata: `Badge System (58VXN7ATGV)` — la vecchia `G3WX4C3UAU` falliva 401
+- **Prossimo:** Aspettare che Build 18 passi da "Processing" a "Ready" in TestFlight, poi installare su iPhone.
 
 #### GDPR Blockers S.24 / S.25 / S.26 — Verifica stato in produzione
 - Il session log Session 33 indica che S.24 (GPS Privacy Policy), S.25 (DPA template), S.26 (GPS Consent dialog) sono stati implementati (commit `b6684ac`, `e0b24e3`, `f34f1fd`).
