@@ -9,7 +9,7 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: it.dataxiom.badge
-      node: v20.x
+      node: 20.17.0
       xcode: latest
       cocoapods: default
     working_directory: frontend-mobile
