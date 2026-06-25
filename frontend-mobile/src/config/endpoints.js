@@ -21,10 +21,12 @@ export const ENDPOINTS = {
   // Shifts
   SHIFTS_MY_SCHEDULE: '/api/v1/shifts/my-schedule',
 
-  // Leaves (ferie)
+  // Leaves (ferie) — employee
   LEAVES_LIST: '/api/v1/leave/my-requests',
   LEAVES_CREATE: '/api/v1/leave/request',
   LEAVES_BALANCE: '/api/v1/leave/balance',
+  // Leaves (ferie) — manager
+  LEAVES_PENDING: '/api/v1/leave/pending',
 
   // Illnesses (malattia)
   ILLNESS_REPORT: '/api/v1/illnesses/report',

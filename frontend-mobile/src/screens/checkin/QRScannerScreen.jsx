@@ -1,47 +1,20 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/apiClient';
 import authService from '../../services/authService';
 import { ENDPOINTS } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import GPSConsentDialog from '../../components/GPSConsentDialog';
 
 const QR_PREFIX = 'badge://checkin';
-
-const logger = {
-  warn: (msg, err) => console.warn(`[QRScanner] ${msg}`, err),
-  error: (msg, err) => console.error(`[QRScanner] ${msg}`, err),
-  info: (msg) => console.log(`[QRScanner] ${msg}`),
-};
-
-// Attempt to get current GPS position within the timeout.
-// Returns { latitude, longitude } or null if unavailable/denied.
-async function tryGetLocation() {
-  try {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return null;
-    const pos = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-      timeInterval: 5000,
-    });
-    return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-  } catch {
-    return null;
-  }
-}
 
 export default function QRScannerScreen({ navigation }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checkType, setCheckType] = useState('IN');
-  const [gpsConsentDialogVisible, setGpsConsentDialogVisible] = useState(false);
-  const [pendingCheckInData, setPendingCheckInData] = useState(null);
-  // useRef guard: prevents duplicate submissions from rapid onBarcodeScanned events
+  // Guard: prevents duplicate submissions from rapid onBarcodeScanned events
   const processingRef = useRef(false);
 
   const handleBarCodeScanned = async ({ data }) => {
@@ -63,7 +36,7 @@ export default function QRScannerScreen({ navigation }) {
     setLoading(true);
 
     try {
-      // Parsing robusto: new URL() può crashare su custom scheme (badge://) in Hermes production
+      // Robust parsing: new URL() crashes on custom schemes (badge://) in Hermes production
       const qmark = data.indexOf('?');
       const queryString = qmark >= 0 ? data.slice(qmark + 1) : '';
       const params = {};
@@ -81,60 +54,22 @@ export default function QRScannerScreen({ navigation }) {
 
       if (!employeeId) throw new Error('Employee ID non trovato — assicurati di accedere con un account dipendente');
 
-      // Attempt GPS — sent when available; server enforces it only if geofence is enabled
-      const location = await tryGetLocation();
-
-      // If location is available, check if user has accepted GPS consent
-      if (location) {
-        const gpsConsentAccepted = await AsyncStorage.getItem('gps_consent_accepted');
-        if (!gpsConsentAccepted) {
-          // Save pending check-in and show consent dialog
-          setPendingCheckInData({
-            employee_id: employeeId,
-            site_id: siteId,
-            client_id: clientId,
-            type: checkType,
-            timestamp: new Date().toISOString(),
-            latitude: location.latitude,
-            longitude: location.longitude,
-          });
-          setGpsConsentDialogVisible(true);
-          setLoading(false);
-          return; // Don't proceed with check-in yet
-        }
-      }
-
-      const payload = {
+      const response = await apiClient.post(ENDPOINTS.CHECKINS_POST, {
         employee_id: employeeId,
         site_id: siteId,
         client_id: clientId,
         type: checkType,
         timestamp: new Date().toISOString(),
-        ...(location ? { latitude: location.latitude, longitude: location.longitude } : {}),
-      };
-
-      const response = await apiClient.post(ENDPOINTS.CHECKINS_POST, payload);
+      });
 
       navigation.replace('Success', {
         checkIn: response.data.data,
         siteId,
       });
     } catch (err) {
-      const code = err.response?.data?.code;
-      const details = err.response?.data?.details;
+      const msg = err.response?.data?.message || err.message || 'Check-in fallito';
 
-      let title = 'Errore check-in';
-      let msg = err.response?.data?.message || err.message || 'Check-in fallito';
-
-      if (code === 'OUTSIDE_GEOFENCE') {
-        title = '📍 Fuori dalla sede';
-        msg = `Sei troppo lontano dalla sede.\nDistanza: ${details?.distance_meters ?? '?'}m\nMassimo consentito: ${details?.max_meters ?? '?'}m\n\nAvvicinati alla sede e riprova.`;
-      } else if (code === 'GEOFENCE_COORDINATES_REQUIRED' || (err.response?.data?.details?.code === 'GEOFENCE_COORDINATES_REQUIRED')) {
-        title = '📍 GPS richiesto';
-        msg = 'Questa sede richiede la posizione GPS per il check-in. Attiva il GPS e riprova.';
-      }
-
-      Alert.alert(title, msg, [
+      Alert.alert('Errore check-in', msg, [
         { text: 'Riprova', onPress: () => {
           processingRef.current = false;
           setScanned(false);
@@ -144,63 +79,6 @@ export default function QRScannerScreen({ navigation }) {
       ]);
       setLoading(false);
     }
-  };
-
-  const handleGpsConsentAccept = async () => {
-    // Save consent locally
-    await AsyncStorage.setItem('gps_consent_accepted', 'true');
-
-    // Send consent to backend (GDPR Art. 7 audit trail)
-    try {
-      await apiClient.post(ENDPOINTS.CONSENT_GPS_ACCEPTANCE, {
-        consent_given: true,
-        privacy_policy_version: '2.0',
-      });
-    } catch (err) {
-      logger.warn('Failed to send GPS consent to backend:', err.message);
-      // Continue anyway — local acceptance is sufficient for UX
-    }
-
-    setGpsConsentDialogVisible(false);
-
-    if (pendingCheckInData) {
-      setLoading(true);
-      try {
-        const response = await apiClient.post(ENDPOINTS.CHECKINS_POST, pendingCheckInData);
-        navigation.replace('Success', {
-          checkIn: response.data.data,
-          siteId: pendingCheckInData.site_id,
-        });
-      } catch (err) {
-        const code = err.response?.data?.code;
-        const details = err.response?.data?.details;
-        let title = 'Errore check-in';
-        let msg = err.response?.data?.message || err.message || 'Check-in fallito';
-
-        if (code === 'OUTSIDE_GEOFENCE') {
-          title = '📍 Fuori dalla sede';
-          msg = `Sei troppo lontano dalla sede.\nDistanza: ${details?.distance_meters ?? '?'}m\nMassimo consentito: ${details?.max_meters ?? '?'}m\n\nAvvicinati alla sede e riprova.`;
-        }
-
-        Alert.alert(title, msg, [
-          { text: 'Riprova', onPress: () => {
-            processingRef.current = false;
-            setScanned(false);
-            setLoading(false);
-          }},
-        ]);
-        setLoading(false);
-      }
-      setPendingCheckInData(null);
-    }
-  };
-
-  const handleGpsConsentDecline = () => {
-    setGpsConsentDialogVisible(false);
-    setPendingCheckInData(null);
-    processingRef.current = false;
-    setScanned(false);
-    setLoading(false);
   };
 
   if (!permission) {
@@ -282,15 +160,9 @@ export default function QRScannerScreen({ navigation }) {
         <Text style={styles.hint}>
           {loading
             ? (checkType === 'IN' ? 'Registrazione entrata...' : 'Registrazione uscita...')
-            : `Inquadra il QR code della sede`}
+            : 'Inquadra il QR code della sede'}
         </Text>
       </SafeAreaView>
-
-      <GPSConsentDialog
-        visible={gpsConsentDialogVisible}
-        onConsent={handleGpsConsentAccept}
-        onDecline={handleGpsConsentDecline}
-      />
     </View>
   );
 }
