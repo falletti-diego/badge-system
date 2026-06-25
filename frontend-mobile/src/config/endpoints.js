@@ -22,9 +22,9 @@ export const ENDPOINTS = {
   SHIFTS_MY_SCHEDULE: '/api/v1/shifts/my-schedule',
 
   // Leaves (ferie)
-  LEAVES_LIST: '/api/v1/leaves',
-  LEAVES_CREATE: '/api/v1/leaves',
-  LEAVES_BALANCE: '/api/v1/leaves/balance',
+  LEAVES_LIST: '/api/v1/leave/my-requests',
+  LEAVES_CREATE: '/api/v1/leave/request',
+  LEAVES_BALANCE: '/api/v1/leave/balance',
 
   // Illnesses (malattia)
   ILLNESS_REPORT: '/api/v1/illnesses/report',
