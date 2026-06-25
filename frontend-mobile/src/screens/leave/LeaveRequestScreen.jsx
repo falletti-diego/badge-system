@@ -156,13 +156,15 @@ export default function LeaveRequestScreen() {
           onPress={() => {
             setShowEndPicker(true);
             setShowStartPicker(false);
-            setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
           }}
         >
           <Text style={styles.dateButtonText}>📅  {toISO(endDate)}</Text>
         </TouchableOpacity>
         {showEndPicker && (
-          <View style={styles.pickerContainer}>
+          <View
+            style={styles.pickerContainer}
+            onLayout={() => scrollRef.current?.scrollToEnd({ animated: true })}
+          >
             <DateTimePicker
               value={endDate}
               mode="date"
