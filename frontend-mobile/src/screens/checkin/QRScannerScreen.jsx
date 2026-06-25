@@ -63,11 +63,18 @@ export default function QRScannerScreen({ navigation }) {
     setLoading(true);
 
     try {
-      const url = new URL(data);
-      const siteId = url.searchParams.get('site_id');
-      const clientId = url.searchParams.get('client_id');
+      // Parsing robusto: new URL() può crashare su custom scheme (badge://) in Hermes production
+      const qmark = data.indexOf('?');
+      const queryString = qmark >= 0 ? data.slice(qmark + 1) : '';
+      const params = {};
+      queryString.split('&').forEach(pair => {
+        const eq = pair.indexOf('=');
+        if (eq >= 0) params[pair.slice(0, eq)] = decodeURIComponent(pair.slice(eq + 1));
+      });
+      const siteId = params.site_id || null;
+      const clientId = params.client_id || null;
 
-      if (!siteId || !clientId) throw new Error('QR incompleto');
+      if (!siteId || !clientId) throw new Error('QR incompleto: parametri site_id o client_id mancanti');
 
       const user = await authService.getUser();
       const employeeId = user?.employee_id;
