@@ -503,4 +503,36 @@ router.get('/admin/saldi', requireAuth, async (req, res, next) => {
   }
 });
 
+// =====================================================
+// GET /api/v1/leave/balance — Employee's own leave saldi (current year)
+// All roles can call this; returns only the caller's own saldi
+// =====================================================
+
+router.get('/balance', requireAuth, async (req, res, next) => {
+  const userId = req.user.user_id;
+  const clientId = req.user.client_id;
+  const year = new Date().getFullYear();
+
+  try {
+    const result = await pool.query(
+      `SELECT leave_type, year, total_days, used_days, remaining_days
+       FROM leave_saldi
+       WHERE user_id = $1::uuid AND client_id = $2::uuid AND year = $3
+       ORDER BY leave_type`,
+      [userId, clientId, year]
+    );
+
+    logger.info({
+      action: 'leave_balance_viewed',
+      user_id: userId,
+      year,
+      count: result.rows.length,
+    });
+
+    res.status(200).json({ data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

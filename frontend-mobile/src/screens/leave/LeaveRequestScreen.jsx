@@ -57,7 +57,7 @@ export default function LeaveRequestScreen() {
         leave_type: leaveType,
         start_date: toISO(startDate),
         end_date: toISO(endDate),
-        reason: reason.trim() || null,
+        motivation: reason.trim() || null,
       });
       Alert.alert('✅ Richiesta inviata', 'La tua richiesta di ferie è stata inviata al manager per approvazione.');
       setReason('');
