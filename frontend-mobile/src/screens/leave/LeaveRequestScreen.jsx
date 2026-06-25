@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, Alert, ActivityIndicator,
@@ -24,6 +24,7 @@ export default function LeaveRequestScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [requests, setRequests] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const scrollRef = useRef(null);
 
   const loadBalance = useCallback(() => {
     setBalanceLoading(true);
@@ -79,7 +80,7 @@ export default function LeaveRequestScreen() {
         <Text style={styles.title}>Richiesta Ferie</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Text style={styles.sectionTitle}>Saldo disponibile</Text>
         <View style={styles.balanceRow}>
           {balanceLoading ? (
@@ -152,7 +153,11 @@ export default function LeaveRequestScreen() {
         <Text style={styles.label}>Data fine</Text>
         <TouchableOpacity
           style={styles.dateButton}
-          onPress={() => { setShowEndPicker(true); setShowStartPicker(false); }}
+          onPress={() => {
+            setShowEndPicker(true);
+            setShowStartPicker(false);
+            setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+          }}
         >
           <Text style={styles.dateButtonText}>📅  {toISO(endDate)}</Text>
         </TouchableOpacity>
