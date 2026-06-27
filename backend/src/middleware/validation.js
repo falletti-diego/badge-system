@@ -486,11 +486,7 @@ const ApproveLeaveSchema = z.object({
       errorMap: () => ({ message: 'status must be either APPROVED or REJECTED' }),
     }),
     rejection_reason: z.string().max(500, 'rejection_reason must be at most 500 characters').optional().nullable(),
-  })
-    .refine(
-      (data) => data.status !== 'REJECTED' || data.rejection_reason,
-      { message: 'rejection_reason is required when status is REJECTED', path: ['rejection_reason'] }
-    ),
+  }),
 });
 
 module.exports = {

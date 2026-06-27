@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../services/apiClient';
 import { ENDPOINTS, CHECKINS_CONFIG } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -69,10 +70,19 @@ export default function StorePresencesScreen({ navigation }) {
     }
   };
 
+  // Re-fetch when filter changes (while screen is already focused)
   useEffect(() => {
     fetchCheckins(activeFilter);
     return () => abortControllerRef.current?.abort();
   }, [activeFilter]);
+
+  // Re-fetch when user returns to this tab (screen regains focus)
+  useFocusEffect(
+    useCallback(() => {
+      fetchCheckins(activeFilter);
+      return () => abortControllerRef.current?.abort();
+    }, [activeFilter]),
+  );
 
   const handleFilterChange = (index) => {
     setActiveFilter(index);

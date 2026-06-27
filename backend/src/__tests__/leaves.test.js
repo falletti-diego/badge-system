@@ -130,17 +130,6 @@ describe('Leave Request API Endpoints — Validation', () => {
       expect(res.body.error).toBe('Validation Error');
     });
 
-    it('should return 400 for REJECTED without rejection_reason', async () => {
-      const res = await request(app)
-        .put(`/api/v1/leave/${TEST_LEAVE_ID}/approve`)
-        .send({
-          status: 'REJECTED',
-        });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error).toBe('Validation Error');
-    });
-
     it('should return 400 for invalid leave ID (not UUID)', async () => {
       const res = await request(app)
         .put('/api/v1/leave/not-uuid/approve')

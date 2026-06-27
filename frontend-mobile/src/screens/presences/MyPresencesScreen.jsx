@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../services/apiClient';
 import { ENDPOINTS, CHECKINS_CONFIG } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -43,10 +44,12 @@ export default function MyPresencesScreen({ navigation }) {
     }
   };
 
-  useEffect(() => {
-    fetchCheckins();
-    return () => abortControllerRef.current?.abort();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchCheckins();
+      return () => abortControllerRef.current?.abort();
+    }, []),
+  );
 
   return (
     <SafeAreaView style={styles.container}>
