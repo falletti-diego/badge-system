@@ -17,13 +17,16 @@ function toISO(d) {
 }
 
 /**
- * Formats 'YYYY-MM-DD' string to Italian 'DD/MM/YYYY'.
+ * Formats 'YYYY-MM-DD' or ISO datetime string to Italian 'DD/MM/YYYY'.
+ * Strips the time component (T...) before parsing to handle API responses
+ * that return full ISO datetimes (e.g. '2026-07-28T00:00:00.000Z').
  * @param {string|null|undefined} dateStr
  * @returns {string}
  */
 function formatDateIT(dateStr) {
   if (!dateStr) return '—';
-  const [y, m, d] = dateStr.split('-');
+  const datePart = dateStr.split('T')[0];
+  const [y, m, d] = datePart.split('-');
   return `${d}/${m}/${y}`;
 }
 

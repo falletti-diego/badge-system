@@ -8,7 +8,7 @@ export default function SuccessScreen({ navigation, route }) {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      navigation.replace('CheckIn');
+      navigation.replace('CheckInMain');
     }, TIMING.SUCCESS_AUTO_RETURN);
     return () => clearTimeout(timer);
   }, [navigation]);
@@ -30,7 +30,7 @@ export default function SuccessScreen({ navigation, route }) {
 
         <TouchableOpacity
           style={styles.button}
-          onPress={() => navigation.replace('CheckIn')}
+          onPress={() => navigation.replace('CheckInMain')}
         >
           <Text style={styles.buttonText}>Torna alla home</Text>
         </TouchableOpacity>

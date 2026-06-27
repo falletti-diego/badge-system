@@ -53,6 +53,14 @@ describe('formatDateIT', () => {
   test('pads single digits in output', () => {
     expect(formatDateIT('2026-01-05')).toBe('05/01/2026');
   });
+
+  test('handles ISO datetime string from API (strips time component)', () => {
+    expect(formatDateIT('2026-07-28T00:00:00.000Z')).toBe('28/07/2026');
+  });
+
+  test('handles ISO datetime with non-midnight time', () => {
+    expect(formatDateIT('2026-01-15T13:45:22.123Z')).toBe('15/01/2026');
+  });
 });
 
 describe('today', () => {

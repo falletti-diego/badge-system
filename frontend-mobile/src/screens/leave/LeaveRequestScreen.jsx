@@ -25,6 +25,7 @@ export default function LeaveRequestScreen() {
   const [requests, setRequests] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const scrollRef = useRef(null);
+  const endDateSectionY = useRef(0);
 
   const loadBalance = useCallback(() => {
     setBalanceLoading(true);
@@ -46,6 +47,12 @@ export default function LeaveRequestScreen() {
     loadBalance();
     loadHistory();
   }, [loadBalance, loadHistory]);
+
+  useEffect(() => {
+    if (showEndPicker) {
+      scrollRef.current?.scrollTo({ y: Math.max(0, endDateSectionY.current - 16), animated: true });
+    }
+  }, [showEndPicker]);
 
   const handleSubmit = async () => {
     if (endDate < startDate) {
@@ -150,35 +157,34 @@ export default function LeaveRequestScreen() {
           </View>
         )}
 
-        <Text style={styles.label}>Data fine</Text>
-        <TouchableOpacity
-          style={styles.dateButton}
-          onPress={() => {
-            setShowEndPicker(true);
-            setShowStartPicker(false);
-          }}
-        >
-          <Text style={styles.dateButtonText}>📅  {toISO(endDate)}</Text>
-        </TouchableOpacity>
-        {showEndPicker && (
-          <View
-            style={styles.pickerContainer}
-            onLayout={() => scrollRef.current?.scrollToEnd({ animated: true })}
+        <View onLayout={(e) => { endDateSectionY.current = e.nativeEvent.layout.y; }}>
+          <Text style={styles.label}>Data fine</Text>
+          <TouchableOpacity
+            style={styles.dateButton}
+            onPress={() => {
+              setShowEndPicker(true);
+              setShowStartPicker(false);
+            }}
           >
-            <DateTimePicker
-              value={endDate}
-              mode="date"
-              display="spinner"
-              minimumDate={startDate}
-              locale="it-IT"
-              onChange={(_, d) => { if (d) setEndDate(d); }}
-              style={styles.picker}
-            />
-            <TouchableOpacity style={styles.doneButton} onPress={() => setShowEndPicker(false)}>
-              <Text style={styles.doneButtonText}>Fine</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+            <Text style={styles.dateButtonText}>📅  {toISO(endDate)}</Text>
+          </TouchableOpacity>
+          {showEndPicker && (
+            <View style={styles.pickerContainer}>
+              <DateTimePicker
+                value={endDate}
+                mode="date"
+                display="spinner"
+                minimumDate={startDate}
+                locale="it-IT"
+                onChange={(_, d) => { if (d) setEndDate(d); }}
+                style={styles.picker}
+              />
+              <TouchableOpacity style={styles.doneButton} onPress={() => setShowEndPicker(false)}>
+                <Text style={styles.doneButtonText}>Fine</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
 
         <Text style={styles.label}>Motivazione (opzionale)</Text>
         <TextInput
