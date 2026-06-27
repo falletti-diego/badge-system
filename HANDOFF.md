@@ -1,15 +1,17 @@
-# Badge System — Session 50 Handoff
+# Badge System — Session 53 Handoff
 
-**Date:** 2026-06-22  
-**Session:** 50 — Codemagic Build 18 — Pipeline iOS CI/CD completata ✅  
-**Status:** ✅ **Build 18 su App Store Connect (Processing → TestFlight a breve)**
+**Date:** 2026-06-27  
+**Session:** 53 — Build 23 su TestFlight — presenze refresh + rifiuto ferie 400 fix ✅  
+**Status:** ✅ **Build 23 in upload su TestFlight via Codemagic**
 
 ---
 
 ## Goal raggiunto
 
-Sbloccare la pipeline Codemagic per la distribuzione iOS automatica su TestFlight.  
-Build 18 caricata su App Store Connect alle 22:42 del 22/06/2026. Status: "Processing".
+Due bug critici segnalati su Build 22 (iPhone reale) — entrambi fixati e committati:
+
+1. **Presenze non aggiornate dopo check-OUT** — il tab Presenze non ricaricava dopo una timbratura in uscita
+2. **400 su "Rifiuta"** — bottone Rifiuta nelle approvazioni ferie dava errore 400
 
 ---
 
@@ -17,131 +19,122 @@ Build 18 caricata su App Store Connect alle 22:42 del 22/06/2026. Status: "Proce
 
 | Componente | Stato |
 |-----------|-------|
-| `dateUtils.js` + 13 unit test TDD | ✅ su main |
-| 5 tab (Badge/Ferie/Malattia/Turni/Presenze) | ✅ su main |
-| `LeaveRequestScreen.jsx` | ✅ su main |
-| `IllnessReportScreen.jsx` | ✅ su main |
-| `codemagic.yaml` | ✅ pipeline funzionante |
-| `ExportOptions.plist` | ✅ committato in `frontend-mobile/` |
-| `app.json` buildNumber | ✅ 18 |
-| Backend produzione | ✅ api.dataxiom.it (23/23 api-test) |
+| Backend produzione | ✅ api.dataxiom.it |
 | Frontend produzione | ✅ badge.dataxiom.it |
+| `app.json` buildNumber | ✅ 23 |
+| `MyPresencesScreen.jsx` | ✅ useFocusEffect — reload ad ogni focus tab |
+| `StorePresencesScreen.jsx` | ✅ doppio hook: useEffect + useFocusEffect |
+| `validation.js` ApproveLeaveSchema | ✅ .refine() rimosso — rejection_reason opzionale |
+| `leaves.test.js` | ✅ test 400-REJECTED rimosso (comportamento cambiato) |
+| Backend test | ✅ 466/466 pass (14 skipped intenzionali) |
+| Mobile test | ✅ 15/15 pass |
 
 ---
 
-## Codemagic — Configurazione attuale funzionante
+## Bug fix in dettaglio
 
-### codemagic.yaml (commit 8cbb995 + 5d9f36d)
-```yaml
-workflows:
-  badge-ios-testflight:
-    name: Badge System iOS — TestFlight
-    max_build_duration: 60
-    instance_type: mac_mini_m1
-    integrations:
-      app_store_connect: Badge System
-    environment:
-      groups:
-        - default
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: it.dataxiom.badge
-      node: 20.17.0
-      xcode: latest
-      cocoapods: default
-    working_directory: frontend-mobile
-    scripts:
-      - npm ci
-      - npx expo prebuild --platform ios --clean
-      - cd ios && pod install
-      - xcode-project use-profiles
-      - xcode-project build-ipa
-          --workspace "ios/BadgeSystem.xcworkspace"
-          --scheme "BadgeSystem"
-          --export-options-plist "ExportOptions.plist"
-    artifacts:
-      - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
+### Bug 1 — Presenze non aggiornate dopo check-OUT
+
+**Root cause:** `useEffect([], [])` in `MyPresencesScreen` carica solo al mount iniziale. Prima visita al tab → mount → OK. Visita successiva (dopo check-out): componente già montato → nessun refresh → dato stale.
+
+**Fix `MyPresencesScreen.jsx`:**
+```jsx
+// Prima (caricava solo al mount)
+useEffect(() => { fetchCheckins(); }, []);
+
+// Dopo (carica ad ogni focus del tab)
+useFocusEffect(
+  useCallback(() => {
+    fetchCheckins();
+    return () => abortControllerRef.current?.abort();
+  }, []),
+);
 ```
 
+**Fix `StorePresencesScreen.jsx`** — doppio hook necessario perché `useFocusEffect` da solo non ri-triggerava quando `activeFilter` cambiava mentre la schermata era già a fuoco:
+```jsx
+// Per cambi filtro (mentre la schermata è già a fuoco)
+useEffect(() => {
+  fetchCheckins(activeFilter);
+  return () => abortControllerRef.current?.abort();
+}, [activeFilter]);
+
+// Per ritorno al tab (focus event)
+useFocusEffect(
+  useCallback(() => {
+    fetchCheckins(activeFilter);
+    return () => abortControllerRef.current?.abort();
+  }, [activeFilter]),
+);
+```
+Il doppio fetch all'apertura iniziale è accettabile — il secondo annulla il primo via AbortController.
+
+### Bug 2 — 400 su "Rifiuta" (approvazione ferie)
+
+**Root cause:** `ApproveLeaveSchema` in `validation.js` aveva un `.refine()` che rendeva `rejection_reason` obbligatorio quando `status === 'REJECTED'`. Il frontend manda solo `{ status: 'REJECTED' }` senza motivazione.
+
+**Fix:** Rimosso il `.refine()`. Il campo era già `optional().nullable()` — accetta null/undefined senza problemi. Il route handler `leaves.js` gestiva già `rejection_reason || null`.
+
+**Test rimosso:** `leaves.test.js` aveva un test che assertiva 400 per REJECTED senza rejection_reason — eliminato perché il comportamento è stato cambiato intenzionalmente.
+
+---
+
+## Commits di questa sessione (53) e della precedente (52)
+
+| Commit | Descrizione |
+|--------|-------------|
+| `2373efa` | chore(mobile): bump buildNumber to 23 → Codemagic Build 23 triggerata |
+| `4772d8d` | fix(mobile+backend): presenze refresh dopo check-out, rifiuto ferie senza motivazione |
+| `4a98156` | chore(mobile): bump buildNumber to 22 |
+| `936a8e4` | fix(mobile): SuccessScreen nav, date formatting, end-date picker scroll |
+
+---
+
+## Prossimi step
+
+### Immediato — Test Build 23 su iPhone
+
+Appena Build 23 appare in TestFlight (~15-40 min dopo il push):
+
+1. **Come Maria (employee):** scan QR → check-IN → vai tab Presenze → vedi entrata ✓ → torna al tab Badge → scan QR → check-OUT → vai tab Presenze → **vedi subito anche l'uscita senza logout** ✓
+2. **Come Pino (manager):** vai tab Approvazioni → clicca "Rifiuta" su una richiesta ferie → **nessun errore 400** ✓
+
+### Se la build va bene (backlog)
+
+1. **Staging environment** — obbligatorio prima del lancio con primo cliente reale (decisione Session 45)
+2. **ONB.2** — Saldi NUMERIC per mezze giornate leave management (3-5h)
+3. **EU trader status** — completare su App Store Connect (richiesto da Apple per distribuzione EU)
+4. **S.26** — GPS explicit consent mechanism
+
+---
+
+## Note operative
+
+### Come avviare nuova build Codemagic
+
+1. Incrementa `buildNumber` in `frontend-mobile/app.json`
+2. `git add . && git commit -m "..." && git push`
+3. Codemagic parte automaticamente (webhook su push a `main`) → ~35-45 min → TestFlight
+
 ### Dati tecnici Codemagic
+
 | Dato | Valore |
 |------|--------|
 | Bundle identifier | `it.dataxiom.badge` |
 | Apple Team ID | `UKZ95L3FHH` |
 | App Store Connect App ID | `6777934529` |
 | API Key in Codemagic | `Badge System (Key: 58VXN7ATGV)` |
-| Issuer ID | `9d2161b8-5317-4aca-8d53-64dc7b2cc48a` |
 | Workflow | `badge-ios-testflight` |
 | Branch | `main` |
-| buildNumber attuale | `18` |
-| Env group | `default` (contiene `SENTRY_DISABLE_AUTO_UPLOAD=true`) |
+| buildNumber attuale | `23` |
 
-### Certificati in Codemagic (Settings → Code signing identities)
-- **iOS certificate:** `Apple Distribution: Diego Falletti (UKZ95L3FHH)` → file `badge_distribution.p12`
-- **Provisioning profile:** `Badge System App Store` → file `.mobileprovision`
-- ⚠️ Entrambi creati il 22/06/2026 — il certificato scade nel 2027
+### Account demo
 
----
-
-## 7 errori risolti in cascata (Session 49-50)
-
-| # | Errore | Fix | Commit |
-|---|--------|-----|--------|
-| 1 | `No matching profiles found` (signing automatico) | Switching a signing manuale: .p12 + .mobileprovision caricati in Codemagic | — |
-| 2 | `Unable to install Node version v20.x` | `node: v20.x` → `node: 20.17.0` | db8c94c |
-| 3 | `Path "ios/Badge System.xcworkspace" does not exist` | Workspace reale è `BadgeSystem` (no spazio) — verificato con prebuild locale | b9e71c4 |
-| 4 | `export_options.plist does not exist` | Creato `frontend-mobile/ExportOptions.plist` committato nel repo | 5d6cd76 |
-| 5 | `sentry-cli: Auth token required` | `SENTRY_DISABLE_AUTO_UPLOAD=true` in env group `default` su Codemagic | 2933581 |
-| 6 | `App Store Connect 401 NOT_AUTHORIZED` | Nuova API key `Badge System (58VXN7ATGV)` — la vecchia falliva | 6858fa8 |
-| 7 | `bundle version must be higher than previously uploaded: 17` | `buildNumber` 17 → 18 in `app.json` | 5d9f36d |
-
----
-
-## Prossimi step
-
-### Immediato (oggi/domani)
-1. **Aspetta che Build 18 passi da "Processing" a "Ready"** su App Store Connect → TestFlight (10-30 min da ora)
-2. **Installa Build 18 su iPhone** via app TestFlight → testa i 5 tab (Badge/Ferie/Malattia/Turni/Presenze)
-3. **Test Expo Go** (se non già fatto):
-   ```bash
-   cd frontend-mobile && npx expo start
-   ```
-   - `maria@badge.local` → 5 tab visibili, Tab Ferie funziona
-   - `pino@badge.local` → Tab Presenze apre StorePresences senza crash
-
-### Per la prossima build (quando si fa una modifica)
-- Incrementa `buildNumber` in `frontend-mobile/app.json` (18 → 19, poi 20, ecc.)
-- `git push` su `main` → Codemagic parte automaticamente → ~35-45 min → TestFlight
-
-### Backlog post-Build 18
-1. **Staging environment** — obbligatorio prima del lancio con primo cliente reale (decisione Session 45)
-2. **ONB.2** — Saldi NUMERIC per mezze giornate leave management (3-5h)
-3. **S.26** — GPS explicit consent mechanism
-4. **EU trader status** — completare su App Store Connect (richiesto da Apple per distribuzione EU)
-
----
-
-## Note operative
-
-### Come avviare la prossima build Codemagic
-1. Modifica codice + incrementa `buildNumber` in `app.json`
-2. `git add . && git commit -m "..." && git push`
-3. Codemagic parte automaticamente (webhook su push a `main`)
-4. Oppure: [codemagic.io](https://codemagic.io) → `badge-system` → **Start new build** → `main` → `badge-ios-testflight`
-
-### Se "post-processing failed" con "Fetching logs..." bloccato
-- È un **bug UI di Codemagic** — non un errore reale
-- Controlla **App Store Connect → My Apps → Badge System → TestFlight → Build Uploads**
-- Se la build è lì (anche in "Processing"), l'upload è riuscito
-
-### Se serve rinnovare il certificato (scade 2027)
-- Rieseguire Step 1C: Keychain → "I miei certificati" → `Apple Distribution: Diego Falletti` → Esporta .p12
-- Ricaricare in Codemagic → Settings → Code signing identities
+| Email | Password | Ruolo |
+|-------|----------|-------|
+| `maria@badge.local` | `Maria2024!` | employee (Torino) |
+| `pino@badge.local` | `Pino2024!` | manager (Milano) |
+| `pippo@badge.local` | `Pippo2024!` | admin |
 
 ---
 

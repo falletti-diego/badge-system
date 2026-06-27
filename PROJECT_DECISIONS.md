@@ -1,8 +1,8 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 22 Giugno 2026 (Session 50)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 18 ✅ su TestFlight (Processing) | Pipeline Codemagic ✅ funzionante  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Mobile CI pipeline attiva, prossimo: staging environment + ONB.2
+**Last Updated:** 27 Giugno 2026 (Session 53)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 23 ✅ su TestFlight | Pipeline Codemagic ✅ funzionante  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Bug fix mobile post-TestFlight, prossimo: staging environment + ONB.2
 
 ---
 
