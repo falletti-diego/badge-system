@@ -14,6 +14,7 @@ const { ValidationError, ForbiddenError, NotFoundError } = require('../utils/err
 const { verifyPassword, hashPassword } = require('../auth/password');
 const { requireAuth } = require('../middleware/auth');
 const { pool } = require('../db/pool');
+const { DEMO_USERS } = require('../__fixtures__/demo-users');
 
 const router = express.Router();
 const logger = pino({
@@ -32,40 +33,6 @@ const JWT_PUBLIC_KEY = process.env.JWT_PUBLIC_KEY.replace(/\\n/g, '\n');
 const JWT_ALGORITHM = 'RS256';
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
-
-// Internal Dataxiom accounts — restricted to @badge.local domain only.
-// Passwords are read from environment variables only — never hardcoded in source.
-// If an env var is not set, that account is effectively disabled (no match possible).
-// Set DEMO_*_PASSWORD in .env (dev) or EC2 --env-file (prod) — see .env.example.
-const DEMO_USERS = [
-  {
-    email: 'pippo@badge.local',
-    password: process.env.DEMO_PIPPO_PASSWORD,
-    id: '550e8400-e29b-41d4-a716-446655440010', // Valid UUID for admin Pippo
-    name: 'Pippo',
-    role: 'admin',
-    client_id: '550e8400-e29b-41d4-a716-446655440001',
-  },
-  {
-    email: 'pino@badge.local',
-    password: process.env.DEMO_PINO_PASSWORD,
-    id: '550e8400-e29b-41d4-a716-446655440011', // Valid UUID for manager Pino
-    name: 'Pino',
-    role: 'manager',
-    client_id: '550e8400-e29b-41d4-a716-446655440001',
-    site_id: '550e8400-e29b-41d4-a716-446655440011', // Milano Store (matches database)
-  },
-  {
-    email: 'maria@badge.local',
-    password: process.env.DEMO_MARIA_PASSWORD,
-    id: '239ec99f-3204-45ca-bce2-793f52442ec6', // Valid UUID for employee Maria (real planning record)
-    name: 'Maria',
-    role: 'employee',
-    client_id: '550e8400-e29b-41d4-a716-446655440001',
-    employee_id: '239ec99f-3204-45ca-bce2-793f52442ec6', // Maria Rossi — real employee id (matches planning)
-  },
-  // Lucia removed — no corresponding employee record in the database
-];
 
 // DEMO_USERS is only consulted for @badge.local emails — never for real-world domains.
 const BADGE_LOCAL_DOMAIN = '@badge.local';

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useContext } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   ScrollView, Alert, ActivityIndicator, RefreshControl,
@@ -8,6 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../services/apiClient';
 import { ENDPOINTS } from '../../config/endpoints';
 import { formatDateIT } from '../../utils/dateUtils';
+import { PendingLeaveContext } from '../../navigation/RootNavigator';
 
 const LEAVE_LABELS = {
   FERIE_1: 'Ferie ordinarie',
@@ -17,6 +18,7 @@ const LEAVE_LABELS = {
 };
 
 export default function ManagerLeaveApprovalScreen() {
+  const { setPendingCount } = useContext(PendingLeaveContext);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -26,14 +28,16 @@ export default function ManagerLeaveApprovalScreen() {
     if (isRefresh) setRefreshing(true); else setLoading(true);
     try {
       const res = await apiClient.get(ENDPOINTS.LEAVES_PENDING);
-      setRequests(res.data.data || []);
+      const data = res.data.data || [];
+      setRequests(data);
+      setPendingCount(data.length);
     } catch {
       setRequests([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [setPendingCount]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 

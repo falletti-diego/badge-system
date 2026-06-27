@@ -86,13 +86,12 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
         });
       }
 
-      // 3.5 Geofence check — skip entirely if client has disabled the feature
+      // 3.5 Geofence check — ON HOLD (MVP): re-enable by setting GEOFENCING_ENABLED=true
+      // Code is preserved for Phase 2 implementation.
       const site = siteResult.rows[0];
       const { latitude: checkinLat, longitude: checkinLng } = req.validated.body;
-      // Geofence validation: BOTH client feature flag AND site-level flag must be true
-      // Null/undefined client flag defaults to true (enabled), preserving backward compatibility
-      if ((site.geofencing_feature_enabled !== false) && site.geofence_enabled) {
-        // latitude/longitude are validated by Zod schema, but double-check for safety
+      const geofencingEnabled = process.env.GEOFENCING_ENABLED === 'true';
+      if (geofencingEnabled && (site.geofencing_feature_enabled !== false) && site.geofence_enabled) {
         if (checkinLat == null || checkinLng == null || isNaN(checkinLat) || isNaN(checkinLng)) {
           throw new ValidationError('GPS coordinates required for check-in at this site', {
             code: 'GEOFENCE_COORDINATES_REQUIRED',
