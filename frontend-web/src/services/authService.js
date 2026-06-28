@@ -120,14 +120,42 @@ const authService = {
   /**
    * Use the refresh token to get a new access token (called by apiClient interceptor).
    * Returns the new access token string, or throws if refresh fails.
+   *
+   * Cross-tab safety: if another browser tab already refreshed while this call
+   * was in-flight, the refresh_token in localStorage will have changed. In that
+   * case we skip the network call and return the token the other tab stored.
    */
   async refreshAccessToken() {
     const refresh_token = this.getRefreshToken();
     if (!refresh_token) throw new Error('No refresh token');
-    const response = await apiClient.post('/api/v1/auth/refresh', { refresh_token });
-    const { token } = response.data.data;
-    localStorage.setItem(TOKEN_KEY, token);
-    return token;
+
+    // Cross-tab lock: a tab writing 'badge_refreshing' blocks other tabs for 4s
+    const LOCK_KEY = 'badge_refreshing';
+    const LOCK_TTL_MS = 4000;
+    const existing = localStorage.getItem(LOCK_KEY);
+    if (existing && Date.now() - parseInt(existing, 10) < LOCK_TTL_MS) {
+      // Another tab is refreshing — wait briefly, then return whatever token it stored
+      await new Promise((r) => setTimeout(r, 600));
+      const raced = localStorage.getItem(TOKEN_KEY);
+      if (raced) return raced;
+    }
+
+    localStorage.setItem(LOCK_KEY, String(Date.now()));
+    try {
+      // If the refresh_token changed while we waited, another tab already refreshed
+      if (localStorage.getItem(REFRESH_TOKEN_KEY) !== refresh_token) {
+        const raced = localStorage.getItem(TOKEN_KEY);
+        if (raced) return raced;
+      }
+
+      const response = await apiClient.post('/api/v1/auth/refresh', { refresh_token });
+      const { token, refresh_token: new_refresh } = response.data.data;
+      localStorage.setItem(TOKEN_KEY, token);
+      if (new_refresh) localStorage.setItem(REFRESH_TOKEN_KEY, new_refresh);
+      return token;
+    } finally {
+      localStorage.removeItem(LOCK_KEY);
+    }
   },
 
   /**

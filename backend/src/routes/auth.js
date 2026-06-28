@@ -288,11 +288,11 @@ router.post('/refresh', async (req, res) => {
           );
 
           if (replayCheck.rows.length > 0) {
-            // REPLAY DETECTED: Revoke the user to prevent further damage
+            // REPLAY DETECTED: Temporary 5-minute block (not permanent — concurrent-tab false positives occur)
             await client.query(
               `INSERT INTO revoked_tokens (user_id, revoked_at, reason, revoked_until)
-               VALUES ($1, NOW(), $2, NULL)
-               ON CONFLICT (user_id) DO UPDATE SET revoked_at = NOW(), revoked_until = NULL`,
+               VALUES ($1, NOW(), $2, NOW() + INTERVAL '5 minutes')
+               ON CONFLICT (user_id) DO UPDATE SET revoked_at = NOW(), revoked_until = NOW() + INTERVAL '5 minutes'`,
               [user_id, 'REPLAY_ATTACK_DETECTED']
             );
 
