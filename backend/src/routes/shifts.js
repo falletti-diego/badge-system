@@ -289,7 +289,12 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
         [empIds, clientId]
       );
       if (validEmpResult.rows.length !== empIds.length) {
-        throw new ValidationError('One or more employee IDs are invalid or belong to a different client');
+        const validSet = new Set(validEmpResult.rows.map((r) => r.id));
+        const invalidIds = empIds.filter((id) => !validSet.has(id));
+        logger.warn({ action: 'shifts_invalid_employee_ids', invalid_ids: invalidIds, client_id: clientId, site_id: siteId });
+        throw new ValidationError(
+          `One or more employee IDs are invalid or belong to a different client: ${invalidIds.join(', ')}`
+        );
       }
     }
 

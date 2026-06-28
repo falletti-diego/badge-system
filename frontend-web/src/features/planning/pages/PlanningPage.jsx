@@ -158,9 +158,12 @@ export const PlanningPage = () => {
 
   useEffect(() => {
     if (data?.shifts_data) {
-      const copy = structuredClone(data.shifts_data);
-      setShifts(copy);
-      setLastSavedShifts(copy);
+      const validIds = new Set((data.employees || []).map((e) => e.id));
+      const filtered = Object.fromEntries(
+        Object.entries(data.shifts_data).filter(([id]) => validIds.has(id))
+      );
+      setShifts(filtered);
+      setLastSavedShifts(filtered);
     }
   }, [data]);
 
