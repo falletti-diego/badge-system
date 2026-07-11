@@ -107,7 +107,7 @@ describe('POST /api/checkins — success', () => {
     pool.query
       .mockResolvedValueOnce({}) // BEGIN
       .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] }) // employee
-      .mockResolvedValueOnce({ rows: [{ id: TEST_SITE_ID }] }) // site
+      .mockResolvedValueOnce({ rows: [{ id: TEST_SITE_ID, name: 'Milano Centro' }] }) // site
       .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }) // assignment
       .mockResolvedValueOnce({
         rows: [{
@@ -129,6 +129,7 @@ describe('POST /api/checkins — success', () => {
     expect(res.status).toBe(201);
     expect(res.body.data).toHaveProperty('id');
     expect(res.body.data.type).toBe('IN');
+    expect(res.body.data.site_name).toBe('Milano Centro');
     expect(res.body.message).toBe('Check-in created successfully');
   });
 

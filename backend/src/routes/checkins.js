@@ -60,7 +60,7 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
 
       // 2. Verify site exists and fetch geofence settings (JOIN clients for feature flag)
       const siteResult = await client.query(
-        `SELECT s.id, s.geofence_enabled, s.latitude, s.longitude, s.geofence_radius_meters,
+        `SELECT s.id, s.name, s.geofence_enabled, s.latitude, s.longitude, s.geofence_radius_meters,
                 c.geofencing_feature_enabled
          FROM sites s
          JOIN clients c ON c.id = s.client_id
@@ -121,6 +121,7 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
       );
 
       const checkin = checkinResult.rows[0];
+      checkin.site_name = site.name;
 
       // 5. Log audit trail
       await logAudit(client, {

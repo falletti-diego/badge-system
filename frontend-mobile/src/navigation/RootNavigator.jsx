@@ -15,6 +15,7 @@ export const PendingLeaveContext = createContext({ setPendingCount: () => {} });
 
 import LoginScreen from '../screens/auth/LoginScreen';
 import CheckInScreen from '../screens/checkin/CheckInScreen';
+import FaceIDScreen from '../screens/checkin/FaceIDScreen';
 import QRScannerScreen from '../screens/checkin/QRScannerScreen';
 import SuccessScreen from '../screens/checkin/SuccessScreen';
 import MyScheduleScreen from '../screens/schedule/MyScheduleScreen';
@@ -32,6 +33,7 @@ function CheckInStackNavigator() {
   return (
     <CheckInStack.Navigator screenOptions={{ headerShown: false }}>
       <CheckInStack.Screen name="CheckInMain" component={CheckInScreen} />
+      <CheckInStack.Screen name="FaceID" component={FaceIDScreen} />
       <CheckInStack.Screen name="QRScanner" component={QRScannerScreen} />
       <CheckInStack.Screen name="Success" component={SuccessScreen} />
     </CheckInStack.Navigator>

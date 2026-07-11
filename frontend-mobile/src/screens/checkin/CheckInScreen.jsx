@@ -8,6 +8,7 @@ import NetInfo from '@react-native-community/netinfo';
 import authService from '../../services/authService';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { TIMING } from '../../config/endpoints';
+import { COLORS, FONTS } from '../../config/theme';
 
 export default function CheckInScreen({ navigation }) {
   const [user, setUser] = useState(null);
@@ -33,16 +34,9 @@ export default function CheckInScreen({ navigation }) {
       return;
     }
 
-    if (faceIdAvailable) {
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Autenticati per il check-in',
-        cancelLabel: 'Annulla',
-        fallbackLabel: 'Usa passcode',
-      });
-      if (!result.success) return;
-    }
-
-    navigation.navigate('QRScanner');
+    // Biometric verification gets its own dedicated screen (FaceIDScreen) —
+    // devices/simulators without hardware bypass it entirely, same as before.
+    navigation.navigate(faceIdAvailable ? 'FaceID' : 'QRScanner');
   };
 
   const handleLogout = async () => {
@@ -65,7 +59,7 @@ export default function CheckInScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.greeting}>
-          Ciao, {loading ? '' : (user?.name?.split(' ')[0] ?? '')}! 👋
+          Ciao, {loading ? '' : (user?.name?.split(' ')[0] ?? '')}
         </Text>
         <TouchableOpacity onPress={handleLogout} disabled={loading}>
           <Text style={[styles.logoutText, loading && styles.logoutDisabled]}>Esci</Text>
@@ -79,42 +73,42 @@ export default function CheckInScreen({ navigation }) {
 
       <View style={styles.actionsContainer}>
         <TouchableOpacity style={styles.checkinButton} onPress={handleCheckIn}>
-          <Text style={styles.checkinIcon}>📱</Text>
           <Text style={styles.checkinButtonText}>Scannerizza QR Code</Text>
           <Text style={styles.checkinSubtext}>
             {faceIdAvailable ? 'Face ID richiesto' : 'Avvicina il telefono al QR'}
           </Text>
         </TouchableOpacity>
-
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F2ED' },
+  container: { flex: 1, backgroundColor: COLORS.linen },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8,
-    backgroundColor: '#1E3A5F',
+    paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16,
+    backgroundColor: COLORS.navy900,
   },
-  greeting: { fontSize: 18, fontWeight: '600', color: '#FFFFFF' },
-  logoutText: { color: '#93C5FD', fontSize: 14 },
+  greeting: { fontFamily: FONTS.display, fontSize: 22, color: COLORS.white },
+  logoutText: { fontFamily: FONTS.body, color: COLORS.navy200, fontSize: 14 },
   logoutDisabled: { opacity: 0.5 },
   clockContainer: {
-    backgroundColor: '#1E3A5F', alignItems: 'center',
-    paddingBottom: 40, paddingTop: 24,
+    backgroundColor: COLORS.navy900, alignItems: 'center',
+    paddingBottom: 40, paddingTop: 8,
   },
-  clock: { fontSize: 64, fontWeight: '200', color: '#FFFFFF', letterSpacing: 2 },
-  date: { fontSize: 16, color: '#93C5FD', marginTop: 8, textTransform: 'capitalize' },
+  clock: { fontFamily: FONTS.displayLight, fontSize: 68, color: COLORS.white, letterSpacing: -1 },
+  date: {
+    fontFamily: FONTS.body, fontSize: 14, color: COLORS.navy200,
+    marginTop: 6, textTransform: 'capitalize',
+  },
   actionsContainer: { flex: 1, padding: 24, gap: 20 },
   checkinButton: {
-    backgroundColor: '#1E3A5F', borderRadius: 20, padding: 32,
+    backgroundColor: COLORS.navy500, borderRadius: 20, padding: 32,
     alignItems: 'center', elevation: 4,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15, shadowRadius: 8,
   },
-  checkinIcon: { fontSize: 48, marginBottom: 12 },
-  checkinButtonText: { color: '#FFFFFF', fontSize: 22, fontWeight: '700' },
-  checkinSubtext: { color: '#93C5FD', fontSize: 14, marginTop: 6 },
+  checkinButtonText: { fontFamily: FONTS.bodySemiBold, color: COLORS.white, fontSize: 18 },
+  checkinSubtext: { fontFamily: FONTS.body, color: COLORS.navy200, fontSize: 14, marginTop: 6 },
 });

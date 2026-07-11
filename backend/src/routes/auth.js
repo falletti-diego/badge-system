@@ -87,7 +87,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       const params = client_id ? [email, client_id] : [email];
       const clientFilter = client_id ? 'AND client_id = $2' : '';
       const result = await pool.query(
-        `SELECT id, client_id, email, name, role, site_id, password_hash, must_change_password
+        `SELECT id, client_id, email, name, role, site_id, password_hash, must_change_password, external_employee_id
          FROM employees
          WHERE email = $1 AND password_hash IS NOT NULL ${clientFilter}
          ORDER BY created_at ASC
@@ -115,6 +115,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
             client_id: dbEmployee.client_id,
             employee_id: dbEmployee.id,
             site_id: dbEmployee.site_id || null,
+            external_employee_id: dbEmployee.external_employee_id || null,
             must_change_password: dbEmployee.must_change_password || false,
           };
         }
@@ -192,6 +193,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
     };
     if (user.employee_id) userResponse.employee_id = user.employee_id;
     if (user.site_id) userResponse.site_id = user.site_id;
+    if (user.external_employee_id) userResponse.external_employee_id = user.external_employee_id;
 
     res.json({
       data: {

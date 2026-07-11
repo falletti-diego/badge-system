@@ -1,13 +1,16 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Animated, Easing } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiClient from '../../services/apiClient';
 import authService from '../../services/authService';
 import { ENDPOINTS } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import StepIndicator from '../../components/StepIndicator';
+import { COLORS, FONTS } from '../../config/theme';
 
 const QR_PREFIX = 'badge://checkin';
+const SUCCESS_FLASH_DURATION = 500;
 
 export default function QRScannerScreen({ navigation }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -16,6 +19,31 @@ export default function QRScannerScreen({ navigation }) {
   const [checkType, setCheckType] = useState('IN');
   // Guard: prevents duplicate submissions from rapid onBarcodeScanned events
   const processingRef = useRef(false);
+
+  const scanLineAnim = useRef(new Animated.Value(0)).current;
+  const successAnim = useRef(new Animated.Value(0)).current;
+  const pulseDotAnim = useRef(new Animated.Value(0)).current;
+
+  // Scan-line loop
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(scanLineAnim, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [scanLineAnim]);
+
+  // Header status dot pulse
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseDotAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulseDotAnim, { toValue: 0, duration: 1000, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulseDotAnim]);
 
   const handleBarCodeScanned = async ({ data }) => {
     if (processingRef.current) return;
@@ -62,10 +90,14 @@ export default function QRScannerScreen({ navigation }) {
         timestamp: new Date().toISOString(),
       });
 
-      navigation.replace('Success', {
-        checkIn: response.data.data,
-        siteId,
-      });
+      // Success feedback: corner brackets flash green before navigating to Conferma
+      Animated.timing(successAnim, { toValue: 1, duration: 150, useNativeDriver: false }).start();
+      setTimeout(() => {
+        navigation.replace('Success', {
+          checkIn: response.data.data,
+          siteId,
+        });
+      }, SUCCESS_FLASH_DURATION);
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Check-in fallito';
 
@@ -81,10 +113,17 @@ export default function QRScannerScreen({ navigation }) {
     }
   };
 
+  const bracketColor = successAnim.interpolate({ inputRange: [0, 1], outputRange: [COLORS.scanBlue, COLORS.success] });
+  // translateY (not `top`) so this can run on the native driver — `top` is a layout
+  // property and unsupported by Animated's native driver.
+  const scanLineTranslateY = scanLineAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 240] });
+  const scanLineOpacity = scanLineAnim.interpolate({ inputRange: [0, 0.1, 0.9, 1], outputRange: [0, 1, 1, 0] });
+  const dotOpacity = pulseDotAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.4] });
+
   if (!permission) {
     return (
       <View style={styles.centered}>
-        <LoadingSpinner color="#1E3A5F" />
+        <LoadingSpinner color={COLORS.navy500} />
         <Text style={styles.text}>Richiesta permesso fotocamera...</Text>
       </View>
     );
@@ -104,7 +143,7 @@ export default function QRScannerScreen({ navigation }) {
             <Text style={styles.buttonText}>Concedi permesso</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={[styles.button, { marginTop: 12, backgroundColor: '#6B7280' }]} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={[styles.button, { marginTop: 12, backgroundColor: COLORS.stone }]} onPress={() => navigation.goBack()}>
           <Text style={styles.buttonText}>Torna indietro</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -124,7 +163,10 @@ export default function QRScannerScreen({ navigation }) {
           <TouchableOpacity onPress={() => navigation.goBack()} disabled={loading}>
             <Text style={styles.cancelText}>✕ Annulla</Text>
           </TouchableOpacity>
-          <Text style={styles.topBarTitle}>Scansiona QR Sede</Text>
+          <View style={styles.statusPill}>
+            <Animated.View style={[styles.statusDot, { opacity: dotOpacity }]} />
+            <Text style={styles.statusPillText}>Fotocamera attiva</Text>
+          </View>
           <View style={{ width: 80 }} />
         </View>
 
@@ -150,11 +192,19 @@ export default function QRScannerScreen({ navigation }) {
         </View>
 
         <View style={styles.scanFrame}>
-          <View style={[styles.corner, styles.topLeft]} />
-          <View style={[styles.corner, styles.topRight]} />
-          <View style={[styles.corner, styles.bottomLeft]} />
-          <View style={[styles.corner, styles.bottomRight]} />
-          {loading && <ActivityIndicator size="large" color="#FFFFFF" style={styles.spinner} />}
+          <Animated.View style={[styles.corner, styles.topLeft, { borderColor: bracketColor }]} />
+          <Animated.View style={[styles.corner, styles.topRight, { borderColor: bracketColor }]} />
+          <Animated.View style={[styles.corner, styles.bottomLeft, { borderColor: bracketColor }]} />
+          <Animated.View style={[styles.corner, styles.bottomRight, { borderColor: bracketColor }]} />
+          {!scanned && (
+            <Animated.View
+              style={[
+                styles.scanLine,
+                { opacity: scanLineOpacity, transform: [{ translateY: scanLineTranslateY }] },
+              ]}
+            />
+          )}
+          {loading && <ActivityIndicator size="large" color={COLORS.white} style={styles.spinner} />}
         </View>
 
         <Text style={styles.hint}>
@@ -162,36 +212,52 @@ export default function QRScannerScreen({ navigation }) {
             ? (checkType === 'IN' ? 'Registrazione entrata...' : 'Registrazione uscita...')
             : 'Inquadra il QR code della sede'}
         </Text>
+
+        <View style={styles.footer}>
+          <TouchableOpacity onPress={() => navigation.navigate('Presenze')} disabled={loading}>
+            <Text style={styles.historyLink}>Storico</Text>
+          </TouchableOpacity>
+        </View>
+
+        <StepIndicator activeStep={2} />
       </SafeAreaView>
     </View>
   );
 }
 
-const CORNER = 24;
-const BORDER = 4;
+const CORNER = 28;
+const BORDER = 3;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, backgroundColor: '#F5F2ED' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, backgroundColor: COLORS.linen },
   overlay: { flex: 1, justifyContent: 'space-between', alignItems: 'center' },
   topBar: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     width: '100%', paddingHorizontal: 24, paddingTop: 8,
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  cancelText: { color: '#FFFFFF', fontSize: 16, width: 80 },
-  topBarTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
+  cancelText: { fontFamily: FONTS.body, color: COLORS.white, fontSize: 16, width: 80 },
+  statusPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6,
+  },
+  statusDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#4ADE80' },
+  statusPillText: { fontFamily: FONTS.body, color: 'rgba(255,255,255,0.85)', fontSize: 12 },
   scanFrame: {
-    width: 260, height: 260, justifyContent: 'center', alignItems: 'center',
+    width: 260, height: 260, justifyContent: 'center', alignItems: 'center', overflow: 'hidden',
   },
   corner: {
-    position: 'absolute', width: CORNER, height: CORNER,
-    borderColor: '#FFFFFF', backgroundColor: 'transparent',
+    position: 'absolute', width: CORNER, height: CORNER, backgroundColor: 'transparent',
   },
-  topLeft: { top: 0, left: 0, borderTopWidth: BORDER, borderLeftWidth: BORDER },
-  topRight: { top: 0, right: 0, borderTopWidth: BORDER, borderRightWidth: BORDER },
-  bottomLeft: { bottom: 0, left: 0, borderBottomWidth: BORDER, borderLeftWidth: BORDER },
-  bottomRight: { bottom: 0, right: 0, borderBottomWidth: BORDER, borderRightWidth: BORDER },
+  topLeft: { top: 0, left: 0, borderTopWidth: BORDER, borderLeftWidth: BORDER, borderTopLeftRadius: 6 },
+  topRight: { top: 0, right: 0, borderTopWidth: BORDER, borderRightWidth: BORDER, borderTopRightRadius: 6 },
+  bottomLeft: { bottom: 0, left: 0, borderBottomWidth: BORDER, borderLeftWidth: BORDER, borderBottomLeftRadius: 6 },
+  bottomRight: { bottom: 0, right: 0, borderBottomWidth: BORDER, borderRightWidth: BORDER, borderBottomRightRadius: 6 },
+  scanLine: {
+    position: 'absolute', left: 8, right: 8, height: 2, backgroundColor: COLORS.scanBlue,
+  },
   spinner: { position: 'absolute' },
   typeToggle: {
     flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.6)',
@@ -200,17 +266,19 @@ const styles = StyleSheet.create({
   typeButton: {
     paddingVertical: 10, paddingHorizontal: 28, borderRadius: 10,
   },
-  typeButtonActive: { backgroundColor: '#2D7049' },
-  typeButtonActiveOut: { backgroundColor: '#C0392B' },
-  typeButtonText: { color: 'rgba(255,255,255,0.6)', fontSize: 15, fontWeight: '600' },
-  typeButtonTextActive: { color: '#FFFFFF' },
+  typeButtonActive: { backgroundColor: COLORS.success },
+  typeButtonActiveOut: { backgroundColor: COLORS.error },
+  typeButtonText: { fontFamily: FONTS.bodySemiBold, color: 'rgba(255,255,255,0.6)', fontSize: 15 },
+  typeButtonTextActive: { color: COLORS.white },
   hint: {
-    color: '#FFFFFF', fontSize: 16, textAlign: 'center',
-    paddingHorizontal: 32, paddingBottom: 48,
-    backgroundColor: 'rgba(0,0,0,0.4)', paddingVertical: 16, width: '100%',
+    fontFamily: FONTS.body, color: COLORS.white, fontSize: 16, textAlign: 'center',
+    paddingHorizontal: 32, paddingVertical: 16, width: '100%',
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
-  text: { color: '#6B7280', fontSize: 15, textAlign: 'center', marginTop: 12 },
-  errorText: { color: '#C0392B', fontSize: 18, fontWeight: '600', marginBottom: 8 },
-  button: { backgroundColor: '#1E3A5F', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12, marginTop: 24 },
-  buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  footer: { paddingBottom: 4 },
+  historyLink: { fontFamily: FONTS.bodyMedium, color: 'rgba(255,255,255,0.85)', fontSize: 14, paddingBottom: 12 },
+  text: { fontFamily: FONTS.body, color: COLORS.stone, fontSize: 15, textAlign: 'center', marginTop: 12 },
+  errorText: { fontFamily: FONTS.bodySemiBold, color: COLORS.error, fontSize: 18, marginBottom: 8 },
+  button: { backgroundColor: COLORS.navy500, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12, marginTop: 24 },
+  buttonText: { fontFamily: FONTS.bodyMedium, color: COLORS.white, fontSize: 16 },
 });
