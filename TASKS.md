@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-06-27 (Session 53: Build 23 — presenze refresh post check-out, 400 su Rifiuta risolti ✅)  
+**Last Updated:** 2026-07-11 (Session 54: Build 24 — redesign mobile QR Scanner/Face ID/Conferma, testato e confermato dall'utente ✅)  
 **Production:** https://badge.dataxiom.it · API: https://api.dataxiom.it
 
 ---
@@ -10,6 +10,7 @@
 
 | Sessione | Data | Sintesi |
 |---|---|---|
+| 54 | 2026-07-11 | **Build 24 — Redesign mobile QR Scanner → Face ID → Conferma check-in** — Primo step del redesign completo dell'app mobile (mockup `frontend-mobile/mockups/badge-mobile-mockups.html`). Grilling esteso per risolvere i gap mockup-vs-reale: ordine flusso mantenuto Face ID→QR→Conferma (non invertito come nel mockup), nuova `FaceIDScreen.jsx` custom (prima solo prompt nativo `LocalAuthentication` inline in `CheckInScreen`), `theme.js` con design token condivisi (colori linen/navy/stone + font Cormorant/DM Sans via `@expo-google-fonts/*`), `StepIndicator` a 3 step riusato dalle 3 schermate, `react-native-svg` per le icone custom, `Animated` nativo per le animazioni (scan-line, arco Face ID, pulse). Backend: `POST /checkins` ora ritorna `site_name` (JOIN riuso dati già letti), login ritorna `external_employee_id` quando presente (mancava del tutto — scoperto in corsa). Bug fix in corso di test: `Animated` con `useNativeDriver:true` non supporta `top` → sostituito con `translateY` per la scan-line. 466 test backend + 15 mobile verdi. **Testato dall'utente su simulatore: QR scan, presenze, invio ferie tutti funzionanti.** buildNumber 23→24, commit `b48b026` pushato su main → Codemagic in corso. Piano: `~/.claude/plans/adesso-entra-nella-cartella-purring-toast.md`. |
 | 53 | 2026-06-27 | **Build 23 — presenze refresh + rifiuto ferie 400 fix** — Bug 1: dopo check-OUT il tab Presenze non si aggiornava (componente già montato, `useEffect([])` non rieseguito). Fix: `useFocusEffect` in `MyPresencesScreen` (reload ad ogni focus). `StorePresencesScreen`: doppio hook — `useEffect([activeFilter])` per cambio filtro + `useFocusEffect` per ritorno al tab (il solo `useFocusEffect` non ri-triggerava al cambio filtro su schermata già a fuoco). Bug 2: "Rifiuta" restituiva 400 — `ApproveLeaveSchema` aveva `.refine()` che richiedeva `rejection_reason` quando `status=REJECTED`, ma il frontend non lo invia. Fix: rimosso `.refine()` (campo già `optional().nullable()`). Rimosso anche test `leaves.test.js` che assertiva 400 per REJECTED senza motivazione (comportamento cambiato intenzionalmente). Code review 8 angoli: nessun finding critico. 466 backend / 15 mobile test verdi. Commits: 4772d8d, 2373efa. |
 | 52 | 2026-06-25 | **Build 22 — 3 bug fix post Build 19 TestFlight** — (1) `SuccessScreen` navigation: dopo check-in/out lo stack era corretto ma l'utente voleva tornare al badge con reset, fix `navigation.replace('Main')` + `initialRouteName='Badge'`. (2) Date formatting: date visualizzate in formato ISO UTC invece di locale italiano, fix `toLocaleDateString('it-IT', {...})` + `toLocaleTimeString`. (3) End-date picker nascosto: `setTimeout(100ms)` race condition → sostituito con `onLayout`. Commits: 936a8e4, 4a98156. |
 | 51 | 2026-06-25 | **Build 18 bug fix → Build 19 TestFlight** — Test su iPhone con Maria: 3 bug trovati. (1) QR crash: `new URL()` crashava Hermes in produzione su custom scheme `badge://` → sostituito con parser manuale (commit 7a44273). (2) Ferie 404: endpoint `/leaves` → `/leave/*` (mismatch URL) + `/leave/balance` mancante nel backend → aggiunto endpoint + test (commits 64068dd, 845fc39). (3) Fine button nascosto nel date picker: `setTimeout(100ms)` race condition → sostituito con `onLayout` (commit 7b28d70). Code-review ha trovato 3 finding aggiuntivi, tutti fixati: UUID errato in `019b_seed_demo_leave_saldi.sql` (Maria aveva `84ab2a73-...` invece di `239ec99f-...` → migration 024 applicata su RDS prod), `setTimeout` race → già fixato, parser QR basso rischio. 467 backend / 183 frontend test verdi. buildNumber 18→19, push su main → CI/CD avviata → Codemagic in attesa. Commits: 7a44273, 64068dd, 845fc39, 7b28d70, a117141, c9d15c1. |
@@ -23,6 +24,30 @@
 | 43 | 2026-06-19 | **Frontend Vitest test suite: 15 failure → 0 failure** — `vitest.setup.js`: localStorage/sessionStorage polyfill per happy-dom 20.x (tutti i metodi Storage erano non-callable). `ChangePasswordPage.test.js` + `PasswordChangeGuard.test.js` rinominati a `.test.jsx` (JSX in `.js` causava parse error). `ChangePasswordFlow.e2e.test.js` + `axiosInterceptor.test.js`: conversione completa Jest→Vitest API (`jest.*`→`vi.*`, `jest.requireActual`→`vi.importActual` async). ChangePasswordPage success flow allineato al componente reale (logout+redirect `/login` dopo 2s, non dashboard). Risultato: **164/165 frontend ✅** (1 `test.skip` intenzionale), **455/455 backend ✅** (14 skipped = integration test intenzionali, richiedono `RUN_INTEGRATION=1`). Commit: efe9567. |
 | 42 | 2026-06-18 | **Manager ferie/malattia separation** + Rinascente onboarding test: ManagerIllnessReport.jsx, route /illnesses/manager-report, navbar 🏥 Malattia per manager, fix critico illnesses.js (employee_id ?? user_id → manager 404 risolto), MALATTIA in LEAVE_TYPES preservato per history display, EmployeeLeaveRequest bypass rimosso → redirect. 3 code-review findings fixati. Cambiamenti uncommitted. |
 | 41 | 2026-06-16→18 | **Deploy produzione completo** (full backlog S.32.3→S.32.9, Malattia, leave, admin split): 6 blocchi a cascata risolti (lint, 130 test rossi→checkRevoked mock, CI env, uuid non dichiarato, migration non idempotenti→prod 502, SSM var) + 7° fix tabelle leave/illness mancanti. Poi **Onboarding cliente ONB.1**: design (Excel 3 fogli + import concierge) → piano TDD → 8 task subagent-driven → code-review (5 findings fixati) → merge su main. 455 test verdi. Vedi HANDOFF.md. |
+
+---
+
+## 🎨 TODO — Redesign Mobile Completo (iniziato Session 54, 2026-07-11)
+
+Obiettivo: ridisegnare tutte le schermate mobile seguendo `frontend-mobile/mockups/badge-mobile-mockups.html`
+(font Cormorant/DM Sans, palette linen/navy/stone). Fondamenta condivise (`theme.js`, font loading,
+`StepIndicator`, `react-native-svg`) create in Session 54 — le prossime schermate le riusano.
+
+- [x] **01 QR Scanner** — restyle overlay, feedback verde su scan riuscito (Session 54)
+- [x] **02 Face ID** — nuova `FaceIDScreen.jsx` custom (prima solo prompt nativo) (Session 54)
+- [x] **03 Conferma Check-in** — `SuccessScreen.jsx` con dati reali (sede, ruolo, employee ID) (Session 54)
+- [x] Home/dashboard (`CheckInScreen.jsx`) — restyle per coerenza (Session 54)
+- [ ] **04 Storico Presenze** — mockup disponibile (screen 4), non ancora implementato
+- [ ] **05 Settings** — mockup disponibile (screen 5), non ancora implementato
+- [ ] **06 Smart Working** — mockup disponibile (screen 6), non ancora implementato
+- [ ] Altre schermate mobile esistenti (Ferie, Malattia, Turni) da valutare se includere nel redesign
+
+**Note per chi continua:**
+- Piano dettagliato con decisioni di grilling: `~/.claude/plans/adesso-entra-nella-cartella-purring-toast.md`
+- `theme.js` (`frontend-mobile/src/config/theme.js`) è la fonte unica per colori/font — riusarlo, non duplicare hex literal
+- Pattern animazioni: usare `transform`/`opacity` con `useNativeDriver:true` — MAI proprietà di layout come `top`/`left` (causa crash "not supported by native animated module")
+- `react-native-svg` è stato aggiunto come dipendenza nativa — richiede build Codemagic/TestFlight aggiornata (già fatto, buildNumber 24) per essere testato fuori da Expo Go
+- Dati mancanti non recuperabili senza modifiche di scope più ampio: mansione testuale (si usa il ruolo di sistema), turno del giorno nel check-in (richiederebbe lookup su `shifts_data` JSONB)
 
 ---
 

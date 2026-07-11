@@ -1,8 +1,8 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 27 Giugno 2026 (Session 53)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 23 ✅ su TestFlight | Pipeline Codemagic ✅ funzionante  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Bug fix mobile post-TestFlight, prossimo: staging environment + ONB.2
+**Last Updated:** 11 Luglio 2026 (Session 54)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 24 ✅ in Codemagic (redesign QR/Face ID/Conferma) | Pipeline Codemagic ✅ funzionante  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Redesign mobile in corso (3/6 schermate fatte), poi staging environment + ONB.2
 
 ---
 
@@ -264,6 +264,39 @@
   - Backend: velocity check tra check-in consecutivi (>100 km in 10 min → flag `suspicious` in audit log, non blocco)
 - **Effort:** 3-4h.
 - **Non bloccante MVP:** Il geofencing reale scoraggia già la maggior parte dei casi.
+
+---
+
+## 3.7 REDESIGN MOBILE — Design System & Architettura Face ID (Session 54, 2026-07-11)
+
+### ✅ Design system condiviso — `theme.js` + font custom (Session 54)
+**DECIDED:** Creare `frontend-mobile/src/config/theme.js` come fonte unica di colori/font per tutto il redesign mobile, invece di continuare con hex literal duplicati per-screen.
+- `COLORS`: mappatura 1:1 delle CSS custom properties del mockup (linen, parchment, bone, dust, stone, ink, navy50/200/500/700/900, success/error/warning, gold)
+- `FONTS`: Cormorant (display, titoli/numeri grandi) + DM Sans (body/UI), caricati via `@expo-google-fonts/cormorant` + `@expo-google-fonts/dm-sans` con `useFonts()` in `App.jsx` (gate di loading prima di montare `RootNavigator`)
+- Rationale: l'utente vuole ridisegnare tutta l'app mobile, non solo 3 schermate — un design system condiviso ora evita di rifare questo lavoro ad ogni nuova schermata
+
+### ✅ Ordine del flusso Face ID → QR → Conferma mantenuto (non invertito come nel mockup)
+**DECIDED:** Il mockup mostra l'ordine QR→Face ID→Conferma, ma il flusso reale resta Face ID→QR→Conferma (comportamento pre-esistente).
+- Conseguenza: la schermata Face ID del mockup mostrava un banner "sede rilevata dal QR" — impossibile nel nostro ordine (la sede si scopre solo scansionando dopo). Il banner è stato rimosso dalla schermata Face ID.
+- Rationale: cambiare l'ordine del flusso è un cambio funzionale/di logica, non estetico — fuori scope per un redesign visivo; nessun motivo di business per invertirlo.
+
+### ✅ Nuova `FaceIDScreen.jsx` custom (prima solo prompt nativo)
+**DECIDED:** Introdurre una schermata dedicata per l'autenticazione biometrica.
+- Prima: `CheckInScreen.jsx` chiamava `LocalAuthentication.authenticateAsync()` inline, mostrando solo il prompt di sistema nativo, senza UI custom.
+- Ora: `FaceIDScreen.jsx` mostra un'anticamera visiva (ring animato, card utente, step indicator) mentre/prima che il prompt nativo appaia; su hardware biometrico assente, il bypass diretto a `QRScanner` resta invariato (nessuna regressione).
+
+### ✅ Dati del mockup non disponibili nel modello dati reale — gestiti con fallback pragmatici
+**DECIDED (Session 54):**
+- **Mansione testuale** (es. "Responsabile Reparto Abbigliamento"): non esiste nel DB (solo `role` di sistema) → si mostra la label del ruolo (Dipendente/Responsabile/Amministratore)
+- **Nome sede in conferma**: `POST /checkins` non lo restituiva → aggiunto `site_name` alla response (riuso dati già letti in query esistente, zero query aggiuntive)
+- **Employee ID leggibile** (`external_employee_id`, es. "EMP001"): esiste nello schema DB ma **non veniva mai restituito dal login** → aggiunto alla response di `POST /auth/login` (bug di completezza scoperto durante l'implementazione, non solo un gap del mockup)
+- **Turno del giorno** (es. "Mattina 09:00–17:00"): omesso dalla conferma — richiederebbe un lookup su `shifts_data` (JSONB aggregato per sede/mese, non per-dipendente/giorno), feature più grande rimandata
+- Rationale generale: preferire piccoli cambi di response API mirati (riuso dati già in query) rispetto a inventare dati falsi o costruire feature più grandi non richieste
+
+### ✅ Icone e animazioni — librerie scelte per il redesign mobile
+**DECIDED:** `react-native-svg` per le icone custom del mockup (fedeltà visiva, es. illustrazione volto Face ID con TrueDepth dots) + `Animated` nativo di React Native per le animazioni (scan-line, arco rotante, pulse) — nessuna dipendenza aggiuntiva per le animazioni (niente `react-native-reanimated`).
+- **Attenzione:** `Animated` con `useNativeDriver: true` NON supporta proprietà di layout come `top`/`left` (solo `transform`/`opacity`) — causa il crash "Style property 'top' is not supported by native animated module". Pattern corretto: usare sempre `transform: [{ translateY }]` invece di animare `top` (vedi fix in `QRScannerScreen.jsx`, scan-line).
+- `react-native-svg` è una dipendenza nativa → ogni redesign che la usa richiede un nuovo build Codemagic/TestFlight (bump `buildNumber`) prima di poter testare fuori da Expo Go in modalità piena.
 
 ---
 
