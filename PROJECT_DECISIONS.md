@@ -1213,9 +1213,18 @@ c6a7ae4 refactor: consolidate mobile app configuration into single source of tru
 - **Applicare:** Ogni sessione di test locale su Xcode per questo progetto richiede prima una sync rsync (esclusi `node_modules`, `ios/`, `android/`, `.git`) verso un path pulito, poi `npm install` + `expo prebuild --clean` + `expo run:ios` lì.
 - **Nota .gitignore:** `frontend-mobile/ios/` e `android/` sono stati aggiunti a `.gitignore` — cartelle generate da `expo prebuild`, mai da versionare (Expo managed workflow + EAS Build).
 
+### Session 56: Vibrazione al check-in QR riuscito (12 Luglio 2026)
+
+**Decisione tecnica: `Vibration` core di React Native, non `expo-haptics`**
+- **Regola:** Per un feedback aptico con durata specifica in millisecondi, usare `Vibration.vibrate(ms)` da `react-native` (nessuna installazione), non `expo-haptics` (che espone solo stili di impatto predefiniti, senza controllo di durata).
+- **Razionale:** La richiesta era una vibrazione di durata precisa (500ms). `Vibration` è già inclusa nel core RN, zero dipendenze native aggiuntive, zero rebuild di configurazione nativa necessari.
+- **Limite noto:** su **iOS** l'API pubblica ignora il parametro di durata — produce sempre un singolo "buzz" di lunghezza fissa (~400ms), non estendibile senza una libreria nativa di terze parti (es. `react-native-haptic-feedback`). Su **Android** i millisecondi passati sono rispettati. Se in futuro serve un controllo preciso della durata su iOS, valutare esplicitamente il trade-off costo (nuova dipendenza nativa + build) vs beneficio con l'utente prima di implementare.
+- **File:** `frontend-mobile/src/screens/checkin/QRScannerScreen.jsx`
+- **Commit:** a90bd62
+
 ---
 
-**Last Updated:** 12 Luglio 2026 (Session 55)
-**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | Redesign Mobile COMPLETE (6/6 schermate) | 3 demo accounts | Migration 027 applied | S.24 plan ready (deferred) | S.25 plan ready (deferred)
-**Created By:** Claude Code Sessions 1-55  
+**Last Updated:** 12 Luglio 2026 (Session 56)
+**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | Redesign Mobile COMPLETE (6/6 schermate) | Build 26 live (vibrazione check-in) | 3 demo accounts | Migration 027 applied | S.24 plan ready (deferred) | S.25 plan ready (deferred)
+**Created By:** Claude Code Sessions 1-56  
 **Next Review:** After first real customer onboarding
