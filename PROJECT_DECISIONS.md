@@ -1,8 +1,8 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 12 Luglio 2026 (Session 55)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 25 ✅ in Codemagic (Storico Presenze/Impostazioni/Smart Working) | Pipeline Codemagic ✅ funzionante  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Redesign mobile completato (6/6 schermate), prossimo: staging environment + ONB.2
+**Last Updated:** 12 Luglio 2026 (Session 59)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 26 ✅ (vibrazione check-in) | Grafici Trend Dashboard ✅ LIVE (api.dataxiom.it) | Pipeline CI/CD ✅ funzionante (backend + mobile)  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Redesign mobile completato (6/6 schermate) + Grafici Trend Dashboard completati, prossimo: MVP Hardening backlog (Session 57) o staging environment + ONB.2
 
 ---
 
@@ -1299,7 +1299,21 @@ clienti pilota prima di allocare ore di sviluppo, non un impegno di roadmap.
 
 ---
 
-**Last Updated:** 12 Luglio 2026 (Session 58)
-**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | Redesign Mobile COMPLETE (6/6 schermate) | Build 26 live (vibrazione check-in) | Grafici Trend Dashboard LIVE in produzione (Session 58) | MVP Hardening backlog identificato (Session 57, non ancora schedulato) | 3 demo accounts | Migration 027 applied | S.24 plan ready (deferred) | S.25 plan ready (deferred) | S.26 ancora aperto
-**Created By:** Claude Code Sessions 1-58  
+### Session 59: Fix 2 fallimenti pre-esistenti LeaveCalendar (12 Luglio 2026)
+
+**Contesto:** su richiesta esplicita dell'utente, indagine e fix dei 2 fallimenti frontend in `LeaveCalendar.test.jsx` lasciati aperti come baseline nota nelle Session 55-58.
+
+**Decisione: bug reale nel componente, non solo nel test — `stringToDate(endDate)` senza guardia null**
+- **Regola:** `LeaveCalendar.jsx` `handleDateClick` deve gestire `endDate === null` mentre `startDate` è valorizzato — stato plausibile ogni volta che un genitore inizializza lo stato con solo `startDate` impostato, non un artefatto di test.
+- **Fix:** `const end = endDate ? stringToDate(endDate) : start;` — fallback a `start` invece di crashare su `null.split(...)`.
+- **Causa secondaria (solo nel test):** mese hardcoded `'2026-06'` nell'assertion (stale, rotto a Luglio 2026) e un'aspettativa `endDate: null` mai stata corretta (il componente imposta `endDate = clickedDateStr` al primo click su un giorno singolo, non `null`) — corretto calcolando il mese da `new Date()` come già fanno gli altri test nello stesso file.
+- **File:** `frontend-web/src/features/leave/components/LeaveCalendar.jsx`, `frontend-web/src/__tests__/LeaveCalendar.test.jsx`.
+- **Verificato:** 11/11 `LeaveCalendar`, 191/192 suite frontend completa (1 skip intenzionale, zero fallimenti), build pulita, pipeline CI verde.
+- **Commit:** `0a04451`
+
+---
+
+**Last Updated:** 12 Luglio 2026 (Session 59)
+**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | Redesign Mobile COMPLETE (6/6 schermate) | Build 26 live (vibrazione check-in) | Grafici Trend Dashboard LIVE in produzione (Session 58) | Frontend test suite 100% verde (Session 59, ex 2 fallimenti pre-esistenti risolti) | MVP Hardening backlog identificato (Session 57, non ancora schedulato) | 3 demo accounts | Migration 027 applied | S.24 plan ready (deferred) | S.25 plan ready (deferred) | S.26 ancora aperto
+**Created By:** Claude Code Sessions 1-59  
 **Next Review:** After first real customer onboarding
