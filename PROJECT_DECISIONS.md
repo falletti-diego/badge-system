@@ -1224,7 +1224,61 @@ c6a7ae4 refactor: consolidate mobile app configuration into single source of tru
 
 ---
 
-**Last Updated:** 12 Luglio 2026 (Session 56)
-**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | Redesign Mobile COMPLETE (6/6 schermate) | Build 26 live (vibrazione check-in) | 3 demo accounts | Migration 027 applied | S.24 plan ready (deferred) | S.25 plan ready (deferred)
-**Created By:** Claude Code Sessions 1-56  
+### Session 57: Analisi critica MVP — feature mancanti e opportunità commerciali (12 Luglio 2026)
+
+**Contesto:** su richiesta esplicita dell'utente, analisi critica del prodotto grounded sul codice
+reale (non su supposizioni) per rispondere a tre domande: quali feature core mancano, quali
+feature aggiuntive avrebbero valore percepito per i clienti, quali supporti servono per rendere
+il prodotto appealing a nuovi clienti. Nessun codice modificato in questa sessione — solo analisi
+e backlog. Tabella riassuntiva in `TASKS.md` §"MVP Hardening: Analisi Critica Session 57".
+
+**1. Feature core mancanti (rischio adozione)**
+- **Notifiche push assenti:** `backend/src/routes/notifications.js` fa solo polling in-app — un
+  dipendente scopre un cambio turno o un'approvazione ferie solo aprendo l'app. Gap più visibile
+  del prodotto per un caso d'uso (cambio turno last-minute) molto comune nel retail.
+- **Offline mode mai iniziato:** `CLAUDE.md` dichiara "Connettività retail instabile" come rischio
+  noto, mitigato solo con "MVP online-only, Phase 2 offline mode" — ma il check-in QR **richiede**
+  connessione, proprio dove il prodotto dovrebbe sostituire il cartellino cartaceo con più
+  affidabilità, non meno. Contraddizione da comunicare chiaramente in vendita finché non risolta.
+- **S.26 (consenso GPS esplicito) ancora `[ ]`:** a differenza di S.24 (deferred legittimamente,
+  rischio dormiente finché nessun cliente usa il geofencing), S.26 è un requisito legale attivo
+  nel momento stesso in cui un cliente reale chiede di attivare il geofencing — va implementato
+  **prima** che accada, non dopo, per evitare una violazione GDPR Art. 7 dal primo giorno.
+- **Nessun cambio turno self-service (shift swap):** oggi ogni scambio turno tra dipendenti
+  richiede l'intervento manuale del manager su Planning — friction quotidiana nel retail.
+
+**2. Feature aggiuntive ad alto valore percepito**
+- **`recharts` installata in `frontend-web/package.json` ma mai usata:** `DashboardPage.jsx` mostra
+  solo KPI card + tabella, zero grafici di trend (presenze/assenteismo per sede/mese). È il
+  miglioramento con il miglior rapporto costo/impatto individuato: dipendenza già pagata (bundle
+  size), nessun nuovo setup, solo lavoro di frontend.
+- **Riepilogo Ore solo CSV, nessun PDF:** il pattern PDF esiste già per il Planning
+  (`window.print()` + `@media print`, Session 44) — riusabile per `SummaryPage.jsx` a basso sforzo.
+- **Nessun alert su anomalie/frodi oltre al geofencing GPS:** il geofencing previene la frode "in
+  tempo reale" ma manca reportistica per scoprire pattern sospetti a posteriori (check-in
+  ravvicinati da device diversi, ore anomale ricorrenti).
+- **Nessuna firma digitale di accettazione del cartellino mensile:** dettaglio che pesa nella
+  percezione di "strumento serio" per un ufficio HR/paghe italiano — riuserebbe il pattern audit
+  log già esistente, senza nuova infrastruttura.
+
+**3. Supporti commerciali mancanti per scalare oltre i primi clienti pilota**
+- **Nessun ambiente demo self-service:** un prospect non può provare il prodotto senza contattare
+  direttamente Dataxiom — collo di bottiglia per il funnel commerciale.
+- **Onboarding cliente ancora "concierge" (`ONB.1`):** Excel compilato dal cliente + import
+  manuale fatto da Dataxiom. Sostenibile per i primi 3-5 clienti, non oltre.
+- **Compliance GDPR/EU-hosting invisibile:** il lavoro tecnico esiste (RDS eu-west-1, DPA pronto,
+  S.25 completato) ma non è comunicato come trust signal nel materiale commerciale.
+- **Nessun canale di assistenza in-app:** pubblico non tecnico (commessi retail) senza un
+  help/FAQ a portata di mano nell'app — aumenta il rischio di abbandono nei primi giorni d'uso e
+  il carico di supporto diretto su Dataxiom.
+
+**Decisione:** nessuna di queste voci viene schedulata con priorità fissa in questa sessione — la
+tabella in `TASKS.md` è un backlog di opzioni da rivalutare rispetto alle richieste reali dei primi
+clienti pilota prima di allocare ore di sviluppo, non un impegno di roadmap.
+
+---
+
+**Last Updated:** 12 Luglio 2026 (Session 57)
+**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | Redesign Mobile COMPLETE (6/6 schermate) | Build 26 live (vibrazione check-in) | MVP Hardening backlog identificato (Session 57, non ancora schedulato) | 3 demo accounts | Migration 027 applied | S.24 plan ready (deferred) | S.25 plan ready (deferred) | S.26 ancora aperto
+**Created By:** Claude Code Sessions 1-57  
 **Next Review:** After first real customer onboarding
