@@ -1278,7 +1278,28 @@ clienti pilota prima di allocare ore di sviluppo, non un impegno di roadmap.
 
 ---
 
-**Last Updated:** 12 Luglio 2026 (Session 57)
-**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | Redesign Mobile COMPLETE (6/6 schermate) | Build 26 live (vibrazione check-in) | MVP Hardening backlog identificato (Session 57, non ancora schedulato) | 3 demo accounts | Migration 027 applied | S.24 plan ready (deferred) | S.25 plan ready (deferred) | S.26 ancora aperto
-**Created By:** Claude Code Sessions 1-57  
+### Session 58: Grafici Trend Dashboard — prima feature subagent-driven del progetto (12 Luglio 2026)
+
+**Contesto:** prima feature di questo progetto implementata interamente con `subagent-driven-development` (fresh subagent per task, spec-review + code-quality-review a due stadi, in un git worktree isolato) invece che manualmente in-sessione. Piano completo: `docs/superpowers/plans/2026-07-12-dashboard-trend-charts.md`.
+
+**Decisione: `subagent-driven-development` + worktree isolato per feature multi-task ben pianificate**
+- **Regola:** Quando un piano scritto con `writing-plans` ha task ben decomposti e per lo più indipendenti, e si resta nella stessa sessione, usare `subagent-driven-development` in un worktree dedicato (creato con `EnterWorktree`) invece di implementare manualmente in-sessione.
+- **Razionale:** Ogni task ha ricevuto un implementer con contesto isolato + 2 review indipendenti (spec compliance, poi code quality) — questo ha catturato 3 problemi reali prima del merge (2 test RBAC mancanti su Task 3, 1 gap di accessibilità su Task 5, poi propagato proattivamente al Task 6) senza inquinare il contesto della sessione principale con i dettagli implementativi di ogni singolo file.
+- **Nota tecnica sul worktree:** creato con lo strumento nativo `EnterWorktree` (non `git worktree add` manuale) — la base è sempre `origin/<branch>`, quindi va fatto un push del branch di partenza (anche solo doc-only) prima di creare il worktree se contiene commit locali non ancora pushati. I file `.env*` (gitignored) vanno copiati manualmente nel worktree per far girare i test backend.
+- **File:** tutto il codice della feature, vedi `TASKS.md` Session 58 per l'elenco commit.
+- **Commit finale su main:** `78a5751` (feature) + `2373ea6` (fix lint, vedi sotto)
+
+**Decisione tecnica: la pipeline CI/CD del backend ha un gate di lint separato dai test — verificarlo esplicitamente prima di considerare un merge "sicuro"**
+- **Regola:** `npm test` locale verde **non garantisce** che la pipeline GitHub Actions passi — il job "Lint backend" (`eslint src/ --ext .js`) è un gate separato e bloccante, con `"quotes": ["error", "single"]` che vieta i template literal a riga singola senza interpolazione (unico caso permesso: template literal multi-riga, o stringa singola quotata come già usato altrove in `presences.js:69`).
+- **Razionale:** il merge di Session 58 è passato tutti i test locali/CI del worktree ma ha rotto il job di lint in produzione (`presences.js:210-211`), bloccando silenziosamente il deploy EC2 (il job "Deploy to EC2" risulta "skipped", non "failed" — facile da non notare se non si controlla esplicitamente `gh run list`). Scoperto solo perché si è verificato l'endpoint reale in produzione dopo il push, non fidandosi del solo "push riuscito".
+- **Applicare:** dopo ogni push su `main` che tocca `backend/`, controllare `gh run list --limit 3` per confermare che sia `CI/CD Pipeline` sia `Deploy to EC2` siano `success`, non solo che il push sia andato a buon fine. Non assumere che i test locali passati implichino che il deploy avvenga.
+
+**Decisione: `scripts/test-api.sh` ha credenziali demo obsolete (Session 46 le ha rimosse)**
+- **Nota:** lo script referenzia ancora `diego@badge.local`/`luca.verdi@employee.it`, rimossi in Session 46 (solo pippo/pino/maria @badge.local restano). I 12 fallimenti a cascata su manager/employee nell'ultima esecuzione sono dovuti a questo, non a regressioni reali. **Da fare** (non urgente): aggiornare lo script con `pino@badge.local`/`maria@badge.local`.
+
+---
+
+**Last Updated:** 12 Luglio 2026 (Session 58)
+**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | Redesign Mobile COMPLETE (6/6 schermate) | Build 26 live (vibrazione check-in) | Grafici Trend Dashboard LIVE in produzione (Session 58) | MVP Hardening backlog identificato (Session 57, non ancora schedulato) | 3 demo accounts | Migration 027 applied | S.24 plan ready (deferred) | S.25 plan ready (deferred) | S.26 ancora aperto
+**Created By:** Claude Code Sessions 1-58  
 **Next Review:** After first real customer onboarding
