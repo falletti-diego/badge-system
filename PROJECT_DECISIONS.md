@@ -1,8 +1,8 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 11 Luglio 2026 (Session 54)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 24 ✅ in Codemagic (redesign QR/Face ID/Conferma) | Pipeline Codemagic ✅ funzionante  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Redesign mobile in corso (3/6 schermate fatte), poi staging environment + ONB.2
+**Last Updated:** 12 Luglio 2026 (Session 55)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 25 ✅ in Codemagic (Storico Presenze/Impostazioni/Smart Working) | Pipeline Codemagic ✅ funzionante  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Redesign mobile completato (6/6 schermate), prossimo: staging environment + ONB.2
 
 ---
 
@@ -1194,9 +1194,28 @@ c6a7ae4 refactor: consolidate mobile app configuration into single source of tru
 - **Trigger obbligatorio S.25:** Prima della firma del primo contratto con qualunque cliente reale → eseguire il piano → fare firmare DPA fisicamente → registrare firma nel tab DPA → archiviare PDF. Non firmare contratti senza DPA.
 - **Decisione presa:** Session 47, 21 Giugno 2026
 
+### Session 55: Redesign Storico Presenze/Impostazioni + Smart Working (12 Luglio 2026)
+
+**Decisione: Smart Working — nuova tabella dedicata, pattern `illnesses` (auto-confermata, no approvazione)**
+- **Regola:** `smart_working_days` (client_id, employee_id, date, created_by, `UNIQUE(employee_id, date)`) — un dipendente/manager con `employee_id` può autodichiarare Smart Working solo per il giorno corrente, nessuna sede, nessuna integrazione con Planning, nessuna vista manager/admin in questa fase.
+- **Razionale (da grilling utente):** È un'autogiustificazione di presenza, concettualmente identica a Malattia — non richiede workflow di approvazione né riferimento a sede/orario.
+- **File:** `backend/migrations/027_create_smart_working_days.sql`, `backend/src/routes/smartWorking.js`, `frontend-mobile/src/screens/checkin/SmartWorkingScreen.jsx`.
+- **Commit:** 7b115fb
+
+**Decisione tecnica: colonne SQL `DATE` esposte via API devono essere castate `::text`**
+- **Regola:** Ogni `SELECT`/`RETURNING` che espone una colonna `DATE` in una response JSON deve usare `date::text AS date`, mai lasciare che `node-pg` la parsi come `Date` object.
+- **Razionale:** `node-pg` interpreta `DATE` come mezzanotte nel timezone **locale** del server; la serializzazione JSON (`Date.toISOString()`) converte in UTC, causando uno shift di un giorno indietro per timezone con offset positivo (es. `Europe/Rome`, UTC+2 in estate). Bug trovato e fixato in `smartWorking.js` durante test reale (non catturato dagli unit test, che mockano il DB) — solo il test manuale con Postgres reale lo ha rivelato. La feature `illnesses` non ha questo bug per un motivo diverso: restituisce la stringa di input del client, non il valore riletto dal DB.
+- **Applicare:** Prima di aggiungere una nuova colonna DATE esposta via API, verificare che sia castata a testo in SQL.
+
+**Decisione tecnica: build iOS locali richiedono un path di progetto senza spazi/caratteri speciali**
+- **Regola:** Per compilare con `expo run:ios`/Xcode in locale, usare una copia di lavoro (rsync, non symlink) in un path come `~/badge-ios-test`, non la cartella originale `Dataxiom – Analisi & BI/badge`.
+- **Razionale:** Gli script `[CP-User]` generati da CocoaPods (es. "Generate app.config for prebuilt Constants.manifest") non quotano correttamente `$SRCROOT` quando contiene `&` — la shell interpreta `&` come operatore di background job e tronca il path, causando `No such file or directory`. Un symlink non risolve il problema perché `process.cwd()` di Node risolve sempre il path reale sottostante, non quello del symlink.
+- **Applicare:** Ogni sessione di test locale su Xcode per questo progetto richiede prima una sync rsync (esclusi `node_modules`, `ios/`, `android/`, `.git`) verso un path pulito, poi `npm install` + `expo prebuild --clean` + `expo run:ios` lì.
+- **Nota .gitignore:** `frontend-mobile/ios/` e `android/` sono stati aggiunti a `.gitignore` — cartelle generate da `expo prebuild`, mai da versionare (Expo managed workflow + EAS Build).
+
 ---
 
-**Last Updated:** 21 Giugno 2026 (Session 47)
-**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | 3 demo accounts | Migration 023 applied | S.24 plan ready (deferred) | S.25 plan ready (deferred)
-**Created By:** Claude Code Sessions 1-47  
+**Last Updated:** 12 Luglio 2026 (Session 55)
+**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | Redesign Mobile COMPLETE (6/6 schermate) | 3 demo accounts | Migration 027 applied | S.24 plan ready (deferred) | S.25 plan ready (deferred)
+**Created By:** Claude Code Sessions 1-55  
 **Next Review:** After first real customer onboarding

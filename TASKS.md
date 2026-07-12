@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-07-11 (Session 54: Build 24 — redesign mobile QR Scanner/Face ID/Conferma, testato e confermato dall'utente ✅)  
+**Last Updated:** 2026-07-12 (Session 55: Build 25 — redesign mobile Storico Presenze/Impostazioni + nuova feature Smart Working, testato e confermato dall'utente ✅)  
 **Production:** https://badge.dataxiom.it · API: https://api.dataxiom.it
 
 ---
@@ -10,6 +10,7 @@
 
 | Sessione | Data | Sintesi |
 |---|---|---|
+| 55 | 2026-07-12 | **Build 25 — Redesign Storico Presenze/Impostazioni + nuova feature Smart Working** — Grilling completo prima di implementare (Smart Working = autogiustificazione presenza senza QR, tabella dedicata `smart_working_days`, auto-confermata come Malattia, solo giorno corrente, nessuna sede, RBAC fail-closed su employee_id). Backend: `POST/GET /api/v1/smart-working` (nuova route, migration 027 idempotente, audit log, blocco duplicati via UNIQUE constraint), login ora ritorna `client_name`/`site_name`. Mobile: `presenceUtils.js` (pairing IN/OUT client-side, mirror di `hours.js` backend) + `MyPresencesScreen.jsx` riscritta (filtri periodo, aggregazione per giorno, riepilogo ore) + `StorePresencesScreen.jsx` restyle, `SmartWorkingScreen.jsx` nuova + bottone in home, `SettingsScreen.jsx` + `ChangePasswordScreen.jsx` nuove (tab "Profilo", Face ID toggle, logout spostato qui). **Bug trovato e fixato durante test reale su Xcode locale**: data Smart Working mostrata shiftata di un giorno indietro — causa `node-pg` che interpreta colonna DATE come mezzanotte locale (Europe/Rome, UTC+2) poi serializzata in UTC da Express, fix `date::text` nella query SQL. Blocco locale iOS risolto: il path del progetto (`Dataxiom – Analisi & BI`, spazi + `&`) rompe gli script `[CP-User]` di CocoaPods — soluzione: copia rsync in path pulito (`~/badge-ios-test`) per build native locali, simlink NON funziona (`process.cwd()` risolve sempre il path reale). Test end-to-end manuali: Smart Working (dichiarazione + blocco duplicato), cambio password (vecchia rifiutata, nuova accettata, verificato via hash DB), toggle Face ID. 473/487 backend + 25/25 mobile test verdi. buildNumber 24→25, commit `7b115fb` pushato su main → Codemagic in corso. Piano: `~/.claude/plans/adesso-entra-nella-cartella-purring-toast.md`. |
 | 54 | 2026-07-11 | **Build 24 — Redesign mobile QR Scanner → Face ID → Conferma check-in** — Primo step del redesign completo dell'app mobile (mockup `frontend-mobile/mockups/badge-mobile-mockups.html`). Grilling esteso per risolvere i gap mockup-vs-reale: ordine flusso mantenuto Face ID→QR→Conferma (non invertito come nel mockup), nuova `FaceIDScreen.jsx` custom (prima solo prompt nativo `LocalAuthentication` inline in `CheckInScreen`), `theme.js` con design token condivisi (colori linen/navy/stone + font Cormorant/DM Sans via `@expo-google-fonts/*`), `StepIndicator` a 3 step riusato dalle 3 schermate, `react-native-svg` per le icone custom, `Animated` nativo per le animazioni (scan-line, arco Face ID, pulse). Backend: `POST /checkins` ora ritorna `site_name` (JOIN riuso dati già letti), login ritorna `external_employee_id` quando presente (mancava del tutto — scoperto in corsa). Bug fix in corso di test: `Animated` con `useNativeDriver:true` non supporta `top` → sostituito con `translateY` per la scan-line. 466 test backend + 15 mobile verdi. **Testato dall'utente su simulatore: QR scan, presenze, invio ferie tutti funzionanti.** buildNumber 23→24, commit `b48b026` pushato su main → Codemagic in corso. Piano: `~/.claude/plans/adesso-entra-nella-cartella-purring-toast.md`. |
 | 53 | 2026-06-27 | **Build 23 — presenze refresh + rifiuto ferie 400 fix** — Bug 1: dopo check-OUT il tab Presenze non si aggiornava (componente già montato, `useEffect([])` non rieseguito). Fix: `useFocusEffect` in `MyPresencesScreen` (reload ad ogni focus). `StorePresencesScreen`: doppio hook — `useEffect([activeFilter])` per cambio filtro + `useFocusEffect` per ritorno al tab (il solo `useFocusEffect` non ri-triggerava al cambio filtro su schermata già a fuoco). Bug 2: "Rifiuta" restituiva 400 — `ApproveLeaveSchema` aveva `.refine()` che richiedeva `rejection_reason` quando `status=REJECTED`, ma il frontend non lo invia. Fix: rimosso `.refine()` (campo già `optional().nullable()`). Rimosso anche test `leaves.test.js` che assertiva 400 per REJECTED senza motivazione (comportamento cambiato intenzionalmente). Code review 8 angoli: nessun finding critico. 466 backend / 15 mobile test verdi. Commits: 4772d8d, 2373efa. |
 | 52 | 2026-06-25 | **Build 22 — 3 bug fix post Build 19 TestFlight** — (1) `SuccessScreen` navigation: dopo check-in/out lo stack era corretto ma l'utente voleva tornare al badge con reset, fix `navigation.replace('Main')` + `initialRouteName='Badge'`. (2) Date formatting: date visualizzate in formato ISO UTC invece di locale italiano, fix `toLocaleDateString('it-IT', {...})` + `toLocaleTimeString`. (3) End-date picker nascosto: `setTimeout(100ms)` race condition → sostituito con `onLayout`. Commits: 936a8e4, 4a98156. |
@@ -27,7 +28,7 @@
 
 ---
 
-## 🎨 TODO — Redesign Mobile Completo (iniziato Session 54, 2026-07-11)
+## 🎨 Redesign Mobile Completo (iniziato Session 54, completato Session 55)
 
 Obiettivo: ridisegnare tutte le schermate mobile seguendo `frontend-mobile/mockups/badge-mobile-mockups.html`
 (font Cormorant/DM Sans, palette linen/navy/stone). Fondamenta condivise (`theme.js`, font loading,
@@ -37,17 +38,19 @@ Obiettivo: ridisegnare tutte le schermate mobile seguendo `frontend-mobile/mocku
 - [x] **02 Face ID** — nuova `FaceIDScreen.jsx` custom (prima solo prompt nativo) (Session 54)
 - [x] **03 Conferma Check-in** — `SuccessScreen.jsx` con dati reali (sede, ruolo, employee ID) (Session 54)
 - [x] Home/dashboard (`CheckInScreen.jsx`) — restyle per coerenza (Session 54)
-- [ ] **04 Storico Presenze** — mockup disponibile (screen 4), non ancora implementato
-- [ ] **05 Settings** — mockup disponibile (screen 5), non ancora implementato
-- [ ] **06 Smart Working** — mockup disponibile (screen 6), non ancora implementato
+- [x] **04 Storico Presenze** — aggregazione per giorno (IN/OUT + durata), filtri periodo, riepilogo ore (Session 55)
+- [x] **05 Settings** — profilo, cambio password, toggle Face ID, logout, tab "Profilo" (Session 55)
+- [x] **06 Smart Working** — nuova feature, non solo restyle: autogiustificazione presenza senza QR (Session 55)
 - [ ] Altre schermate mobile esistenti (Ferie, Malattia, Turni) da valutare se includere nel redesign
 
 **Note per chi continua:**
 - Piano dettagliato con decisioni di grilling: `~/.claude/plans/adesso-entra-nella-cartella-purring-toast.md`
-- `theme.js` (`frontend-mobile/src/config/theme.js`) è la fonte unica per colori/font — riusarlo, non duplicare hex literal
+- `theme.js` (`frontend-mobile/src/config/theme.js`) è la fonte unica per colori/font (incluso `ROLE_LABELS`) — riusarlo, non duplicare hex literal
 - Pattern animazioni: usare `transform`/`opacity` con `useNativeDriver:true` — MAI proprietà di layout come `top`/`left` (causa crash "not supported by native animated module")
-- `react-native-svg` è stato aggiunto come dipendenza nativa — richiede build Codemagic/TestFlight aggiornata (già fatto, buildNumber 24) per essere testato fuori da Expo Go
+- `react-native-svg` è dipendenza nativa già in build (buildNumber 25) — nessuna nuova dipendenza nativa introdotta in Session 55
 - Dati mancanti non recuperabili senza modifiche di scope più ampio: mansione testuale (si usa il ruolo di sistema), turno del giorno nel check-in (richiederebbe lookup su `shifts_data` JSONB)
+- **Colonne SQL `DATE` da restituire in JSON: sempre castare `::text`** — `node-pg` interpreta `DATE` come mezzanotte nel timezone locale del server, e la serializzazione JSON (`toISOString()`) la converte in UTC causando uno shift di un giorno per timezone con offset positivo (es. Europe/Rome). Visto nella route `smartWorking.js`, fixato con `date::text AS date`. Controllare se lo stesso pattern esiste altrove prima di aggiungere nuove colonne DATE esposte via API.
+- **Path progetto con spazi/`&` rompe le build iOS locali**: gli script `[CP-User]` generati da CocoaPods non quotano correttamente `SRCROOT` quando contiene `&` — la shell lo interpreta come operatore di background job troncando il path. Un symlink NON risolve (Node `process.cwd()` risolve sempre il path reale sottostante) — serve una copia reale (rsync) in un path senza caratteri speciali per compilare/testare in locale con Xcode.
 
 ---
 
