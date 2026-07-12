@@ -85,12 +85,16 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       // If client_id is provided, filter by it to prevent cross-tenant identity collision.
       // If omitted, guard against silent wrong-tenant login: reject when multiple tenants share the email.
       const params = client_id ? [email, client_id] : [email];
-      const clientFilter = client_id ? 'AND client_id = $2' : '';
+      const clientFilter = client_id ? 'AND e.client_id = $2' : '';
       const result = await pool.query(
-        `SELECT id, client_id, email, name, role, site_id, password_hash, must_change_password, external_employee_id
-         FROM employees
-         WHERE email = $1 AND password_hash IS NOT NULL ${clientFilter}
-         ORDER BY created_at ASC
+        `SELECT e.id, e.client_id, e.email, e.name, e.role, e.site_id, e.password_hash,
+                e.must_change_password, e.external_employee_id,
+                c.name AS client_name, s.name AS site_name
+         FROM employees e
+         JOIN clients c ON c.id = e.client_id
+         LEFT JOIN sites s ON s.id = e.site_id
+         WHERE e.email = $1 AND e.password_hash IS NOT NULL ${clientFilter}
+         ORDER BY e.created_at ASC
          LIMIT 2`,
         params
       );
@@ -116,6 +120,8 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
             employee_id: dbEmployee.id,
             site_id: dbEmployee.site_id || null,
             external_employee_id: dbEmployee.external_employee_id || null,
+            client_name: dbEmployee.client_name || null,
+            site_name: dbEmployee.site_name || null,
             must_change_password: dbEmployee.must_change_password || false,
           };
         }
@@ -194,6 +200,8 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
     if (user.employee_id) userResponse.employee_id = user.employee_id;
     if (user.site_id) userResponse.site_id = user.site_id;
     if (user.external_employee_id) userResponse.external_employee_id = user.external_employee_id;
+    if (user.client_name) userResponse.client_name = user.client_name;
+    if (user.site_name) userResponse.site_name = user.site_name;
 
     res.json({
       data: {

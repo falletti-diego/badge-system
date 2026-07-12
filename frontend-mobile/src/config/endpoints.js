@@ -10,10 +10,15 @@ export const ENDPOINTS = {
   AUTH_LOGIN: '/api/v1/auth/login',
   AUTH_LOGOUT: '/api/v1/auth/logout',
   AUTH_REFRESH: '/api/v1/auth/refresh',
+  AUTH_CHANGE_PASSWORD: '/api/v1/auth/change-password',
 
   // Check-ins
   CHECKINS_POST: '/api/v1/checkins',
   CHECKINS_LIST: '/api/v1/checkins',
+
+  // Smart Working (self-declared, no site/QR required)
+  SMART_WORKING_CREATE: '/api/v1/smart-working',
+  SMART_WORKING_HISTORY: '/api/v1/smart-working/my-history',
 
   // Consent (GDPR Art. 7)
   CONSENT_GPS_ACCEPTANCE: '/api/v1/consent/gps-acceptance',
@@ -102,6 +107,7 @@ export const STORAGE_KEYS = {
   AUTH_TOKEN: 'badge_auth_token',
   REFRESH_TOKEN: 'badge_refresh_token',
   USER_DATA: 'badge_user',
+  FACE_ID_ENABLED: 'badge_face_id_enabled',
 };
 
 export default { API_BASE, ENDPOINTS, LEAVE_TYPES, SHIFTS_CONFIG, CHECKINS_CONFIG, DEMO_ACCOUNTS, TIMING, STORAGE_KEYS };

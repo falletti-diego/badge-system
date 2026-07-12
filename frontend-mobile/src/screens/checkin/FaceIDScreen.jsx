@@ -7,14 +7,7 @@ import Svg, { Ellipse, Circle, Path } from 'react-native-svg';
 import * as LocalAuthentication from 'expo-local-authentication';
 import authService from '../../services/authService';
 import StepIndicator from '../../components/StepIndicator';
-import { COLORS, FONTS } from '../../config/theme';
-
-const ROLE_LABELS = {
-  employee: 'Dipendente',
-  manager: 'Responsabile',
-  admin: 'Amministratore',
-  viewer: 'Visualizzatore',
-};
+import { COLORS, FONTS, ROLE_LABELS } from '../../config/theme';
 
 function getInitials(name) {
   if (!name) return '';

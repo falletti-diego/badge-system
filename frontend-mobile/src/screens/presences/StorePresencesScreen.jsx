@@ -8,6 +8,7 @@ import apiClient from '../../services/apiClient';
 import { ENDPOINTS, CHECKINS_CONFIG } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SkeletonLoader from '../../components/SkeletonLoader';
+import { COLORS, FONTS } from '../../config/theme';
 
 const { TYPE_COLORS, TYPE_ICONS } = CHECKINS_CONFIG;
 
@@ -200,76 +201,76 @@ export default function StorePresencesScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F2ED' },
+  container: { flex: 1, backgroundColor: COLORS.linen },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 12, backgroundColor: '#1E3A5F',
+    paddingHorizontal: 20, paddingVertical: 14, backgroundColor: COLORS.navy900,
   },
-  title: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
+  title: { fontFamily: FONTS.display, fontSize: 22, color: COLORS.white },
 
   filterBar: {
     flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10,
-    backgroundColor: '#FFFFFF', gap: 8,
-    borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
+    backgroundColor: COLORS.white, gap: 8,
+    borderBottomWidth: 1, borderBottomColor: COLORS.bone,
   },
   filterButton: {
     flex: 1, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: '#F3F4F6', alignItems: 'center',
+    backgroundColor: COLORS.linen, alignItems: 'center',
   },
-  filterButtonActive: { backgroundColor: '#1E3A5F' },
-  filterText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
-  filterTextActive: { color: '#FFFFFF' },
+  filterButtonActive: { backgroundColor: COLORS.navy500 },
+  filterText: { fontFamily: FONTS.bodyMedium, fontSize: 13, color: COLORS.stone },
+  filterTextActive: { color: COLORS.white },
 
   statsBar: {
-    flexDirection: 'row', backgroundColor: '#FFFFFF',
+    flexDirection: 'row', backgroundColor: COLORS.white,
     paddingVertical: 12, paddingHorizontal: 24,
-    borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
+    borderBottomWidth: 1, borderBottomColor: COLORS.bone,
   },
   statItem: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 22, fontWeight: '700', color: '#2A2520' },
-  statLabel: { fontSize: 11, color: '#9CA3AF', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
-  statDivider: { width: 1, backgroundColor: '#E5E7EB', marginVertical: 4 },
+  statValue: { fontFamily: FONTS.display, fontSize: 24, color: COLORS.ink },
+  statLabel: { fontFamily: FONTS.bodySemiBold, fontSize: 11, color: COLORS.dust, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
+  statDivider: { width: 1, backgroundColor: COLORS.bone, marginVertical: 4 },
 
   list: { padding: 16, gap: 8 },
   row: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white,
     borderRadius: 12, padding: 14, gap: 12,
   },
 
   avatar: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#1E3A5F', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: COLORS.navy500, justifyContent: 'center', alignItems: 'center',
   },
-  avatarText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  avatarText: { fontFamily: FONTS.bodySemiBold, color: COLORS.white, fontSize: 14 },
 
   rowInfo: { flex: 1 },
-  employeeName: { fontSize: 15, fontWeight: '600', color: '#2A2520' },
-  rowDateTime: { fontSize: 12, color: '#6B7280', marginTop: 2, textTransform: 'capitalize' },
-  rowSite: { fontSize: 11, color: '#9CA3AF', marginTop: 3 },
+  employeeName: { fontFamily: FONTS.bodyMedium, fontSize: 15, color: COLORS.ink },
+  rowDateTime: { fontFamily: FONTS.body, fontSize: 12, color: COLORS.stone, marginTop: 2, textTransform: 'capitalize' },
+  rowSite: { fontFamily: FONTS.body, fontSize: 11, color: COLORS.dust, marginTop: 3 },
 
   typeBadge: {
     width: 44, height: 44, borderRadius: 22,
     justifyContent: 'center', alignItems: 'center',
   },
   typeIcon: { fontSize: 16, fontWeight: '700' },
-  typeLabel: { fontSize: 10, fontWeight: '600', marginTop: 1 },
+  typeLabel: { fontFamily: FONTS.bodySemiBold, fontSize: 10, marginTop: 1 },
 
   correctedBadge: {
     width: 24, height: 24, borderRadius: 12,
-    backgroundColor: '#FEF3C7', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: COLORS.warningBg, justifyContent: 'center', alignItems: 'center',
   },
   correctedText: { fontSize: 12 },
 
   truncatedBanner: {
-    backgroundColor: '#FEF3C7', paddingHorizontal: 16, paddingVertical: 8,
-    borderBottomWidth: 1, borderBottomColor: '#F59E0B',
+    backgroundColor: COLORS.warningBg, paddingHorizontal: 16, paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: COLORS.warning,
   },
-  truncatedText: { fontSize: 12, color: '#92400E', textAlign: 'center' },
-  emptyText: { textAlign: 'center', color: '#6B7280', marginTop: 60, fontSize: 16 },
+  truncatedText: { fontFamily: FONTS.body, fontSize: 12, color: COLORS.warning, textAlign: 'center' },
+  emptyText: { textAlign: 'center', color: COLORS.stone, fontFamily: FONTS.body, marginTop: 60, fontSize: 16 },
   errorContainer: { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 32 },
-  errorText: { color: '#C0392B', textAlign: 'center', fontSize: 16, marginBottom: 16 },
+  errorText: { color: COLORS.error, textAlign: 'center', fontFamily: FONTS.body, fontSize: 16, marginBottom: 16 },
   retryButton: {
-    backgroundColor: '#2563EB', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 12,
+    backgroundColor: COLORS.navy500, borderRadius: 8, paddingHorizontal: 24, paddingVertical: 12,
   },
-  retryButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+  retryButtonText: { color: COLORS.white, fontFamily: FONTS.bodyMedium, fontSize: 15 },
 });

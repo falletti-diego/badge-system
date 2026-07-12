@@ -5,9 +5,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as LocalAuthentication from 'expo-local-authentication';
 import NetInfo from '@react-native-community/netinfo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import authService from '../../services/authService';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { TIMING } from '../../config/endpoints';
+import { TIMING, STORAGE_KEYS } from '../../config/endpoints';
 import { COLORS, FONTS } from '../../config/theme';
 
 export default function CheckInScreen({ navigation }) {
@@ -34,22 +35,13 @@ export default function CheckInScreen({ navigation }) {
       return;
     }
 
-    // Biometric verification gets its own dedicated screen (FaceIDScreen) —
-    // devices/simulators without hardware bypass it entirely, same as before.
-    navigation.navigate(faceIdAvailable ? 'FaceID' : 'QRScanner');
-  };
-
-  const handleLogout = async () => {
-    Alert.alert('Logout', 'Sei sicuro di voler uscire?', [
-      { text: 'Annulla', style: 'cancel' },
-      {
-        text: 'Esci', style: 'destructive',
-        onPress: async () => {
-          await authService.logout();
-          navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-        },
-      },
-    ]);
+    // Biometric verification gets its own dedicated screen (FaceIDScreen) — skipped
+    // both when the hardware is unavailable and when the user disabled it in
+    // Impostazioni (Preferenze > Face ID). Neither bypass weakens check-in security:
+    // ownership is enforced server-side via employee_id in the JWT regardless.
+    const faceIdPref = await AsyncStorage.getItem(STORAGE_KEYS.FACE_ID_ENABLED);
+    const faceIdWanted = faceIdAvailable && faceIdPref !== 'false';
+    navigation.navigate(faceIdWanted ? 'FaceID' : 'QRScanner');
   };
 
   const timeStr = time.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
@@ -61,9 +53,6 @@ export default function CheckInScreen({ navigation }) {
         <Text style={styles.greeting}>
           Ciao, {loading ? '' : (user?.name?.split(' ')[0] ?? '')}
         </Text>
-        <TouchableOpacity onPress={handleLogout} disabled={loading}>
-          <Text style={[styles.logoutText, loading && styles.logoutDisabled]}>Esci</Text>
-        </TouchableOpacity>
       </View>
 
       <View style={styles.clockContainer}>
@@ -78,6 +67,14 @@ export default function CheckInScreen({ navigation }) {
             {faceIdAvailable ? 'Face ID richiesto' : 'Avvicina il telefono al QR'}
           </Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.smartWorkingButton}
+          onPress={() => navigation.navigate('SmartWorking')}
+        >
+          <Text style={styles.smartWorkingButtonText}>Smart Working</Text>
+          <Text style={styles.smartWorkingSubtext}>Autogiustifica la giornata odierna</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -86,13 +83,10 @@ export default function CheckInScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.linen },
   header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16,
     backgroundColor: COLORS.navy900,
   },
   greeting: { fontFamily: FONTS.display, fontSize: 22, color: COLORS.white },
-  logoutText: { fontFamily: FONTS.body, color: COLORS.navy200, fontSize: 14 },
-  logoutDisabled: { opacity: 0.5 },
   clockContainer: {
     backgroundColor: COLORS.navy900, alignItems: 'center',
     paddingBottom: 40, paddingTop: 8,
@@ -111,4 +105,10 @@ const styles = StyleSheet.create({
   },
   checkinButtonText: { fontFamily: FONTS.bodySemiBold, color: COLORS.white, fontSize: 18 },
   checkinSubtext: { fontFamily: FONTS.body, color: COLORS.navy200, fontSize: 14, marginTop: 6 },
+  smartWorkingButton: {
+    backgroundColor: COLORS.white, borderRadius: 16, padding: 20, alignItems: 'center',
+    borderWidth: 1.5, borderColor: COLORS.navy200,
+  },
+  smartWorkingButtonText: { fontFamily: FONTS.bodySemiBold, color: COLORS.navy500, fontSize: 15 },
+  smartWorkingSubtext: { fontFamily: FONTS.body, color: COLORS.stone, fontSize: 12, marginTop: 4 },
 });

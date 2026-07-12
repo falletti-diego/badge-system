@@ -1,148 +1,266 @@
 import React, { useState, useCallback, useRef } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, Alert,
+  View, Text, FlatList, TouchableOpacity, StyleSheet, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../services/apiClient';
-import { ENDPOINTS, CHECKINS_CONFIG } from '../../config/endpoints';
-import LoadingSpinner from '../../components/LoadingSpinner';
+import { ENDPOINTS } from '../../config/endpoints';
 import SkeletonLoader from '../../components/SkeletonLoader';
+import { pairCheckins, mergeWithSmartWorking, formatDuration } from '../../utils/presenceUtils';
+import { COLORS, FONTS } from '../../config/theme';
 
-const { TYPE_COLORS, TYPE_ICONS } = CHECKINS_CONFIG;
-const { LIMIT: CHECKINS_LIMIT } = CHECKINS_CONFIG.DEFAULTS;
+/** Parses a 'YYYY-MM-DD' key into a local Date (no UTC-parsing ambiguity). */
+function parseDateKey(dateKey) {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
 
-export default function MyPresencesScreen({ navigation }) {
-  const [checkins, setCheckins] = useState([]);
+function toISODate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function startOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay(); // 0 = Sunday
+  const diff = day === 0 ? 6 : day - 1; // days since Monday
+  d.setDate(d.getDate() - diff);
+  return d;
+}
+
+function buildFilters() {
+  const today = new Date();
+  const prevMonth1 = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const prevMonth2 = new Date(today.getFullYear(), today.getMonth() - 2, 1);
+  const label = (d) => {
+    const s = d.toLocaleDateString('it-IT', { month: 'long' });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  };
+
+  return [
+    {
+      label: 'Questa settimana',
+      range: () => ({ date_from: toISODate(startOfWeek(today)), date_to: toISODate(today) }),
+    },
+    {
+      label: 'Questo mese',
+      range: () => ({ date_from: toISODate(new Date(today.getFullYear(), today.getMonth(), 1)), date_to: toISODate(today) }),
+    },
+    {
+      label: label(prevMonth1),
+      range: () => ({
+        date_from: toISODate(prevMonth1),
+        date_to: toISODate(new Date(prevMonth1.getFullYear(), prevMonth1.getMonth() + 1, 0)),
+      }),
+    },
+    {
+      label: label(prevMonth2),
+      range: () => ({
+        date_from: toISODate(prevMonth2),
+        date_to: toISODate(new Date(prevMonth2.getFullYear(), prevMonth2.getMonth() + 1, 0)),
+      }),
+    },
+  ];
+}
+
+const FILTERS = buildFilters();
+
+export default function MyPresencesScreen() {
+  const [activeFilter, setActiveFilter] = useState(0);
+  const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const abortControllerRef = useRef(null);
 
-  const fetchCheckins = async () => {
+  const fetchData = useCallback(async (filterIndex) => {
     abortControllerRef.current?.abort();
-    abortControllerRef.current = new AbortController();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     setLoading(true);
     setError(null);
 
     try {
-      const response = await apiClient.get(ENDPOINTS.CHECKINS_LIST, {
-        params: { limit: CHECKINS_LIMIT },
-        signal: abortControllerRef.current.signal,
-      });
-      if (!abortControllerRef.current?.signal.aborted) {
-        setCheckins(response.data.data ?? []);
-      }
+      const { date_from, date_to } = FILTERS[filterIndex].range();
+      const [checkinsRes, smartWorkingRes] = await Promise.all([
+        apiClient.get(ENDPOINTS.CHECKINS_LIST, { params: { date_from, date_to, limit: 200 }, signal: controller.signal }),
+        apiClient.get(ENDPOINTS.SMART_WORKING_HISTORY, { params: { date_from, date_to }, signal: controller.signal }),
+      ]);
+
+      if (controller.signal.aborted) return;
+
+      const dailyEntries = pairCheckins(checkinsRes.data.data ?? []);
+      const merged = mergeWithSmartWorking(dailyEntries, smartWorkingRes.data.data ?? []);
+      setEntries(merged);
     } catch (err) {
-      if (!abortControllerRef.current?.signal.aborted) {
+      if (!controller.signal.aborted) {
         setError(err.response?.data?.message || 'Errore caricamento presenze');
       }
     } finally {
-      if (!abortControllerRef.current?.signal.aborted) {
-        setLoading(false);
-      }
+      if (!controller.signal.aborted) setLoading(false);
     }
-  };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      fetchCheckins();
+      fetchData(activeFilter);
       return () => abortControllerRef.current?.abort();
-    }, []),
+    }, [activeFilter, fetchData]),
   );
 
+  const totalMinutes = entries
+    .filter((e) => e.kind === 'checkin')
+    .reduce((sum, e) => sum + (e.totalMinutes || 0), 0);
+
+  // Precompute month-divider markers into the flat list data (rather than mutating
+  // a variable during renderItem, which is fragile under FlatList virtualization).
+  const listData = [];
+  let lastMonthLabel = null;
+  entries.forEach((item) => {
+    const dateObj = parseDateKey(item.date);
+    const rawMonthLabel = dateObj.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+    const monthLabel = rawMonthLabel.charAt(0).toUpperCase() + rawMonthLabel.slice(1);
+    if (monthLabel !== lastMonthLabel) {
+      listData.push({ rowType: 'divider', key: `divider-${monthLabel}`, label: monthLabel });
+      lastMonthLabel = monthLabel;
+    }
+    listData.push({ rowType: 'entry', key: `${item.kind}-${item.date}`, item, dateObj });
+  });
+
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={[styles.header, { justifyContent: 'center' }]}>
-        <Text style={styles.title}>Le Mie Presenze</Text>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Le mie presenze</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsRow}>
+          {FILTERS.map((f, i) => (
+            <TouchableOpacity
+              key={f.label}
+              style={[styles.pill, activeFilter === i && styles.pillActive]}
+              onPress={() => setActiveFilter(i)}
+            >
+              <Text style={[styles.pillText, activeFilter === i && styles.pillTextActive]}>{f.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
-      {loading && !error && <SkeletonLoader count={5} />}
-      {error && (
+      {loading && <SkeletonLoader count={5} />}
+
+      {error && !loading && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={fetchCheckins}
-          >
+          <TouchableOpacity style={styles.retryButton} onPress={() => fetchData(activeFilter)}>
             <Text style={styles.retryButtonText}>Riprova</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {!loading && checkins.length === 0 && !error && (
-        <Text style={styles.emptyText}>Nessuna presenza registrata.</Text>
+      {!loading && !error && entries.length === 0 && (
+        <Text style={styles.emptyText}>Nessuna presenza nel periodo selezionato.</Text>
       )}
 
-      {!loading && checkins.length > 0 && (
-        <FlatList
-          data={checkins}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => {
-          const ts = new Date(item.timestamp);
-          const dateStr = ts.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
-          const timeStr = ts.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-          const color = TYPE_COLORS[item.type] ?? '#6B7280';
-          const icon = TYPE_ICONS[item.type] ?? '•';
+      {!loading && !error && entries.length > 0 && (
+        <>
+          <FlatList
+            data={listData}
+            keyExtractor={(row) => row.key}
+            contentContainerStyle={styles.list}
+            renderItem={({ item: row }) => {
+              if (row.rowType === 'divider') {
+                return <Text style={styles.monthDivider}>{row.label}</Text>;
+              }
 
-          return (
-            <View style={styles.row}>
-              <View style={[styles.typeBadge, { backgroundColor: color + '15' }]}>
-                <Text style={[styles.typeIcon, { color }]}>{icon}</Text>
-                <Text style={[styles.typeLabel, { color }]}>{item.type}</Text>
-              </View>
-              <View style={styles.rowInfo}>
-                <Text style={styles.rowTime}>{timeStr}</Text>
-                <Text style={styles.rowDate}>{dateStr}</Text>
-                {item.site_name && <Text style={styles.rowSite}>📍 {item.site_name}</Text>}
-              </View>
-              {item.modified_at && (
-                <View style={styles.correctedBadge}>
-                  <Text style={styles.correctedText}>✏️</Text>
+              const { item, dateObj } = row;
+              return (
+                <View style={styles.row}>
+                  <View style={styles.dateBox}>
+                    <Text style={styles.dateDay}>{String(dateObj.getDate()).padStart(2, '0')}</Text>
+                    <Text style={styles.dateDow}>
+                      {dateObj.toLocaleDateString('it-IT', { weekday: 'short' }).replace('.', '')}
+                    </Text>
+                  </View>
+                  <View style={styles.rowInfo}>
+                    {item.kind === 'smart_working' ? (
+                      <Text style={styles.rowTimesSmartWorking}>Smart Working</Text>
+                    ) : (
+                      <Text style={styles.rowTimes}>
+                        {item.firstIn.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                        {' — '}
+                        {item.openPresence || !item.lastOut
+                          ? 'in corso'
+                          : item.lastOut.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    )}
+                    {item.kind === 'checkin' && item.siteName && (
+                      <Text style={styles.rowSite}>{item.siteName}</Text>
+                    )}
+                  </View>
+                  {item.kind === 'checkin' && (
+                    <Text style={styles.duration}>{formatDuration(item.totalMinutes)}</Text>
+                  )}
                 </View>
-              )}
-            </View>
-          );
-        }}
-        />
+              );
+            }}
+          />
+
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Totale ore periodo</Text>
+            <Text style={styles.summaryValue}>{formatDuration(totalMinutes)}</Text>
+          </View>
+        </>
       )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F2ED' },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 12, backgroundColor: '#1E3A5F',
+  container: { flex: 1, backgroundColor: COLORS.linen },
+  header: { backgroundColor: COLORS.white, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.bone },
+  title: { fontFamily: FONTS.display, fontSize: 24, color: COLORS.ink, marginBottom: 12 },
+  pillsRow: { gap: 8 },
+  pill: {
+    height: 32, paddingHorizontal: 14, borderRadius: 20, justifyContent: 'center',
+    borderWidth: 1, borderColor: COLORS.bone, backgroundColor: COLORS.white,
   },
-  title: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
-  list: { padding: 16, gap: 8 },
+  pillActive: { backgroundColor: COLORS.navy500, borderColor: COLORS.navy500 },
+  pillText: { fontFamily: FONTS.bodyMedium, fontSize: 12, color: COLORS.stone },
+  pillTextActive: { color: COLORS.white },
+
+  monthDivider: {
+    fontFamily: FONTS.bodySemiBold, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase',
+    color: COLORS.dust, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 6,
+  },
+  list: { paddingBottom: 16 },
   row: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF',
-    borderRadius: 12, padding: 16, gap: 12,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white,
+    marginHorizontal: 16, marginBottom: 8, borderRadius: 12, padding: 12, gap: 12,
   },
-  typeBadge: {
-    width: 52, height: 52, borderRadius: 26,
-    justifyContent: 'center', alignItems: 'center',
+  dateBox: {
+    width: 44, height: 52, borderRadius: 10, backgroundColor: COLORS.linen,
+    alignItems: 'center', justifyContent: 'center',
   },
-  typeIcon: { fontSize: 20, fontWeight: '700' },
-  typeLabel: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+  dateDay: { fontFamily: FONTS.display, fontSize: 20, color: COLORS.ink },
+  dateDow: { fontFamily: FONTS.bodySemiBold, fontSize: 9, color: COLORS.stone, textTransform: 'uppercase', marginTop: 1 },
   rowInfo: { flex: 1 },
-  rowTime: { fontSize: 20, fontWeight: '600', color: '#2A2520' },
-  rowDate: { fontSize: 13, color: '#6B7280', marginTop: 2, textTransform: 'capitalize' },
-  rowSite: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
-  correctedBadge: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: '#FEF3C7', justifyContent: 'center', alignItems: 'center',
+  rowTimes: { fontFamily: FONTS.bodyMedium, fontSize: 15, color: COLORS.ink },
+  rowTimesSmartWorking: { fontFamily: FONTS.bodyMedium, fontSize: 15, color: COLORS.navy500 },
+  rowSite: { fontFamily: FONTS.body, fontSize: 12, color: COLORS.stone, marginTop: 2 },
+  duration: { fontFamily: FONTS.display, fontSize: 18, color: COLORS.navy500 },
+
+  summaryCard: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: COLORS.white, marginHorizontal: 16, marginBottom: 16,
+    borderRadius: 14, padding: 16, borderWidth: 1, borderColor: COLORS.bone,
   },
-  correctedText: { fontSize: 14 },
-  emptyText: { textAlign: 'center', color: '#6B7280', marginTop: 60, fontSize: 16 },
+  summaryLabel: { fontFamily: FONTS.body, fontSize: 13, color: COLORS.stone },
+  summaryValue: { fontFamily: FONTS.display, fontSize: 22, color: COLORS.ink },
+
+  emptyText: { textAlign: 'center', color: COLORS.stone, fontFamily: FONTS.body, marginTop: 60, fontSize: 16 },
   errorContainer: { alignItems: 'center', paddingHorizontal: 24, paddingVertical: 32 },
-  errorText: { color: '#C0392B', textAlign: 'center', fontSize: 16, marginBottom: 16 },
-  retryButton: {
-    backgroundColor: '#2563EB', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 12,
-  },
-  retryButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+  errorText: { color: COLORS.error, textAlign: 'center', fontFamily: FONTS.body, fontSize: 16, marginBottom: 16 },
+  retryButton: { backgroundColor: COLORS.navy500, borderRadius: 8, paddingHorizontal: 24, paddingVertical: 12 },
+  retryButtonText: { color: COLORS.white, fontFamily: FONTS.bodyMedium, fontSize: 15 },
 });

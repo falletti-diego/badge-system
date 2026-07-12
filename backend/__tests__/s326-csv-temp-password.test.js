@@ -74,7 +74,8 @@ describe('S.32.6 — CSV Temp Password Feature', () => {
       const authModule = fs.readFileSync(authPath, 'utf8');
 
       expect(authModule).toContain('must_change_password');
-      expect(authModule).toContain('SELECT id, client_id, email, name, role, site_id, password_hash, must_change_password');
+      expect(authModule).toContain('SELECT e.id, e.client_id, e.email, e.name, e.role, e.site_id, e.password_hash');
+      expect(authModule).toContain('e.must_change_password');
     });
   });
 

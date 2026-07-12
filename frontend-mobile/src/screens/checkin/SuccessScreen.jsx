@@ -5,14 +5,7 @@ import Svg, { Circle, Polyline } from 'react-native-svg';
 import authService from '../../services/authService';
 import StepIndicator from '../../components/StepIndicator';
 import { TIMING } from '../../config/endpoints';
-import { COLORS, FONTS } from '../../config/theme';
-
-const ROLE_LABELS = {
-  employee: 'Dipendente',
-  manager: 'Responsabile',
-  admin: 'Amministratore',
-  viewer: 'Visualizzatore',
-};
+import { COLORS, FONTS, ROLE_LABELS } from '../../config/theme';
 
 export default function SuccessScreen({ navigation, route }) {
   const { checkIn } = route.params ?? {};

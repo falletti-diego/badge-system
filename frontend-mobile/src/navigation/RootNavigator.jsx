@@ -18,25 +18,39 @@ import CheckInScreen from '../screens/checkin/CheckInScreen';
 import FaceIDScreen from '../screens/checkin/FaceIDScreen';
 import QRScannerScreen from '../screens/checkin/QRScannerScreen';
 import SuccessScreen from '../screens/checkin/SuccessScreen';
+import SmartWorkingScreen from '../screens/checkin/SmartWorkingScreen';
 import MyScheduleScreen from '../screens/schedule/MyScheduleScreen';
 import ManagerScheduleScreen from '../screens/schedule/ManagerScheduleScreen';
 import PresenzaTabScreen from '../screens/presences/PresenzaTabScreen';
 import LeaveRequestScreen from '../screens/leave/LeaveRequestScreen';
 import ManagerLeaveApprovalScreen from '../screens/leave/ManagerLeaveApprovalScreen';
 import IllnessReportScreen from '../screens/illness/IllnessReportScreen';
+import SettingsScreen from '../screens/settings/SettingsScreen';
+import ChangePasswordScreen from '../screens/settings/ChangePasswordScreen';
 
 const RootStack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 const CheckInStack = createNativeStackNavigator();
+const SettingsStack = createNativeStackNavigator();
 
 function CheckInStackNavigator() {
   return (
     <CheckInStack.Navigator screenOptions={{ headerShown: false }}>
       <CheckInStack.Screen name="CheckInMain" component={CheckInScreen} />
       <CheckInStack.Screen name="FaceID" component={FaceIDScreen} />
+      <CheckInStack.Screen name="SmartWorking" component={SmartWorkingScreen} />
       <CheckInStack.Screen name="QRScanner" component={QRScannerScreen} />
       <CheckInStack.Screen name="Success" component={SuccessScreen} />
     </CheckInStack.Navigator>
+  );
+}
+
+function SettingsStackNavigator() {
+  return (
+    <SettingsStack.Navigator screenOptions={{ headerShown: false }}>
+      <SettingsStack.Screen name="Settings" component={SettingsScreen} />
+      <SettingsStack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+    </SettingsStack.Navigator>
   );
 }
 
@@ -47,6 +61,7 @@ const TAB_ICONS = {
   Malattia: 'medical-outline',
   Turni: 'time-outline',
   Presenze: 'people-outline',
+  Profilo: 'person-outline',
 };
 
 // MainTabs reads user role fresh on every mount (so logout+login as different role works correctly).
@@ -121,6 +136,8 @@ function MainTabs() {
       />
 
       <Tab.Screen name="Presenze" component={PresenzaTabScreen} />
+
+      <Tab.Screen name="Profilo" component={SettingsStackNavigator} />
     </Tab.Navigator>
     </PendingLeaveContext.Provider>
   );

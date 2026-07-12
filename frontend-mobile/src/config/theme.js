@@ -42,4 +42,12 @@ export const FONTS = {
   bodySemiBold: 'DMSans_600SemiBold',
 };
 
-export default { COLORS, FONTS };
+// System role -> display label (no free-text job title exists in the data model)
+export const ROLE_LABELS = {
+  employee: 'Dipendente',
+  manager: 'Responsabile',
+  admin: 'Amministratore',
+  viewer: 'Visualizzatore',
+};
+
+export default { COLORS, FONTS, ROLE_LABELS };
