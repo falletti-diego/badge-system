@@ -178,6 +178,16 @@ const GetStatsSchema = z.object({
 });
 
 // =====================================================
+// 5b. GET /api/presences/trend — Trend data for charts
+// =====================================================
+
+const GetPresencesTrendSchema = z.object({
+  query: z.object({
+    site_id: z.preprocess(val => val === '' ? undefined : val, z.string().optional()),
+  }),
+});
+
+// =====================================================
 // 6. GET /api/employees — List employees with pagination
 // =====================================================
 
@@ -496,6 +506,7 @@ module.exports = {
   PutCheckinSchema,
   GetExportCsvSchema,
   GetStatsSchema,
+  GetPresencesTrendSchema,
   GetEmployeesSchema,
   GetShiftsSchema,
   GetMyScheduleSchema,
