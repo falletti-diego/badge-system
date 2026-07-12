@@ -207,8 +207,8 @@ router.get('/trend', requireAuth, createValidationMiddleware(GetPresencesTrendSc
 
     // Dipendenti attivi nello scope (solo ruolo 'employee', mai manager/admin/viewer)
     const employeesQuery = resolvedSiteId
-      ? `SELECT id FROM employees WHERE client_id = $1::uuid AND role = 'employee' AND $2::uuid = ANY(assigned_sites)`
-      : `SELECT id FROM employees WHERE client_id = $1::uuid AND role = 'employee'`;
+      ? 'SELECT id FROM employees WHERE client_id = $1::uuid AND role = \'employee\' AND $2::uuid = ANY(assigned_sites)'
+      : 'SELECT id FROM employees WHERE client_id = $1::uuid AND role = \'employee\'';
     const employeesParams = resolvedSiteId ? [client_id, resolvedSiteId] : [client_id];
     const employeesResult = await pool.query(employeesQuery, employeesParams);
     const activeEmployeeIds = employeesResult.rows.map((r) => r.id);
