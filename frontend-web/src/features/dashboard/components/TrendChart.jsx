@@ -18,6 +18,11 @@ const formatDayLabel = (dateStr) => {
 const TrendChart = ({ days = [], loading = false, error = null }) => {
   const chartData = days.map((d) => ({ ...d, label: formatDayLabel(d.date) }));
 
+  const totalPresenze = chartData.reduce((sum, d) => sum + (Number(d.presenze) || 0), 0);
+  const chartLabel = chartData.length > 0
+    ? `Grafico a linea delle presenze giornaliere degli ultimi 30 giorni, totale ${totalPresenze} presenze nel periodo`
+    : 'Grafico a linea delle presenze giornaliere degli ultimi 30 giorni, nessun dato disponibile';
+
   return (
     <Card
       sx={{
@@ -37,15 +42,17 @@ const TrendChart = ({ days = [], loading = false, error = null }) => {
       {!loading && error && <Alert severity="error">{error}</Alert>}
 
       {!loading && !error && (
-        <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E5E1DA" />
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-            <Tooltip />
-            <Line type="monotone" dataKey="presenze" stroke={NAVY} strokeWidth={2} dot={false} name="Presenze" />
-          </LineChart>
-        </ResponsiveContainer>
+        <div role="img" aria-label={chartLabel}>
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E1DA" />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Line type="monotone" dataKey="presenze" stroke={NAVY} strokeWidth={2} dot={false} name="Presenze" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       )}
     </Card>
   );

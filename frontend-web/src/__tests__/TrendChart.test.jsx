@@ -17,4 +17,11 @@ describe('TrendChart', () => {
     render(<TrendChart days={[]} loading={true} error={null} />);
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
   });
+
+  it('espone un testo alternativo accessibile per il grafico', () => {
+    render(<TrendChart days={[]} loading={false} error={null} />);
+    expect(
+      screen.getByRole('img', { name: /presenze giornaliere degli ultimi 30 giorni/i }),
+    ).toBeInTheDocument();
+  });
 });
