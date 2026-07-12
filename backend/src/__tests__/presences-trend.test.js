@@ -86,6 +86,47 @@ describe('GET /api/v1/presences/trend', () => {
     expect(employeesParams).toEqual([CLIENT_ID, SITE_ID]);
   });
 
+  test('manager con query-string site_id diverso viene comunque scoped alla propria sede (no override RBAC)', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: [{ id: 'emp-1' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const OTHER_SITE_ID = '550e8400-e29b-41d4-a716-446655440099';
+    const app = createApp({ client_id: CLIENT_ID, role: 'manager', site_id: SITE_ID });
+    const res = await request(app).get('/api/v1/presences/trend').query({ site_id: OTHER_SITE_ID });
+
+    expect(res.status).toBe(200);
+    const [employeesQuery, employeesParams] = pool.query.mock.calls[0];
+    expect(employeesQuery).toMatch(/ANY\(assigned_sites\)/);
+    expect(employeesParams).toEqual([CLIENT_ID, SITE_ID]);
+
+    const [checkinsQuery, checkinsParams] = pool.query.mock.calls[1];
+    expect(checkinsQuery).toMatch(/site_id = \$4::uuid/);
+    expect(checkinsParams).toEqual([CLIENT_ID, expect.any(String), expect.any(String), SITE_ID]);
+  });
+
+  test('admin/viewer con site_id in query filtra i checkins su quella sede specifica', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: [{ id: 'emp-1' }] }) // active employees (scoped)
+      .mockResolvedValueOnce({ rows: [] }) // checkins
+      .mockResolvedValueOnce({ rows: [] }) // leave_requests
+      .mockResolvedValueOnce({ rows: [] }); // illnesses
+
+    const app = createApp({ client_id: CLIENT_ID, role: 'admin' });
+    const res = await request(app).get('/api/v1/presences/trend').query({ site_id: SITE_ID });
+
+    expect(res.status).toBe(200);
+    const [employeesQuery, employeesParams] = pool.query.mock.calls[0];
+    expect(employeesQuery).toMatch(/ANY\(assigned_sites\)/);
+    expect(employeesParams).toEqual([CLIENT_ID, SITE_ID]);
+
+    const [checkinsQuery, checkinsParams] = pool.query.mock.calls[1];
+    expect(checkinsQuery).toMatch(/site_id = \$4::uuid/);
+    expect(checkinsParams).toEqual([CLIENT_ID, expect.any(String), expect.any(String), SITE_ID]);
+  });
+
   test('quando non ci sono dipendenti attivi, salta le query leave/illness (0 righe, nessuna query ANY su array vuoto)', async () => {
     pool.query
       .mockResolvedValueOnce({ rows: [] }) // active employees: nessuno
