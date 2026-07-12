@@ -71,9 +71,11 @@ export const LeaveCalendar = ({ startDate, endDate, onDateChange }) => {
       // First day selected: set both startDate and endDate to same day (single day)
       onDateChange({ startDate: clickedDateStr, endDate: clickedDateStr });
     } else {
-      // Already have startDate (and endDate = startDate for single day)
+      // Already have startDate (and endDate = startDate for single day).
+      // endDate may still be null if the parent hasn't set it yet — fall back to start
+      // so a single-day selection can be cleared without crashing on stringToDate(null).
       const start = stringToDate(startDate);
-      const end = stringToDate(endDate);
+      const end = endDate ? stringToDate(endDate) : start;
 
       if (clickedDate.getTime() === start.getTime()) {
         // Clicking start date deselects all

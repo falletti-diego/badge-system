@@ -82,12 +82,14 @@ describe('LeaveCalendar', () => {
     const dayButton = container.querySelector('button[data-testid="day-15"]');
     if (dayButton && !dayButton.disabled) {
       await user.click(dayButton);
-      expect(mockOnDateChange).toHaveBeenCalledWith(
-        expect.objectContaining({
-          startDate: expect.stringContaining('2026-06'),
-          endDate: null,
-        })
-      );
+
+      const currentDate = new Date();
+      const yearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+
+      expect(mockOnDateChange).toHaveBeenCalledWith({
+        startDate: expect.stringContaining(yearMonth),
+        endDate: expect.stringContaining(yearMonth),
+      });
     }
   });
 
