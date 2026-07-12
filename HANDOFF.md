@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-12
 **Session:** 55 — Redesign mobile Storico Presenze/Impostazioni + nuova feature Smart Working (Build 25)
-**Status:** ✅ **Codice pushato su main (commit `7b115fb`), Build 25 in corso su Codemagic — testato dall'utente in locale su Xcode, funzionante**
+**Status:** ✅ **Build 25 APPROVATA su TestFlight/produzione (testata con `maria@badge.local`) — codice pushato su main (commit `7b115fb`, `ff33233`)**
 
 ---
 
@@ -89,8 +89,10 @@ richiesta esplicita dell'utente): `~/.claude/plans/adesso-entra-nella-cartella-p
 
 | Email | Password | Ruolo | Note |
 |---|---|---|---|
-| `maria@badge.local` / `pino@badge.local` / `pippo@badge.local` | vedi `.env.development` | employee/manager/admin | ⚠️ `employee_id` fixture di Maria non esiste nel DB locale attuale — FK violation su nuove tabelle |
-| `alice@store.local` | **`ProvaFinale2028!`** (ultima password impostata in questa sessione, via test cambio-password in-app) | employee (Torino Store) | Account reale DB — usare questo per testare feature con FK su `employees` |
+| `maria@badge.local` / `pino@badge.local` / `pippo@badge.local` | locale: vedi `.env.development` — produzione: SSM `/badge/production/DEMO_*_PASSWORD` | employee/manager/admin | ⚠️ `employee_id` fixture di Maria non esiste nel DB **locale** attuale — FK violation su nuove tabelle in locale (in produzione funziona, verificato Build 25) |
+| `alice@store.local` | `ProvaFinale2028!` | employee (Torino Store) | **Solo DB locale** — non esiste in produzione (RDS), mai sincronizzato. Non usare per test su TestFlight/build reali: fallisce il login. Usare solo per testare in locale feature con FK su `employees`. |
+
+**⚠️ Regola per le prossime sessioni:** ogni build TestFlight/produzione (`buildNumber` incrementato, push su main → Codemagic) usa `https://api.dataxiom.it` di default (`endpoints.js:6`, nessun `.env` è committato nel repo). Per testare su TestFlight/dispositivo reale con build da Codemagic, usare **solo** gli account `@badge.local` — mai account creati ad-hoc nel DB locale come `alice@store.local`.
 
 ---
 
