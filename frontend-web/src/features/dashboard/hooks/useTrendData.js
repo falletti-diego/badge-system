@@ -8,12 +8,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import apiClient from '../../../services/apiClient';
 
-export const useTrendData = (siteId) => {
+export const useTrendData = (siteId, enabled = true) => {
   const [days, setDays] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const fetchTrend = useCallback(async () => {
+    if (!enabled) return;
     try {
       setLoading(true);
       setError(null);
@@ -26,7 +27,7 @@ export const useTrendData = (siteId) => {
     } finally {
       setLoading(false);
     }
-  }, [siteId]);
+  }, [siteId, enabled]);
 
   useEffect(() => {
     fetchTrend();

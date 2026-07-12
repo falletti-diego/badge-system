@@ -8,6 +8,9 @@ import { useNavigate } from 'react-router-dom';
 import { Container, Box, Alert, Button } from '@mui/material';
 import { usePresences } from '../hooks/usePresences';
 import KpiCards from '../components/KpiCards';
+import TrendChart from '../components/TrendChart';
+import MiniTrendCard from '../components/MiniTrendCard';
+import { useTrendData } from '../hooks/useTrendData';
 import FilterBar from '../components/FilterBar';
 import PresencesTable from '../components/PresencesTable';
 import ExportButton from '../components/ExportButton';
@@ -44,6 +47,7 @@ const DashboardPage = () => {
   ]);
 
   const { data, stats, loading, error, refetch } = usePresences(memoizedFilters);
+  const { days: trendDays, loading: trendLoading, error: trendError } = useTrendData(filters.site_id, !isEmployee);
 
   const handleFilterChange = (newFilters) => {
     setFilters((prev) => ({
@@ -237,6 +241,17 @@ const DashboardPage = () => {
 
         {/* KPI Cards */}
         <KpiCards stats={stats} />
+
+        {!isEmployee && (
+          <>
+            <TrendChart days={trendDays} loading={trendLoading} error={trendError} />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <MiniTrendCard title="Ore Lavorate" dataKey="ore_lavorate" days={trendDays} color="#1E3A5F" suffix="h" />
+              <MiniTrendCard title="Ore Straordinarie" dataKey="ore_straordinarie" days={trendDays} color="#B45309" suffix="h" />
+              <MiniTrendCard title="Assenteismo" dataKey="assenteismo_pct" days={trendDays} color="#C0392B" suffix="%" />
+            </div>
+          </>
+        )}
 
         {/* Manager Leave Approval Panel - Show for managers only */}
         {userRole === 'manager' && (
