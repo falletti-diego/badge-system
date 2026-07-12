@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Animated, Easing } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Animated, Easing, Vibration } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import apiClient from '../../services/apiClient';
@@ -90,7 +90,8 @@ export default function QRScannerScreen({ navigation }) {
         timestamp: new Date().toISOString(),
       });
 
-      // Success feedback: corner brackets flash green before navigating to Conferma
+      // Success feedback: vibration + corner brackets flash green before navigating to Conferma
+      Vibration.vibrate(500);
       Animated.timing(successAnim, { toValue: 1, duration: 150, useNativeDriver: false }).start();
       setTimeout(() => {
         navigation.replace('Success', {
