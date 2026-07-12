@@ -7,10 +7,12 @@
 
 const express = require('express');
 const { pool } = require('../db/pool');
-const { createValidationMiddleware, GetPresencesSummarySchema } = require('../middleware/validation');
+const { createValidationMiddleware, GetPresencesSummarySchema, GetPresencesTrendSchema } = require('../middleware/validation');
 const { requireAuth } = require('../middleware/auth');
 const { ForbiddenError } = require('../utils/errors');
-const { calculateDailyHours, aggregateMonthly } = require('../utils/hours');
+const { calculateDailyHours, aggregateMonthly, toUtcDateString } = require('../utils/hours');
+const { resolveSiteId } = require('../utils/resolvers');
+const { buildTrendDays } = require('../utils/trendStats');
 
 const router = express.Router();
 
@@ -169,6 +171,101 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
         totals,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =====================================================
+// GET /api/presences/trend — ultimi 30 giorni, 4 metriche aggregate
+// =====================================================
+
+router.get('/trend', requireAuth, createValidationMiddleware(GetPresencesTrendSchema), async (req, res, next) => {
+  const { site_id } = req.validated.query;
+  const { client_id, role, site_id: managerSiteId } = req.user;
+
+  if (role === 'employee') {
+    return next(new ForbiddenError('Employees cannot access trend charts', 'FORBIDDEN_ROLE'));
+  }
+
+  try {
+    let resolvedSiteId;
+    if (role === 'manager') {
+      if (!managerSiteId) {
+        return next(new ForbiddenError('Manager has no assigned site', 'NO_SITE_ASSIGNED'));
+      }
+      resolvedSiteId = managerSiteId;
+    } else if (site_id) {
+      resolvedSiteId = await resolveSiteId(site_id, client_id);
+    }
+
+    const today = new Date();
+    const dateTo = toUtcDateString(today);
+    const fromDate = new Date(today);
+    fromDate.setUTCDate(fromDate.getUTCDate() - 29);
+    const dateFrom = toUtcDateString(fromDate);
+
+    // Dipendenti attivi nello scope (solo ruolo 'employee', mai manager/admin/viewer)
+    const employeesQuery = resolvedSiteId
+      ? `SELECT id FROM employees WHERE client_id = $1::uuid AND role = 'employee' AND $2::uuid = ANY(assigned_sites)`
+      : `SELECT id FROM employees WHERE client_id = $1::uuid AND role = 'employee'`;
+    const employeesParams = resolvedSiteId ? [client_id, resolvedSiteId] : [client_id];
+    const employeesResult = await pool.query(employeesQuery, employeesParams);
+    const activeEmployeeIds = employeesResult.rows.map((r) => r.id);
+
+    // Check-ins nel range, scoped per client + sede opzionale
+    const checkinsParams = [client_id, `${dateFrom}T00:00:00.000Z`, `${dateTo}T23:59:59.999Z`];
+    let siteFilter = '';
+    if (resolvedSiteId) {
+      checkinsParams.push(resolvedSiteId);
+      siteFilter = `AND site_id = $${checkinsParams.length}::uuid`;
+    }
+    const checkinsResult = await pool.query(
+      `SELECT employee_id, timestamp, type FROM checkins
+       WHERE client_id = $1::uuid AND timestamp >= $2 AND timestamp <= $3 ${siteFilter}
+       ORDER BY employee_id, timestamp ASC`,
+      checkinsParams
+    );
+    const dailyHourEntries = calculateDailyHours(checkinsResult.rows);
+
+    // Ferie approvate e malattie attive nel range, scoped ai dipendenti attivi.
+    // NOTA: start_date/end_date castati a ::text — node-pg interpreta DATE come
+    // mezzanotte locale del server, che poi shifterebbe di un giorno in JSON
+    // (vedi PROJECT_DECISIONS.md Session 55 per il bug reale già trovato).
+    let leaveRows = [];
+    let illnessRows = [];
+    if (activeEmployeeIds.length > 0) {
+      const leaveResult = await pool.query(
+        `SELECT user_id, start_date::text AS start_date, end_date::text AS end_date
+         FROM leave_requests
+         WHERE client_id = $1::uuid AND status = 'APPROVED'
+           AND start_date <= $3::date AND end_date >= $2::date
+           AND user_id = ANY($4::uuid[])`,
+        [client_id, dateFrom, dateTo, activeEmployeeIds]
+      );
+      leaveRows = leaveResult.rows;
+
+      const illnessResult = await pool.query(
+        `SELECT employee_id, start_date::text AS start_date, end_date::text AS end_date
+         FROM illnesses
+         WHERE client_id = $1::uuid AND cancelled_at IS NULL
+           AND start_date <= $3::date AND end_date >= $2::date
+           AND employee_id = ANY($4::uuid[])`,
+        [client_id, dateFrom, dateTo, activeEmployeeIds]
+      );
+      illnessRows = illnessResult.rows;
+    }
+
+    const days = buildTrendDays({
+      dateFrom,
+      dateTo,
+      dailyHourEntries,
+      activeEmployeeIds,
+      leaveRows,
+      illnessRows,
+    });
+
+    res.json({ data: { date_from: dateFrom, date_to: dateTo, days } });
   } catch (err) {
     next(err);
   }
