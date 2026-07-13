@@ -46,6 +46,13 @@ function fmtTime(ts) {
 }
 
 /**
+ * Format a Date to DD/MM/YYYY HH:MM (Italian convention)
+ */
+function fmtDateTime(ts) {
+  return `${fmtDate(ts)} ${fmtTime(ts)}`;
+}
+
+/**
  * Format decimal hours to Italian H,MM convention (e.g. 8,30)
  */
 function fmtHours(decimalHours) {
@@ -218,6 +225,7 @@ function exportGeneric(res, rows, truncated) {
       string: (value) => escapeCsvField(value),
       boolean: (value) => value ? 'Yes' : 'No',
       object: (value) => value === null ? '' : JSON.stringify(value),
+      date: (value) => fmtDateTime(value),
     },
   });
 
