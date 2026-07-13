@@ -4,17 +4,22 @@
  */
 
 import React, { useState } from 'react';
-import { Card, TextField, Button, Box } from '@mui/material';
+import { Card, TextField, Button, Box, MenuItem } from '@mui/material';
+import { useFetch } from '../../admin/components/useFetch';
 
-const FilterBar = ({ onFilter = () => {}, onClear = () => {} }) => {
+const FilterBar = ({ onFilter = () => {}, onClear = () => {}, userRole, userSiteId }) => {
+  const isSiteLocked = userRole === 'manager';
+
   const [filters, setFilters] = useState({
     date_from: '',
     date_to: '',
-    site_id: '',
+    site_id: isSiteLocked && userSiteId ? userSiteId : '',
     employee_id: '',
   });
 
   const [error, setError] = useState('');
+
+  const { data: sites } = useFetch('/api/v1/sites');
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -55,7 +60,7 @@ const FilterBar = ({ onFilter = () => {}, onClear = () => {} }) => {
     setFilters({
       date_from: '',
       date_to: '',
-      site_id: '',
+      site_id: isSiteLocked && userSiteId ? userSiteId : '',
       employee_id: '',
     });
     setError('');
@@ -88,14 +93,22 @@ const FilterBar = ({ onFilter = () => {}, onClear = () => {} }) => {
         />
 
         <TextField
-          label="Site (optional)"
+          select
+          label="Sede"
           name="site_id"
           value={filters.site_id}
           onChange={handleInputChange}
-          placeholder="Site ID or name"
           size="small"
           fullWidth
-        />
+          disabled={isSiteLocked}
+        >
+          {!isSiteLocked && <MenuItem value="">Tutte le sedi</MenuItem>}
+          {sites.map((site) => (
+            <MenuItem key={site.id} value={site.id}>
+              {site.name}
+            </MenuItem>
+          ))}
+        </TextField>
 
         <TextField
           label="Employee (optional)"

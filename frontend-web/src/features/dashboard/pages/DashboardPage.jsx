@@ -261,7 +261,12 @@ const DashboardPage = () => {
         )}
 
         {/* Filters */}
-        <FilterBar onFilter={handleFilterChange} onClear={handleClearFilters} />
+        <FilterBar
+          onFilter={handleFilterChange}
+          onClear={handleClearFilters}
+          userRole={userRole}
+          userSiteId={userSiteId}
+        />
 
         {/* Export Button */}
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
