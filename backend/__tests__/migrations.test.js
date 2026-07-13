@@ -63,3 +63,37 @@ describe('Migration Runner', () => {
     expect(sql).toContain('schema_migrations');
   });
 });
+
+describe('Migration 028: demo tenant fields on clients', () => {
+  const migrationPath = path.join(__dirname, '..', 'migrations', '028_add_demo_tenant_fields.sql');
+  const sql = fs.readFileSync(migrationPath, 'utf8');
+
+  it('adds is_demo, demo_expires_at, demo_contact_email idempotently', () => {
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS is_demo BOOLEAN NOT NULL DEFAULT false');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS demo_expires_at TIMESTAMPTZ NULL');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS demo_contact_email VARCHAR(255) NULL');
+  });
+
+  it('creates a partial index on (is_demo, demo_expires_at) for the hot-path queries', () => {
+    expect(sql).toContain('CREATE INDEX IF NOT EXISTS idx_clients_demo_expiry');
+    expect(sql).toContain('ON clients(is_demo, demo_expires_at)');
+    expect(sql).toContain('WHERE is_demo = true');
+  });
+});
+
+describe('Migration 029: demo_contact_requests table', () => {
+  const migrationPath = path.join(__dirname, '..', 'migrations', '029_create_demo_contact_requests.sql');
+  const sql = fs.readFileSync(migrationPath, 'utf8');
+
+  it('creates demo_contact_requests with expected columns idempotently', () => {
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS demo_contact_requests');
+    expect(sql).toContain('client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE');
+    expect(sql).toContain('message TEXT NOT NULL');
+    expect(sql).toContain('created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()');
+  });
+
+  it('indexes client_id for lookups and cascades cleanup on client delete', () => {
+    expect(sql).toContain('CREATE INDEX IF NOT EXISTS idx_demo_contact_requests_client_id ON demo_contact_requests(client_id)');
+    expect(sql).toContain('ON DELETE CASCADE');
+  });
+});
