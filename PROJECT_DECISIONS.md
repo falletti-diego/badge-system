@@ -1,8 +1,8 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 13 Luglio 2026 (Session 60)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 26 ✅ (vibrazione check-in) | Grafici Trend Dashboard ✅ LIVE (api.dataxiom.it) | Dropdown Sede in Dashboard ✅ LIVE | Export CSV date/ora ✅ fix live | Pipeline CI/CD ✅ funzionante (backend + mobile)  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Redesign mobile completato (6/6 schermate) + Grafici Trend Dashboard completati, prossimo: MVP Hardening backlog (Session 57) o staging environment + ONB.2
+**Last Updated:** 13 Luglio 2026 (Session 61 — in pausa)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 26 ✅ (vibrazione check-in) | Grafici Trend Dashboard ✅ LIVE (api.dataxiom.it) | Dropdown Sede in Dashboard ✅ LIVE | Export CSV date/ora ✅ fix live | Pipeline CI/CD ✅ funzionante (backend + mobile) | 🚧 Ambiente Demo Self-Service IN CORSO (Task 1-2/9, worktree isolato, non ancora in main)  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Ambiente Demo Self-Service in costruzione (piano approvato, esecuzione a task singoli con pausa esplicita), prossimo: completare Task 3-9, poi MVP Hardening backlog residuo (Session 57) o staging environment + ONB.2
 
 ---
 
@@ -1342,7 +1342,38 @@ clienti pilota prima di allocare ore di sviluppo, non un impegno di roadmap.
 
 ---
 
-**Last Updated:** 13 Luglio 2026 (Session 60)
-**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | Redesign Mobile COMPLETE (6/6 schermate) | Build 26 live (vibrazione check-in) | Grafici Trend Dashboard LIVE in produzione (Session 58) | Dropdown Sede in Dashboard LIVE (Session 60) | Dati demo maggio 2026 in produzione (temporanei, cleanup pronto in `backend/scripts/`) | Export CSV date/ora fix LIVE (Session 60) | Frontend test suite 100% verde (Session 59) | MVP Hardening backlog identificato (Session 57, "Grafici trend" ora completato, resto non ancora schedulato) | 3 demo accounts + 8 demo temporanei (`@demo-maggio.local`) | Migration 027 applied | S.24 plan ready (deferred) | S.25 plan ready (deferred) | S.26 ancora aperto
-**Created By:** Claude Code Sessions 1-60  
+### Session 61: Ambiente Demo Self-Service — pianificazione + Task 1-2/9 (13 Luglio 2026, IN PAUSA)
+
+**Contesto:** su richiesta dell'utente di individuare la prossima feature "a minimo sforzo, massima resa" dal backlog MVP Hardening (Session 57), è stata scelta l'**Ambiente Demo Self-Service** al posto di alternative a sforzo più basso (es. PDF export Riepilogo Ore) per il maggior valore commerciale (scala oltre la capacità di demo 1:1 dell'utente, qualifica lead freddi, segnale di maturità del prodotto). Pianificata con `/superpowers:writing-plans` + `/grilling` esteso (13 domande sequenziali), poi sottoposta a un'**autocritica esplicita** (`/grilling` con se stessi, su richiesta dell'utente) prima di iniziare l'esecuzione. Piano completo: `~/.claude/plans/adesso-entra-nella-cartella-purring-toast.md`.
+
+**Decisione: scope volutamente ridotto rispetto a un "ambiente demo completo"**
+- **Regola:** la demo self-service copre SOLO la Dashboard web — il flusso mobile (QR/Face ID) è mostrato con screenshot/video statico, non provabile dal vivo.
+- **Razionale:** verificato nel codice che l'app mobile è distribuita solo via TestFlight (nessuna build Android reale in produzione, nessun canale Expo Go pubblico) — un prospect anonimo non può installarla al volo il giorno stesso. Investire in un canale mobile pubblico sarebbe uno sforzo/rischio molto più alto di quanto richiesto ("minimo sforzo").
+
+**Decisione: nuovo flag `is_demo` dedicato su `clients`, mai overload del campo `plan` esistente**
+- **Regola:** `clients.is_demo BOOLEAN NOT NULL DEFAULT false` + `demo_expires_at TIMESTAMPTZ NULL` + `demo_contact_email VARCHAR NULL`, non un valore speciale del campo `plan` (VARCHAR libero, oggi enum-only a livello Zod: starter/growth/enterprise).
+- **Razionale:** il codice più critico di questa feature (l'endpoint che riemette JWT per cambiare ruolo, vedi sotto) deve poter verificare "questo è un tenant demo?" con un controllo booleano inequivocabile — sovraccaricare una stringa libera avrebbe introdotto ambiguità in un controllo di sicurezza.
+- **Verifica tecnica chiave** (confermata via SSH+psql su RDS produzione): ogni tabella con `client_id` ha `ON DELETE CASCADE` verso `clients` — la cancellazione di un tenant demo scaduto è quindi una singola query (`DELETE FROM clients WHERE id=$1 AND is_demo=true`), non uno script multi-tabella come quello dei dati demo di maggio (Session 60), che serviva solo perché lì si cancellavano dipendenti di un client esistente, non un intero tenant.
+
+**Decisione: bug reale trovato e corretto durante l'autocritica del piano — email duplicata**
+- **Regola:** `clients.email` ha un vincolo `UNIQUE NOT NULL` (verificato in `schema.sql`) — il piano iniziale non gestiva il caso di una stessa email che richiede una demo una seconda volta, che avrebbe prodotto un errore grezzo invece di un comportamento sensato.
+- **Fix pianificato:** 3 percorsi espliciti su `POST /demo/start` — (1) demo attiva → resume senza rigenerare dati; (2) demo scaduta ma in finestra di grazia → riavvio del conto alla rovescia sullo stesso tenant; (3) email di un cliente reale (`is_demo=false`) → rifiuto generico, nessuna fuga di informazioni su quale tipo di account esiste già. Più una difesa in profondità contro race condition (catch esplicito del codice Postgres `23505` come rete di sicurezza, non solo un pre-check).
+- **Perché rilevante per chi continua:** è l'esempio concreto di come l'autocritica di un piano prima di eseguirlo abbia trovato un difetto che l'implementazione avrebbe altrimenti prodotto come bug in produzione — pattern da ripetere per feature future con superfici pubbliche/non autenticate.
+
+**Decisione: esecuzione a task singoli con pausa esplicita, non esecuzione continua**
+- **Regola:** `subagent-driven-development` (worktree isolato `.claude/worktrees/demo-self-service`, branch `worktree-demo-self-service`) normalmente esegue tutti i task in sequenza senza fermarsi; su richiesta esplicita dell'utente, dopo ogni task che supera implementer + le 2 review (spec-compliance, poi code-quality) ci si ferma, si riassume il lavoro, e si aspetta un via libera esplicito prima di procedere — le istruzioni esplicite dell'utente hanno sempre priorità sul comportamento di default di una skill.
+- **Task 1/9 completato**: migration `028_add_demo_tenant_fields.sql` + `029_create_demo_contact_requests.sql`. La review ha trovato un indice mancante su `clients(is_demo, demo_expires_at)` (le due query future — tetto demo attive, scheduler di pulizia — sarebbero finite in full scan) — corretto con un indice parziale (`WHERE is_demo=true`).
+- **Task 2/9 completato**: `backend/src/utils/demoSeed.js` (1 sede, 3 dipendenti admin/manager/employee, check-in relativi a "oggi" non a un mese fisso — critico perché i Grafici Trend mostrano sempre gli ultimi 30 giorni fissi). La review ha trovato un design a doppia modalità (Pool vs Client già connesso) superfluo e rischioso, dato che l'unico chiamante reale futuro (Task 3) passerà sempre un client già dentro una propria transazione — semplificato a un solo contratto (sempre client già connesso).
+- **Verifica sistematica:** ogni task testato con esecuzione reale su Postgres locale (non solo mock), da implementer E indipendentemente da entrambi i reviewer — pattern coerente con quanto richiesto esplicitamente dall'utente ("testa ogni feature alla fine di ogni task").
+
+**Nota aperta per la prossima sessione — gap CI**
+- La pipeline GitHub Actions (`ci.yml`) imposta `DATABASE_URL`/`DB_HOST` per il job backend ma **non provisiona un vero servizio Postgres** — i test DB-dipendenti passano solo in locale, non in CI. Non bloccante per Task 1-2, ma il Task 3 (email duplicata, race condition) dipende molto di più da questa copertura. Decisione da prendere con l'utente: aggiungere un servizio Postgres al job CI prima o durante il Task 3, o accettare il gap come limite noto.
+
+**Stato:** nessun merge su main — tutto il lavoro (commit fino a `c9ae14b`) resta sul branch `worktree-demo-self-service`, isolato dal checkout principale. Riprendere da **Task 3/9** (`POST /demo/start`), il task con la superficie di rischio più delicata dell'intero piano (endpoint pubblico che crea tenant ed emette JWT senza password).
+
+---
+
+**Last Updated:** 13 Luglio 2026 (Session 61 — in pausa)
+**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | Redesign Mobile COMPLETE (6/6 schermate) | Build 26 live (vibrazione check-in) | Grafici Trend Dashboard LIVE in produzione (Session 58) | Dropdown Sede in Dashboard LIVE (Session 60) | Dati demo maggio 2026 in produzione (temporanei, cleanup pronto in `backend/scripts/`) | Export CSV date/ora fix LIVE (Session 60) | 🚧 Ambiente Demo Self-Service: piano approvato, Task 1-2/9 completati su worktree isolato (non in main), riprendere da Task 3/9 | Frontend test suite 100% verde (Session 59) | MVP Hardening backlog identificato (Session 57, "Grafici trend" completato, "Ambiente demo self-service" in corso, resto non ancora schedulato) | 3 demo accounts + 8 demo temporanei (`@demo-maggio.local`) | Migration più recente su main: 027 applied | Migration 028-029 pronte ma solo sul branch del worktree | S.24 plan ready (deferred) | S.25 plan ready (deferred) | S.26 ancora aperto
+**Created By:** Claude Code Sessions 1-61  
 **Next Review:** After first real customer onboarding
