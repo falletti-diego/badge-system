@@ -1,7 +1,7 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 12 Luglio 2026 (Session 59)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 26 ✅ (vibrazione check-in) | Grafici Trend Dashboard ✅ LIVE (api.dataxiom.it) | Pipeline CI/CD ✅ funzionante (backend + mobile)  
+**Last Updated:** 13 Luglio 2026 (Session 60)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 26 ✅ (vibrazione check-in) | Grafici Trend Dashboard ✅ LIVE (api.dataxiom.it) | Dropdown Sede in Dashboard ✅ LIVE | Export CSV date/ora ✅ fix live | Pipeline CI/CD ✅ funzionante (backend + mobile)  
 **MVP Launch Target:** Settembre 2026 | **Current Phase:** Redesign mobile completato (6/6 schermate) + Grafici Trend Dashboard completati, prossimo: MVP Hardening backlog (Session 57) o staging environment + ONB.2
 
 ---
@@ -1313,7 +1313,36 @@ clienti pilota prima di allocare ore di sviluppo, non un impegno di roadmap.
 
 ---
 
-**Last Updated:** 12 Luglio 2026 (Session 59)
-**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | Redesign Mobile COMPLETE (6/6 schermate) | Build 26 live (vibrazione check-in) | Grafici Trend Dashboard LIVE in produzione (Session 58) | Frontend test suite 100% verde (Session 59, ex 2 fallimenti pre-esistenti risolti) | MVP Hardening backlog identificato (Session 57, non ancora schedulato) | 3 demo accounts | Migration 027 applied | S.24 plan ready (deferred) | S.25 plan ready (deferred) | S.26 ancora aperto
-**Created By:** Claude Code Sessions 1-59  
+### Session 60: Dropdown Sede in Dashboard + dati demo maggio 2026 + fix CSV export epoch timestamp (13 Luglio 2026)
+
+**Contesto:** su richiesta esplicita dell'utente, via `/grilling`: (1) convertire il campo testo libero "Sede" della Dashboard in un menu a tendina; (2) popolare maggio 2026 con dati fittizi (presenze/assenze/straordinari/assenteismo) come mese demo, esplicitamente temporanei e cancellabili a richiesta; (3, emerso dopo, su segnalazione utente con CSV allegato) fix di un bug reale nell'export CSV.
+
+**Decisione: dropdown Sede riusa l'RBAC già esistente di `GET /api/v1/sites`, nessun nuovo endpoint**
+- **Regola:** `FilterBar.jsx` fetcha `GET /api/v1/sites` (già RBAC-scoped: admin vede tutte le sedi del tenant, manager vede solo la propria) invece di introdurre logica di filtro lato frontend.
+- **Comportamento per ruolo:** admin → select con opzione aggiuntiva "Tutte le sedi" (value vuoto, azzera il filtro) + ogni sede; manager → select disabilitata, pre-selezionata sulla propria sede (nessuna scelta possibile, coerente con lo scoping fail-closed già presente lato backend).
+- **File:** `frontend-web/src/features/dashboard/components/FilterBar.jsx`, `frontend-web/src/features/dashboard/pages/DashboardPage.jsx` (passa `userRole`/`userSiteId` come prop).
+- **Verificato:** build pulita, 191/192 test frontend (nessuna regressione, nessun test pre-esistente copriva questo componente).
+
+**Decisione: dati demo temporanei marcati con dominio email dedicato, mai con schema o tabelle nuove**
+- **Regola:** per dati demo temporanei da inserire in produzione, marcare le entità create con un identificatore univoco e invisibile (qui: dominio email `@demo-maggio.local`) invece di aggiungere colonne/tabelle di tracking — permette una cancellazione futura mirata con una singola query, senza toccare lo schema.
+- **Razionale:** minimizza l'impatto sul codice (zero migration, zero nuove tabelle) e il rischio (verificato PRIMA dell'inserimento, via SSH+psql su RDS produzione, che non esistesse già alcun dato reale per maggio 2026 sui 3 account demo — query di conferma su `checkins`/`illnesses`/`leave_requests`, tutte a zero).
+- **Vincoli di dominio scoperti in corsa:** `leave_requests` ha un CHECK constraint (`leave_requests_check1`) che richiede `approved_by` e `approved_at` entrambi NULL o entrambi valorizzati — uno stato APPROVED richiede sempre un approvatore esplicito (usato Pippo/admin come approvatore demo).
+- **FK da conoscere per cleanup sicuro:** `checkins.employee_id`, `illnesses.employee_id`, `leave_requests.user_id` sono tutti `ON DELETE CASCADE` verso `employees`, ma `checkins.created_by` e `illnesses.created_by` sono `ON DELETE RESTRICT` — per evitare blocchi di cancellazione, i check-in/malattie demo hanno sempre `created_by` uguale al dipendente stesso (self-created), e lo script di cleanup cancella esplicitamente le tabelle figlie PRIMA di cancellare gli `employees`, senza affidarsi solo al cascade.
+- **File:** `backend/scripts/seed-may-2026-demo.sql` (8 dipendenti, 4 Torino + 4 Milano, 310 check-in, 3 ferie approvate, 2 malattie), `backend/scripts/cleanup-may-2026-demo.sql` (companion, da eseguire via SSH sull'host EC2 quando richiesto — unico host che raggiunge l'RDS).
+- **Scoperta rilevante comunicata all'utente:** i Grafici Trend (Session 58) mostrano sempre "ultimi 30 giorni fissi da oggi" per design — non mostreranno **mai** maggio una volta passato giugno. L'utente ha confermato di lasciare questo comportamento invariato: KPI Card e tabella presenze (che rispettano il filtro Da/A impostabile) restano il modo corretto per mostrare il mese demo.
+
+**Decisione: fix bug reale nell'export CSV — `csv-stringify` senza `cast.date` converte i `Date` in epoch ms**
+- **Contesto:** l'utente ha allegato un CSV scaricato dalla Dashboard segnalando che le colonne data mostravano solo numeri privi di senso.
+- **Causa:** `csv-stringify` (libreria usata in `export.js`), quando non riceve un handler `cast.date` esplicito, serializza un oggetto `Date` chiamando `.getTime()` (epoch millisecondi), non una stringa leggibile. Il formato CSV "generico" (`exportGeneric`) passava `c.timestamp`/`c.modified_at` (oggetti `Date` nativi restituiti da `pg`) direttamente allo stringifier senza formattarli — a differenza dei formati Zucchetti/TeamSystem, che già costruivano stringhe formattate manualmente prima dello stringify e quindi non ne erano affetti.
+- **Fix:** aggiunta una funzione `fmtDateTime()` (riusa `fmtDate`+`fmtTime` già esistenti) e un handler `cast.date` nello stringifier di `exportGeneric` → formato italiano `DD/MM/YYYY HH:MM`.
+- **File:** `backend/src/routes/export.js`.
+- **Verificato:** 24/24 test export (nessuna assertion su valore letterale del timestamp, quindi nessuna modifica ai test necessaria), 488/502 suite completa, endpoint testato live in produzione (`GET /api/v1/export/csv`) con token reale — colonne ora mostrano `01/05/2026 07:00` invece di `1777618800000`.
+- **Nota per il futuro:** qualunque nuova colonna `Date`/`timestamp` esposta via un formato export CSV va sempre formattata esplicitamente (o via `cast.date` globale, o costruendo la stringa manualmente come già fanno Zucchetti/TeamSystem) — mai passata come oggetto `Date` grezzo allo stringifier.
+- **Commits:** `5cfbf52` (dropdown + seed), `0857cbc` (fix CSV export).
+
+---
+
+**Last Updated:** 13 Luglio 2026 (Session 60)
+**Status:** FASE 10 COMPLETE | Leave Management COMPLETE | Redesign Mobile COMPLETE (6/6 schermate) | Build 26 live (vibrazione check-in) | Grafici Trend Dashboard LIVE in produzione (Session 58) | Dropdown Sede in Dashboard LIVE (Session 60) | Dati demo maggio 2026 in produzione (temporanei, cleanup pronto in `backend/scripts/`) | Export CSV date/ora fix LIVE (Session 60) | Frontend test suite 100% verde (Session 59) | MVP Hardening backlog identificato (Session 57, "Grafici trend" ora completato, resto non ancora schedulato) | 3 demo accounts + 8 demo temporanei (`@demo-maggio.local`) | Migration 027 applied | S.24 plan ready (deferred) | S.25 plan ready (deferred) | S.26 ancora aperto
+**Created By:** Claude Code Sessions 1-60  
 **Next Review:** After first real customer onboarding
