@@ -33,19 +33,23 @@
  * @param {import('pg').Pool|import('pg').PoolClient} dbClientOrPool
  *   Either the shared pool, or a single client already inside a
  *   transaction (e.g. one obtained via `pool.connect()` in the caller).
- *   - If given something with `.connect()` (a Pool), this function opens
- *     its own client and wraps all inserts in a single transaction
- *     (BEGIN/COMMIT/ROLLBACK), releasing the client afterwards.
- *   - If given something that only has `.query()` (a Client already
- *     participating in a transaction owned by the caller), this function
- *     just issues queries on it and lets the caller manage
- *     BEGIN/COMMIT/ROLLBACK.
+ *   - If given a `pg.Pool` instance, this function opens its own client and
+ *     wraps all inserts in a single transaction (BEGIN/COMMIT/ROLLBACK),
+ *     releasing the client afterwards. (Detected via `instanceof Pool` —
+ *     a plain Client/PoolClient also exposes `.connect()`, so duck-typing
+ *     on that method alone would misdetect an in-progress transaction
+ *     client as a Pool.)
+ *   - If given anything else (a Client/PoolClient already participating in
+ *     a transaction owned by the caller), this function just issues
+ *     queries on it and lets the caller manage BEGIN/COMMIT/ROLLBACK.
  * @returns {Promise<{
  *   site: { id: string, name: string },
  *   employees: { admin: object, manager: object, employee: object },
  *   counts: { checkins: number, leaveRequests: number, illnesses: number }
  * }>}
  */
+
+const { Pool } = require('pg');
 
 const DAYS_BACK = 34; // covers the last ~30-35 calendar days ending today
 const ORDINARY_OUT_HOUR = 18;
@@ -154,7 +158,13 @@ async function seedDemoTenant(clientId, dbClientOrPool) {
     throw new Error('seedDemoTenant: dbClientOrPool is required');
   }
 
-  const ownsConnection = typeof dbClientOrPool.connect === 'function';
+  // A pg Client/PoolClient also exposes a `.connect()` method (used to open
+  // its own connection), so duck-typing on `.connect` is not enough to tell
+  // it apart from a Pool. Only treat this as "we own the connection" when
+  // it's actually an instance of Pool — everything else (a Client already
+  // checked out via pool.connect(), possibly mid-transaction) is used as-is,
+  // with transaction boundaries left to the caller.
+  const ownsConnection = dbClientOrPool instanceof Pool;
   const client = ownsConnection ? await dbClientOrPool.connect() : dbClientOrPool;
 
   try {
