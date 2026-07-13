@@ -13,6 +13,14 @@
  *      a mocked pool — the whole point is to prove the generated SQL is
  *      schema-valid and produces non-empty data.
  *
+ *      seedDemoTenant() itself never manages BEGIN/COMMIT/ROLLBACK (that's
+ *      the caller's job — see demoSeed.js JSDoc), so each test here owns its
+ *      own transaction explicitly: `pool.connect()` -> `BEGIN` -> call the
+ *      function -> `ROLLBACK` -> `release()`. This both matches how the
+ *      real (not-yet-built) POST /demo/start route will call it, and means
+ *      every test cleans up after itself via rollback rather than manual
+ *      DELETE statements.
+ *
  *      Layer 2 soft-skips (passes trivially with a console warning) when no
  *      Postgres instance is reachable at the configured connection, so it
  *      does not break `npm test` in environments without a live DB (e.g.
@@ -118,7 +126,6 @@ describe('seedDemoTenant (real database)', () => {
 
   let pool;
   let dbAvailable = false;
-  let demoClientId;
 
   beforeAll(async () => {
     pool = new Pool(dbConfig);
@@ -135,117 +142,188 @@ describe('seedDemoTenant (real database)', () => {
   });
 
   afterAll(async () => {
-    if (dbAvailable && demoClientId) {
-      // clients row cascades to sites/employees/checkins/leave_requests/illnesses
-      await pool.query('DELETE FROM clients WHERE id = $1', [demoClientId]);
-    }
     if (pool) {
       await pool.end();
     }
   });
+
+  /**
+   * Inserts a throwaway `clients` row on the given (already-BEGIN'd) client
+   * and returns its id. Mirrors what the real (not-yet-built) POST
+   * /demo/start route will do inside its own transaction before calling
+   * seedDemoTenant().
+   */
+  async function insertDemoClient(client, label) {
+    const result = await client.query(
+      `INSERT INTO clients (id, name, email, plan, is_demo, demo_expires_at)
+       VALUES (uuid_generate_v4(), $1, $2, 'demo', true, NOW() + INTERVAL '7 days')
+       RETURNING id`,
+      [label, `${label.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.invalid`]
+    );
+    return result.rows[0].id;
+  }
 
   it('creates 1 site, 3 employees (admin/manager/employee), and non-empty check-in/leave/illness history relative to today', async () => {
     if (!dbAvailable) {
       return;
     }
 
-    const clientResult = await pool.query(
-      `INSERT INTO clients (id, name, email, plan, is_demo, demo_expires_at)
-       VALUES (uuid_generate_v4(), 'Demo Test Tenant', $1, 'demo', true, NOW() + INTERVAL '7 days')
-       RETURNING id`,
-      [`demo-test-${Date.now()}@example.invalid`]
-    );
-    demoClientId = clientResult.rows[0].id;
+    // seedDemoTenant() never manages its own transaction — the caller does,
+    // exactly as the future POST /demo/start route will. ROLLBACK at the end
+    // both proves that contract and cleans up without manual DELETEs.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    const result = await seedDemoTenant(demoClientId, pool);
+      const demoClientId = await insertDemoClient(client, 'Demo Test Tenant');
+      const result = await seedDemoTenant(demoClientId, client);
 
-    // --- shape of the returned summary ---
-    expect(result.site).toBeDefined();
-    expect(result.employees.admin.role).toBe('admin');
-    expect(result.employees.manager.role).toBe('manager');
-    expect(result.employees.employee.role).toBe('employee');
-    expect(result.counts.checkins).toBeGreaterThan(0);
-    expect(result.counts.leaveRequests).toBeGreaterThan(0);
-    expect(result.counts.illnesses).toBeGreaterThan(0);
+      // --- shape of the returned summary ---
+      expect(result.site).toBeDefined();
+      expect(result.employees.admin.role).toBe('admin');
+      expect(result.employees.manager.role).toBe('manager');
+      expect(result.employees.employee.role).toBe('employee');
+      expect(result.counts.checkins).toBeGreaterThan(0);
+      expect(result.counts.leaveRequests).toBeGreaterThan(0);
+      expect(result.counts.illnesses).toBeGreaterThan(0);
 
-    // --- real row counts, queried independently of the function's own return value ---
-    const sitesCount = await pool.query('SELECT COUNT(*)::int AS n FROM sites WHERE client_id = $1', [demoClientId]);
-    expect(sitesCount.rows[0].n).toBe(1);
+      // --- real row counts, queried independently of the function's own return value ---
+      const sitesCount = await client.query('SELECT COUNT(*)::int AS n FROM sites WHERE client_id = $1', [
+        demoClientId,
+      ]);
+      expect(sitesCount.rows[0].n).toBe(1);
 
-    const employeesCount = await pool.query(
-      'SELECT COUNT(*)::int AS n FROM employees WHERE client_id = $1',
-      [demoClientId]
-    );
-    expect(employeesCount.rows[0].n).toBe(3);
+      const employeesCount = await client.query(
+        'SELECT COUNT(*)::int AS n FROM employees WHERE client_id = $1',
+        [demoClientId]
+      );
+      expect(employeesCount.rows[0].n).toBe(3);
 
-    const roleCounts = await pool.query(
-      'SELECT role, COUNT(*)::int AS n FROM employees WHERE client_id = $1 GROUP BY role',
-      [demoClientId]
-    );
-    const rolesSeen = roleCounts.rows.map((r) => r.role).sort();
-    expect(rolesSeen).toEqual(['admin', 'employee', 'manager']);
+      const roleCounts = await client.query(
+        'SELECT role, COUNT(*)::int AS n FROM employees WHERE client_id = $1 GROUP BY role',
+        [demoClientId]
+      );
+      const rolesSeen = roleCounts.rows.map((r) => r.role).sort();
+      expect(rolesSeen).toEqual(['admin', 'employee', 'manager']);
 
-    const checkinsCount = await pool.query(
-      'SELECT COUNT(*)::int AS n FROM checkins WHERE client_id = $1',
-      [demoClientId]
-    );
-    expect(checkinsCount.rows[0].n).toBeGreaterThan(0);
+      const checkinsCount = await client.query(
+        'SELECT COUNT(*)::int AS n FROM checkins WHERE client_id = $1',
+        [demoClientId]
+      );
+      expect(checkinsCount.rows[0].n).toBeGreaterThan(0);
 
-    const leaveCount = await pool.query(
-      'SELECT COUNT(*)::int AS n FROM leave_requests WHERE client_id = $1',
-      [demoClientId]
-    );
-    expect(leaveCount.rows[0].n).toBeGreaterThan(0);
+      // admin should have SOME check-ins (cosmetic, not blank) but fewer
+      // than the employee/manager, who work the full weekday range.
+      const adminCheckinsCount = await client.query(
+        'SELECT COUNT(*)::int AS n FROM checkins WHERE client_id = $1 AND employee_id = $2',
+        [demoClientId, result.employees.admin.id]
+      );
+      expect(adminCheckinsCount.rows[0].n).toBeGreaterThan(0);
+      expect(adminCheckinsCount.rows[0].n).toBeLessThan(checkinsCount.rows[0].n);
 
-    const illnessCount = await pool.query(
-      'SELECT COUNT(*)::int AS n FROM illnesses WHERE client_id = $1',
-      [demoClientId]
-    );
-    expect(illnessCount.rows[0].n).toBeGreaterThan(0);
+      const leaveCount = await client.query(
+        'SELECT COUNT(*)::int AS n FROM leave_requests WHERE client_id = $1',
+        [demoClientId]
+      );
+      expect(leaveCount.rows[0].n).toBeGreaterThan(0);
 
-    // --- critical: check-in dates actually fall within the last ~35 days from now ---
-    const dateRange = await pool.query(
-      'SELECT MIN(timestamp) AS min_ts, MAX(timestamp) AS max_ts FROM checkins WHERE client_id = $1',
-      [demoClientId]
-    );
-    const now = new Date();
-    const minTs = new Date(dateRange.rows[0].min_ts);
-    const maxTs = new Date(dateRange.rows[0].max_ts);
-    const daysSinceMax = (now - maxTs) / 86400000;
-    const daysSinceMin = (now - minTs) / 86400000;
-    expect(daysSinceMax).toBeLessThanOrEqual(7); // most recent checkin should be very recent (within last week)
-    expect(daysSinceMin).toBeLessThanOrEqual(40); // oldest checkin within the ~34-day generation window (+buffer)
+      const illnessCount = await client.query(
+        'SELECT COUNT(*)::int AS n FROM illnesses WHERE client_id = $1',
+        [demoClientId]
+      );
+      expect(illnessCount.rows[0].n).toBeGreaterThan(0);
 
-    // approved_by/approved_at both set (CHECK constraint: both-or-neither)
-    const leaveRows = await pool.query(
-      'SELECT approved_by, approved_at, status FROM leave_requests WHERE client_id = $1',
-      [demoClientId]
-    );
-    for (const row of leaveRows.rows) {
-      expect(row.status).toBe('APPROVED');
-      expect(row.approved_by).not.toBeNull();
-      expect(row.approved_at).not.toBeNull();
+      // --- critical: check-in dates actually fall within the last ~35 days from now ---
+      const dateRange = await client.query(
+        'SELECT MIN(timestamp) AS min_ts, MAX(timestamp) AS max_ts FROM checkins WHERE client_id = $1',
+        [demoClientId]
+      );
+      const now = new Date();
+      const minTs = new Date(dateRange.rows[0].min_ts);
+      const maxTs = new Date(dateRange.rows[0].max_ts);
+      const daysSinceMax = (now - maxTs) / 86400000;
+      const daysSinceMin = (now - minTs) / 86400000;
+      expect(daysSinceMax).toBeLessThanOrEqual(7); // most recent checkin should be very recent (within last week)
+      expect(daysSinceMin).toBeLessThanOrEqual(40); // oldest checkin within the ~34-day generation window (+buffer)
+
+      // approved_by/approved_at both set (CHECK constraint: both-or-neither)
+      const leaveRows = await client.query(
+        'SELECT approved_by, approved_at, status FROM leave_requests WHERE client_id = $1',
+        [demoClientId]
+      );
+      for (const row of leaveRows.rows) {
+        expect(row.status).toBe('APPROVED');
+        expect(row.approved_by).not.toBeNull();
+        expect(row.approved_at).not.toBeNull();
+      }
+
+      await client.query('ROLLBACK');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
   });
 
-  it('is idempotent-safe to call twice for two different clients without UUID/constraint collisions', async () => {
+  it('does not collide across two independent tenants (different client_ids)', async () => {
     if (!dbAvailable) {
       return;
     }
 
-    const clientResult = await pool.query(
-      `INSERT INTO clients (id, name, email, plan, is_demo, demo_expires_at)
-       VALUES (uuid_generate_v4(), 'Demo Test Tenant 2', $1, 'demo', true, NOW() + INTERVAL '7 days')
-       RETURNING id`,
-      [`demo-test-2-${Date.now()}@example.invalid`]
-    );
-    const secondClientId = clientResult.rows[0].id;
-
+    const client = await pool.connect();
     try {
-      const result = await seedDemoTenant(secondClientId, pool);
-      expect(result.counts.checkins).toBeGreaterThan(0);
+      await client.query('BEGIN');
+
+      const clientIdA = await insertDemoClient(client, 'Demo Test Tenant A');
+      const clientIdB = await insertDemoClient(client, 'Demo Test Tenant B');
+
+      const resultA = await seedDemoTenant(clientIdA, client);
+      const resultB = await seedDemoTenant(clientIdB, client);
+
+      expect(resultA.counts.checkins).toBeGreaterThan(0);
+      expect(resultB.counts.checkins).toBeGreaterThan(0);
+      // distinct tenants get distinct generated ids
+      expect(resultA.site.id).not.toBe(resultB.site.id);
+      expect(resultA.employees.admin.id).not.toBe(resultB.employees.admin.id);
+
+      await client.query('ROLLBACK');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
     } finally {
-      await pool.query('DELETE FROM clients WHERE id = $1', [secondClientId]);
+      client.release();
+    }
+  });
+
+  it('rejects a second call for the SAME client_id with a clean UNIQUE-constraint violation (not silently duplicating data)', async () => {
+    if (!dbAvailable) {
+      return;
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const demoClientId = await insertDemoClient(client, 'Demo Test Tenant Dup');
+      await seedDemoTenant(demoClientId, client);
+
+      // Second call for the same client_id re-inserts the same fixed demo
+      // emails (admin@demo.local etc.) for that client_id, which collides
+      // with employees' UNIQUE(client_id, email) constraint — this is the
+      // real, documented behavior: callers must not re-seed an existing
+      // tenant, and Postgres enforces that loudly rather than silently
+      // duplicating rows.
+      await expect(seedDemoTenant(demoClientId, client)).rejects.toMatchObject({
+        code: '23505', // unique_violation
+      });
+
+      await client.query('ROLLBACK');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
   });
 });

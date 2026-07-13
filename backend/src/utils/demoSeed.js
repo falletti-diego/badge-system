@@ -1,13 +1,15 @@
 'use strict';
 
 /**
- * seedDemoTenant(clientId, dbClientOrPool)
+ * seedDemoTenant(clientId, dbClient)
  *
  * Generates a small, realistic dataset for a self-service demo tenant:
  *   - 1 site ("Sede Demo")
  *   - 3 employees, one per role (admin / manager / employee)
- *   - ~30-35 calendar days (weekdays only) of IN/OUT check-ins, with a
- *     sprinkling of overtime days, ending TODAY
+ *   - ~30-35 calendar days (weekdays only) of IN/OUT check-ins for the
+ *     employee and manager, with a sprinkling of overtime days, plus a
+ *     light sprinkling of check-ins for the admin (cosmetic only — so the
+ *     admin's own history isn't blank), ending TODAY
  *   - a handful of APPROVED leave_requests (ferie) and illnesses records
  *
  * This is a generalized, parameterized version of scripts/seed-may-2026-demo.sql:
@@ -26,30 +28,24 @@
  *
  * Pure data-generation logic — no HTTP/Express concerns. Intended to be
  * called by the (not-yet-built) POST /demo/start route, which is
- * responsible for creating the `clients` row and deciding the transaction
- * boundary.
+ * responsible for creating the `clients` row and owning the transaction
+ * boundary: it will `BEGIN` before calling this function and
+ * `COMMIT`/`ROLLBACK` afterwards, passing in the same client it used for
+ * the `clients` insert.
  *
  * @param {string} clientId - UUID of an already-created `clients` row.
- * @param {import('pg').Pool|import('pg').PoolClient} dbClientOrPool
- *   Either the shared pool, or a single client already inside a
- *   transaction (e.g. one obtained via `pool.connect()` in the caller).
- *   - If given a `pg.Pool` instance, this function opens its own client and
- *     wraps all inserts in a single transaction (BEGIN/COMMIT/ROLLBACK),
- *     releasing the client afterwards. (Detected via `instanceof Pool` —
- *     a plain Client/PoolClient also exposes `.connect()`, so duck-typing
- *     on that method alone would misdetect an in-progress transaction
- *     client as a Pool.)
- *   - If given anything else (a Client/PoolClient already participating in
- *     a transaction owned by the caller), this function just issues
- *     queries on it and lets the caller manage BEGIN/COMMIT/ROLLBACK.
+ * @param {import('pg').PoolClient|import('pg').Client} dbClient
+ *   An already-connected client, normally already participating in a
+ *   transaction owned by the caller (e.g. one obtained via
+ *   `pool.connect()` + `BEGIN`). This function never opens its own
+ *   connection and never issues BEGIN/COMMIT/ROLLBACK itself — transaction
+ *   lifecycle is entirely the caller's responsibility.
  * @returns {Promise<{
  *   site: { id: string, name: string },
  *   employees: { admin: object, manager: object, employee: object },
  *   counts: { checkins: number, leaveRequests: number, illnesses: number }
  * }>}
  */
-
-const { Pool } = require('pg');
 
 const DAYS_BACK = 34; // covers the last ~30-35 calendar days ending today
 const ORDINARY_OUT_HOUR = 18;
@@ -148,53 +144,20 @@ function buildCheckinPairs(workDates, absentDates) {
 
 /**
  * @param {string} clientId
- * @param {import('pg').Pool|import('pg').PoolClient} dbClientOrPool
+ * @param {import('pg').PoolClient|import('pg').Client} dbClient
+ *   Already-connected client. Transaction lifecycle (BEGIN/COMMIT/ROLLBACK)
+ *   is entirely the caller's responsibility — this function only issues
+ *   queries on the given client.
  */
-async function seedDemoTenant(clientId, dbClientOrPool) {
+async function seedDemoTenant(clientId, dbClient) {
   if (!clientId) {
     throw new Error('seedDemoTenant: clientId is required');
   }
-  if (!dbClientOrPool) {
-    throw new Error('seedDemoTenant: dbClientOrPool is required');
+  if (!dbClient) {
+    throw new Error('seedDemoTenant: dbClient is required');
   }
 
-  // A pg Client/PoolClient also exposes a `.connect()` method (used to open
-  // its own connection), so duck-typing on `.connect` is not enough to tell
-  // it apart from a Pool. Only treat this as "we own the connection" when
-  // it's actually an instance of Pool — everything else (a Client already
-  // checked out via pool.connect(), possibly mid-transaction) is used as-is,
-  // with transaction boundaries left to the caller.
-  const ownsConnection = dbClientOrPool instanceof Pool;
-  const client = ownsConnection ? await dbClientOrPool.connect() : dbClientOrPool;
-
-  try {
-    if (ownsConnection) {
-      await client.query('BEGIN');
-    }
-
-    const result = await runSeed(client, clientId);
-
-    if (ownsConnection) {
-      await client.query('COMMIT');
-    }
-    return result;
-  } catch (err) {
-    if (ownsConnection) {
-      await client.query('ROLLBACK');
-    }
-    throw err;
-  } finally {
-    if (ownsConnection) {
-      client.release();
-    }
-  }
-}
-
-/**
- * Runs the actual inserts on an already-open client (no transaction
- * management here — that's handled by the caller in seedDemoTenant()).
- */
-async function runSeed(client, clientId) {
+  const client = dbClient;
   const referenceDate = new Date();
 
   // ------------------------------------------------------------------
@@ -241,7 +204,7 @@ async function runSeed(client, clientId) {
   // ------------------------------------------------------------------
   const weekdayDates = getWeekdaysInRange(DAYS_BACK, referenceDate);
 
-  // Absences (employee only — admin/manager have lighter/no history):
+  // Absences (employee only — manager/admin have lighter or no absence history):
   //   - 3-day FERIE block roughly a third of the way through the range
   //   - 2-day MALATTIA block roughly two-thirds of the way through
   const ferieRun = findConsecutiveRun(weekdayDates, 3, Math.floor(weekdayDates.length / 3));
@@ -265,13 +228,21 @@ async function runSeed(client, clientId) {
 
   const employeeCheckins = buildCheckinPairs(weekdayDates, employeeAbsentDates);
   const managerCheckins = buildCheckinPairs(weekdayDates, new Set());
-  // Admin: no floor check-ins — realistic for an admin-only role, and the
-  // Trend Charts' assenteismo/presenze denominators only look at role='employee'.
+  // Admin: a light sprinkling of check-ins (roughly 1 day in 5, i.e. about a
+  // week's worth over the whole range) — enough that an admin landing on the
+  // demo dashboard sees *some* personal history instead of a blank slate
+  // that reads as "did the seed not work?", but light enough to stay
+  // cosmetic. The Trend Charts' assenteismo/presenze denominators only look
+  // at role='employee', so this doesn't skew those KPIs.
+  const ADMIN_CHECKIN_EVERY_N_DAYS = 5;
+  const adminWorkDates = weekdayDates.filter((_, i) => i % ADMIN_CHECKIN_EVERY_N_DAYS === 0);
+  const adminCheckins = buildCheckinPairs(adminWorkDates, new Set());
 
   let checkinsCount = 0;
   for (const { employeeId, rows } of [
     { employeeId: employee.id, rows: employeeCheckins },
     { employeeId: manager.id, rows: managerCheckins },
+    { employeeId: admin.id, rows: adminCheckins },
   ]) {
     for (const row of rows) {
       await client.query(
