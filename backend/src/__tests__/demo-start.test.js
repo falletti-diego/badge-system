@@ -141,8 +141,9 @@ describe('POST /api/v1/demo/start (real database)', () => {
   });
 
   /**
-   * SKIPPED — blocked by a pre-existing, unrelated bug in POST
-   * /api/v1/auth/refresh, not by anything in demo.js.
+   * Previously skipped — blocked by a pre-existing, unrelated bug in POST
+   * /api/v1/auth/refresh, not by anything in demo.js. Fixed and un-skipped,
+   * see below.
    *
    * routes/auth.js POST /login writes the freshly-signed refresh token's
    * jti into `used_tokens` immediately at issuance (S.32.7 "race condition
@@ -176,15 +177,14 @@ describe('POST /api/v1/demo/start (real database)', () => {
    * tracking entirely (`!email.endsWith(BADGE_LOCAL_DOMAIN)` guards the
    * insert) — so this regression has no green/red signal in CI today.
    *
-   * Deliberately NOT fixed as part of the demo-self-service task: it's a
-   * shared, security-critical authentication path well outside this PR's
-   * scope, and any fix needs to reconcile with auth-refresh-race.test.js
-   * and auth-refresh-concurrent-stress.test.js's own concurrency
-   * invariants rather than a quick patch here. Flagged for separate,
-   * dedicated triage. Un-skip this test once /auth/refresh is fixed — it
-   * is written to the intended, correct behavior already.
+   * Fixed separately in docs/superpowers/plans/2026-07-14-refresh-replay-detection-hotfix.md
+   * (main commit e2d1380, merged into this branch) — POST /auth/refresh now
+   * treats a *found* used_tokens row as "current, valid, unconsumed" and an
+   * *absent* row as "already consumed" (replay), matching what login's
+   * best-effort jti INSERT was always meant to establish. Un-skipped now
+   * that the fix is present on this branch.
    */
-  it.skip('BLOCKED (pre-existing auth.js bug, see comment above): the demo refresh_token can be redeemed via POST /api/v1/auth/refresh for a new access token', async () => {
+  it('the demo refresh_token can be redeemed via POST /api/v1/auth/refresh for a new access token', async () => {
     if (!dbAvailable) return;
     const email = uniqueEmail('refresh-roundtrip');
 

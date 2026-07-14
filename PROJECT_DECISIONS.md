@@ -1,8 +1,35 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 14 Luglio 2026 (Session 62 — hotfix refresh replay-detection pronto per merge, non ancora in main)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 26 ✅ (vibrazione check-in) | Grafici Trend Dashboard ✅ LIVE (api.dataxiom.it) | Dropdown Sede in Dashboard ✅ LIVE | Export CSV date/ora ✅ fix live | Pipeline CI/CD ✅ funzionante (backend + mobile) | 🔴 Hotfix `POST /auth/refresh` PRONTO in worktree isolato, **non ancora mergiato su main** (bug live in produzione: primo refresh di ogni cliente reale fallisce con 401) | 🚧 Ambiente Demo Self-Service IN PAUSA (Task 1-2/9, worktree isolato, non ancora in main)  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Merge urgente dell'hotfix refresh (Session 62) su main, poi riprendere Ambiente Demo Self-Service da Task 3/9 (piano approvato, esecuzione a task singoli con pausa esplicita), poi MVP Hardening backlog residuo (Session 57) o staging environment + ONB.2
+**Last Updated:** 14 Luglio 2026 (Session 63 — hotfix refresh replay-detection mergiato + verificato in produzione, Task 3/9 demo self-service chiuso)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 26 ✅ (vibrazione check-in) | Grafici Trend Dashboard ✅ LIVE (api.dataxiom.it) | Dropdown Sede in Dashboard ✅ LIVE | Export CSV date/ora ✅ fix live | Pipeline CI/CD ✅ funzionante (backend + mobile) | ✅ Hotfix `POST /auth/refresh` MERGIATO su main e verificato live in produzione (login → refresh reale confermato 200, replay correttamente rifiutato 401) | 🚧 Ambiente Demo Self-Service — Task 3/9 (`POST /demo/start`) ✅ chiuso, Task 4/9 (`POST /demo/switch-role`) da iniziare (worktree isolato, non ancora in main)  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Ambiente Demo Self-Service da Task 4/9 (piano approvato, esecuzione a task singoli con pausa esplicita), poi MVP Hardening backlog residuo (Session 57) o staging environment + ONB.2
+
+---
+
+## Session 63 — Chiusura hotfix refresh + Task 3/9 demo self-service ripreso e chiuso (14 Luglio 2026)
+
+### Contesto
+Continuazione diretta della Session 62: l'hotfix era pronto ma non ancora mergiato, e il Task 3/9 della Ambiente Demo Self-Service era in pausa in attesa proprio di questo hotfix (perché `POST /demo/start` emette un `refresh_token` che passa dallo stesso `/auth/refresh`).
+
+### Parte 1 — Merge, deploy, verifica live
+Merge/PR (`#2`, commit `e2d1380`) su `main`, deploy CI/CD → EC2 verificato. Verifica live in produzione con un account cliente reale (`maria.rossi@torino.it`, non un fixture `@badge.local`): login → primo refresh **200** (prima 401, bug confermato risolto), replay del token consumato → **401 SESSION_REVOKED** (conferma che il fix V1 per la collisione id con `DEMO_USERS`, Session 62, funziona anche in produzione — l'id di Maria coincide intenzionalmente con la fixture `maria@badge.local`, migration 022).
+
+**Effetto collaterale accettato**: per ottenere credenziali di test è stata resettata temporaneamente la password di Maria via l'endpoint admin esistente (`POST /admin/employees/:id/reset-password`, RBAC-scoped, stesso tenant). L'utente ha poi impostato la password definitiva da sé. Nessun impatto sui dati di presenza/ferie di Maria — solo `password_hash`/`must_change_password`.
+
+**Bug FYI trovato ma esplicitamente non toccato**: il token rinnovato di Maria contiene ancora l'identità della fixture demo (nome/email `maria@badge.local`) invece dei suoi dati reali. Causa: `routes/auth.js`, il branch `if (demoUser) {...}` che costruisce il *payload* del nuovo token usa lo stesso id-lookup su `DEMO_USERS` il cui rischio di collisione era già stato identificato e corretto — ma solo per il *replay check* (V1 della Session 62), non per la costruzione del payload. Sono due punti diversi dello stesso file con lo stesso pattern di rischio, e solo uno è stato corretto in questo hotfix (lo strettamente necessario per il bug segnalato). **Decisione**: non espandere lo scope dell'hotfix per correggerlo qui — aprire un ticket dedicato, dato che tocca la stessa area di sicurezza condivisa e merita lo stesso rigore (test TDD + code review) di un fix a sé.
+
+### Parte 2 — Task 3/9 ripreso: gap trovato e colmato
+Il branch `worktree-demo-self-service` era diramato da `main` prima della Session 62 e non aveva mai ricevuto l'hotfix. Poiché `POST /demo/start` (già implementato prima di questa sessione, commit `9474913`) emette un `refresh_token` reale che passa dallo stesso `/auth/refresh`, **senza portare l'hotfix nel branch demo, il primo refresh di ogni sessione demo avrebbe fallito con lo stesso identico bug appena risolto in produzione** — un prospect che prova la demo avrebbe visto la sessione scadere silenziosamente dopo 15 minuti (durata dell'access token) senza mai riuscire a rinnovarla.
+
+**Decisione**: mergiare l'hotfix nel branch demo prima di considerare il Task 3 completo, non solo verificarlo isolatamente su `main`.
+
+**Intoppo**: `git merge main` (locale) è sembrato riuscire ma non ha portato il fix reale — solo i commit di documentazione. Causa: i worktree Git condividono lo stesso set di branch locali, ma un `git merge <branch-locale>` non aggiorna quel branch dal remote automaticamente; la PR era stata mergiata su GitHub, ma il ref locale `main` in questo worktree era rimasto indietro. Rilevato confrontando esplicitamente `git rev-parse main origin/main` (non coincidevano) dopo il primo merge, invece di fidarsi del solo "merge riuscito senza conflitti". Risolto con `git fetch` + un secondo merge esplicito da `origin/main`. **Verificato positivamente** con `grep isBadgeLocalSession backend/src/routes/auth.js` dopo il secondo merge, non solo assumendolo dal successo del comando.
+
+### Verifica sistematica dei checkpoint del Task 3 (nessun gap trovato)
+Con il fix ora presente, il test `demo-start.test.js`'s `it.skip('BLOCKED (pre-existing auth.js bug...')` — scritto in anticipo alla Session 61 già con l'aspettativa corretta — è stato un-skippato e verificato **GREEN** senza modifiche al codice di produzione (solo alla stringa del test e al commento). Rivisitati poi tutti gli item del "Checkpoint 3" del piano contro i test esistenti (`demo-start.test.js`, `demo-start-validation.test.js`, `demo-start-rate-limit.test.js`, `demo-start-constraint-scoping.test.js`): body-shape injection, rate-limit, tetto `MAX_ACTIVE_DEMOS` con boundary esatto, i 3 percorsi email-duplicata, race condition parallela, scoping del `23505`, audit log — tutti già coperti, nessun fix necessario. Suite backend completa: 522/536 verdi, 14 skip noti, 0 falliti.
+
+### Lezione generale
+Dopo un merge/PR completato in un worktree o sessione diversa, non fidarsi di un `git merge <branch-locale>` in un altro worktree senza prima `git fetch` — i branch locali di worktree fratelli non si sincronizzano da soli col remote. Verificare sempre `git rev-parse <branch> origin/<branch>` prima di considerare un merge "portato a termine".
 
 ---
 
