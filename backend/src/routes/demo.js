@@ -22,11 +22,12 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const pino = require('pino');
 const { v4: uuid } = require('uuid');
-const { createValidationMiddleware, DemoStartSchema } = require('../middleware/validation');
-const { ConflictError, InternalServerError } = require('../utils/errors');
+const { createValidationMiddleware, DemoStartSchema, DemoSwitchRoleSchema } = require('../middleware/validation');
+const { ConflictError, ForbiddenError, InternalServerError, NotFoundError } = require('../utils/errors');
 const { pool } = require('../db/pool');
 const { seedDemoTenant } = require('../utils/demoSeed');
 const { logAudit } = require('../middleware/audit');
+const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 const logger = pino({
@@ -340,4 +341,106 @@ router.post('/start', createValidationMiddleware(DemoStartSchema), async (req, r
   }
 });
 
+/**
+ * POST /demo/switch-role
+ * Requires requireAuth (valid JWT for the current demo session).
+ *
+ * Fail-closed guard (non-negotiable — see plan Checkpoint 4): before doing
+ * anything else, verify the caller's own client_id has is_demo = true. This
+ * endpoint must NEVER be able to re-issue a JWT for a real tenant's
+ * employees, so the guard is the very first thing this handler does, and a
+ * failure here returns 403 immediately with no further work.
+ *
+ * Body: { role: 'admin'|'manager'|'employee' } (Zod enum — see
+ * DemoSwitchRoleSchema — no other value accepted).
+ *
+ * Looks up the demo employee with that role WITHIN THE SAME client_id as
+ * the caller (never cross-tenant — demoSeed.js guarantees every demo
+ * tenant has exactly one employee per role), issues a fresh JWT for them
+ * via the same issueDemoSession() helper POST /demo/start uses (so the new
+ * session gets the same used_tokens jti tracking / refresh mechanics).
+ *
+ * If the requested role is the caller's current role, this is a no-op:
+ * still re-issues an equivalent token, no special-cased response — the
+ * frontend doesn't need to handle a different shape for this case.
+ *
+ * Session hygiene: after issuing the new role's token, the previous role's
+ * refresh session is invalidated via a targeted
+ * `DELETE FROM used_tokens WHERE user_id = $1` (previous role's
+ * employee_id) — NOT by reusing POST /auth/revoke-session's permanent
+ * revoked_tokens logic (see plan's resolved design decision: that would
+ * risk a demo visitor's later real Admin session being permanently
+ * revoked by a stale revoked_tokens row keyed on the same employee_id).
+ * The DELETE is scoped and self-contained: if the old refresh token is
+ * ever replayed, POST /auth/refresh's replay-detection (an absent
+ * used_tokens row = already consumed) correctly rejects it with 401.
+ */
+router.post('/switch-role', requireAuth, createValidationMiddleware(DemoSwitchRoleSchema), async (req, res, next) => {
+  const { role } = req.validated.body;
+  const { client_id: clientId, user_id: previousUserId } = req.user;
+
+  try {
+    // ---- Fail-closed guard: caller's own tenant must be a demo tenant ----
+    const clientResult = await pool.query(
+      'SELECT is_demo FROM clients WHERE id = $1',
+      [clientId]
+    );
+    const callerClient = clientResult.rows[0];
+    if (!callerClient || callerClient.is_demo !== true) {
+      logger.warn({ action: 'demo_switch_role_forbidden', client_id: clientId });
+      throw new ForbiddenError('This endpoint is only available for demo tenants');
+    }
+
+    // ---- Find the target-role employee, scoped to the SAME client_id ----
+    const employeeResult = await pool.query(
+      'SELECT id, email, name, role, site_id FROM employees WHERE client_id = $1 AND role = $2 LIMIT 1',
+      [clientId, role]
+    );
+    const targetEmployee = employeeResult.rows[0];
+    if (!targetEmployee) {
+      // Data-integrity guard: demoSeed.js guarantees one employee per role,
+      // so this should not happen — fail closed rather than issue a
+      // malformed token.
+      throw new NotFoundError(`No demo employee found for role "${role}" in this tenant`);
+    }
+
+    const { token, refresh_token, user } = await issueDemoSession(targetEmployee, clientId);
+
+    // ---- Session hygiene: invalidate the previous role's refresh session ----
+    // Targeted delete only — see function doc comment above for why this is
+    // NOT a call into revoke-session's revoked_tokens logic.
+    try {
+      await pool.query('DELETE FROM used_tokens WHERE user_id = $1', [previousUserId]);
+    } catch (cleanupErr) {
+      logger.warn({
+        action: 'demo_switch_role_session_cleanup_failed',
+        user_id: previousUserId,
+        error: cleanupErr.message,
+      });
+      // Best-effort — do not block the role switch itself on this cleanup.
+    }
+
+    await logAudit(pool, {
+      action: 'demo_role_switch',
+      entity: 'client',
+      entityId: clientId,
+      newValue: { role, employee_id: targetEmployee.id, previous_user_id: previousUserId },
+      userId: targetEmployee.id,
+    });
+
+    logger.info({
+      action: 'demo_role_switch',
+      client_id: clientId,
+      previous_user_id: previousUserId,
+      new_role: role,
+      new_user_id: targetEmployee.id,
+    });
+
+    res.json({ data: { token, refresh_token, user } });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
+module.exports.issueDemoSession = issueDemoSession;

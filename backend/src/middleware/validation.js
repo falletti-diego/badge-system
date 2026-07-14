@@ -34,6 +34,20 @@ const DemoStartSchema = z.object({
 });
 
 // =====================================================
+// DEMO — POST /api/v1/demo/switch-role
+// =====================================================
+// .strict() rejects any body field other than `role` — the caller is an
+// already-authenticated demo session, but the role must still be one of
+// exactly the 3 accepted values (never an arbitrary string).
+const DemoSwitchRoleSchema = z.object({
+  body: z.object({
+    role: z.enum(['admin', 'manager', 'employee'], {
+      errorMap: () => ({ message: 'role must be one of: admin, manager, employee' }),
+    }),
+  }).strict(),
+});
+
+// =====================================================
 // 1. POST /api/checkin — Create check-in
 // =====================================================
 
@@ -513,6 +527,7 @@ const ApproveLeaveSchema = z.object({
 module.exports = {
   LoginSchema,
   DemoStartSchema,
+  DemoSwitchRoleSchema,
   PostCheckinSchema,
   GetCheckinsSchema,
   PutCheckinSchema,
