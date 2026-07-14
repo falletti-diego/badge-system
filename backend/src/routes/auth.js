@@ -231,7 +231,12 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
  * - Fix #5: Try-finally ensures connection release even on error
  *
  * Token rotation: old jti deleted, new jti generated with new tokens
- * Replay detection: if old jti appears in used_tokens, user is revoked (Model 1 blacklist)
+ * Replay detection: absence of the current jti in used_tokens means it was
+ * already consumed (or never issued) — the request is treated as a replay
+ * and the session is temporarily revoked. Presence means the token is
+ * still valid and unconsumed; it is deleted (consumed) here and replaced
+ * with a freshly rotated jti below. Demo (@badge.local) accounts are
+ * exempt — see BADGE_LOCAL_DOMAIN guard in POST /login.
  */
 router.post('/refresh', async (req, res) => {
   const { refresh_token } = req.body;
@@ -289,16 +294,30 @@ router.post('/refresh', async (req, res) => {
         // Fix #5: Use explicit transaction for atomicity
         await client.query('BEGIN');
 
-        // Fix #1: SELECT FOR UPDATE prevents concurrent refresh race condition
-        // Only check replay if jti is present (backward compatibility with legacy tokens)
-        if (jti_old) {
-          const replayCheck = await client.query(
+        // Fix #1 (corrected): SELECT FOR UPDATE locks the current, valid,
+        // not-yet-consumed jti row so concurrent refresh attempts of the
+        // SAME token serialize instead of both succeeding. Presence of the
+        // row means "this jti is the current valid token, not yet
+        // consumed" (it was inserted either at login, or by a prior
+        // refresh's rotation) — proceed and consume it. Absence means the
+        // jti was already consumed by an earlier refresh (a genuine
+        // replay) or never existed (forged/garbage jti) — reject.
+        //
+        // demoUser accounts are exempt: POST /login deliberately never
+        // inserts a used_tokens row for @badge.local accounts (see
+        // BADGE_LOCAL_DOMAIN guard above), so their jti is *always*
+        // "absent" by design — applying the found/not-found check to them
+        // would reject every single demo refresh as a false replay.
+        if (jti_old && !demoUser) {
+          const currentJtiCheck = await client.query(
             'SELECT 1 FROM used_tokens WHERE jti = $1 FOR UPDATE',
             [jti_old]
           );
 
-          if (replayCheck.rows.length > 0) {
-            // REPLAY DETECTED: Temporary 5-minute block (not permanent — concurrent-tab false positives occur)
+          if (currentJtiCheck.rows.length === 0) {
+            // REPLAY DETECTED: this jti was already consumed by an earlier
+            // refresh, or never issued. Temporary 5-minute block (not
+            // permanent — concurrent-tab false positives occur).
             await client.query(
               `INSERT INTO revoked_tokens (user_id, revoked_at, reason, revoked_until)
                VALUES ($1, NOW(), $2, NOW() + INTERVAL '5 minutes')
@@ -332,8 +351,9 @@ router.post('/refresh', async (req, res) => {
           return res.status(401).json({ error: 'SESSION_REVOKED', message: 'User session revoked' });
         }
 
-        // Delete old jti from used_tokens (before generating new token) if jti exists
-        if (jti_old) {
+        // Consume (delete) the current jti now that it's been validated —
+        // it's about to be replaced by a freshly rotated one below.
+        if (jti_old && !demoUser) {
           await client.query('DELETE FROM used_tokens WHERE jti = $1', [jti_old]);
         }
       }
