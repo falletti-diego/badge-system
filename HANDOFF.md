@@ -1,140 +1,86 @@
-# Badge System — Session 61 Handoff
+# Badge System — Session 62 Handoff
 
-**Date:** 2026-07-13
-**Session:** 61 — Ambiente Demo Self-Service: pianificazione + Task 1-2/9 implementati
-**Status:** ⏸️ **IN PAUSA su richiesta esplicita dell'utente — riprendere da Task 3/9 nella prossima sessione**
+**Date:** 2026-07-14
+**Session:** 62 — Hotfix `POST /auth/refresh`: bug replay-detection in produzione, trovato durante il Task 3/9 della Session 61
+**Status:** ✅ **Fix completo, testato, code-reviewed — pronto per merge su `main`. Il bug è ancora LIVE in produzione finché non viene mergiato.**
 
 ---
 
 ## Goal
 
-Costruire un ambiente demo self-service: un visitatore anonimo del sito clicca "Prova la demo",
-inserisce solo la propria email, ed entra immediatamente in una Dashboard web già popolata con
-dati realistici (presenze, straordinari, assenteismo), esplorabile come Admin/Manager/Dipendente,
-per 7 giorni, senza mai parlare con nessuno — con un invito sempre visibile a contattare Dataxiom.
+Correggere un bug di produzione reale, indipendente dalla feature "Ambiente Demo Self-Service": `POST /api/v1/auth/refresh` rifiutava con `401 SESSION_REVOKED` il **primo** tentativo di refresh di ogni cliente reale (non-`@badge.local`) login, subito dopo un login altrimenti riuscito.
 
-Scelta come "prossima feature a minimo sforzo/massima resa" dal backlog MVP Hardening (Session 57),
-al posto di alternative più economiche (es. PDF export Riepilogo Ore) per il maggiore valore
-commerciale.
+Scoperto per caso durante il Task 3/9 della Session 61 (testando il `refresh_token` appena aggiunto a `POST /demo/start`), ma è un bug pre-esistente su `main`, non introdotto dalla feature demo.
 
 ---
 
 ## Come riprendere (leggi in quest'ordine)
 
-1. **Questo file** (contesto generale + cosa fare subito)
-2. **Piano completo**: `~/.claude/plans/adesso-entra-nella-cartella-purring-toast.md` — contiene tutte
-   le decisioni di grilling, il design visivo, i 9 task con checkpoint di sicurezza, e la matrice di
-   test aggiuntiva emersa dall'autocritica del piano
-3. **`TASKS.md`** Session 61 + **`PROJECT_DECISIONS.md`** Session 61 — riassunto di cosa è stato
-   deciso e perché
+1. **Questo file**
+2. **Piano completo**: `docs/superpowers/plans/2026-07-14-refresh-replay-detection-hotfix.md` — root cause dettagliata, task-by-task, note di auto-review
+3. **`PROJECT_DECISIONS.md`** sezione "Session 62" — ragionamento completo dietro ogni decisione di design
+4. **`TASKS.md`** Session 62 — riepilogo sintetico
 
-**Il lavoro NON è su main.** Tutto vive in un worktree isolato:
+**Il lavoro vive in un worktree isolato, separato dal branch demo self-service:**
 ```bash
-cd "/Users/diegofalletti/DATAXIOM/Dataxiom – Analisi & BI/badge/.claude/worktrees/demo-self-service"
-git log --oneline -6   # deve mostrare c9ae14b in cima
-git branch --show-current   # worktree-demo-self-service
+cd "/Users/diegofalletti/DATAXIOM/Dataxiom – Analisi & BI/badge/.claude/worktrees/hotfix-refresh-replay-detection"
+git log --oneline -6   # deve mostrare ae92741 in cima
+git branch --show-current   # worktree-hotfix-refresh-replay-detection
 ```
-Se il worktree non esiste più (rimosso per qualche motivo), va ricreato con lo strumento nativo
-`EnterWorktree` (non `git worktree add` manuale) — vedi skill `superpowers:using-git-worktrees`.
+Base branch: `main` (non `worktree-demo-self-service`) — deliberato, per poter shippare questo hotfix indipendentemente dalla feature demo, ancora multi-settimana dal completamento.
 
-**Per riprendere l'esecuzione:** invocare `/superpowers:subagent-driven-development`, leggere il
-piano, e procedere dal **Task 3/9** (`POST /demo/start`). L'utente ha chiesto esplicitamente una
-pausa con via libera dopo OGNI task (non l'esecuzione continua di default della skill) — mantenere
-questo pattern anche nella prossima sessione, salvo diversa indicazione.
+**Prossimo step immediato: merge/PR su `main`**, poi tornare al worktree `.claude/worktrees/demo-self-service` e riprendere da **Task 3/9** della Ambiente Demo Self-Service (vedi `HANDOFF.md`/`TASKS.md` Session 61 in quel worktree).
 
 ---
 
-## Stato del codice (branch `worktree-demo-self-service`, commit `c9ae14b`)
+## Stato del codice (branch `worktree-hotfix-refresh-replay-detection`, commit `ae92741`)
 
-| Task | Stato | Cosa contiene |
-|---|---|---|
-| 1/9 — Migration | ✅ Completato, review passata (con fix) | `backend/migrations/028_add_demo_tenant_fields.sql`, `029_create_demo_contact_requests.sql` |
-| 2/9 — `demoSeed.js` | ✅ Completato, review passata (con fix) | `backend/src/utils/demoSeed.js` + `backend/src/__tests__/demoSeed.test.js` |
-| 3/9 — `POST /demo/start` | ⏳ **DA INIZIARE** | Endpoint pubblico più delicato del piano — vedi sezione dedicata sotto |
-| 4/9 — `POST /demo/switch-role` | Non iniziato | |
-| 5/9 — `POST /demo/contact` + AWS SES | Non iniziato | |
-| 6/9 — `DEMO_EXPIRED` + cleanup scheduler | Non iniziato | |
-| 7/9 — `TryDemoPage.jsx` | Non iniziato | |
-| 8/9 — Banner/Tour/Modal/ExpiredPage | Non iniziato | |
-| 9/9 — `GET /api/admin/demo-tenants` | Non iniziato | |
+| File | Cosa contiene |
+|---|---|
+| `backend/src/routes/auth.js` | Fix completo: semantica trovato/non-trovato invertita, esenzione demo basata su dominio email (non più id-lookup), `revoked_tokens` controllato prima del replay-check, tutti e 3 i touch-point del ciclo di vita del jti coerenti |
+| `backend/src/__tests__/auth-refresh-first-use.test.js` | 4 test di regressione reali (Postgres locale, non mockati): primo refresh dopo login, rifiuto di un token già consumato, collisione id con `DEMO_USERS`, revoca permanente non declassata |
+| `backend/src/__tests__/auth-refresh-race.test.js` | Test mockati preesistenti, aggiornati alla semantica corretta + al nuovo ordine delle query |
+| `backend/src/__tests__/auth-refresh-concurrent-stress.test.js` | Idem |
+| `docs/superpowers/plans/2026-07-14-refresh-replay-detection-hotfix.md` | Piano completo con root cause e task |
 
-Suite backend nel worktree: **502/502 test verdi** (verificato anche direttamente, non solo dai
-subagent). Nessuna regressione rispetto alla baseline di main (492/502 dopo Session 60).
+Suite backend: **492/506 test verdi**, 14 skip noti (pattern soft-skip senza Postgres reale), 0 falliti. Lint pulito (1 warning preesistente non correlato, riga 630, funzione change-password). Un test frontend isolato (`getInitials.test.js`, 8/8) eseguito per verificare la toolchain — l'hotfix è backend-only, non serve la suite frontend completa.
 
 ---
 
 ## What Worked
 
-- **Autocritica esplicita del piano prima di eseguirlo** (`/grilling` con se stessi, su richiesta
-  dell'utente): ha trovato un bug reale — `clients.email UNIQUE` non gestito per il caso di
-  richiesta-demo-ripetuta con la stessa email — prima ancora che diventasse codice. Vale la pena
-  ripetere questo passaggio per qualunque feature futura con superfici pubbliche/non autenticate.
-- **Esecuzione a task singoli con pausa esplicita**: ha permesso review reali (implementer + 2
-  subagent indipendenti per task) invece di una corsa continua — in entrambi i task completati la
-  code-quality review ha trovato un problema reale non banale (indice mancante Task 1, design a
-  doppia modalità superfluo/rischioso Task 2) che sarebbe stato più costoso correggere più avanti,
-  quando altro codice si fosse appoggiato sopra.
-- **Verifica reale su Postgres locale ad ogni step**, non solo mock — richiesto esplicitamente
-  dall'utente ("testa ogni feature alla fine di ogni task") e già la pratica di default della
-  skill: sia l'implementer che il reviewer di spec-compliance hanno rieseguito indipendentemente
-  le stesse query/inserimenti contro un DB reale, non fidandosi l'uno del report dell'altro.
-- **Verifica tecnica preventiva via SSH+psql su RDS produzione** (stessa sessione, prima di
-  scrivere il piano): confermato che ogni tabella con `client_id` ha `ON DELETE CASCADE` verso
-  `clients` — questo ha permesso di progettare la cancellazione di un tenant demo come una singola
-  query invece di uno script multi-tabella.
+- **TDD reale, non solo dichiarato**: ogni fix (quello iniziale e le 2 correzioni successive trovate dalla code review) è passato per un vero ciclo RED→GREEN — il test di regressione è stato eseguito e verificato fallire per il motivo esatto atteso prima di scrivere qualunque riga di fix.
+- **Worktree isolato dedicato, non il branch della feature in corso**: separare l'hotfix dal branch demo self-service (ancora WIP, multi-settimana) permette di shippare la correzione di sicurezza immediatamente, senza aspettare che l'altra feature sia completa.
+- **`/code-review` con 6 agenti paralleli su una fix già "verde"**: la prima versione della fix passava tutti i test e sembrava corretta — la code review ha comunque trovato 2 regressioni reali e sfruttabili (collisione id Maria, declassamento revoca permanente) che nessun test esistente copriva, perché nessuno aveva mai pensato di testare "cosa succede se un dipendente reale ha lo stesso id di un fixture demo" o "cosa succede al refresh dopo una revoca amministrativa". Vale la pena ripetere la code review multi-angolo anche su fix che sembrano già complete, specialmente su codice di autenticazione condiviso.
+- **Verificare le affermazioni degli agenti finder contro il codice reale prima di agire**: un agente aveva ipotizzato che l'INSERT finale avrebbe causato un crash per violazione di foreign key sugli account demo Pippo/Pino — verificato leggendo `migrations/018_add_badge_local_demo_users.sql` che le loro righe `employees` esistono davvero, confutando l'ipotesi (non un vero bug, solo un accumulo di righe orfane, comunque corretto per coerenza).
+- **Usare il payload del token stesso (dominio email) invece di un id-lookup come segnale di "sessione demo"**: più robusto di `DEMO_USERS.find(u => u.id === user_id)`, che collide ogni volta che un id fixture viene intenzionalmente riusato per un dipendente reale (già successo una volta con Maria, migration 022 — potrebbe succedere di nuovo).
 
 ## What Didn't Work / Attenzione
 
-- Nessun blocco grave. Un solo intoppo minore: durante il Task 2, un run isolato di `auth.test.js`
-  ha mostrato un fallimento transitorio (`refresh_token` undefined) legato a ordine/stato dei test
-  pre-esistente, non a `demoSeed.js` — risolto rieseguendo (pulito sia dal subagent che da me
-  direttamente). Se dovesse ripresentarsi in futuro, indagare `auth.test.js` per uno stato
-  condiviso tra test non ripulito correttamente tra un test e l'altro — non è stato causato da
-  questa feature, ma vale la pena tenerlo d'occhio.
+- Il primo tentativo del test di regressione per la collisione id (V1) ha fallito con un conflitto di chiave duplicata: avevo provato a inserire una nuova riga `employees` con l'id di Pippo, ma quella riga esiste già (seed di migration 018). Risolto riusando/ripristinando la riga esistente (UPDATE temporaneo email/password_hash, ripristinato in `afterAll`) invece di inserirne una nuova.
+- Il classificatore di sicurezza della piattaforma è stato temporaneamente non disponibile per diversi minuti durante la sessione (bloccando `npm ci` e l'invocazione della skill code-review) — non un problema del codice, risolto aspettando.
 
 ---
 
 ## Prossimi step
 
-### Da fare subito (Task 3/9)
-`POST /demo/start` — l'endpoint pubblico, rate-limited, che crea un tenant demo. Il piano lo
-descrive in dettaglio (§3), inclusa tutta la logica di gestione email-duplicata (3 percorsi + rete
-di sicurezza contro race condition) emersa dall'autocritica. **Checkpoint di sicurezza esplicito
-nel piano**: nessun campo diverso da `email` accettato dal body, rate-limit + tetto globale
-verificati con test automatici (non solo manuali), i 3 percorsi email-duplicata testati uno per
-uno incluso un test di race condition reale (`Promise.all`, non sequenziale).
+### Immediato
+- **Merge/PR di questo hotfix su `main`** — priorità alta, il bug è live in produzione (ogni cliente reale non riesce al primo refresh del token).
+- Dopo il merge, verificare il deploy in produzione (CI/CD → EC2) e testare live con un account cliente reale (login → refresh) come da convenzione "Verification" del progetto.
 
-### Decisione in sospeso da prendere con l'utente
-- **Gap CI**: la pipeline GitHub Actions non provisiona un servizio Postgres reale per il job
-  backend — i test DB-dipendenti passano solo in locale. Non bloccante finora, ma il Task 3
-  dipende molto di più da questa copertura (race condition, duplicate email). Proporre
-  esplicitamente all'utente: aggiungere un servizio Postgres a `ci.yml` prima/durante il Task 3, o
-  accettare il gap come limite noto documentato.
-
-### Dopo il Task 9 (fine feature)
-- Review finale complessiva (code-reviewer su tutto il branch) + `superpowers:finishing-a-development-branch`
-  per decidere merge/PR/keep/discard — non ancora il momento, restano 7 task.
-- Setup infrastrutturale fuori dal repo (non bloccante per lo sviluppo applicativo): AWS SES
-  (verifica dominio/email mittente + IAM `ses:SendEmail`), AWS EventBridge Scheduler (regola
-  giornaliera per `cleanup-expired-demos.js`, via SSM Run Command sull'istanza EC2 esistente).
+### Dopo il merge
+- Tornare al worktree `.claude/worktrees/demo-self-service`, riprendere da **Task 3/9** (`POST /demo/start`) della Ambiente Demo Self-Service (Session 61, in pausa su richiesta esplicita dell'utente).
+- Valutare se il branch demo self-service debba fare rebase/merge di questo hotfix (contiene modifiche a `routes/auth.js` che il branch demo tocca in modo adiacente per `POST /demo/start`'s `issueDemoSession()` — verificare compatibilità).
+- Task 4 del piano di questo hotfix (un-skip del test `demo-start.test.js` che documentava questo stesso bug) può essere completato una volta che il branch demo ha questo fix disponibile.
 
 ---
 
 ## Note operative
 
-- Env file (`.env`, `.env.development`, `.env.test`) già copiati nel worktree — non serve
-  ripeterlo, ma se il worktree viene ricreato da zero vanno ricopiati manualmente (sono
-  gitignored).
-- `npm install` già eseguito in `backend/` e `frontend-web/` dentro il worktree.
-- Pattern di generazione dati demo (`demoSeed.js`) generalizza `backend/scripts/seed-may-2026-demo.sql`
-  (Session 60) — stesso concetto (weekday-only IN/OUT, straordinari sparsi, assenze), ma date
-  relative a "oggi" invece che a un mese fisso, e UUID dinamici invece che fissi.
-- Vedi `PROJECT_DECISIONS.md` Session 61 per il ragionamento completo dietro ogni decisione di
-  design (perché `is_demo` booleano dedicato e non overload di `plan`, perché scope solo-web,
-  perché selettore ruolo in-app invece di 3 credenziali separate, ecc.).
+- Non confondere questo worktree (`hotfix-refresh-replay-detection`, base `main`) con `.claude/worktrees/demo-self-service` (base `main` + commit feature demo) — sono branch fratelli indipendenti, non l'uno dentro l'altro.
+- Env file (`.env`, `.env.test`) copiati manualmente da `.claude/worktrees/demo-self-service/backend/` all'inizio di questa sessione — se il worktree viene ricreato da zero, vanno ricopiati di nuovo (gitignored).
+- Database locale condiviso (`badge_system`, `badge_system_test`) tra i worktree — già migrato con lo schema del branch demo (comprese le migration 028-030), quindi i test di questo hotfix (che non dipendono da quelle tabelle) girano correttamente senza bisogno di ri-migrare.
 
 ---
 
-Per riprendere: leggi questo file, poi il piano (`~/.claude/plans/adesso-entra-nella-cartella-purring-toast.md`),
-poi entra nel worktree ed esegui `git log --oneline -6` per confermare lo stato, poi procedi dal
-Task 3/9 con `subagent-driven-development`.
+Per riprendere: leggi questo file, poi `docs/superpowers/plans/2026-07-14-refresh-replay-detection-hotfix.md`, poi procedi al merge/PR.
