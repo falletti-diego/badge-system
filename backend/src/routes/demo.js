@@ -422,7 +422,13 @@ router.post('/switch-role', requireAuth, createValidationMiddleware(DemoSwitchRo
         user_id: previousUserId,
         error: cleanupErr.message,
       });
-      // Best-effort — do not block the role switch itself on this cleanup.
+      // Accepted tradeoff, not an oversight: a failure here leaves the
+      // previous role's refresh token live until it expires naturally
+      // (max 7 days) instead of blocking the switch on a transient DB
+      // hiccup. Confined to the caller's own demo tenant — never a
+      // cross-tenant or real-customer exposure — so failing the whole
+      // role switch over this best-effort cleanup isn't worth the UX cost
+      // for a sandbox session.
     }
 
     const { token, refresh_token, user } = await issueDemoSession(targetEmployee, clientId);
@@ -450,4 +456,3 @@ router.post('/switch-role', requireAuth, createValidationMiddleware(DemoSwitchRo
 });
 
 module.exports = router;
-module.exports.issueDemoSession = issueDemoSession;
