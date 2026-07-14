@@ -59,8 +59,8 @@ describe('S.32.7 Load Testing: Concurrent Refresh', () => {
   test('10 concurrent requests: first succeeds, 9 blocked as replays', async () => {
     const mockClient1 = createMockClient([
       { rows: [] }, // BEGIN
-      { rows: [{ jti }] }, // SELECT FOR UPDATE (found - current valid jti from login)
       { rows: [] }, // SELECT revoked
+      { rows: [{ jti }] }, // SELECT FOR UPDATE (found - current valid jti from login)
       { rows: [] }, // DELETE (consumed)
       { rows: [{ id: userId, role: 'admin', client_id: '550e8400-e29b-41d4-a716-446655440001', name: 'Admin', email: 'admin@test.local' }] }, // SELECT
       { rows: [] }, // INSERT new jti
@@ -71,6 +71,7 @@ describe('S.32.7 Load Testing: Concurrent Refresh', () => {
     for (let i = 1; i < 10; i++) {
       const mockClientN = createMockClient([
         { rows: [] }, // BEGIN
+        { rows: [] }, // SELECT revoked
         { rows: [] }, // SELECT FOR UPDATE (not found - already consumed = replay)
         { rows: [] }, // INSERT revoked
         { rows: [] }, // COMMIT
@@ -96,8 +97,8 @@ describe('S.32.7 Load Testing: Concurrent Refresh', () => {
   test('Sequential refresh succeeds for different tokens', async () => {
     const mock1 = createMockClient([
       { rows: [] }, // BEGIN
-      { rows: [{ jti }] }, // SELECT FOR UPDATE (found - current valid jti from login)
       { rows: [] }, // SELECT revoked
+      { rows: [{ jti }] }, // SELECT FOR UPDATE (found - current valid jti from login)
       { rows: [] }, // DELETE (consumed)
       { rows: [{ id: userId, role: 'admin', client_id: '550e8400-e29b-41d4-a716-446655440001', name: 'Admin', email: 'admin@test.local' }] }, // SELECT
       { rows: [] }, // INSERT jti_1

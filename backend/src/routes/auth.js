@@ -152,8 +152,14 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
     });
 
     // Generate refresh token with jti for S.32.7 token rotation
+    // `email` is included so POST /refresh can tell a @badge.local demo
+    // session apart from a real DB session by domain, the same signal
+    // login itself just used below -- NOT by re-deriving identity from
+    // `user_id` via DEMO_USERS.find(), which collides for any real
+    // employee whose id happens to match a DEMO_USERS fixture entry
+    // (e.g. maria.rossi@torino.it, see migrations/022_merge_maria_*).
     const jti = uuid();
-    const refreshPayload = { user_id: user.id, type: 'refresh', jti };
+    const refreshPayload = { user_id: user.id, email: user.email, type: 'refresh', jti };
     const refresh_token = jwt.sign(refreshPayload, JWT_PRIVATE_KEY, {
       algorithm: JWT_ALGORITHM,
       expiresIn: REFRESH_TOKEN_EXPIRY,
@@ -266,6 +272,21 @@ router.post('/refresh', async (req, res) => {
     // First check if this is a demo user (no DB queries needed)
     const demoUser = DEMO_USERS.find((u) => u.id === user_id);
 
+    // Whether THIS session was issued via the @badge.local demo login path
+    // (POST /login skips used_tokens tracking there — see BADGE_LOCAL_DOMAIN
+    // guard above). Derived from the token's own `email` claim, NOT from
+    // `demoUser` (an id-based DEMO_USERS lookup) — a real employee's id can
+    // collide with a DEMO_USERS fixture id (e.g. maria.rossi@torino.it now
+    // shares an id with the maria@badge.local fixture entry, see
+    // migrations/022_merge_maria_badge_local_to_real_employee.sql), which
+    // would otherwise falsely exempt her real, DB-authenticated session
+    // from replay tracking. Refresh tokens issued before this fix may lack
+    // `email` (the very first refresh_token from POST /login didn't carry
+    // it); the typeof guard treats that as "not a demo session" — the safe
+    // default, since normal (non-exempt) tracking is what a real user needs
+    // regardless of whether `email` happens to be present.
+    const isBadgeLocalSession = typeof decoded.email === 'string' && decoded.email.endsWith(BADGE_LOCAL_DOMAIN);
+
     // Fix #5: Get explicit connection for transaction control (try-finally cleanup)
     // Only connect to DB if needed (non-demo users or if jti needs to be checked/recorded)
     const needsDbConnection = !demoUser || jti_old;
@@ -294,6 +315,27 @@ router.post('/refresh', async (req, res) => {
         // Fix #5: Use explicit transaction for atomicity
         await client.query('BEGIN');
 
+        // Fix #3: Check if user is revoked (permanent or temporary revoke
+        // within window). Runs BEFORE the replay check (reordered from the
+        // original): an admin revoke (POST /revoke-session) deletes the
+        // user's used_tokens rows, which would otherwise make the replay
+        // check below fire on legitimate grounds (row absent) and
+        // overwrite a PERMANENT revoke (revoked_until=NULL) with a
+        // temporary 5-minute one via its ON CONFLICT DO UPDATE — silently
+        // un-revoking the user 5 minutes later. Checking revoked_tokens
+        // first means a revoked user always gets the correct
+        // "User session revoked" response and the revoke is never touched.
+        const revokeCheck = await client.query(
+          `SELECT revoked_at FROM revoked_tokens
+           WHERE user_id = $1 AND (revoked_until IS NULL OR revoked_until > NOW())`,
+          [user_id]
+        );
+
+        if (revokeCheck.rows.length > 0) {
+          await client.query('COMMIT');
+          return res.status(401).json({ error: 'SESSION_REVOKED', message: 'User session revoked' });
+        }
+
         // Fix #1 (corrected): SELECT FOR UPDATE locks the current, valid,
         // not-yet-consumed jti row so concurrent refresh attempts of the
         // SAME token serialize instead of both succeeding. Presence of the
@@ -303,12 +345,12 @@ router.post('/refresh', async (req, res) => {
         // jti was already consumed by an earlier refresh (a genuine
         // replay) or never existed (forged/garbage jti) — reject.
         //
-        // demoUser accounts are exempt: POST /login deliberately never
-        // inserts a used_tokens row for @badge.local accounts (see
-        // BADGE_LOCAL_DOMAIN guard above), so their jti is *always*
-        // "absent" by design — applying the found/not-found check to them
-        // would reject every single demo refresh as a false replay.
-        if (jti_old && !demoUser) {
+        // @badge.local demo sessions are exempt: POST /login deliberately
+        // never inserts a used_tokens row for them (see BADGE_LOCAL_DOMAIN
+        // guard above), so their jti is *always* "absent" by design —
+        // applying the found/not-found check to them would reject every
+        // single demo refresh as a false replay.
+        if (jti_old && !isBadgeLocalSession) {
           const currentJtiCheck = await client.query(
             'SELECT 1 FROM used_tokens WHERE jti = $1 FOR UPDATE',
             [jti_old]
@@ -339,21 +381,9 @@ router.post('/refresh', async (req, res) => {
           }
         }
 
-        // Fix #3: Check if user is revoked (permanent or temporary revoke within window)
-        const revokeCheck = await client.query(
-          `SELECT revoked_at FROM revoked_tokens
-           WHERE user_id = $1 AND (revoked_until IS NULL OR revoked_until > NOW())`,
-          [user_id]
-        );
-
-        if (revokeCheck.rows.length > 0) {
-          await client.query('COMMIT');
-          return res.status(401).json({ error: 'SESSION_REVOKED', message: 'User session revoked' });
-        }
-
         // Consume (delete) the current jti now that it's been validated —
         // it's about to be replaced by a freshly rotated one below.
-        if (jti_old && !demoUser) {
+        if (jti_old && !isBadgeLocalSession) {
           await client.query('DELETE FROM used_tokens WHERE jti = $1', [jti_old]);
         }
       }
@@ -409,13 +439,19 @@ router.post('/refresh', async (req, res) => {
         expiresIn: REFRESH_TOKEN_EXPIRY,
       });
 
-      // Insert new jti into used_tokens (if DB connection available)
+      // Insert new jti into used_tokens (if DB connection available). Skipped
+      // for @badge.local demo sessions -- POST /login never tracks their
+      // jti either, so tracking it only on rotation would leave orphaned,
+      // never-checked, never-cleaned rows accumulating in used_tokens for
+      // every demo refresh.
       if (client) {
-        await client.query(
-          `INSERT INTO used_tokens (user_id, jti)
-           VALUES ($1, $2)`,
-          [user_id, jti_new]
-        );
+        if (!isBadgeLocalSession) {
+          await client.query(
+            `INSERT INTO used_tokens (user_id, jti)
+             VALUES ($1, $2)`,
+            [user_id, jti_new]
+          );
+        }
         await client.query('COMMIT');
       }
 
