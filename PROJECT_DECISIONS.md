@@ -1,8 +1,39 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 13 Luglio 2026 (Session 61 — in pausa)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 26 ✅ (vibrazione check-in) | Grafici Trend Dashboard ✅ LIVE (api.dataxiom.it) | Dropdown Sede in Dashboard ✅ LIVE | Export CSV date/ora ✅ fix live | Pipeline CI/CD ✅ funzionante (backend + mobile) | 🚧 Ambiente Demo Self-Service IN CORSO (Task 1-2/9, worktree isolato, non ancora in main)  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Ambiente Demo Self-Service in costruzione (piano approvato, esecuzione a task singoli con pausa esplicita), prossimo: completare Task 3-9, poi MVP Hardening backlog residuo (Session 57) o staging environment + ONB.2
+**Last Updated:** 14 Luglio 2026 (Session 62 — hotfix refresh replay-detection pronto per merge, non ancora in main)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 26 ✅ (vibrazione check-in) | Grafici Trend Dashboard ✅ LIVE (api.dataxiom.it) | Dropdown Sede in Dashboard ✅ LIVE | Export CSV date/ora ✅ fix live | Pipeline CI/CD ✅ funzionante (backend + mobile) | 🔴 Hotfix `POST /auth/refresh` PRONTO in worktree isolato, **non ancora mergiato su main** (bug live in produzione: primo refresh di ogni cliente reale fallisce con 401) | 🚧 Ambiente Demo Self-Service IN PAUSA (Task 1-2/9, worktree isolato, non ancora in main)  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Merge urgente dell'hotfix refresh (Session 62) su main, poi riprendere Ambiente Demo Self-Service da Task 3/9 (piano approvato, esecuzione a task singoli con pausa esplicita), poi MVP Hardening backlog residuo (Session 57) o staging environment + ONB.2
+
+---
+
+## Session 62 — Hotfix `POST /auth/refresh`: replay-detection rifiutava il primo refresh di ogni cliente reale (14 Luglio 2026)
+
+### Contesto e scoperta
+Bug trovato per caso durante il Task 3/9 della Session 61 (Ambiente Demo Self-Service), testando end-to-end il `refresh_token` appena aggiunto a `POST /demo/start`. **Non è un bug introdotto dalla feature demo** — è un bug pre-esistente su `main`, già in produzione, indipendente e antecedente.
+
+### Causa radice
+Due commit già su `main` avevano lasciato la logica anti-replay di `POST /auth/refresh` in uno stato incoerente:
+1. **`907a6fb`** (12/6, "Remove jti insert from login endpoint - unblocks first refresh") aveva rimosso l'`INSERT INTO used_tokens` che `POST /login` eseguiva all'emissione del token, perché la sua presenza faceva sì che il *primo* refresh di qualunque token venisse scambiato per un replay. Questo però riapriva una race condition più stretta: un token appena emesso non ha nessuna riga da bloccare con `SELECT ... FOR UPDATE`, quindi due richieste di refresh concorrenti sullo stesso token fresco potevano entrambe avere successo.
+2. **`6abb03f`** (14/6, poche ore dopo, "S.32.7 Critical Fixes") aveva reintrodotto l'INSERT al login specificamente per chiudere quella race, **ma senza aggiornare la logica del controllo** in `/refresh`: il codice continuava a interpretare "riga trovata in `used_tokens`" come prova di replay — semantica corretta nel design *precedente* (blacklist di jti già consumati), ma opposta a quella richiesta dal nuovo design (jti inserito all'emissione, quindi "trovato" = "token corrente valido, non ancora consumato").
+
+Risultato: il primo tentativo di refresh di **ogni cliente reale** (non-`@badge.local`) falliva con `401 SESSION_REVOKED`, riproducibile al 100%. Gli account demo interni (`@badge.local`) non mostravano il sintomo perché `POST /login` salta esplicitamente il tracking del jti per loro — motivo per cui il bug non era mai stato notato nei test manuali di sessione.
+
+### Decisione: non un revert, ma completare il design di `6abb03f`
+Ripristinare `907a6fb` avrebbe riaperto la race condition che `6abb03f` aveva correttamente chiuso. La fix corretta inverte la semantica trovato/non-trovato (presenza = valido, procedi; assenza = già consumato o mai emesso, replay) mantenendo l'INSERT al login.
+
+### Due regressioni trovate dalla code review sulla fix stessa (poi corrette)
+Eseguita `/code-review` (6 agenti in parallelo, verifica indipendente) sulla prima versione della fix. Trovate e corrette 2 regressioni reali, non teoriche:
+
+1. **Collisione id con `DEMO_USERS`**: l'esenzione per le sessioni demo cercava `user_id` in `DEMO_USERS` per id. `maria.rossi@torino.it` (dipendente reale, login via password DB) condivide intenzionalmente l'id con la fixture `maria@badge.local` (`migrations/022_merge_maria_badge_local_to_real_employee.sql`) — quindi la sua sessione reale veniva scambiata per demo, disattivando silenziosamente sia il controllo anti-replay che la pulizia di `used_tokens` per il suo account. **Fix**: l'esenzione ora si basa sul dominio email presente nel payload del token (aggiunto `email` al refresh token emesso da `POST /login`), lo stesso segnale già usato da login stesso — non più su un id-lookup soggetto a collisioni.
+2. **Declassamento di una revoca permanente**: il controllo anti-replay girava *prima* del controllo `revoked_tokens`. Dopo una revoca amministrativa permanente (`POST /revoke-session`, che cancella le righe `used_tokens` dell'utente e imposta `revoked_until = NULL`), il refresh token residuo (non ancora scaduto per JWT) dell'utente revocato veniva classificato come "replay" invece che "sessione revocata" — e l'`INSERT ... ON CONFLICT DO UPDATE` del ramo replay **sovrascriveva silenziosamente la revoca permanente con una temporanea di 5 minuti**, permettendo all'utente revocato di riottenere accesso da solo. **Fix**: riordinato — `revoked_tokens` viene controllato prima del replay-check.
+
+Aggiunto anche un terzo touch-point mancante nella prima versione della fix (l'INSERT finale del jti ruotato non era esentato per le sessioni demo, causando accumulo di righe orfane in `used_tokens`).
+
+### Processo seguito
+`/superpowers:writing-plans` (piano: `docs/superpowers/plans/2026-07-14-refresh-replay-detection-hotfix.md`) → worktree isolato dedicato basato su `main` (non sul branch demo, per poter shippare indipendentemente) → `/superpowers:test-driven-development` diretto per l'implementazione iniziale (RED→GREEN→REFACTOR reale, verificato ad ogni passo) → `/code-review` (6 agenti paralleli + verifica) → fix delle 2 regressioni trovate, di nuovo via TDD con test di regressione dedicati.
+
+### Stato: non ancora mergiato
+Il lavoro vive interamente su `worktree-hotfix-refresh-replay-detection` (branch omonimo, base `main`). **Il bug è ancora live in produzione** finché questo branch non viene mergiato — priorità alta.
 
 ---
 
