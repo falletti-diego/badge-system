@@ -404,11 +404,16 @@ router.post('/switch-role', requireAuth, createValidationMiddleware(DemoSwitchRo
       throw new NotFoundError(`No demo employee found for role "${role}" in this tenant`);
     }
 
-    const { token, refresh_token, user } = await issueDemoSession(targetEmployee, clientId);
-
     // ---- Session hygiene: invalidate the previous role's refresh session ----
     // Targeted delete only — see function doc comment above for why this is
-    // NOT a call into revoke-session's revoked_tokens logic.
+    // NOT a call into revoke-session's revoked_tokens logic. Deliberately
+    // runs BEFORE issueDemoSession below: in the same-role no-op case,
+    // previousUserId === targetEmployee.id, so if this ran AFTER
+    // issueDemoSession's own used_tokens INSERT, it would delete the
+    // brand-new session's own jti row it just inserted, breaking that
+    // session's very first refresh. Deleting first (only the OLD row, if
+    // any) then letting issueDemoSession insert the new row afterwards is
+    // correct in both the cross-role and same-role cases.
     try {
       await pool.query('DELETE FROM used_tokens WHERE user_id = $1', [previousUserId]);
     } catch (cleanupErr) {
@@ -419,6 +424,8 @@ router.post('/switch-role', requireAuth, createValidationMiddleware(DemoSwitchRo
       });
       // Best-effort — do not block the role switch itself on this cleanup.
     }
+
+    const { token, refresh_token, user } = await issueDemoSession(targetEmployee, clientId);
 
     await logAudit(pool, {
       action: 'demo_role_switch',

@@ -194,6 +194,15 @@ describe('POST /api/v1/demo/switch-role (real database)', () => {
       expect(res.body.data.user.role).toBe('admin');
       const decoded = jwt.decode(res.body.data.token);
       expect(decoded.role).toBe('admin');
+
+      // The no-op's own freshly-issued refresh_token must itself remain
+      // usable — the session-hygiene cleanup for the "previous" role must
+      // not delete the very row it just inserted for this identical-role
+      // switch (previousUserId === targetEmployee.id in the no-op case).
+      const refreshRes = await request(app)
+        .post('/api/v1/auth/refresh')
+        .send({ refresh_token: res.body.data.refresh_token });
+      expect(refreshRes.status).toBe(200);
     } finally {
       await cleanupByEmail(email);
     }
