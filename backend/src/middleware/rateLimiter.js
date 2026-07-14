@@ -197,8 +197,44 @@ const csvLimiter = rateLimit({
   },
 });
 
+/**
+ * Demo-start rate limiter (3 req/hour per IP) — self-service demo tenant
+ * creation is a heavier operation (DB transaction + full seed dataset) and
+ * a public, unauthenticated endpoint, so it gets its own tighter window
+ * separate from authLimiter's per-minute login-brute-force window.
+ * SKIP in test environment (NODE_ENV === 'test') — see demo-start-rate-limit.test.js
+ * for how this limiter is exercised directly, bypassing the skip.
+ */
+const DEMO_START_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const demoStartLimiter = rateLimit({
+  windowMs: DEMO_START_WINDOW_MS,
+  max: 3,
+  standardHeaders: false,
+  store: createHybridStore('demo-start', DEMO_START_WINDOW_MS),
+  skip: (req) => process.env.NODE_ENV === 'test',
+  keyGenerator: (req) => req.ip,
+  handler: (req, res) => {
+    const retryAfter = Math.ceil(DEMO_START_WINDOW_MS / 1000);
+
+    logger.warn({
+      action: 'demo_start_rate_limit_exceeded',
+      ip: req.ip,
+      endpoint: req.path,
+    });
+
+    res.set('Retry-After', retryAfter.toString());
+    res.status(429).json({
+      error: 'RATE_LIMIT_EXCEEDED',
+      message: `Too many demo requests, please retry after ${retryAfter} seconds`,
+      statusCode: 429,
+      retryAfter,
+    });
+  },
+});
+
 module.exports = {
   apiLimiter,
   authLimiter,
   csvLimiter,
+  demoStartLimiter,
 };

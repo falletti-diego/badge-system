@@ -23,6 +23,17 @@ const LoginSchema = z.object({
 });
 
 // =====================================================
+// DEMO — POST /api/v1/demo/start
+// =====================================================
+// .strict() rejects any body field other than `email` (e.g. client_id, role)
+// so the public, unauthenticated caller cannot inject tenant/role data.
+const DemoStartSchema = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email format'),
+  }).strict(),
+});
+
+// =====================================================
 // 1. POST /api/checkin — Create check-in
 // =====================================================
 
@@ -501,6 +512,7 @@ const ApproveLeaveSchema = z.object({
 
 module.exports = {
   LoginSchema,
+  DemoStartSchema,
   PostCheckinSchema,
   GetCheckinsSchema,
   PutCheckinSchema,
