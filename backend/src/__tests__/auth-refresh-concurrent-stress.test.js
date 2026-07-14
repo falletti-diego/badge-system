@@ -2,6 +2,11 @@
  * S.32.7 Load Testing: Concurrent Refresh Stress Test
  * Tests behavior under concurrent refresh attempts with same token
  * Verifies first succeeds, subsequent are revoked as replays
+ *
+ * See docs/superpowers/plans/2026-07-14-refresh-replay-detection-hotfix.md
+ * for the corrected found/not-found semantics this file's mocks encode:
+ * a found jti row means "current, valid, unconsumed" (proceed); an absent
+ * row means "already consumed by an earlier refresh" (replay, reject).
  */
 
 const request = require('supertest');
@@ -54,9 +59,9 @@ describe('S.32.7 Load Testing: Concurrent Refresh', () => {
   test('10 concurrent requests: first succeeds, 9 blocked as replays', async () => {
     const mockClient1 = createMockClient([
       { rows: [] }, // BEGIN
-      { rows: [] }, // SELECT FOR UPDATE
+      { rows: [{ jti }] }, // SELECT FOR UPDATE (found - current valid jti from login)
       { rows: [] }, // SELECT revoked
-      { rows: [] }, // DELETE
+      { rows: [] }, // DELETE (consumed)
       { rows: [{ id: userId, role: 'admin', client_id: '550e8400-e29b-41d4-a716-446655440001', name: 'Admin', email: 'admin@test.local' }] }, // SELECT
       { rows: [] }, // INSERT new jti
       { rows: [] }, // COMMIT
@@ -66,7 +71,7 @@ describe('S.32.7 Load Testing: Concurrent Refresh', () => {
     for (let i = 1; i < 10; i++) {
       const mockClientN = createMockClient([
         { rows: [] }, // BEGIN
-        { rows: [{ jti }] }, // SELECT FOR UPDATE (replay)
+        { rows: [] }, // SELECT FOR UPDATE (not found - already consumed = replay)
         { rows: [] }, // INSERT revoked
         { rows: [] }, // COMMIT
       ]);
@@ -91,9 +96,9 @@ describe('S.32.7 Load Testing: Concurrent Refresh', () => {
   test('Sequential refresh succeeds for different tokens', async () => {
     const mock1 = createMockClient([
       { rows: [] }, // BEGIN
-      { rows: [] }, // SELECT FOR UPDATE
+      { rows: [{ jti }] }, // SELECT FOR UPDATE (found - current valid jti from login)
       { rows: [] }, // SELECT revoked
-      { rows: [] }, // DELETE
+      { rows: [] }, // DELETE (consumed)
       { rows: [{ id: userId, role: 'admin', client_id: '550e8400-e29b-41d4-a716-446655440001', name: 'Admin', email: 'admin@test.local' }] }, // SELECT
       { rows: [] }, // INSERT jti_1
       { rows: [] }, // COMMIT

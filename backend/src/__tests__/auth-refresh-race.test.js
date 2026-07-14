@@ -2,10 +2,16 @@
  * S.32.7 Race Condition & Replay Detection Tests
  * Tests concurrent refresh attacks, jti tracking, SELECT FOR UPDATE locking
  *
- * DESIGN CLARIFICATION:
+ * DESIGN (corrected 2026-07-14, see
+ * docs/superpowers/plans/2026-07-14-refresh-replay-detection-hotfix.md):
  * - LOGIN (DB users only): INSERT jti into used_tokens
- * - FIRST REFRESH: SELECT FOR UPDATE jti (finds row from login), DELETE jti, INSERT new jti, COMMIT
- * - SECOND REFRESH (same token): SELECT FOR UPDATE jti (finds nothing - was deleted), REPLAY DETECTED
+ * - FIRST REFRESH: SELECT FOR UPDATE jti (finds row from login) -> proceed,
+ *   DELETE jti, INSERT new jti, COMMIT
+ * - SECOND REFRESH (same, now-consumed token): SELECT FOR UPDATE jti
+ *   (finds nothing - was deleted by first refresh) -> REPLAY DETECTED
+ * - Demo (@badge.local) users: jti is never inserted at login, and the
+ *   replay check is skipped entirely for them (see demoUser guard in
+ *   routes/auth.js) — they are not subject to this check at all.
  *
  * For DEMO users (our test): No DB login occurs, so jti insert/delete don't happen automatically.
  * We simulate the sequence manually.
@@ -75,13 +81,14 @@ describe('S.32.7 Refresh Token Race Condition Prevention', () => {
     expect(loginRes.body.data.token).toBeDefined();
   });
 
-  test('Refresh succeeds when jti not found in used_tokens (first use of token)', async () => {
-    // Scenario: jti exists in token payload, but not in DB (not a replay)
+  test('Refresh succeeds when jti IS found in used_tokens (first use of token, inserted by login)', async () => {
+    // Scenario: jti exists both in the token payload AND in the DB (inserted
+    // at login) -- this is the current, valid, not-yet-consumed token.
     const mockClient = createMockClient([
       { rows: [] }, // BEGIN
-      { rows: [] }, // SELECT FOR UPDATE (jti not found - fresh token)
+      { rows: [{ jti }] }, // SELECT FOR UPDATE (jti found - fresh token from login)
       { rows: [] }, // SELECT revoked_tokens (not revoked)
-      { rows: [] }, // DELETE old jti (no rows to delete)
+      { rows: [] }, // DELETE old jti (row existed, now consumed)
       {
         rows: [{
           id: userId,
@@ -105,11 +112,12 @@ describe('S.32.7 Refresh Token Race Condition Prevention', () => {
     expect(mockClient.release).toHaveBeenCalled();
   });
 
-  test('Replay attack: second use of same token finds jti in DB and revokes', async () => {
-    // Scenario: jti was inserted by first refresh, now second refresh finds it -> REPLAY
+  test('Replay attack: reusing an already-consumed token finds no jti and revokes', async () => {
+    // Scenario: jti was already deleted (consumed) by an earlier refresh,
+    // so a second use of the exact same token finds nothing -> REPLAY
     const mockClient = createMockClient([
       { rows: [] }, // BEGIN
-      { rows: [{ jti }] }, // SELECT FOR UPDATE (found! = this is a REPLAY)
+      { rows: [] }, // SELECT FOR UPDATE (not found! = already consumed = REPLAY)
       { rows: [] }, // INSERT revoked_tokens
       { rows: [] }, // COMMIT
     ]);
@@ -126,12 +134,13 @@ describe('S.32.7 Refresh Token Race Condition Prevention', () => {
   });
 
   test('Concurrent refresh: SELECT FOR UPDATE serializes attempts', async () => {
-    // First concurrent request: SELECT FOR UPDATE acquires lock
+    // First concurrent request: SELECT FOR UPDATE finds the current valid
+    // jti (from login) and acquires the row lock while it's still present.
     const mockClient1 = createMockClient([
       { rows: [] }, // BEGIN
-      { rows: [] }, // SELECT FOR UPDATE (no rows - lock acquired)
+      { rows: [{ jti }] }, // SELECT FOR UPDATE (found - lock acquired on the current jti)
       { rows: [] }, // SELECT revoked_tokens
-      { rows: [] }, // DELETE old jti
+      { rows: [] }, // DELETE old jti (consumed)
       {
         rows: [{
           id: userId,
@@ -153,10 +162,12 @@ describe('S.32.7 Refresh Token Race Condition Prevention', () => {
     expect(res1.status).toBe(200);
     expect(mockClient1.release).toHaveBeenCalled();
 
-    // Second concurrent request: lock prevents it, finds jti now exists (was inserted by first)
+    // Second concurrent request: by the time its lock is granted, the first
+    // request has already deleted (consumed) the row -- SELECT FOR UPDATE
+    // now finds nothing, correctly flagging this as a replay.
     const mockClient2 = createMockClient([
       { rows: [] }, // BEGIN
-      { rows: [{ jti }] }, // SELECT FOR UPDATE (now finds the jti from first request!)
+      { rows: [] }, // SELECT FOR UPDATE (not found - already consumed by first request)
       { rows: [] }, // INSERT revoked_tokens (replay detected)
       { rows: [] }, // COMMIT
     ]);
@@ -173,7 +184,7 @@ describe('S.32.7 Refresh Token Race Condition Prevention', () => {
   test('Revoked user cannot refresh', async () => {
     const mockClient = createMockClient([
       { rows: [] }, // BEGIN
-      { rows: [] }, // SELECT FOR UPDATE
+      { rows: [{ jti }] }, // SELECT FOR UPDATE (found - not a replay, proceed to revoke check)
       { rows: [{ revoked_at: new Date().toISOString() }] }, // SELECT revoked_tokens (FOUND)
       { rows: [] }, // COMMIT
     ]);
@@ -185,15 +196,16 @@ describe('S.32.7 Refresh Token Race Condition Prevention', () => {
 
     expect(res.status).toBe(401);
     expect(res.body.error).toBe('SESSION_REVOKED');
+    expect(res.body.message).toBe('User session revoked');
     expect(mockClient.release).toHaveBeenCalled();
   });
 
   test('Connection released in finally block', async () => {
     const mockClient = createMockClient([
       { rows: [] }, // BEGIN
-      { rows: [] }, // SELECT FOR UPDATE
+      { rows: [{ jti }] }, // SELECT FOR UPDATE (found - valid, proceed through full flow)
       { rows: [] }, // SELECT revoked_tokens
-      { rows: [] }, // DELETE
+      { rows: [] }, // DELETE (consumed)
       {
         rows: [{
           id: userId,
