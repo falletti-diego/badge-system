@@ -96,6 +96,7 @@ describe('POST /api/v1/demo/start (real database)', () => {
       expect(res.status).toBe(200);
       expect(res.body.data.resumed).toBe(false);
       expect(typeof res.body.data.token).toBe('string');
+      expect(typeof res.body.data.refresh_token).toBe('string');
       expect(res.body.data.user.role).toBe('admin');
       expect(res.body.data.user.employee_id).toBeDefined();
 
@@ -103,6 +104,13 @@ describe('POST /api/v1/demo/start (real database)', () => {
       expect(decoded.role).toBe('admin');
       expect(decoded.client_id).toBeDefined();
       expect(decoded.employee_id).toBe(decoded.user_id);
+
+      // Refresh token is a genuine, distinct refresh-typed JWT for the same user.
+      const decodedRefresh = jwt.decode(res.body.data.refresh_token);
+      expect(decodedRefresh.type).toBe('refresh');
+      expect(decodedRefresh.user_id).toBe(decoded.user_id);
+      expect(decodedRefresh.jti).toBeDefined();
+      expect(res.body.data.refresh_token).not.toBe(res.body.data.token);
 
       // Row actually created, is_demo=true, expires ~7 days out
       const clientRow = await probePool.query(
@@ -127,6 +135,75 @@ describe('POST /api/v1/demo/start (real database)', () => {
         [decoded.client_id]
       );
       expect(audit.rows.length).toBeGreaterThan(0);
+    } finally {
+      await cleanupByEmail(email);
+    }
+  });
+
+  /**
+   * SKIPPED — blocked by a pre-existing, unrelated bug in POST
+   * /api/v1/auth/refresh, not by anything in demo.js.
+   *
+   * routes/auth.js POST /login writes the freshly-signed refresh token's
+   * jti into `used_tokens` immediately at issuance (S.32.7 "race condition
+   * fix", commit 6abb03f — "Login now inserts jti into used_tokens
+   * (best-effort, non-blocking) - Prevents concurrent refresh token
+   * duplication attack"). But POST /auth/refresh's replay check —
+   * `if (replayCheck.rows.length > 0) { ...REPLAY DETECTED... }` — treats
+   * *finding* that same jti row as proof of reuse. Since the row was just
+   * written by login/issuance, the very FIRST refresh attempt for any
+   * non-@badge.local user always hits this branch and gets rejected with
+   * SESSION_REVOKED — the opposite of the two-line design the project's
+   * own auth-refresh-race.test.js documents in its header comment
+   * ("FIRST REFRESH: SELECT FOR UPDATE jti (finds row from login), DELETE
+   * jti, INSERT new jti, COMMIT" — i.e. finding the row on first use
+   * should proceed, not be treated as replay).
+   *
+   * This is not demo-specific: reproduced directly against routes/auth.js
+   * POST /login + POST /refresh for a plain DB employee (no demo.js
+   * involved) during this task's verification. It affects every real
+   * customer login where the best-effort jti insert succeeds — i.e. the
+   * common case, not an edge case.
+   *
+   * History: this exact bug was already found and fixed once, in commit
+   * 907a6fb ("fix(S.32.7): Remove jti insert from login endpoint - unblocks
+   * first refresh"), then silently reintroduced by 6abb03f for a different
+   * reason (closing a FOR-UPDATE-on-no-row race window) without restoring
+   * a test that exercises a real (non-@badge.local) login → refresh round
+   * trip. The only test that does that today, auth.integration.test.js, is
+   * gated behind `RUN_INTEGRATION=1` (skipped in normal `npm test`) and
+   * always logs in as an @badge.local demo account, which skips jti
+   * tracking entirely (`!email.endsWith(BADGE_LOCAL_DOMAIN)` guards the
+   * insert) — so this regression has no green/red signal in CI today.
+   *
+   * Deliberately NOT fixed as part of the demo-self-service task: it's a
+   * shared, security-critical authentication path well outside this PR's
+   * scope, and any fix needs to reconcile with auth-refresh-race.test.js
+   * and auth-refresh-concurrent-stress.test.js's own concurrency
+   * invariants rather than a quick patch here. Flagged for separate,
+   * dedicated triage. Un-skip this test once /auth/refresh is fixed — it
+   * is written to the intended, correct behavior already.
+   */
+  it.skip('BLOCKED (pre-existing auth.js bug, see comment above): the demo refresh_token can be redeemed via POST /api/v1/auth/refresh for a new access token', async () => {
+    if (!dbAvailable) return;
+    const email = uniqueEmail('refresh-roundtrip');
+
+    try {
+      const startRes = await request(app).post('/api/v1/demo/start').send({ email });
+      expect(startRes.status).toBe(200);
+      const decoded = jwt.decode(startRes.body.data.token);
+
+      const refreshRes = await request(app)
+        .post('/api/v1/auth/refresh')
+        .send({ refresh_token: startRes.body.data.refresh_token });
+
+      expect(refreshRes.status).toBe(200);
+      expect(typeof refreshRes.body.data.token).toBe('string');
+      expect(typeof refreshRes.body.data.refresh_token).toBe('string');
+      const decodedNewAccess = jwt.decode(refreshRes.body.data.token);
+      expect(decodedNewAccess.user_id).toBe(decoded.user_id);
+      expect(decodedNewAccess.client_id).toBe(decoded.client_id);
+      expect(decodedNewAccess.role).toBe('admin');
     } finally {
       await cleanupByEmail(email);
     }
@@ -161,6 +238,7 @@ describe('POST /api/v1/demo/start (real database)', () => {
       const second = await request(app).post('/api/v1/demo/start').send({ email });
       expect(second.status).toBe(200);
       expect(second.body.data.resumed).toBe(true);
+      expect(typeof second.body.data.refresh_token).toBe('string');
 
       const secondDecoded = jwt.decode(second.body.data.token);
       expect(secondDecoded.client_id).toBe(firstClientId);

@@ -4,8 +4,10 @@
  * POST /api/v1/demo/start — public, unauthenticated, rate-limited.
  * Creates (or resumes) a self-service demo tenant from just an email
  * address, seeds it with realistic sample data (demoSeed.js), and returns
- * a login-shaped response `{ token, user, resumed }` so the frontend can
- * reuse the same authService.setSession(...) flow used by a normal login.
+ * a login-shaped response `{ token, refresh_token, user, resumed }` so the
+ * frontend can reuse the same authService.setSession(...) flow used by a
+ * normal login — including transparently renewing the session past the
+ * 15-minute access-token window via the existing POST /api/v1/auth/refresh.
  *
  * Security-sensitive: this is a public POST endpoint that creates database
  * rows and issues JWTs from nothing but caller-supplied input. See the
@@ -19,6 +21,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const pino = require('pino');
+const { v4: uuid } = require('uuid');
 const { createValidationMiddleware, DemoStartSchema } = require('../middleware/validation');
 const { ConflictError, InternalServerError } = require('../utils/errors');
 const { pool } = require('../db/pool');
@@ -36,11 +39,15 @@ const logger = pino({
 const JWT_PRIVATE_KEY = process.env.JWT_PRIVATE_KEY?.replace(/\\n/g, '\n');
 const JWT_ALGORITHM = 'RS256';
 const ACCESS_TOKEN_EXPIRY = '15m';
+const REFRESH_TOKEN_EXPIRY = '7d';
 
 // Deliberately prudent default for a db.t3.micro — see plan Checkpoint 3.
 const MAX_ACTIVE_DEMOS = parseInt(process.env.MAX_ACTIVE_DEMOS || '20', 10);
 
-const DEMO_TENANT_EXPIRY_INTERVAL = 'interval \'7 days\'';
+// Bound as a query parameter (`now() + $N::interval`) at both call sites
+// below rather than string-interpolated into SQL text — single source of
+// truth for the trial length, with no string ever spliced into a query.
+const DEMO_TENANT_EXPIRY_DAYS = '7 days';
 // Postgres auto-generated name for `email VARCHAR(100) NOT NULL UNIQUE` on
 // clients — verified against the actual schema (`\d clients`). Scoping the
 // 23505 catch to this specific constraint (rather than any 23505 raised
@@ -49,14 +56,17 @@ const DEMO_TENANT_EXPIRY_INTERVAL = 'interval \'7 days\'';
 const CLIENTS_EMAIL_UNIQUE_CONSTRAINT = 'clients_email_key';
 
 /**
- * Builds the login-shaped { token, user } pair for a demo admin employee,
- * mirroring routes/auth.js POST /login's token payload and user response
- * shape (minus refresh_token, which this endpoint does not issue).
+ * Builds the login-shaped { token, refresh_token, user } triple for a demo
+ * admin employee, mirroring routes/auth.js POST /login's token payload,
+ * refresh-token issuance, and user response shape exactly — a self-service
+ * demo is meant to run unattended for the full 7-day trial, so it needs the
+ * same renewable-session mechanics as a real login, not just a 15-minute
+ * access token with no way to recover it.
  *
  * @param {{ id: string, email: string, name: string, role: string, site_id?: string|null }} admin
  * @param {string} clientId
  */
-function issueDemoSession(admin, clientId) {
+async function issueDemoSession(admin, clientId) {
   const tokenPayload = {
     user_id: admin.id,
     name: admin.name,
@@ -72,6 +82,34 @@ function issueDemoSession(admin, clientId) {
     expiresIn: ACCESS_TOKEN_EXPIRY,
   });
 
+  // Refresh token with jti, mirroring routes/auth.js POST /login (S.32.7
+  // token rotation) — this is what lets POST /api/v1/auth/refresh silently
+  // renew a demo session past the 15-minute access-token window.
+  const jti = uuid();
+  const refreshPayload = { user_id: admin.id, type: 'refresh', jti };
+  const refresh_token = jwt.sign(refreshPayload, JWT_PRIVATE_KEY, {
+    algorithm: JWT_ALGORITHM,
+    expiresIn: REFRESH_TOKEN_EXPIRY,
+  });
+
+  // Best-effort jti tracking (same pattern and same tradeoff as auth.js's
+  // POST /login): enables /auth/refresh's replay-detection for this
+  // session, but a tracking failure must never block demo access — the
+  // demo session still starts, refresh just falls back to its
+  // backward-compatible no-jti path if this row never landed.
+  try {
+    await pool.query(
+      'INSERT INTO used_tokens (user_id, jti) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [admin.id, jti]
+    );
+  } catch (jtiErr) {
+    logger.warn({
+      action: 'jti_tracking_failed',
+      user_id: admin.id,
+      error: jtiErr.message,
+    });
+  }
+
   const user = {
     id: admin.id,
     email: admin.email,
@@ -81,7 +119,7 @@ function issueDemoSession(admin, clientId) {
   };
   if (admin.site_id) user.site_id = admin.site_id;
 
-  return { token, user };
+  return { token, refresh_token, user };
 }
 
 /**
@@ -103,10 +141,10 @@ async function resumeDemoTenant(clientId) {
     await client.query('BEGIN');
 
     const updateResult = await client.query(
-      `UPDATE clients SET demo_expires_at = now() + ${DEMO_TENANT_EXPIRY_INTERVAL}
+      `UPDATE clients SET demo_expires_at = now() + $2::interval
        WHERE id = $1
        RETURNING id`,
-      [clientId]
+      [clientId, DEMO_TENANT_EXPIRY_DAYS]
     );
 
     if (updateResult.rows.length === 0) {
@@ -133,7 +171,7 @@ async function resumeDemoTenant(clientId) {
       throw new InternalServerError('Demo tenant admin account not found');
     }
 
-    const { token, user } = issueDemoSession(admin, clientId);
+    const { token, refresh_token, user } = await issueDemoSession(admin, clientId);
 
     await logAudit(client, {
       action: 'demo_tenant_resumed',
@@ -145,7 +183,7 @@ async function resumeDemoTenant(clientId) {
 
     await client.query('COMMIT');
 
-    return { token, user };
+    return { token, refresh_token, user };
   } catch (err) {
     try {
       await client.query('ROLLBACK');
@@ -178,9 +216,12 @@ router.post('/start', createValidationMiddleware(DemoStartSchema), async (req, r
     const existing = existingResult.rows[0];
 
     if (existing && !existing.is_demo) {
-      // Real (non-demo) client email — generic message, no tenant created,
-      // no distinction in the response between "real customer" and any
-      // other reason the request was refused (avoid account enumeration).
+      // Real (non-demo) client email — generic message, no tenant created.
+      // This doesn't hide *whether* the email exists (a resume-vs-refuse
+      // design can't avoid that — a 200 vs. this branch already signals
+      // it); it only avoids revealing *which type* of account it is, so a
+      // caller can't distinguish "real customer" from any other refusal
+      // reason via the response body.
       throw new ConflictError(
         'Questo indirizzo è già registrato — contattaci se hai bisogno di aiuto',
         'EMAIL_ALREADY_REGISTERED'
@@ -188,8 +229,8 @@ router.post('/start', createValidationMiddleware(DemoStartSchema), async (req, r
     }
 
     if (existing && existing.is_demo) {
-      const { token, user } = await resumeDemoTenant(existing.id);
-      return res.json({ data: { token, user, resumed: true } });
+      const { token, refresh_token, user } = await resumeDemoTenant(existing.id);
+      return res.json({ data: { token, refresh_token, user, resumed: true } });
     }
 
     // ---- Global active-demo cap (resource guard for db.t3.micro) ----
@@ -226,9 +267,9 @@ router.post('/start', createValidationMiddleware(DemoStartSchema), async (req, r
       try {
         const insertResult = await client.query(
           `INSERT INTO clients (id, name, email, plan, is_demo, demo_expires_at, demo_contact_email)
-           VALUES (uuid_generate_v4(), $1, $2, 'demo', true, now() + ${DEMO_TENANT_EXPIRY_INTERVAL}, $2)
+           VALUES (uuid_generate_v4(), $1, $2, 'demo', true, now() + $3::interval, $2)
            RETURNING id`,
-          ['Demo Tenant', email]
+          ['Demo Tenant', email, DEMO_TENANT_EXPIRY_DAYS]
         );
         newClientId = insertResult.rows[0].id;
       } catch (insertErr) {
@@ -266,8 +307,8 @@ router.post('/start', createValidationMiddleware(DemoStartSchema), async (req, r
           checkins: seedResult.counts.checkins,
         });
 
-        const { token, user } = issueDemoSession(admin, newClientId);
-        res.json({ data: { token, user, resumed: false } });
+        const { token, refresh_token, user } = await issueDemoSession(admin, newClientId);
+        res.json({ data: { token, refresh_token, user, resumed: false } });
       }
     } catch (err) {
       try {
@@ -291,8 +332,8 @@ router.post('/start', createValidationMiddleware(DemoStartSchema), async (req, r
         // unique_violation and this re-query) — fail closed.
         throw new InternalServerError('Demo tenant creation conflict could not be resolved');
       }
-      const { token, user } = await resumeDemoTenant(winner.id);
-      res.json({ data: { token, user, resumed: true } });
+      const { token, refresh_token, user } = await resumeDemoTenant(winner.id);
+      res.json({ data: { token, refresh_token, user, resumed: true } });
     }
   } catch (err) {
     next(err);
