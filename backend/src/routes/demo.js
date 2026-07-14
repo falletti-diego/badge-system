@@ -348,8 +348,10 @@ router.post('/start', createValidationMiddleware(DemoStartSchema), async (req, r
  * Fail-closed guard (non-negotiable — see plan Checkpoint 4): before doing
  * anything else, verify the caller's own client_id has is_demo = true. This
  * endpoint must NEVER be able to re-issue a JWT for a real tenant's
- * employees, so the guard is the very first thing this handler does, and a
- * failure here returns 403 immediately with no further work.
+ * employees, so the guard is the first thing this handler's own logic does
+ * (after body-shape validation, which only rejects malformed requests and
+ * never touches the database), and a failure here returns 403 immediately
+ * with no further work.
  *
  * Body: { role: 'admin'|'manager'|'employee' } (Zod enum — see
  * DemoSwitchRoleSchema — no other value accepted).
@@ -364,16 +366,24 @@ router.post('/start', createValidationMiddleware(DemoStartSchema), async (req, r
  * still re-issues an equivalent token, no special-cased response — the
  * frontend doesn't need to handle a different shape for this case.
  *
- * Session hygiene: after issuing the new role's token, the previous role's
- * refresh session is invalidated via a targeted
- * `DELETE FROM used_tokens WHERE user_id = $1` (previous role's
- * employee_id) — NOT by reusing POST /auth/revoke-session's permanent
- * revoked_tokens logic (see plan's resolved design decision: that would
- * risk a demo visitor's later real Admin session being permanently
- * revoked by a stale revoked_tokens row keyed on the same employee_id).
- * The DELETE is scoped and self-contained: if the old refresh token is
- * ever replayed, POST /auth/refresh's replay-detection (an absent
- * used_tokens row = already consumed) correctly rejects it with 401.
+ * No proactive session-hygiene cleanup: an earlier version of this route
+ * deleted the previous role's used_tokens row here (`DELETE FROM
+ * used_tokens WHERE user_id = $1`), matched by user_id only. Code review
+ * found this could race with a concurrent, legitimate POST /auth/refresh
+ * for the SAME user_id: if that refresh's own DELETE-old/INSERT-new
+ * jti-rotation commits between this route's guard checks and its cleanup
+ * step, the unscoped-by-jti DELETE here would remove the refresh it just
+ * legitimately created (not just the stale one), causing a false
+ * REPLAY_ATTACK_DETECTED and a 5-minute lockout on a session that never
+ * replayed anything. Scoping the delete correctly would require this
+ * route to know the caller's specific old jti, which isn't available from
+ * an access token (only refresh tokens carry a jti). Since the plan
+ * itself frames this cleanup as hygiene, not a security requirement (see
+ * plan §4: "non un rischio di sicurezza, ma un accumulo di sessioni
+ * fantasma da evitare"), the previous role's refresh token is now simply
+ * left to expire naturally (max 7 days) — accepting some session
+ * accumulation over eliminating the false-lockout risk entirely. See
+ * PROJECT_DECISIONS.md Session 63 for the full analysis.
  */
 router.post('/switch-role', requireAuth, createValidationMiddleware(DemoSwitchRoleSchema), async (req, res, next) => {
   const { role } = req.validated.body;
@@ -404,33 +414,9 @@ router.post('/switch-role', requireAuth, createValidationMiddleware(DemoSwitchRo
       throw new NotFoundError(`No demo employee found for role "${role}" in this tenant`);
     }
 
-    // ---- Session hygiene: invalidate the previous role's refresh session ----
-    // Targeted delete only — see function doc comment above for why this is
-    // NOT a call into revoke-session's revoked_tokens logic. Deliberately
-    // runs BEFORE issueDemoSession below: in the same-role no-op case,
-    // previousUserId === targetEmployee.id, so if this ran AFTER
-    // issueDemoSession's own used_tokens INSERT, it would delete the
-    // brand-new session's own jti row it just inserted, breaking that
-    // session's very first refresh. Deleting first (only the OLD row, if
-    // any) then letting issueDemoSession insert the new row afterwards is
-    // correct in both the cross-role and same-role cases.
-    try {
-      await pool.query('DELETE FROM used_tokens WHERE user_id = $1', [previousUserId]);
-    } catch (cleanupErr) {
-      logger.warn({
-        action: 'demo_switch_role_session_cleanup_failed',
-        user_id: previousUserId,
-        error: cleanupErr.message,
-      });
-      // Accepted tradeoff, not an oversight: a failure here leaves the
-      // previous role's refresh token live until it expires naturally
-      // (max 7 days) instead of blocking the switch on a transient DB
-      // hiccup. Confined to the caller's own demo tenant — never a
-      // cross-tenant or real-customer exposure — so failing the whole
-      // role switch over this best-effort cleanup isn't worth the UX cost
-      // for a sandbox session.
-    }
-
+    // No session-hygiene cleanup here — see function doc comment above for
+    // why the previous role's refresh token is deliberately left to expire
+    // naturally rather than proactively deleted.
     const { token, refresh_token, user } = await issueDemoSession(targetEmployee, clientId);
 
     await logAudit(pool, {

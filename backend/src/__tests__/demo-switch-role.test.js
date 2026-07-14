@@ -15,8 +15,10 @@
  *   2. Invalid `role` value -> 400.
  *   3. New token's client_id always equals the caller's original client_id.
  *   4. No-op: switching to the currently-active role -> 200, not an error.
- *   5. Session hygiene: old refresh_token unusable after a switch (401 via
- *      POST /auth/refresh's replay detection).
+ *   5. Previous role's refresh_token is deliberately left usable after a
+ *      switch (not proactively invalidated) — see routes/demo.js's doc
+ *      comment above POST /switch-role for why a code-review-found race
+ *      condition ruled out proactive session-hygiene cleanup here.
  *   6. All 3 roles reachable, correct employee_id per role, audit logged.
  */
 
@@ -196,9 +198,8 @@ describe('POST /api/v1/demo/switch-role (real database)', () => {
       expect(decoded.role).toBe('admin');
 
       // The no-op's own freshly-issued refresh_token must itself remain
-      // usable — the session-hygiene cleanup for the "previous" role must
-      // not delete the very row it just inserted for this identical-role
-      // switch (previousUserId === targetEmployee.id in the no-op case).
+      // usable — there's no cleanup step to accidentally delete it, but
+      // this guards against a future regression re-introducing one.
       const refreshRes = await request(app)
         .post('/api/v1/auth/refresh')
         .send({ refresh_token: res.body.data.refresh_token });
@@ -209,10 +210,19 @@ describe('POST /api/v1/demo/switch-role (real database)', () => {
   });
 
   // ----------------------------------------------------------------
-  // Checkpoint 4.5 — session hygiene: old refresh token unusable
+  // Checkpoint 4.5 — previous role's refresh token deliberately left valid
   // ----------------------------------------------------------------
 
-  it('invalidates the previous role session — old refresh_token fails after a switch', async () => {
+  it('does not invalidate the previous role session — old refresh_token still works after a switch', async () => {
+    // Deliberate design choice, not an oversight: an earlier version of
+    // this route proactively deleted the previous role's used_tokens row,
+    // but code review found this could race with a concurrent, legitimate
+    // POST /auth/refresh for the same user_id and delete a session it had
+    // just legitimately rotated, causing a false replay-detected lockout.
+    // The plan itself frames this cleanup as non-critical hygiene, not a
+    // security requirement, so the tradeoff was resolved by leaving the
+    // previous role's refresh token to expire naturally instead. See
+    // PROJECT_DECISIONS.md Session 63 for the full analysis.
     if (!dbAvailable) return;
     const { email, body } = await startDemo('session-hygiene');
     const oldRefreshToken = body.refresh_token;
@@ -228,7 +238,7 @@ describe('POST /api/v1/demo/switch-role (real database)', () => {
         .post('/api/v1/auth/refresh')
         .send({ refresh_token: oldRefreshToken });
 
-      expect(refreshRes.status).toBe(401);
+      expect(refreshRes.status).toBe(200);
     } finally {
       await cleanupByEmail(email);
     }
