@@ -20,6 +20,18 @@ const apiClient = axios.create({
   },
 });
 
+// Endpoints that are genuinely public (no auth required by the route itself)
+// and must NEVER receive a stale Authorization header from a previous,
+// unrelated session on the same browser. Sending one is not just pointless —
+// the backend's global compositeAuthMiddleware (optionalAuth + checkRevoked,
+// app.js) runs before every route regardless of whether that route requires
+// auth, so a valid-but-revoked token would make checkRevoked reject an
+// otherwise-public request with 401 SESSION_REVOKED. See TryDemoPage.jsx /
+// POST /demo/start — a public landing page must keep working for a visitor
+// whose browser happens to hold a revoked token from an earlier, unrelated
+// login.
+const PUBLIC_NO_AUTH_URLS = ['/api/v1/demo/start'];
+
 /**
  * Request interceptor: rewrite /api/ → /api/v1/ and add authorization token.
  * Callers keep /api/... paths; versioning is transparent.
@@ -30,7 +42,7 @@ apiClient.interceptors.request.use(
       config.url = '/api/v1/' + config.url.slice('/api/'.length);
     }
     const token = localStorage.getItem('badge_auth_token');
-    if (token) {
+    if (token && !PUBLIC_NO_AUTH_URLS.includes(config.url)) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;

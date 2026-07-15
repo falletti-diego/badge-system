@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Container, Box, TextField, Button, Typography, Alert, CircularProgress } from '@mui/material';
 import apiClient from '../services/apiClient';
@@ -29,6 +29,18 @@ export default function TryDemoPage() {
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState(null);
   const [resumed, setResumed] = useState(false);
+  const resumeRedirectTimeoutRef = useRef(null);
+
+  // Clear any pending "resumed" redirect timer on unmount so a visitor who
+  // navigates away within the confirmation window doesn't get force-navigated
+  // to /dashboard later by a stale timer.
+  useEffect(() => {
+    return () => {
+      if (resumeRedirectTimeoutRef.current) {
+        clearTimeout(resumeRedirectTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -58,7 +70,7 @@ export default function TryDemoPage() {
         // Brief confirmation before navigating away — the user gets to see
         // the "Bentornato" message rather than an instant, silent redirect.
         setResumed(true);
-        setTimeout(() => navigate('/dashboard'), 1200);
+        resumeRedirectTimeoutRef.current = setTimeout(() => navigate('/dashboard'), 1200);
       } else {
         navigate('/dashboard');
       }
@@ -76,7 +88,12 @@ export default function TryDemoPage() {
         message = data.message;
       } else if (data?.details?.length) {
         message = data.details[0].message;
-      } else if (err.request) {
+      } else if (!err.response && err.request) {
+        // axios sets err.request truthy for any dispatched request, even one
+        // that got a real HTTP response — so this must be gated on the
+        // *absence* of err.response, otherwise a response with a minimal/odd
+        // body (e.g. a bare 404 with no message/details) gets misreported as
+        // a network connectivity problem.
         message = 'Errore di rete — controlla la connessione e riprova.';
       } else {
         message = 'Qualcosa è andato storto — riprova tra un momento.';

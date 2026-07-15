@@ -268,4 +268,74 @@ describe('TryDemoPage', () => {
 
     expect(mockNavigate).not.toHaveBeenCalled();
   });
+
+  // Regression test for code-review Fix 3: a real HTTP response with a
+  // minimal/unexpected body (axios still sets err.request truthy in this
+  // case) must NOT be misreported as "Errore di rete" — it should fall
+  // through to the generic fallback message instead.
+  test('shows the generic fallback (not "Errore di rete") when the response body has no message/details/known error code', async () => {
+    apiClient.post.mockRejectedValue({
+      request: {},
+      response: {
+        status: 404,
+        data: { error: 'Not Found', path: '/api/v1/demo/start' },
+      },
+    });
+
+    render(
+      <Router>
+        <TryDemoPage />
+      </Router>
+    );
+
+    fireEvent.change(screen.getByLabelText(/la tua email/i), { target: { value: 'prospect@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /entra nella demo/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/qualcosa è andato storto/i)).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/errore di rete/i)).not.toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  // Regression test for code-review Fix 2: the resumed-branch setTimeout
+  // must be cleared on unmount so a visitor who navigates away within the
+  // confirmation window is never force-navigated later by a stale timer.
+  test('clears the pending resumed-redirect timer on unmount (no late navigate call)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    apiClient.post.mockResolvedValue({
+      data: {
+        data: {
+          token: 'demo.jwt.token',
+          refresh_token: 'demo.refresh.token',
+          user: { id: 'user-1', email: 'prospect@example.com', role: 'admin' },
+          resumed: true,
+        },
+      },
+    });
+
+    const { unmount } = render(
+      <Router>
+        <TryDemoPage />
+      </Router>
+    );
+
+    fireEvent.change(screen.getByLabelText(/la tua email/i), { target: { value: 'prospect@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /entra nella demo/i }));
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/bentornato/i)).toBeInTheDocument();
+    });
+
+    // Navigate away before the 1200ms confirmation window elapses.
+    unmount();
+
+    await vi.runAllTimersAsync();
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
+  });
 });

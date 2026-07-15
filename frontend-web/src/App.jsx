@@ -89,7 +89,7 @@ const theme = createTheme({
  * Watches for must_change_password flag and redirects to /change-password
  * Allows access to /change-password and /login only when password change is required
  */
-function PasswordChangeGuard({ children }) {
+export function PasswordChangeGuard({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
 
