@@ -22,12 +22,14 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const pino = require('pino');
 const { v4: uuid } = require('uuid');
-const { createValidationMiddleware, DemoStartSchema, DemoSwitchRoleSchema } = require('../middleware/validation');
-const { ConflictError, ForbiddenError, InternalServerError, NotFoundError } = require('../utils/errors');
+const { createValidationMiddleware, DemoStartSchema, DemoSwitchRoleSchema, DemoContactSchema } = require('../middleware/validation');
+const { ConflictError, InternalServerError, NotFoundError } = require('../utils/errors');
 const { pool } = require('../db/pool');
 const { seedDemoTenant } = require('../utils/demoSeed');
 const { logAudit } = require('../middleware/audit');
 const { requireAuth } = require('../middleware/auth');
+const { requireDemoTenant } = require('../middleware/requireDemoTenant');
+const { sendEmail } = require('../utils/email');
 
 const router = express.Router();
 const logger = pino({
@@ -343,15 +345,19 @@ router.post('/start', createValidationMiddleware(DemoStartSchema), async (req, r
 
 /**
  * POST /demo/switch-role
- * Requires requireAuth (valid JWT for the current demo session).
+ * Requires requireAuth (valid JWT for the current demo session), then
+ * requireDemoTenant (shared fail-closed guard — see
+ * middleware/requireDemoTenant.js).
  *
  * Fail-closed guard (non-negotiable — see plan Checkpoint 4): before doing
  * anything else, verify the caller's own client_id has is_demo = true. This
  * endpoint must NEVER be able to re-issue a JWT for a real tenant's
- * employees, so the guard is the first thing this handler's own logic does
- * (after body-shape validation, which only rejects malformed requests and
- * never touches the database), and a failure here returns 403 immediately
- * with no further work.
+ * employees, so the guard runs first (after body-shape validation, which
+ * only rejects malformed requests and never touches the database), and a
+ * failure here returns 403 immediately with no further work. Previously an
+ * inline query in this handler; extracted to requireDemoTenant middleware
+ * (Task 5) since POST /demo/contact needs the exact same check and the plan
+ * calls for reusing it rather than duplicating the query a second time.
  *
  * Body: { role: 'admin'|'manager'|'employee' } (Zod enum — see
  * DemoSwitchRoleSchema — no other value accepted).
@@ -385,22 +391,11 @@ router.post('/start', createValidationMiddleware(DemoStartSchema), async (req, r
  * accumulation over eliminating the false-lockout risk entirely. See
  * PROJECT_DECISIONS.md Session 63 for the full analysis.
  */
-router.post('/switch-role', requireAuth, createValidationMiddleware(DemoSwitchRoleSchema), async (req, res, next) => {
+router.post('/switch-role', requireAuth, createValidationMiddleware(DemoSwitchRoleSchema), requireDemoTenant, async (req, res, next) => {
   const { role } = req.validated.body;
   const { client_id: clientId, user_id: previousUserId } = req.user;
 
   try {
-    // ---- Fail-closed guard: caller's own tenant must be a demo tenant ----
-    const clientResult = await pool.query(
-      'SELECT is_demo FROM clients WHERE id = $1',
-      [clientId]
-    );
-    const callerClient = clientResult.rows[0];
-    if (!callerClient || callerClient.is_demo !== true) {
-      logger.warn({ action: 'demo_switch_role_forbidden', client_id: clientId });
-      throw new ForbiddenError('This endpoint is only available for demo tenants');
-    }
-
     // ---- Find the target-role employee, scoped to the SAME client_id ----
     const employeeResult = await pool.query(
       'SELECT id, email, name, role, site_id FROM employees WHERE client_id = $1 AND role = $2 LIMIT 1',
@@ -436,6 +431,80 @@ router.post('/switch-role', requireAuth, createValidationMiddleware(DemoSwitchRo
     });
 
     res.json({ data: { token, refresh_token, user } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /demo/contact
+ * Requires requireAuth (valid JWT for the current demo session), then
+ * requireDemoTenant (shared fail-closed guard — see
+ * middleware/requireDemoTenant.js).
+ *
+ * Body: { message } (Zod — see DemoContactSchema — .strict() rejects any
+ * other field).
+ *
+ * The demo employee's JWT/email is always a fixed fake address
+ * (admin@demo.local etc. — see demoSeed.js), NOT the real prospect who
+ * requested the demo. The real prospect email lives on
+ * clients.demo_contact_email (set once, at tenant creation, in POST
+ * /demo/start) — requireDemoTenant already looked this row up as part of
+ * its own is_demo check and attached it to req.demoClient, so this handler
+ * reuses that instead of issuing a second, redundant SELECT.
+ *
+ * Ordering is deliberate and load-bearing for Checkpoint 5: the message is
+ * INSERTed and committed BEFORE the SES send is attempted. A DB failure
+ * still correctly propagates to next(err) (500) — the message genuinely
+ * wasn't saved. An SES failure, by contrast, must never surface as a 500:
+ * it is caught locally, logged as a warning, and the handler still
+ * responds 200, because the message the user cares about ("did my request
+ * get through?") was already durably saved by that point.
+ */
+router.post('/contact', requireAuth, requireDemoTenant, createValidationMiddleware(DemoContactSchema), async (req, res, next) => {
+  const { message } = req.validated.body;
+  const { client_id: clientId, user_id: userId } = req.user;
+  const { demo_contact_email: prospectEmail } = req.demoClient;
+
+  try {
+    // ---- Save first — this must succeed before we ever attempt SES ----
+    const insertResult = await pool.query(
+      `INSERT INTO demo_contact_requests (client_id, message)
+       VALUES ($1, $2)
+       RETURNING id`,
+      [clientId, message]
+    );
+    const requestId = insertResult.rows[0].id;
+
+    await logAudit(pool, {
+      action: 'demo_contact_request',
+      entity: 'client',
+      entityId: clientId,
+      newValue: { client_id: clientId, demo_contact_request_id: requestId },
+      userId,
+    });
+
+    // ---- Best-effort notification — never blocks the response ----
+    // Checkpoint 5 (plan) / test matrix row 11: an SES failure (expired
+    // credentials, throttling, ...) must never produce a 500. The message
+    // above is already committed, so the user's request is safe regardless
+    // of what happens here.
+    try {
+      await sendEmail({
+        to: process.env.DEMO_CONTACT_NOTIFY_EMAIL,
+        subject: 'Nuova richiesta di contatto dalla demo',
+        text: `Un prospect (${prospectEmail || 'email sconosciuta'}) ha richiesto di essere contattato dalla demo self-service.\n\nMessaggio:\n${message}\n\nclient_id: ${clientId}`,
+      });
+    } catch (emailErr) {
+      logger.warn({
+        action: 'demo_contact_email_failed',
+        error: emailErr.message,
+        client_id: clientId,
+        demo_contact_request_id: requestId,
+      });
+    }
+
+    res.json({ data: { success: true } });
   } catch (err) {
     next(err);
   }
