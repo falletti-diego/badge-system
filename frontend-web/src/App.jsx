@@ -97,8 +97,17 @@ function PasswordChangeGuard({ children }) {
     // Get must_change_password flag from localStorage
     const mustChangePassword = localStorage.getItem('badge_must_change_password') === 'true';
 
-    // If password must be changed but user is NOT on /change-password or /login
-    if (mustChangePassword && !location.pathname.startsWith('/change-password') && location.pathname !== '/login') {
+    // If password must be changed but user is NOT on /change-password, /login,
+    // or the public self-service demo landing page (/prova-demo must stay
+    // reachable by any anonymous visitor, even one with a stale
+    // must_change_password flag left over from an earlier real session on
+    // the same browser)
+    if (
+      mustChangePassword &&
+      !location.pathname.startsWith('/change-password') &&
+      location.pathname !== '/login' &&
+      location.pathname !== '/prova-demo'
+    ) {
       // Force redirect to /change-password (fail-closed, Opzione A)
       navigate('/change-password', { replace: true });
     }

@@ -129,6 +129,33 @@ describe('PasswordChangeGuard', () => {
 
       expect(redirectedPath).toBe('/login');
     });
+
+    // Mirrors App.jsx's actual PasswordChangeGuard condition, which reads
+    // localStorage['badge_must_change_password'] directly (not badge_user) —
+    // see App.jsx lines ~96-112. Regression test for the code-review finding
+    // on commit 5b695ef: the public /prova-demo landing page must stay
+    // reachable even when a stale must_change_password flag is left over
+    // from an earlier real session on the same browser, otherwise anonymous
+    // visitors get bounced to /change-password before ever seeing the page.
+    test('should NOT redirect when on /prova-demo (even if a stale must_change_password flag is set)', () => {
+      localStorage.setItem('badge_must_change_password', 'true');
+
+      const mustChangePassword = localStorage.getItem('badge_must_change_password') === 'true';
+
+      let redirectedPath = '/prova-demo';
+      if (
+        mustChangePassword &&
+        !redirectedPath.startsWith('/change-password') &&
+        redirectedPath !== '/login' &&
+        redirectedPath !== '/prova-demo'
+      ) {
+        redirectedPath = '/change-password';
+      }
+
+      expect(redirectedPath).toBe('/prova-demo');
+
+      localStorage.removeItem('badge_must_change_password');
+    });
   });
 
   describe('No redirect when must_change_password=false', () => {
