@@ -14,6 +14,46 @@ const MUST_CHANGE_PASSWORD_KEY = 'badge_must_change_password';
  */
 const authService = {
   /**
+   * Persist a login-shaped session `{ token, refresh_token, user }` to
+   * localStorage. Shared by login() and by any other flow that receives the
+   * same envelope from the backend (e.g. POST /demo/start, POST
+   * /demo/switch-role) — single source of truth so token/user storage never
+   * has to be duplicated (see CLAUDE.md "Pattern 4: DRY Violation").
+   *
+   * `must_change_password` is optional: login-specific flows pass it,
+   * other callers (like the self-service demo) can simply omit it and the
+   * flag is cleared as if it were false.
+   *
+   * @param {{ token: string, refresh_token?: string, user: object, must_change_password?: boolean }} session
+   */
+  setSession({ token, refresh_token, user, must_change_password }) {
+    localStorage.setItem(TOKEN_KEY, token);
+    if (refresh_token) localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+
+    // Store must_change_password flag (for forced password change flow)
+    if (must_change_password) {
+      localStorage.setItem(MUST_CHANGE_PASSWORD_KEY, 'true');
+    } else {
+      localStorage.removeItem(MUST_CHANGE_PASSWORD_KEY);
+    }
+
+    // Store employee_id if present (for employee role users)
+    if (user.employee_id) {
+      localStorage.setItem(EMPLOYEE_ID_KEY, user.employee_id);
+    } else {
+      localStorage.removeItem(EMPLOYEE_ID_KEY);
+    }
+
+    // Store site_id if present (for manager role users assigned to specific store)
+    if (user.site_id) {
+      localStorage.setItem(SITE_ID_KEY, user.site_id);
+    } else {
+      localStorage.removeItem(SITE_ID_KEY);
+    }
+  },
+
+  /**
    * Login with email and password
    * @param {string} email - User email
    * @param {string} password - User password
@@ -34,30 +74,7 @@ const authService = {
         const { token, refresh_token, user, must_change_password } = response.data.data;
         logger.debug('authService', 'storing tokens in localStorage', { userId: user.id, role: user.role });
 
-        localStorage.setItem(TOKEN_KEY, token);
-        if (refresh_token) localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
-        localStorage.setItem(USER_KEY, JSON.stringify(user));
-
-        // Store must_change_password flag (for forced password change flow)
-        if (must_change_password) {
-          localStorage.setItem(MUST_CHANGE_PASSWORD_KEY, 'true');
-        } else {
-          localStorage.removeItem(MUST_CHANGE_PASSWORD_KEY);
-        }
-
-        // Store employee_id if present (for employee role users)
-        if (user.employee_id) {
-          localStorage.setItem(EMPLOYEE_ID_KEY, user.employee_id);
-        } else {
-          localStorage.removeItem(EMPLOYEE_ID_KEY);
-        }
-
-        // Store site_id if present (for manager role users assigned to specific store)
-        if (user.site_id) {
-          localStorage.setItem(SITE_ID_KEY, user.site_id);
-        } else {
-          localStorage.removeItem(SITE_ID_KEY);
-        }
+        this.setSession({ token, refresh_token, user, must_change_password });
 
         logger.info('authService', 'login successful', { email, role: user.role, mustChangePassword: must_change_password });
       }

@@ -8,6 +8,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavig
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import DashboardPage from './features/dashboard/pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
+import TryDemoPage from './pages/TryDemoPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { PlanningPage } from './features/planning/pages/PlanningPage';
@@ -120,6 +121,9 @@ function AppRouter() {
         {/* Auth Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
+
+        {/* Public self-service demo landing page — no ProtectedRoute wrapper */}
+        <Route path="/prova-demo" element={<TryDemoPage />} />
 
           {/* Protected Routes */}
           <Route
