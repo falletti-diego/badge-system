@@ -1,14 +1,14 @@
-# Badge System — Session 65 Handoff
+# Badge System — Session 66 Handoff
 
 **Date:** 2026-07-15
-**Session:** 65 — Task 5/9 (`POST /demo/contact` + AWS SES) implementato, revisionato, chiuso
-**Status:** ✅ **Task 5/9 chiuso. Pronto per Task 6/9 (`DEMO_EXPIRED` + cleanup scheduler) nella prossima sessione.**
+**Session:** 66 — Task 6/9 (`DEMO_EXPIRED` su refresh + cleanup scheduler) implementato, revisionato, chiuso
+**Status:** ✅ **Task 6/9 chiuso. Pronto per Task 7/9 (`TryDemoPage.jsx`) nella prossima sessione.**
 
 ---
 
 ## Goal
 
-Riprendere il piano "Ambiente Demo Self-Service" dal Task 5/9, su richiesta esplicita dell'utente di
+Riprendere il piano "Ambiente Demo Self-Service" dal Task 6/9, su richiesta esplicita dell'utente di
 usare `/superpowers:subagent-driven-development`, seguito da `/test-all` e da una `/code-review`
 completa sul diff del task, prima di considerarlo chiuso.
 
@@ -18,87 +18,83 @@ completa sul diff del task, prima di considerarlo chiuso.
 
 1. **Questo file**
 2. **Piano completo**: `~/.claude/plans/adesso-entra-nella-cartella-purring-toast.md` — 9 task, checkpoint di sicurezza, matrice di test
-3. **`TASKS.md`** Session 65 + **`PROJECT_DECISIONS.md`** Session 65 — ragionamento completo dietro le decisioni di questa sessione
+3. **`TASKS.md`** Session 66 + **`PROJECT_DECISIONS.md`** Session 66 — ragionamento completo dietro le decisioni di questa sessione
 
 ```bash
 cd "/Users/diegofalletti/DATAXIOM/Dataxiom – Analisi & BI/badge/.claude/worktrees/demo-self-service"
-git log --oneline -6   # deve mostrare 7935ce2 in cima
+git log --oneline -6   # deve mostrare 6cc3077 in cima (prima dei commit di docs)
 git branch --show-current   # worktree-demo-self-service
 ```
 
 **Per riprendere l'esecuzione:** invocare `/superpowers:subagent-driven-development`, leggere il piano,
-procedere dal **Task 6/9** (`DEMO_EXPIRED` su login/refresh + scheduler di pulizia). Mantenere la pausa
-esplicita dopo ogni task come richiesto dall'utente dalla Session 61.
+procedere dal **Task 7/9** (`frontend-web/src/pages/TryDemoPage.jsx` — landing pubblica `/prova-demo`).
+Mantenere la pausa esplicita dopo ogni task come richiesto dall'utente dalla Session 61.
 
 ---
 
 ## Cosa è successo in questa sessione
 
-### Implementazione (subagent-driven-development)
-Endpoint `POST /demo/contact` implementato secondo spec (piano §5): salva il messaggio in
-`demo_contact_requests` PRIMA di tentare l'invio email via AWS SES (`utils/email.js`, prima vera
-dipendenza AWS SDK di questo backend), un fallimento SES viene loggato come warning e non produce mai
-un 500 (Checkpoint 5 / riga 11 della matrice di test). L'email di notifica include l'email reale del
-prospect (`clients.demo_contact_email`, non l'email fissa fittizia del dipendente demo nel JWT).
+### Implementazione (subagent-driven-development), corretta con precisione chirurgica su file sensibile
+`backend/src/routes/auth.js` — file con una storia reale di incidenti di produzione (Session 62: ordine
+sbagliato tra revoke-check e replay-check) — è stato toccato con istruzioni estremamente precise
+all'implementer: **non riordinare nulla** della sequenza esistente revoke-check → replay-check →
+consumo-jti, aggiungere solo un controllo puntuale dopo il guard `USER_NOT_FOUND` già esistente in
+`POST /refresh`. **Due correzioni deliberate al testo letterale del piano**, decise dal coordinatore
+prima di dispatchare l'implementer: (1) il controllo non va in `middleware/auth.js` né nel path di
+login — `middleware/auth.js` fa solo verifica di firma JWT su ogni richiesta (nessuna query DB, un
+controllo lì sarebbe una regressione di performance su tutta l'app), e i dipendenti demo hanno
+`password_hash NULL` quindi non possono strutturalmente autenticarsi via `POST /login` (percorso
+irraggiungibile per loro); (2) la forma della risposta usa `{ error: 'DEMO_EXPIRED' }` (non `{ code:
+... }` come scritto nel piano) per coerenza con tutte le altre risposte di rifiuto già esistenti in
+quella stessa funzione (`SESSION_REVOKED`, `USER_NOT_FOUND`, ecc.).
 
-**Scope aggiuntivo deciso dal coordinatore** (finding non risolto dalla Session 64): estratto un
-middleware condiviso `requireDemoTenant.js` dal guard inline che `POST /demo/switch-role` aveva —
-refactor a comportamento invariato, verificato che i test esistenti di `switch-role` passassero
-immutati.
+`backend/scripts/cleanup-expired-demos.js` (nuovo) — modellato sul pattern già esistente
+`audit-log-retention.js` (Pool proprio, `--dry-run`, count-before-delete), logica core esportata come
+funzione testabile `cleanupExpiredDemos(pool, { dryRun })` separata dal wrapper CLI, audit log
+`demo_tenant_cleanup` per ogni riga effettivamente cancellata (via `RETURNING`).
 
-### Review a due stadi
-- **Spec-compliance**: ✅ conforme al 100%, verificato indipendentemente leggendo il codice reale (non
-  fidandosi del report dell'implementer) — ordine save-poi-send corretto, scope del catch corretto (un
-  errore DB continua a produrre 500, solo l'errore SES viene assorbito), email reale del prospect usata
-  correttamente, guardia fail-closed cablata sulla route, schema `.strict()` corretto, refactor di
-  `switch-role` bit-a-bit invariato nei test.
-- **Code-quality**: **Ready to merge: Yes**, un solo finding Important (ordine dei middleware
-  incoerente tra `/contact` e `/switch-role` — nessun impatto di sicurezza) + 2 minor (test mancante
-  per messaggio oltre 2000 caratteri, logger locale invece di quello condiviso). I primi due sono stati
-  corretti su richiesta del coordinatore in un commit separato (`7935ce2`) prima di chiudere il task;
-  il terzo è stato lasciato (pattern preesistente non introdotto da questo task).
+### `/code-review` (8 angoli) — trovato e corretto un bypass funzionale reale
+A differenza della Session 65, questa volta il `/code-review` ha trovato qualcosa di sostanziale
+**non solo nitpick di stile**: l'angolo Altitude ha segnalato che `POST /demo/switch-role` (Task 4) è
+protetto solo da `requireAuth` + `requireDemoTenant`, e quest'ultimo controllava solo `is_demo`, mai
+`demo_expires_at`. Siccome `switch-role` riemette sempre un token fresco (15 minuti) via
+`issueDemoSession()`, un tenant demo scaduto ma non ancora ripulito (entro la finestra di grazia di 7
+giorni) poteva chiamare `switch-role` ogni ~14 minuti per rinnovare la sessione all'infinito,
+bypassando completamente il controllo `DEMO_EXPIRED` appena aggiunto su `/refresh` — vanificando lo
+scopo dichiarato del task. **Verificato personalmente dal coordinatore** leggendo il codice (non solo
+fidandosi del report dell'agente) prima di agire: confermato che `requireDemoTenant.js` selezionava
+solo `is_demo, demo_contact_email`, mai `demo_expires_at`. Severità classificata **Important, non
+Critical**: nessuna fuga cross-tenant (il bypassatore accede solo ai propri dati demo già isolati), e
+comunque limitato nel tempo dallo scheduler di pulizia stesso (cancellazione dopo 7 giorni dalla
+scadenza originale, indipendentemente da quante volte la sessione viene rinnovata via switch-role).
 
-### Intoppo ambientale scoperto e diagnosticato (non un bug del codice)
-Durante l'attesa del completamento dei test da parte dell'implementer, il processo è rimasto bloccato
-più volte (~20-37 minuti, quasi zero CPU). **Diagnosi del coordinatore**: non è un hang nell'esecuzione
-dei test — la suite completa termina regolarmente in ~9-10 secondi con tutti i test verdi — ma un
-processo Jest che **non esce mai dopo il completamento** ("Jest did not exit one second after the test
-run has completed"), verificato **anche sul commit base pre-Task-5** (`20bc87b`, via `git stash`) con
-lo stesso identico comportamento. **Non è una regressione di questo task.** Causa probabile: una
-risorsa (verosimilmente una connessione Postgres) lasciata aperta da qualche file di test più vecchio
-nella suite, non identificato con precisione — da tenere d'occhio, non bloccante.
+**Fix**: esteso `requireDemoTenant` (non solo `/switch-role` inline) per controllare anche
+`demo_expires_at`, rispondendo `401 { error: 'DEMO_EXPIRED' }` (distinto dal 403 "non è un tenant
+demo" già esistente) — questo chiude il gap per `switch-role`, `contact`, e qualunque futura route
+demo-autenticata in un solo posto, invece di richiedere che ogni nuovo endpoint ricordi di ricopiare
+il controllo a mano (esattamente il tipo di gap appena trovato). Aggiunto anche un fix minore
+(commento fuorviante in `cleanup-expired-demos.js` che affermava erroneamente che ogni tabella figlia
+avesse `ON DELETE CASCADE` — `checkins.created_by` è in realtà `ON DELETE RESTRICT`, corretto solo il
+commento per riflettere la realtà, la query non necessitava modifiche).
 
-**Lezione operativa per sessioni future**: mai pipare l'output di `jest` a `tail` quando si sospetta
-questo problema — `tail` bufferizza fino a `EOF`, che non arriva mai se il processo non esce, dando
-l'illusione di un hang totale del test runner invece del vero sintomo (fine dei test, mancata uscita
-del processo). Scrivere sempre su file con `>` e leggere il file dopo aver visto la riga `Test Suites:`
-nel log, senza aspettare che il processo termini da solo.
+Altri 6 finding minori del `/code-review` (loop sequenziale di `logAudit` invece di batch, boilerplate
+CLI duplicato con `audit-log-retention.js`, `console.log` invece di `pino`, commento verboso,
+audit-log non atomico con la DELETE, JOIN concettualmente duplicato tra login e refresh) **non
+fixati** — coerenti con pattern già esistenti nel resto del codebase, non bloccanti, lasciati come
+backlog.
 
-### `/test-all`
-Backend: 541/542 verdi in `--runInBand` deterministico (1 fallimento è il flake pre-esistente e già
-documentato `auth-refresh-first-use.test.js`, riprodotto identico anche sul commit base, non introdotto
-da questo task). Coverage 74.6% stmts / 66.07% branch. Frontend: 191/192 (1 skip noto, invariato,
-feature backend-only). **Nota**: `npm run test:coverage` di default NON usa `--runInBand` — con worker
-paralleli, i test demo-correlati possono darsi falsi 409/count-mismatch a vicenda per via del tetto
-reale `MAX_ACTIVE_DEMOS` condiviso su Postgres (gap noto già dalla Session 64, non risolto
-strutturalmente) — per un segnale deterministico usare sempre `--runInBand` esplicito.
-
-### `/code-review` (8 angoli, medium effort)
-Il tool Agent è stato temporaneamente indisponibile per metà delle chiamate (errore del classificatore
-di sicurezza, non del codice) — 5 angoli completati via subagent, 3 (efficiency/altitude/conventions)
-completati direttamente dal coordinatore leggendo il diff. **Nessun finding Critical o Important** — 6
-finding Minor sopravvissuti alla verifica (nomi di log action cambiati nel refactor, config email
-SMTP/SES parallela e inutilizzata, logger locale duplicato, singleton lazy non necessario in
-`utils/email.js`, guardia difensiva speculativa, doppio riferimento al client in `/contact`). Un
-candidato di refactor (estrarre un helper riusabile per il pattern "catch-and-warn" di SES) è stato
-scartato per astrazione prematura (usato una sola volta). Un mio candidato sulla convenzione CLAUDE.md
-riguardo ai log silenziosi è stato **refutato** verificando `app.js:206` — esiste già un error handler
-globale che logga ogni errore propagato, quindi non c'è un vero fallimento silenzioso. Nessun fix
-applicato per questi 6 minor — non bloccanti, lasciati come backlog opzionale.
+### `/test-all` (dopo il fix)
+Backend: 555/569 verdi in `--runInBand` deterministico (14 skip noti, 0 fallimenti — incluso l'intero
+set di test auth-correlati: `auth-refresh-first-use`, `auth-refresh-race`,
+`auth-refresh-concurrent-stress`, `auth-revoke-session`, `auth-checkrevoked`, `auth.test.js`, tutti
+verdi). Frontend: 191/192 invariato (feature backend-only). **Nota operativa ripetuta**: pulita
+preventivamente la riga `revoked_tokens` nota per la fixture `Pippo` (id `550e8400-...-440010`) prima
+di ogni run — stesso flake pre-esistente e non correlato già documentato in Session 65, riconfermato
+anche dall'implementer durante il proprio fix loop.
 
 ---
 
-## Stato del codice (branch `worktree-demo-self-service`, commit `7935ce2`)
+## Stato del codice (branch `worktree-demo-self-service`, commit `6cc3077` prima dei commit di docs)
 
 | Task | Stato |
 |---|---|
@@ -106,9 +102,9 @@ applicato per questi 6 minor — non bloccanti, lasciati come backlog opzionale.
 | 2/9 — `demoSeed.js` | ✅ Completato (Session 61) |
 | 3/9 — `POST /demo/start` | ✅ Completato (Session 61/63) |
 | 4/9 — `POST /demo/switch-role` | ✅ Completato (Session 64) |
-| 5/9 — `POST /demo/contact` + AWS SES | ✅ **Completato e chiuso in questa sessione** |
-| 6/9 — `DEMO_EXPIRED` + cleanup scheduler | ⏳ **DA INIZIARE — prossimo task** |
-| 7/9 — `TryDemoPage.jsx` | Non iniziato |
+| 5/9 — `POST /demo/contact` + AWS SES | ✅ Completato (Session 65) |
+| 6/9 — `DEMO_EXPIRED` + cleanup scheduler | ✅ **Completato e chiuso in questa sessione** — bypass reale trovato dal code-review e fixato prima della chiusura |
+| 7/9 — `TryDemoPage.jsx` | ⏳ **DA INIZIARE — prossimo task** |
 | 8/9 — Banner/Tour/Modal/ExpiredPage | Non iniziato |
 | 9/9 — `GET /api/admin/demo-tenants` | Non iniziato |
 
@@ -116,70 +112,64 @@ applicato per questi 6 minor — non bloccanti, lasciati come backlog opzionale.
 
 ## What Worked
 
-- **Verifica indipendente del coordinatore in parallelo all'attesa dell'implementer**: mentre
-  l'implementer era bloccato sull'hang ambientale, il coordinatore ha diagnosticato la causa reale
-  (stash + confronto col baseline) invece di aspettare passivamente — ha permesso di sbloccare
-  l'implementer con informazioni concrete invece di fargli ripetere lo stesso hang.
-- **`git stash` per isolare una regressione da un problema ambientale pre-esistente**: confrontare lo
-  stesso comando sullo stesso ambiente con/senza le modifiche del task è stato decisivo per escludere
-  con certezza (non solo sospetto) che l'hang Jest e il flake `auth-refresh-first-use` fossero
-  pre-esistenti.
-- **Fix dei finding Important/Minor della code-quality review prima di chiudere il task** (non solo
-  quando Critical): economico da fare subito, evita che si accumulino come debito silenzioso.
-- **Verificare un candidato di code-review invece di fidarsi ciecamente**: il candidato "log silenzioso
-  in `requireDemoTenant.js`" sembrava plausibile per la lettera del CLAUDE.md, ma leggere l'error
-  handler globale in `app.js` lo ha refutato — un falso positivo scartato prima di diventare un fix
-  inutile.
+- **Verificare personalmente un finding di severità alta prima di agire, non fidarsi del solo report
+  dell'agente**: ho letto io stesso `requireDemoTenant.js` e la costante `ACCESS_TOKEN_EXPIRY` in
+  `routes/demo.js` per confermare il meccanismo esatto del bypass prima di richiedere un fix — pratica
+  ormai consolidata dalle sessioni precedenti (Session 64 aveva fatto lo stesso per la race condition
+  su `switch-role`).
+- **Istruzioni estremamente precise e vincolanti sull'implementer per un file ad alto rischio**: dare
+  in anticipo la sequenza esatta riga-per-riga della funzione esistente e vietare esplicitamente il
+  riordino ha prodotto un diff chirurgico, confermato intatto da 3 angoli di review indipendenti
+  (Angle A, Angle B, spec-compliance) senza bisogno di correzioni su quella parte.
+- **Fixare il guard condiviso invece della singola route**: quando il code-review ha trovato che
+  `switch-role` bypassava il controllo, la scelta di estendere `requireDemoTenant` (già estratto in
+  Session 65 proprio per essere il punto singolo di verità) invece di aggiungere un controllo inline
+  solo lì ha chiuso il gap anche per `/demo/contact` e per qualunque route futura, senza doverci
+  pensare di nuovo.
+- **Decidere esplicitamente cosa NON fixare**: dei 9 finding totali del code-review, solo 1 (+1 minore
+  di documentazione) meritava un fix immediato; gli altri 7 sono nitpick di stile coerenti con pattern
+  già esistenti — fixarli tutti avrebbe esteso lo scope oltre il necessario per una sessione con pausa
+  esplicita richiesta dopo ogni task.
 
 ## What Didn't Work / Attenzione
 
-- **Mai pipare `jest` a `tail` quando il processo potrebbe non uscire pulito** — vedi sezione dedicata
-  sopra. Questo intoppo ha causato diversi minuti persi in questa sessione prima che la causa fosse
-  chiara.
-- Il tool Agent è stato temporaneamente indisponibile per errori del classificatore di sicurezza
-  (`claude-sonnet-5 is temporarily unavailable`) durante il `/code-review` — gestito eseguendo
-  manualmente le 3 angolazioni mancanti, ma se ricapita vale la pena semplicemente ritentare dopo una
-  breve attesa prima di procedere manualmente.
-- Non risolto (pre-esistente, non bloccante): il processo Jest che non esce dopo il completamento
-  della suite completa — causa esatta non identificata (probabile leak di connessione/handle in un
-  file di test più vecchio). Da investigare in una sessione futura se diventa fastidioso, non urgente.
+- Nessun blocco grave. L'unico intoppo minore è stato di nuovo il pre-esistente stato residuo in
+  `revoked_tokens`/`used_tokens` per la fixture `Pippo` (vedi Session 65) — gestito con la stessa
+  pulizia preventiva prima di ogni run completa, sia dal coordinatore che dall'implementer durante il
+  proprio fix loop, indipendentemente.
 
 ---
 
 ## Prossimi step
 
-### Immediato — Task 6/9
-`DEMO_EXPIRED` su login/refresh (`middleware/auth.js`) + `scripts/cleanup-expired-demos.js` — vedi
-piano §6. Nota dal piano: singola query `DELETE FROM clients WHERE is_demo=true AND demo_expires_at <
-now() - interval '7 days'`, cascata automatica già verificata su tutte le tabelle figlie fin dalla
-Session 61.
+### Immediato — Task 7/9
+`frontend-web/src/pages/TryDemoPage.jsx` — landing pubblica `/prova-demo`, vedi piano §7 e la sezione
+Design del piano (hero navy-900/oro, form solo email, chiama `POST /demo/start`, riusa
+`authService.setSession(...)` esistente, micro-copy GDPR, responsive <768px).
 
 ### Backlog
-- Task 7-9 del piano, vedi tabella sopra.
-- 6 finding Minor non risolti da questa sessione (`/code-review`): nome del log action cambiato in
-  `requireDemoTenant.js` (`demo_switch_role_forbidden` → `require_demo_tenant_forbidden`, verificare se
-  qualche dashboard/alert esterno lo referenzia); config email parallela SMTP_*/SES_* in
-  `.env.example`; logger `pino` locale invece del condiviso in `requireDemoTenant.js`; singleton lazy
-  non necessario in `utils/email.js`; guardia difensiva `req.user &&` speculativa; doppio riferimento
-  al client (`req.user.client_id` vs `req.demoClient`) in `/contact`.
+- Task 8-9 del piano, vedi tabella sopra.
+- 6 finding Minor non risolti da questa sessione (`/code-review` Task 6): loop sequenziale
+  `logAudit` in `cleanup-expired-demos.js`, boilerplate CLI duplicato con `audit-log-retention.js`,
+  `console.log` invece di `pino`, commento verboso sul cortocircuito booleano in `auth.js`, audit-log
+  non atomico con la DELETE (coerente col pattern "best-effort" già documentato altrove), JOIN
+  concettualmente duplicato tra `POST /login` e `POST /refresh`.
+- 6 finding Minor non risolti dalla Session 65 (vedi HANDOFF Session 65).
 - Decisione ancora in sospeso dalla Session 61: aggiungere un servizio Postgres reale alla pipeline CI
   GitHub Actions.
-- Causa esatta dell'hang Jest post-completamento non identificata — non bloccante, da investigare se
-  ricapita e infastidisce.
+- Causa esatta dell'hang Jest post-completamento (Session 65) non identificata — non bloccante.
+- Setup infrastrutturale fuori dal repo (non bloccante): AWS EventBridge Scheduler per invocare
+  `cleanup-expired-demos.js` quotidianamente via SSM Run Command sull'istanza EC2 esistente.
 
 ---
 
 ## Note operative
 
-- Invariate rispetto a Session 64: env file già copiati, `npm install` già eseguito.
-- **Nuovo**: se lanci `jest` con `npm run test:coverage` o simili e sembra "bloccarsi" per minuti dopo
-  che i test sono finiti, non è un hang dei test — scrivi l'output su file (`> file.log 2>&1 &`, mai
-  `| tail`) e controlla se la riga `Test Suites:` è già apparsa; se sì, i test sono finiti e puoi
-  killare il processo residuo in sicurezza.
-- Vedi `PROJECT_DECISIONS.md` Session 65 per il ragionamento completo dietro le decisioni di questa
-  sessione (estrazione `requireDemoTenant`, scelta di non fixare i 6 minor, diagnosi dell'hang Jest).
+- Invariate rispetto a Session 65: env file già copiati, `npm install` già eseguito.
+- Vedi `PROJECT_DECISIONS.md` Session 66 per il ragionamento completo dietro il bypass trovato e la
+  decisione di fixare il guard condiviso invece della singola route.
 
 ---
 
 Per riprendere: leggi questo file, poi il piano, poi `git log --oneline -6` per confermare lo stato, poi
-procedi dal Task 6/9 con `subagent-driven-development`.
+procedi dal Task 7/9 con `subagent-driven-development`.
