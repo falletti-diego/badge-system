@@ -261,4 +261,27 @@ describe('POST /api/v1/demo/contact (real database, mocked SES)', () => {
       await cleanupByEmail(email);
     }
   });
+
+  it('rejects a message over 2000 characters with 400', async () => {
+    if (!dbAvailable) return;
+    const { email, body } = await startDemo('contact-oversized-message');
+
+    try {
+      const res = await request(app)
+        .post('/api/v1/demo/contact')
+        .set('Authorization', `Bearer ${body.token}`)
+        .send({ message: 'a'.repeat(2001) });
+
+      expect(res.status).toBe(400);
+      expect(sendEmail).not.toHaveBeenCalled();
+
+      const rows = await probePool.query(
+        'SELECT id FROM demo_contact_requests WHERE client_id = $1',
+        [jwt.decode(body.token).client_id]
+      );
+      expect(rows.rows).toHaveLength(0);
+    } finally {
+      await cleanupByEmail(email);
+    }
+  });
 });

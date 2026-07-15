@@ -439,8 +439,11 @@ router.post('/switch-role', requireAuth, createValidationMiddleware(DemoSwitchRo
 /**
  * POST /demo/contact
  * Requires requireAuth (valid JWT for the current demo session), then
- * requireDemoTenant (shared fail-closed guard — see
- * middleware/requireDemoTenant.js).
+ * body-shape validation, then requireDemoTenant (shared fail-closed
+ * guard — see middleware/requireDemoTenant.js). Same middleware ordering
+ * as POST /demo/switch-role (validate first, then guard) for consistency
+ * across this file — there is no security difference either way, since
+ * requireDemoTenant is fail-closed regardless of what ran before it.
  *
  * Body: { message } (Zod — see DemoContactSchema — .strict() rejects any
  * other field).
@@ -461,7 +464,7 @@ router.post('/switch-role', requireAuth, createValidationMiddleware(DemoSwitchRo
  * responds 200, because the message the user cares about ("did my request
  * get through?") was already durably saved by that point.
  */
-router.post('/contact', requireAuth, requireDemoTenant, createValidationMiddleware(DemoContactSchema), async (req, res, next) => {
+router.post('/contact', requireAuth, createValidationMiddleware(DemoContactSchema), requireDemoTenant, async (req, res, next) => {
   const { message } = req.validated.body;
   const { client_id: clientId, user_id: userId } = req.user;
   const { demo_contact_email: prospectEmail } = req.demoClient;
