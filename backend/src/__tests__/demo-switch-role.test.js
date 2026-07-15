@@ -289,4 +289,38 @@ describe('POST /api/v1/demo/switch-role (real database)', () => {
       await cleanupByEmail(email);
     }
   });
+
+  // ----------------------------------------------------------------
+  // Code-review follow-up (Task 6 of 9): switch-role must not bypass
+  // DEMO_EXPIRED. Before requireDemoTenant.js was extended to check
+  // demo_expires_at, a demo tenant past its trial (but still within the
+  // cleanup script's 7-day grace period) could call this route every
+  // ~14 minutes to renew its session indefinitely without ever going
+  // through POST /auth/refresh, defeating the soft-expiry Task 6 added
+  // there. Verifies the shared guard now catches this route too.
+  // ----------------------------------------------------------------
+
+  it('rejects switch-role with 401 DEMO_EXPIRED when the tenant demo_expires_at has passed, issuing no new token', async () => {
+    if (!dbAvailable) return;
+    const { email, body } = await startDemo('switch-role-demo-expired');
+    const clientId = jwt.decode(body.token).client_id;
+
+    try {
+      await probePool.query(
+        `UPDATE clients SET demo_expires_at = now() - interval '1 day' WHERE id = $1`,
+        [clientId]
+      );
+
+      const res = await request(app)
+        .post('/api/v1/demo/switch-role')
+        .set('Authorization', `Bearer ${body.token}`)
+        .send({ role: 'manager' });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe('DEMO_EXPIRED');
+      expect(res.body.data).toBeUndefined();
+    } finally {
+      await cleanupByEmail(email);
+    }
+  });
 });

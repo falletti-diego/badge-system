@@ -5,10 +5,23 @@
  * Deletes self-service demo tenants (clients.is_demo = true) whose
  * demo_expires_at is more than 7 days in the past (a 7-day grace period
  * past the nominal expiry, matching the plan's Checkpoint 6). Deleting the
- * `clients` row cascades automatically to every child table (sites,
- * employees, checkins, leave_requests, illnesses, demo_contact_requests —
- * all declared `ON DELETE CASCADE`, see backend/src/db/schema.sql and
- * migrations 028-030), so a single DELETE is sufficient.
+ * `clients` row cascades automatically to every child table keyed on
+ * client_id (sites, employees, checkins, leave_requests, illnesses,
+ * demo_contact_requests — all declared `client_id ... ON DELETE CASCADE`,
+ * see backend/src/db/schema.sql and migrations 028-030), so a single
+ * DELETE is sufficient.
+ *
+ * One exception, not a cascade path: `checkins.created_by` references
+ * `employees(id) ON DELETE RESTRICT`, not CASCADE (see schema.sql line
+ * ~83). This never actually blocks the delete in practice: every
+ * `INSERT INTO checkins` in this codebase sets `created_by` to an
+ * employee_id belonging to the SAME client (demoSeed.js does this too —
+ * see the checkins loop, `created_by = $2` = the row's own employee_id),
+ * so `checkins.employee_id`'s CASCADE removes the row before its
+ * `created_by` RESTRICT constraint could ever be evaluated against a
+ * still-existing employee row. Flagging this explicitly because a naive
+ * reading of "every child table cascades" would be wrong if that
+ * same-client invariant on created_by were ever violated.
  *
  * Run once a day via EventBridge Scheduler / SSM Run Command on the
  * existing EC2 instance (infra setup out of scope for this script).

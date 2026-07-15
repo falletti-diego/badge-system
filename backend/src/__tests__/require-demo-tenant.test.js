@@ -35,25 +35,82 @@ describe('requireDemoTenant middleware', () => {
     return { user: { client_id: clientId } };
   }
 
-  it('calls next() with no error when the caller client has is_demo = true', async () => {
-    pool.query.mockResolvedValue({ rows: [{ is_demo: true, demo_contact_email: 'prospect@example.com' }] });
+  function makeRes() {
+    return { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
+  }
+
+  it('calls next() with no error when the caller client has is_demo = true and a future demo_expires_at', async () => {
+    const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    pool.query.mockResolvedValue({ rows: [{ is_demo: true, demo_contact_email: 'prospect@example.com', demo_expires_at: future }] });
     const req = makeReq('11111111-1111-1111-1111-111111111111');
+    const res = makeRes();
     const next = jest.fn();
 
-    await requireDemoTenant(req, {}, next);
+    await requireDemoTenant(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(next).toHaveBeenCalledWith(); // no arguments = success
+    expect(res.status).not.toHaveBeenCalled();
   });
 
   it('attaches the looked-up client row to req.demoClient so callers can reuse it', async () => {
-    pool.query.mockResolvedValue({ rows: [{ is_demo: true, demo_contact_email: 'prospect@example.com' }] });
+    const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    pool.query.mockResolvedValue({ rows: [{ is_demo: true, demo_contact_email: 'prospect@example.com', demo_expires_at: future }] });
     const req = makeReq('11111111-1111-1111-1111-111111111111');
     const next = jest.fn();
 
-    await requireDemoTenant(req, {}, next);
+    await requireDemoTenant(req, makeRes(), next);
 
-    expect(req.demoClient).toEqual({ is_demo: true, demo_contact_email: 'prospect@example.com' });
+    expect(req.demoClient).toEqual({ is_demo: true, demo_contact_email: 'prospect@example.com', demo_expires_at: future });
+  });
+
+  // ----------------------------------------------------------------
+  // demo_expires_at enforcement — code-review follow-up (Task 6 of 9):
+  // POST /demo/switch-role was found to bypass POST /auth/refresh's
+  // DEMO_EXPIRED check entirely (it never calls /auth/refresh, and this
+  // shared guard previously only checked is_demo, never demo_expires_at).
+  // Extending the shared guard closes the gap for switch-role AND contact
+  // AND any future demo-authenticated route, instead of requiring each one
+  // to remember to duplicate the check.
+  // ----------------------------------------------------------------
+
+  it('responds 401 DEMO_EXPIRED (not 403 ForbiddenError) when demo_expires_at is in the past', async () => {
+    const past = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    pool.query.mockResolvedValue({ rows: [{ is_demo: true, demo_contact_email: 'prospect@example.com', demo_expires_at: past }] });
+    const req = makeReq('55555555-5555-5555-5555-555555555555');
+    const res = makeRes();
+    const next = jest.fn();
+
+    await requireDemoTenant(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'DEMO_EXPIRED' }));
+  });
+
+  it('passes normally when demo_expires_at is in the future', async () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    pool.query.mockResolvedValue({ rows: [{ is_demo: true, demo_contact_email: 'prospect@example.com', demo_expires_at: future }] });
+    const req = makeReq('66666666-6666-6666-6666-666666666666');
+    const res = makeRes();
+    const next = jest.fn();
+
+    await requireDemoTenant(req, res, next);
+
+    expect(res.status).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it('does not false-positive when demo_expires_at is null (defensive — currently impossible for is_demo=true rows)', async () => {
+    pool.query.mockResolvedValue({ rows: [{ is_demo: true, demo_contact_email: 'prospect@example.com', demo_expires_at: null }] });
+    const req = makeReq('77777777-7777-7777-7777-777777777777');
+    const res = makeRes();
+    const next = jest.fn();
+
+    await requireDemoTenant(req, res, next);
+
+    expect(res.status).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith();
   });
 
   it('fails closed with ForbiddenError when the client is a real (non-demo) tenant', async () => {
