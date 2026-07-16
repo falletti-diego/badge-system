@@ -1,8 +1,40 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 16 Luglio 2026 (Session 69 — Task 9/9 chiuso, piano completo, verifica e2e completa + review di sicurezza automatica: 1 fix TLS applicato, 1 finding RBAC cross-tenant documentato come backlog prioritario, non fixato)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 26 ✅ (vibrazione check-in) | Grafici Trend Dashboard ✅ LIVE (api.dataxiom.it) | Dropdown Sede in Dashboard ✅ LIVE | Export CSV date/ora ✅ fix live | Pipeline CI/CD ✅ funzionante (backend + mobile) | ✅ Hotfix `POST /auth/refresh` MERGIATO su main e verificato live in produzione (login → refresh reale confermato 200, replay correttamente rifiutato 401) | ✅ Ambiente Demo Self-Service — **piano COMPLETO, tutti i 9 task chiusi**, in attesa della decisione merge/PR (worktree isolato, non ancora in main)  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Decisione merge/PR per il branch Ambiente Demo Self-Service (`superpowers:finishing-a-development-branch`), poi MVP Hardening backlog residuo (Session 57) o staging environment + ONB.2
+**Last Updated:** 16 Luglio 2026 (Session 70 — PR #3 aperta verso main, valutazione critica post-merge con 10 punti di miglioramento prioritizzati)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 26 ✅ (vibrazione check-in) | Grafici Trend Dashboard ✅ LIVE (api.dataxiom.it) | Dropdown Sede in Dashboard ✅ LIVE | Export CSV date/ora ✅ fix live | Pipeline CI/CD ✅ funzionante (backend + mobile) | ✅ Hotfix `POST /auth/refresh` MERGIATO su main e verificato live in produzione (login → refresh reale confermato 200, replay correttamente rifiutato 401) | ✅ Ambiente Demo Self-Service — **piano COMPLETO, tutti i 9 task chiusi, PR #3 aperta** (`worktree-demo-self-service` → `main`, non ancora mergiata)  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Review PR #3 (Ambiente Demo Self-Service), poi item Alta priorità del backlog post-merge (RBAC cross-tenant, provisioning AWS reale, QA visiva browser) prima di mostrare la demo a un prospect reale
+
+---
+
+## Session 70 — `finishing-a-development-branch`: PR #3 aperta, valutazione critica post-merge (16 Luglio 2026)
+
+### Contesto
+Su richiesta esplicita dell'utente, eseguito `/superpowers:finishing-a-development-branch` per decidere il destino del branch `worktree-demo-self-service` (9/9 task del piano chiusi in Session 61-69). Test verificati prima di procedere: 563/577 verdi, 0 fallimenti, nessuna modifica non committata.
+
+### Scelta dell'utente: Push + Pull Request
+Non merge locale diretto — l'utente ha scelto di passare da una PR per lasciare margine a una review esterna prima di toccare `main`. Push del branch (`git push -u origin worktree-demo-self-service`), poi `gh pr create` verso `main`.
+
+**Blocco del classificatore auto-mode al primo tentativo**: il body della PR conteneva i dettagli tecnici specifici del finding RBAC cross-tenant HIGH non ancora fixato (Session 69) — il classificatore lo ha correttamente bloccato come "divulgazione pubblica di dettagli su una vulnerabilità non patchata su un repo pubblico, senza che l'utente avesse revisionato/autorizzato quella divulgazione specifica". Riscritto il body senza i dettagli tecnici del finding (solo riferimento generico a "backlog di sicurezza documentato in TASKS.md"), poi la PR è stata creata con successo: **https://github.com/falletti-diego/badge-system/pull/3**.
+
+Worktree e branch lasciati intatti (nessun cleanup) — coerente con l'opzione "Push + PR" della skill, che richiede il worktree vivo per iterare su eventuale feedback.
+
+### Valutazione critica del piano implementato (richiesta esplicita dell'utente)
+Il processo `subagent-driven-development` + code-review a 8 angoli, ripetuto per ciascuno dei 9 task, ha prodotto un risultato migliore dell'atteso sul piano puramente procedurale: **ogni singolo task ha fatto emergere almeno un bug funzionale reale** prima del merge in `main` — non correzioni di stile, ma difetti concreti: bypass di `DEMO_EXPIRED` tramite `switch-role` (Task 6), redirect rotto a `/login` su token revocato residuo che rompeva la landing pubblica `/prova-demo` (Task 7), race condition su sessioni concorrenti nello switch di ruolo (Task 4), oltre a un hotfix di produzione scoperto per caso durante il Task 3 (bug preesistente sul refresh token dei clienti reali, non introdotto da questo piano ma che lo bloccava). Il pattern "non fidarsi del report di un subagent, verificare leggendo il codice" — applicato sistematicamente da Session 61 in poi — ha pagato più volte, incluso nella gestione dei 2 finding della review di sicurezza automatica (Session 69).
+
+Il risultato copre lo scope del piano approvato (`~/.claude/plans/adesso-entra-nella-cartella-purring-toast.md`): dataset rolling relativo a "oggi", 3 ruoli via selettore in-app, tour guidato, contatto via SES, scadenza+grazia+cleanup automatico, vista admin read-only — verificato end-to-end contro Postgres reale, non solo mock (Session 69).
+
+### 10 punti di miglioramento identificati, con priorità e stima ore
+Documentati in dettaglio in `TASKS.md` (sezione "Valutazione critica post-merge", sotto SECURITY TECH DEBT). Riepilogo:
+
+**Alta (bloccanti prima di un prospect reale):** (1) RBAC cross-tenant `/api/admin/*` — stesso finding Session 69, 6-9h; (2) infrastruttura AWS reale non provisionata (SES, EventBridge Scheduler, `MAX_ACTIVE_DEMOS` in produzione) — 3-5h, non codice; (3) QA visiva browser del funnel completo, mai eseguita — 1-2h.
+
+**Media (entro poche settimane dal lancio):** (4) CI senza servizio Postgres reale — 2-4h; (5) 2 gap di test già noti da Session 69 — 1-2h; (6) codice morto `lib/axiosInterceptor.js` (Task 8) — 0.5-1h; (7) 3 minor backlog del Task 9 (codice errore riusato, nessun log, query duplicata) — 1-2h.
+
+**Bassa (opzionale):** (8) anti-abuso solo rate-limit+tetto, nessun CAPTCHA (scelta deliberata del piano) — 3-5h se necessario; (9) minor accumulati nei singoli task (regex duplicata, valori hardcoded, mapping errori non condiviso) — 2-3h; (10) nessun alert su `MAX_ACTIVE_DEMOS` raggiunto spesso — 1-2h.
+
+**Totale stimato: ~20-30 ore.** L'unico blocco realmente urgente prima di un secondo cliente pagante è il finding RBAC (#1); gli altri due item Alta sono urgenti solo prima di mostrare la demo a un prospect vero, non prima del merge stesso.
+
+**Prossimo**: attesa di eventuale feedback sulla PR #3, poi pianificazione degli item Alta priorità (a partire dal finding RBAC, che richiede prima una decisione di prodotto sul ruolo `admin`).
 
 ---
 

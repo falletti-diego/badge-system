@@ -1,89 +1,71 @@
-# Badge System — Session 69 Handoff
+# Badge System — Session 70 Handoff
 
 **Date:** 2026-07-16
-**Session:** 69 — Task 9/9 (`GET /api/admin/demo-tenants`) implementato e chiuso — ULTIMO task del piano — + verifica end-to-end completa + review di sicurezza automatica (1 fix TLS applicato, 1 finding RBAC documentato come backlog)
-**Status:** ✅ **Piano "Ambiente Demo Self-Service" COMPLETO. Tutti i 9 task chiusi. Prossimo step: decisione merge/PR.** ⚠️ Prima di decidere merge, leggi la sezione "Finding di sicurezza" qui sotto — un finding HIGH resta aperto e non è specifico di questo branch.
+**Session:** 70 — `superpowers:finishing-a-development-branch` (PR #3 aperta verso `main`) + valutazione critica post-merge del piano "Ambiente Demo Self-Service" con 10 punti di miglioramento prioritizzati
+**Status:** ✅ **PR #3 aperta: https://github.com/falletti-diego/badge-system/pull/3** (`worktree-demo-self-service` → `main`, non ancora mergiata). Branch e worktree lasciati intatti per iterare su eventuale feedback.
 
 ---
 
 ## Goal
 
-Implementare l'ultimo task del piano "Ambiente Demo Self-Service" (Task 9/9), poi condurre una
-verifica end-to-end completa del piano prima di decidere se e come integrare il branch nel resto
-del repository (merge/PR/keep), su richiesta esplicita dell'utente.
+Chiudere il ciclo del piano "Ambiente Demo Self-Service" (9/9 task completati Session 61-69) decidendo
+merge/PR/keep/discard tramite la skill dedicata, poi fornire una valutazione critica del piano
+implementato e del risultato ottenuto, con punti di miglioramento prioritizzati e stima ore — su
+richiesta esplicita dell'utente.
 
 ---
 
 ## Come riprendere (leggi in quest'ordine)
 
 1. **Questo file**
-2. **`TASKS.md`** Session 69 + **`PROJECT_DECISIONS.md`** Session 69 — ragionamento completo dietro
-   ogni decisione e verifica di questa sessione
-3. **Piano completo** (per riferimento storico): `~/.claude/plans/adesso-entra-nella-cartella-purring-toast.md`
+2. **`TASKS.md`** sezione "Valutazione critica post-merge" (sotto SECURITY TECH DEBT) — i 10 punti di
+   miglioramento con priorità e stima ore
+3. **`PROJECT_DECISIONS.md`** Session 70 — ragionamento completo dietro la scelta Push+PR e la valutazione critica
+4. **PR #3** su GitHub: https://github.com/falletti-diego/badge-system/pull/3 — controllare se ci sono commenti/feedback da indirizzare
 
 ```bash
 cd "/Users/diegofalletti/DATAXIOM/Dataxiom – Analisi & BI/badge/.claude/worktrees/demo-self-service"
-git log --oneline -6   # deve mostrare 3058086 in cima (prima dei commit di docs)
+git log --oneline -6
 git branch --show-current   # worktree-demo-self-service
+gh pr view 3                # stato PR, eventuali commenti
 ```
 
-**Per riprendere: NON c'è più un Task N/9 da fare.** Il piano è completo. Il passo successivo è
-invocare `/superpowers:finishing-a-development-branch` per decidere merge/PR/keep/discard del branch
-`worktree-demo-self-service` verso `main`.
+**Per riprendere:** il piano è completo e in PR. Se ci sono commenti sulla PR, indirizzarli sul branch
+del worktree (già pronto, nessun setup aggiuntivo). Se la PR viene approvata, il merge può avvenire
+direttamente su GitHub o rieseguendo `finishing-a-development-branch` con opzione "Merge locale". Se
+non c'è feedback, il prossimo lavoro naturale è il primo item Alta priorità del backlog qui sotto.
 
 ---
 
 ## Cosa è successo in questa sessione
 
-### Implementazione Task 9/9
-`GET /api/admin/demo-tenants` (`backend/src/routes/admin/demo-tenants.js`) — endpoint di sola lettura,
-lista tenant demo ordinata per scadenza, montato dopo il gate RBAC condiviso `role==='admin'` già
-esistente. **Gap reale chiuso**: il gate condiviso non controllava se il tenant del chiamante fosse
-esso stesso demo — un admin di un tenant demo (creato da `demoSeed.js`) avrebbe altrimenti passato il
-controllo. Fix dedicato dentro il nuovo file, polarità invertita rispetto a `requireDemoTenant.js`
-(deliberatamente non riusato per questo motivo).
+### `finishing-a-development-branch`
+Test verificati prima di procedere: 563/577 verdi, 0 fallimenti, nessuna modifica non committata.
+Ambiente rilevato: worktree con branch nominato (non detached), 33 commit avanti rispetto a `main`.
+Presentate le 4 opzioni standard — l'utente ha scelto **Push + Pull Request** (non merge diretto, per
+lasciare margine a review esterna prima di toccare `main`).
 
-### Review: nessun Critical/Important, 3 Minor in backlog
-Spec-compliance e code-quality entrambe pulite. 3 Minor lasciati come backlog esplicito: codice errore
-riusato (`ADMIN_REQUIRED`) invece di uno dedicato, nessun log sul tentativo cross-tenant, query
-duplicata invece di un middleware condiviso (stesso pattern DRY che il Task 5 aveva già imparato ad
-evitare).
+**Blocco del classificatore auto-mode al primo tentativo di `gh pr create`**: il body della PR conteneva
+i dettagli tecnici specifici del finding RBAC cross-tenant HIGH non ancora fixato (Session 69) — bloccato
+correttamente come divulgazione pubblica di una vulnerabilità non patchata su repo pubblico, senza
+revisione esplicita dell'utente su quel contenuto. **Fix**: riscritto il body senza i dettagli tecnici
+(solo riferimento generico a "backlog di sicurezza in TASKS.md"). PR creata con successo:
+**https://github.com/falletti-diego/badge-system/pull/3**.
 
-### `/test-all`
-Backend **563/577 verdi** (0 fallimenti — 2 fallimenti iniziali in parallelo diagnosticati come flake
-preesistente, non correlato, riprodotto anche sul commit precedente). Frontend 259/260 invariato.
+Worktree e branch lasciati intatti (nessun cleanup) — corretto per l'opzione Push+PR, che richiede il
+worktree vivo per iterare su feedback futuro.
 
-### `/api-test` — fallimento diagnosticato come gap ambientale locale, non del codice
-Lo script generico ha fallito 8/23 contro il backend dev locale. Causa reale: `.env.development` ha
-`DISABLE_AUTH=true` (bypassa tutto l'RBAC, voluto in dev) e il DB locale non ha gli account
-`diego@badge.local`/`luca.verdi@employee.it` che lo script si aspetta. **Nessuna relazione col Task 9.**
-Sostituito con una verifica mirata: server riavviato con `DISABLE_AUTH=false`, verificato dal vivo con
-curl reali contro Postgres reale — admin reale vede la lista (200), admin di un tenant demo riceve
-**403 `ADMIN_REQUIRED`**, nessun token riceve 401. Esattamente il Checkpoint 9 del piano.
-
-### Verifica end-to-end completa del piano (richiesta esplicita dell'utente)
-Verificati dal vivo con curl reali (server locale, auth reale attiva):
-- **#6 (critico)**: `switch-role` con JWT di un admin REALE → 403, nessun token emesso.
-- **#7**: scadenza forzata nel passato → refresh dà `DEMO_EXPIRED`, non un errore generico.
-- **#8**: scadenza oltre la finestra di grazia → `cleanup-expired-demos.js` cancella tutto a cascata
-  (verificato a zero righe client/dipendenti/sedi), rieseguito una seconda volta → idempotente pulito.
-  **Nota operativa**: lo script richiede le variabili `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_PASSWORD`/
-  `DB_NAME` singole, non `DATABASE_URL` — utile saperlo se va rieseguito manualmente.
-- **#5**: rate-limit bloccato con messaggio chiaro e `retryAfter`.
-- **#1-4** (flusso frontend/tour/banner): **NON verificati con un browser reale** — nessuno strumento
-  di controllo browser disponibile in questo ambiente. Verificati per proxy tramite la suite di test
-  frontend automatizzata (259/260 verdi). **Gap dichiarato esplicitamente**: una verifica visiva reale
-  in un browser resta raccomandata prima del lancio a un prospect reale.
-
-**Matrice di test supplementare (13 scenari)**: 11/13 già coperti da test automatici verdi. 2 gap
-accettati come non bloccanti: riga 10 (richiesta in-flight durante cleanup — strutturalmente sicura per
-le garanzie transazionali di Postgres, ma non testata esplicitamente), riga 12 (nessun test di
-regressione dedicato per `is_demo=false` su `POST /api/admin/clients` — protetto comunque dal
-`DEFAULT false` della colonna).
+### Valutazione critica del piano implementato (richiesta esplicita dell'utente)
+Il processo `subagent-driven-development` + code-review a 8 angoli, ripetuto per ciascuno dei 9 task, ha
+fatto emergere **almeno un bug funzionale reale per ogni singolo task** prima del merge — non correzioni
+di stile: bypass di `DEMO_EXPIRED` via `switch-role` (Task 6), redirect rotto su `/prova-demo` per token
+revocato residuo (Task 7), race condition su sessioni concorrenti (Task 4), più un hotfix di produzione
+scoperto per caso durante il Task 3. Il pattern "verificare leggendo il codice, mai fidarsi del report di
+un subagent" ha pagato ripetutamente, incluso nella gestione dei 2 finding di sicurezza della Session 69.
 
 ---
 
-## Stato del codice (branch `worktree-demo-self-service`, commit `3058086` prima dei commit di docs)
+## Stato del codice (branch `worktree-demo-self-service`, PR #3 aperta)
 
 | Task | Stato |
 |---|---|
@@ -95,94 +77,80 @@ regressione dedicato per `is_demo=false` su `POST /api/admin/clients` — protet
 | 6/9 — `DEMO_EXPIRED` + cleanup scheduler | ✅ Completato (Session 66) |
 | 7/9 — `TryDemoPage.jsx` | ✅ Completato (Session 67) |
 | 8/9 — Banner/Tour/Modal/ExpiredPage | ✅ Completato (Session 68) |
-| 9/9 — `GET /api/admin/demo-tenants` | ✅ **Completato e chiuso in questa sessione — piano COMPLETO** |
+| 9/9 — `GET /api/admin/demo-tenants` | ✅ Completato (Session 69) |
+| — | ✅ PR #3 aperta verso `main` (Session 70) |
+
+---
+
+## 10 punti di miglioramento — priorità e stima ore
+
+Dettaglio completo in `TASKS.md` (sezione "Valutazione critica post-merge"). Riepilogo:
+
+### 🔴 Alta — bloccanti prima di mostrare la demo a un prospect reale
+1. **RBAC cross-tenant `/api/admin/*`** (stesso finding HIGH Session 69) — richiede prima una decisione
+   di prodotto sul ruolo `admin`. Stima: 2-3h decisione/design + 4-6h fix e test.
+2. **Infrastruttura AWS reale non provisionata**: verifica dominio/email SES, permesso IAM
+   `ses:SendEmail`, regola EventBridge Scheduler per `cleanup-expired-demos.js`, `MAX_ACTIVE_DEMOS` in
+   produzione. Stima: 3-5h (setup, non codice).
+3. **QA visiva browser del funnel completo** — mai eseguita, nessuno strumento browser disponibile in
+   questo ambiente. Stima: 1-2h.
+
+### 🟡 Media — entro poche settimane dal lancio
+4. **CI senza servizio Postgres reale** — test DB-dipendenti critici (race condition email duplicata)
+   passano solo in locale. Stima: 2-4h.
+5. **2 gap di test già noti** (Session 69: in-flight request durante cleanup; regressione `is_demo=false`
+   su `/admin/clients`). Stima: 1-2h.
+6. **Codice morto** `frontend-web/src/lib/axiosInterceptor.js` (interceptor inerte, Task 8). Stima: 0.5-1h.
+7. **3 minor backlog Task 9** (codice errore riusato, nessun log cross-tenant, query duplicata). Stima: 1-2h.
+
+### 🟢 Bassa — opzionale
+8. Anti-abuso solo rate-limit+tetto, nessun CAPTCHA (scelta deliberata) — 3-5h se necessario.
+9. Minor accumulati nei task (regex duplicata, valori hardcoded, mapping errori non condiviso) — 2-3h.
+10. Nessun alert su `MAX_ACTIVE_DEMOS` raggiunto spesso — 1-2h.
+
+**Totale stimato: ~20-30 ore.** Solo il punto 1 (RBAC) blocca davvero un secondo cliente pagante; i
+punti 2-3 sono urgenti solo prima di mostrare la demo a un prospect vero, non prima del merge.
 
 ---
 
 ## What Worked
 
-- **Diagnosticare un fallimento di `/api-test` leggendo la configurazione invece di assumere una
-  regressione**: trovare `DISABLE_AUTH=true` e gli account mancanti nel DB locale ha evitato di
-  inseguire 8 falsi allarmi non correlati al Task 9, e ha permesso una verifica mirata più preziosa
-  (auth reale, scenario esatto del Checkpoint 9) al posto di uno script generico mal configurato per
-  l'ambiente locale.
-- **Verificare dal vivo con curl reali contro Postgres reale invece di fidarsi solo dei test automatici**
-  per i punti più critici del piano (#5, #6, #7, #8) — ha dato una conferma diretta, non mediata da
-  mock, degli scenari di sicurezza più delicati dell'intera feature (switch-role fail-closed, scadenza,
-  cascata di cancellazione).
-- **Dichiarare esplicitamente i gap invece di nasconderli**: sia l'assenza di verifica browser reale
-  (punti #1-4) sia le 2 righe non coperte della matrice supplementare sono stati riportati onestamente
-  come limiti accettati, non presentati come "tutto verificato al 100%".
+- Verificare entrambi i finding di sicurezza leggendo il codice reale prima di agire, invece di fidarsi
+  del report automatico — ha permesso di distinguere correttamente un fix genuino (TLS) da un problema
+  sistemico che richiede una decisione di prodotto (RBAC), evitando sia un fix affrettato sia un'inazione
+  ingiustificata.
+- Il blocco del classificatore sulla PR è stato gestito correttamente: non uno scavalcamento, ma una
+  riscrittura del contenuto per rimuovere la divulgazione problematica mantenendo intatta l'informazione
+  utile (un finding esiste, è tracciato, non è dettagliato pubblicamente).
 
 ## What Didn't Work / Attenzione
 
-- Nessun blocco grave. Uno script di utilità (`cleanup-expired-demos.js`) richiede variabili d'ambiente
-  singole (`DB_HOST` etc.) invece di `DATABASE_URL` — non un bug, ma una discrepanza di convenzione
-  rispetto al resto del progetto, utile da ricordare per la prossima esecuzione manuale.
-
----
-
-## Finding di sicurezza (review automatica in background, subito dopo la chiusura del Task 9/9)
-
-Una review di sicurezza automatica ha segnalato 2 finding. Entrambi verificati manualmente (non accettati sulla fiducia) prima di agire.
-
-**Fixato**: TLS certificate verification disabilitata in 3 script standalone (`cleanup-expired-demos.js`,
-`audit-log-retention.js`, `apply-schema.js` — ciascuno apre un proprio `pg.Pool` separato dal pool
-condiviso, con `rejectUnauthorized: false` incondizionato in produzione). Nessuno dei tre file era stato
-toccato dal Task 9 — problema preesistente (il più recente risale alla Session 66), non una regressione
-di questa sessione. Allineati al pattern già sicuro di `src/db/pool.js`. Verificato: sintassi corretta,
-563/577 backend verdi dopo il fix. Commit `2659982`.
-
-**NON fixato, documentato come backlog HIGH in `TASKS.md`**: l'intero namespace `/api/admin/*`
-(incluse `GET /admin/clients` e `GET /admin/sites`, preesistenti da molte sessioni, non solo la nuova
-`GET /admin/demo-tenants`) non scopa mai l'accesso al `client_id` del chiamante — qualunque dipendente
-`role==='admin'` di *qualsiasi* tenant reale vede oggi tutti i client/sedi/ora anche tutte le email di
-contatto dei prospect demo del sistema. **Non è una regressione del Task 9** — `demo-tenants.js` ha solo
-ereditato il modello di accesso già stabilito per tutto il namespace. Non fixato perché: (1) correggerlo
-solo qui sarebbe incoerente (resterebbe comunque possibile vedere tutto da `/admin/clients`), (2) serve
-prima una decisione di prodotto (il ruolo `admin` è esclusivo di Dataxiom o assegnabile da un cliente
-reale a un proprio dipendente?) che l'utente ha preferito investigare insieme piuttosto che decidere a
-memoria. Evidenza raccolta (indicativa, non conclusiva): l'onboarding self-service reale
-(`scripts/onboarding/parseWorkbook.js`) non può mai produrre un dipendente `admin` tramite import CSV
-— solo Dataxiom può crearne uno manualmente. Vedi `PROJECT_DECISIONS.md` Session 69 (Addendum) per il
-ragionamento completo. **Prossimo passo consigliato**: un ciclo `/grilling` + `/writing-plans` dedicato
-per decidere e pianificare il fix (probabilmente una colonna `is_staff` su `clients` o un ruolo
-`superadmin`, applicato a tutto `/api/admin`), separato dalla decisione merge/PR di questo branch — il
-finding non è specifico del branch demo self-service e non dovrebbe bloccarne il merge, ma va tracciato
-con la priorità che merita.
+- Nessun blocco grave. Ricordare che qualunque futura PR che tocchi aree con finding di sicurezza aperti
+  non deve descriverne i dettagli tecnici nel body pubblico — riferimento generico al backlog interno.
 
 ---
 
 ## Prossimi step
 
-### Immediato — decisione merge/PR
-Il piano è completo. Prossimo passo: `superpowers:finishing-a-development-branch` per decidere se e
-come integrare `worktree-demo-self-service` in `main` — merge diretto, PR per review, o mantenerlo
-ancora isolato per ulteriori verifiche.
+### Immediato
+Attendere eventuale feedback sulla PR #3, oppure procedere direttamente con il punto 1 della lista Alta
+priorità (decisione di prodotto sul ruolo `admin`, poi fix RBAC) se l'utente preferisce non aspettare.
 
-### Prima del lancio a un prospect reale (raccomandato, non bloccante per il merge tecnico)
-- Verifica visiva reale in un browser del flusso completo (`/prova-demo` → dashboard → tour → banner →
-  selettore ruolo → form contatto → scadenza) — non eseguibile in questo ambiente.
-- Screenshot reali per la sezione "Cosa vedrai" di `TryDemoPage.jsx` (oggi placeholder commentati).
-- Setup infrastrutturale fuori dal repo: AWS SES (dominio/email mittente), AWS EventBridge Scheduler
-  per `cleanup-expired-demos.js` quotidiano via SSM su EC2.
+### Prima del lancio a un prospect reale (non bloccante per il merge tecnico)
+- Verifica visiva reale in browser del flusso completo.
+- Screenshot reali per `TryDemoPage.jsx` (oggi placeholder commentati).
+- Setup AWS SES + EventBridge Scheduler.
 
-### Backlog tecnico (non bloccante)
-- 3 Minor del Task 9 (codice errore dedicato, logging cross-tenant, middleware condiviso).
-- Minor residui delle Session 65-68 (vedi `PROJECT_DECISIONS.md` di ciascuna sessione).
-- 2 gap della matrice di test supplementare (righe 10 e 12, vedi sopra — entrambi strutturalmente
-  a basso rischio).
-- Decisione ancora in sospeso dalla Session 61: servizio Postgres reale nella pipeline CI.
+### Backlog tecnico (vedi tabella sopra per dettaglio/priorità)
 
 ---
 
 ## Note operative
 
-- Ambiente ripulito a fine sessione: nessun tenant demo di test residuo, `.env.development` ripristinato
-  a `DISABLE_AUTH=true`.
-- Vedi `PROJECT_DECISIONS.md` Session 69 per il dettaglio completo di ogni verifica live eseguita.
+- Ambiente locale pulito, nessun tenant demo di test residuo.
+- Vedi `PROJECT_DECISIONS.md` Session 70 per il dettaglio completo del ragionamento.
 
 ---
 
-Per riprendere: leggi questo file, poi `git log --oneline -6` per confermare lo stato, poi invoca
-`superpowers:finishing-a-development-branch` per la decisione merge/PR.
+Per riprendere: leggi questo file, poi `gh pr view 3` per lo stato della PR, poi decidi se lavorare sul
+feedback della PR o sul primo item Alta priorità del backlog (RBAC cross-tenant).
