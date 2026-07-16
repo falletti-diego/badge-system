@@ -18,22 +18,23 @@ const router = express.Router();
 router.post('/', createValidationMiddleware(AdminSiteSchema), async (req, res, next) => {
   try {
     const data = req.validated.body;
+    const targetClientId = req.user.role === 'superadmin' ? data.client_id : req.user.client_id;
 
-    const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1', [data.client_id]);
+    const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1', [targetClientId]);
     if (clientCheck.rowCount === 0) return next(new ValidationError('Client not found'));
 
     const siteId = randomUUID();
-    const qrContent = `badge://checkin?site_id=${siteId}&client_id=${data.client_id}&v=1`;
+    const qrContent = `badge://checkin?site_id=${siteId}&client_id=${targetClientId}&v=1`;
 
     const result = await pool.query(
       `INSERT INTO sites (id, client_id, name, location, qr_code_content)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, client_id, name, location, qr_code_content, created_at`,
-      [siteId, data.client_id, data.name, data.location || null, qrContent]
+      [siteId, targetClientId, data.name, data.location || null, qrContent]
     );
 
     const site = result.rows[0];
-    logger.info({ action: 'admin_create_site', site_id: site.id, client_id: data.client_id });
+    logger.info({ action: 'admin_create_site', site_id: site.id, client_id: targetClientId });
     await logAudit(pool, {
       action: 'admin_create_site',
       entity: 'site',
@@ -52,13 +53,18 @@ router.post('/', createValidationMiddleware(AdminSiteSchema), async (req, res, n
 
 router.get('/', async (req, res, next) => {
   try {
-    const { client_id } = req.query;
     const params = [];
     let where = '';
-    if (client_id) {
-      const uuidCheck = z.string().uuid().safeParse(client_id);
-      if (!uuidCheck.success) return next(new ValidationError('Invalid client_id format'));
-      params.push(client_id);
+    if (req.user.role === 'superadmin') {
+      const { client_id } = req.query;
+      if (client_id) {
+        const uuidCheck = z.string().uuid().safeParse(client_id);
+        if (!uuidCheck.success) return next(new ValidationError('Invalid client_id format'));
+        params.push(client_id);
+        where = 'WHERE s.client_id = $1';
+      }
+    } else {
+      params.push(req.user.client_id);
       where = 'WHERE s.client_id = $1';
     }
     const result = await pool.query(
@@ -84,9 +90,13 @@ router.delete('/:id', async (req, res, next) => {
     const uuidCheck = z.string().uuid().safeParse(id);
     if (!uuidCheck.success) return next(new ValidationError('Invalid site id'));
 
+    const isSuperadmin = req.user.role === 'superadmin';
+    const params = isSuperadmin ? [id] : [id, req.user.client_id];
+    const scopeClause = isSuperadmin ? '' : 'AND client_id = $2::uuid';
+
     const result = await pool.query(
-      'DELETE FROM sites WHERE id = $1 RETURNING id, name, client_id',
-      [id]
+      `DELETE FROM sites WHERE id = $1 ${scopeClause} RETURNING id, name, client_id`,
+      params
     );
     if (result.rowCount === 0) return next(new ValidationError('Site not found'));
 
@@ -99,7 +109,7 @@ router.delete('/:id', async (req, res, next) => {
       oldValue: { name: site.name },
       newValue: null,
       userId: req.user.user_id,
-    }).catch((err) => logger.warn({ action: 'audit_log_failed', error: err.message }));
+    }).catch((err) => logger.warn({ action: 'admin_delete_site_failed', error: err.message }));
 
     logger.info({ action: 'admin_delete_site', site_id: site.id, name: site.name });
     res.json({ success: true, message: `Sede "${site.name}" eliminata.` });
