@@ -1,237 +1,134 @@
-import { describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect, beforeEach, vi } from 'vitest';
 import React from 'react';
-import { BrowserRouter as Router, useLocation } from 'react-router-dom';
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { PasswordChangeGuard } from '../App';
 
-// Helper component (not rendered in tests, but JSX must be parseable)
-function LocationTracker() {
-  const location = useLocation();
-  return <div data-testid="location">{location.pathname}</div>;
-}
+/**
+ * Tests the REAL PasswordChangeGuard component from App.jsx (exported for
+ * testability — see the code-review finding on commit ec9db24: the previous
+ * version of this file hand-copied the guard's conditional logic into local
+ * variables instead of exercising the actual component, so it would keep
+ * passing even if the real guard were broken).
+ *
+ * The guard reads `localStorage['badge_must_change_password'] === 'true'`
+ * (a plain string flag, not JSON) and, when true, redirects away from any
+ * path except /change-password, /login, and /prova-demo (the public
+ * self-service demo landing page — see Task 7 code review).
+ */
 
-function TestApp() {
-  const [location, setLocation] = React.useState('/dashboard');
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
 
-  React.useEffect(() => {
-    const userStr = localStorage.getItem('badge_user');
-    const user = userStr ? JSON.parse(userStr) : null;
-    const mustChangePassword = user?.must_change_password === true;
-
-    if (
-      mustChangePassword &&
-      !location.startsWith('/change-password') &&
-      location !== '/login'
-    ) {
-      setLocation('/change-password');
-    }
-  }, [location]);
-
-  return (
-    <Router>
-      <div data-testid="current-path">{location}</div>
-    </Router>
+function renderGuardAt(initialPath) {
+  return render(
+    <MemoryRouter initialEntries={[initialPath]}>
+      <PasswordChangeGuard>
+        <div data-testid="guarded-child">child content</div>
+      </PasswordChangeGuard>
+    </MemoryRouter>
   );
 }
 
-describe('PasswordChangeGuard', () => {
+describe('PasswordChangeGuard (real component)', () => {
   beforeEach(() => {
-    // happy-dom does not implement localStorage.clear(); remove known keys instead
-    localStorage.removeItem('badge_user');
+    vi.clearAllMocks();
+    localStorage.removeItem('badge_must_change_password');
   });
 
   describe('Redirect when must_change_password=true', () => {
-    test('should redirect to /change-password when must_change_password is true and user on /dashboard', () => {
-      const user = {
-        id: 'user-123',
-        email: 'user@company.local',
-        must_change_password: true,
-      };
-      localStorage.setItem('badge_user', JSON.stringify(user));
-
-      const parsedUser = JSON.parse(localStorage.getItem('badge_user'));
-      const mustChangePassword = parsedUser.must_change_password === true;
-
-      let redirectedPath = '/dashboard';
-      if (mustChangePassword) {
-        redirectedPath = '/change-password';
-      }
-
-      expect(redirectedPath).toBe('/change-password');
+    test('redirects to /change-password when on /dashboard', () => {
+      localStorage.setItem('badge_must_change_password', 'true');
+      renderGuardAt('/dashboard');
+      expect(mockNavigate).toHaveBeenCalledWith('/change-password', { replace: true });
     });
 
-    test('should redirect to /change-password when accessing /planning', () => {
-      const user = { id: 'user-123', email: 'user@company.local', must_change_password: true };
-      localStorage.setItem('badge_user', JSON.stringify(user));
-
-      const mustChangePassword = JSON.parse(localStorage.getItem('badge_user')).must_change_password === true;
-
-      let redirectedPath = '/planning';
-      if (mustChangePassword && !redirectedPath.startsWith('/change-password')) {
-        redirectedPath = '/change-password';
-      }
-
-      expect(redirectedPath).toBe('/change-password');
+    test('redirects to /change-password when on /planning', () => {
+      localStorage.setItem('badge_must_change_password', 'true');
+      renderGuardAt('/planning');
+      expect(mockNavigate).toHaveBeenCalledWith('/change-password', { replace: true });
     });
 
-    test('should redirect to /change-password when accessing /admin', () => {
-      const user = { id: 'user-123', email: 'user@company.local', must_change_password: true };
-      localStorage.setItem('badge_user', JSON.stringify(user));
-
-      const mustChangePassword = JSON.parse(localStorage.getItem('badge_user')).must_change_password === true;
-
-      let redirectedPath = '/admin';
-      if (mustChangePassword && !redirectedPath.startsWith('/change-password')) {
-        redirectedPath = '/change-password';
-      }
-
-      expect(redirectedPath).toBe('/change-password');
+    test('redirects to /change-password when on /admin', () => {
+      localStorage.setItem('badge_must_change_password', 'true');
+      renderGuardAt('/admin');
+      expect(mockNavigate).toHaveBeenCalledWith('/change-password', { replace: true });
     });
 
-    test('should redirect to /change-password when accessing /corrections', () => {
-      const user = { id: 'user-123', email: 'user@company.local', must_change_password: true };
-      localStorage.setItem('badge_user', JSON.stringify(user));
-
-      const mustChangePassword = JSON.parse(localStorage.getItem('badge_user')).must_change_password === true;
-
-      let redirectedPath = '/corrections';
-      if (mustChangePassword && !redirectedPath.startsWith('/change-password')) {
-        redirectedPath = '/change-password';
-      }
-
-      expect(redirectedPath).toBe('/change-password');
+    test('redirects to /change-password when on /corrections', () => {
+      localStorage.setItem('badge_must_change_password', 'true');
+      renderGuardAt('/corrections');
+      expect(mockNavigate).toHaveBeenCalledWith('/change-password', { replace: true });
     });
   });
 
-  describe('Allow access to /change-password and /login', () => {
-    test('should NOT redirect when on /change-password (even if must_change_password=true)', () => {
-      const user = { id: 'user-123', email: 'user@company.local', must_change_password: true };
-      localStorage.setItem('badge_user', JSON.stringify(user));
-
-      const mustChangePassword = JSON.parse(localStorage.getItem('badge_user')).must_change_password === true;
-
-      let redirectedPath = '/change-password';
-      if (mustChangePassword && !redirectedPath.startsWith('/change-password')) {
-        redirectedPath = '/change-password';
-      }
-
-      expect(redirectedPath).toBe('/change-password');
+  describe('Allow access to exempt paths even when must_change_password=true', () => {
+    test('does NOT redirect when on /change-password', () => {
+      localStorage.setItem('badge_must_change_password', 'true');
+      renderGuardAt('/change-password');
+      expect(mockNavigate).not.toHaveBeenCalled();
     });
 
-    test('should NOT redirect when on /login (even if must_change_password=true)', () => {
-      const user = { id: 'user-123', email: 'user@company.local', must_change_password: true };
-      localStorage.setItem('badge_user', JSON.stringify(user));
-
-      const mustChangePassword = JSON.parse(localStorage.getItem('badge_user')).must_change_password === true;
-
-      let redirectedPath = '/login';
-      if (mustChangePassword && redirectedPath !== '/login' && !redirectedPath.startsWith('/change-password')) {
-        redirectedPath = '/change-password';
-      }
-
-      expect(redirectedPath).toBe('/login');
-    });
-  });
-
-  describe('No redirect when must_change_password=false', () => {
-    test('should NOT redirect to /change-password when must_change_password is false', () => {
-      const user = { id: 'user-123', email: 'user@company.local', must_change_password: false };
-      localStorage.setItem('badge_user', JSON.stringify(user));
-
-      const mustChangePassword = JSON.parse(localStorage.getItem('badge_user')).must_change_password === true;
-
-      let redirectedPath = '/dashboard';
-      if (mustChangePassword && !redirectedPath.startsWith('/change-password')) {
-        redirectedPath = '/change-password';
-      }
-
-      expect(redirectedPath).toBe('/dashboard');
+    test('does NOT redirect when on /login', () => {
+      localStorage.setItem('badge_must_change_password', 'true');
+      renderGuardAt('/login');
+      expect(mockNavigate).not.toHaveBeenCalled();
     });
 
-    test('should allow access to /planning when must_change_password=false', () => {
-      const user = { id: 'manager-123', role: 'manager', must_change_password: false };
-      localStorage.setItem('badge_user', JSON.stringify(user));
-
-      const mustChangePassword = JSON.parse(localStorage.getItem('badge_user')).must_change_password === true;
-
-      let redirectedPath = '/planning';
-      if (mustChangePassword && !redirectedPath.startsWith('/change-password')) {
-        redirectedPath = '/change-password';
-      }
-
-      expect(redirectedPath).toBe('/planning');
+    // Regression test for the code-review finding on commit ec9db24: the
+    // public demo landing page must stay reachable even for a visitor whose
+    // browser has a stale must_change_password flag from an earlier,
+    // unrelated real session.
+    test('does NOT redirect when on /prova-demo', () => {
+      localStorage.setItem('badge_must_change_password', 'true');
+      renderGuardAt('/prova-demo');
+      expect(mockNavigate).not.toHaveBeenCalled();
     });
 
-    test('should allow access to /admin when must_change_password=false', () => {
-      const user = { id: 'admin-123', role: 'admin', must_change_password: false };
-      localStorage.setItem('badge_user', JSON.stringify(user));
-
-      const mustChangePassword = JSON.parse(localStorage.getItem('badge_user')).must_change_password === true;
-
-      let redirectedPath = '/admin';
-      if (mustChangePassword && !redirectedPath.startsWith('/change-password')) {
-        redirectedPath = '/change-password';
-      }
-
-      expect(redirectedPath).toBe('/admin');
+    // Regression test for Task 8: /demo-expired must also stay reachable
+    // without ProtectedRoute even with a stale must_change_password flag,
+    // same reasoning as /prova-demo above.
+    test('does NOT redirect when on /demo-expired', () => {
+      localStorage.setItem('badge_must_change_password', 'true');
+      renderGuardAt('/demo-expired');
+      expect(mockNavigate).not.toHaveBeenCalled();
     });
   });
 
-  describe('No user in localStorage', () => {
-    test('should NOT redirect when no user in localStorage', () => {
-      const userStr = localStorage.getItem('badge_user');
-      const user = userStr ? JSON.parse(userStr) : null;
-      const mustChangePassword = user?.must_change_password === true;
+  describe('No redirect when must_change_password is false or absent', () => {
+    test('does NOT redirect when flag is explicitly "false"', () => {
+      localStorage.setItem('badge_must_change_password', 'false');
+      renderGuardAt('/dashboard');
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
 
-      let redirectedPath = '/dashboard';
-      if (mustChangePassword && !redirectedPath.startsWith('/change-password')) {
-        redirectedPath = '/change-password';
-      }
+    test('does NOT redirect when flag is absent from localStorage', () => {
+      renderGuardAt('/dashboard');
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
 
-      expect(redirectedPath).toBe('/dashboard');
+    test('does NOT redirect on /planning when flag is absent', () => {
+      renderGuardAt('/planning');
+      expect(mockNavigate).not.toHaveBeenCalled();
     });
   });
 
-  describe('Token update affects guard behavior', () => {
-    test('should stop redirecting after password change (must_change_password becomes false)', () => {
-      localStorage.setItem('badge_user', JSON.stringify({ id: 'user-123', must_change_password: true }));
-
-      let mustChange = JSON.parse(localStorage.getItem('badge_user')).must_change_password === true;
-      let path = '/dashboard';
-      if (mustChange && !path.startsWith('/change-password')) path = '/change-password';
-      expect(path).toBe('/change-password');
-
-      localStorage.setItem('badge_user', JSON.stringify({ id: 'user-123', must_change_password: false }));
-
-      mustChange = JSON.parse(localStorage.getItem('badge_user')).must_change_password === true;
-      path = '/dashboard';
-      if (mustChange && !path.startsWith('/change-password')) path = '/change-password';
-      expect(path).toBe('/dashboard');
-    });
-  });
-
-  describe('Malformed localStorage data', () => {
-    test('should handle invalid JSON gracefully', () => {
-      localStorage.setItem('badge_user', 'invalid json');
-
-      try {
-        const userStr = localStorage.getItem('badge_user');
-        JSON.parse(userStr);
-        expect(true).toBe(false); // should not reach here
-      } catch (e) {
-        expect(e instanceof SyntaxError).toBe(true);
-      }
+  describe('Renders children regardless of guard state', () => {
+    test('renders children when redirecting (guard does not block rendering)', () => {
+      localStorage.setItem('badge_must_change_password', 'true');
+      renderGuardAt('/dashboard');
+      expect(screen.getByTestId('guarded-child')).toBeInTheDocument();
     });
 
-    test('should handle missing must_change_password field gracefully', () => {
-      localStorage.setItem('badge_user', JSON.stringify({ id: 'user-123', email: 'user@company.local' }));
-
-      const mustChangePassword = JSON.parse(localStorage.getItem('badge_user')).must_change_password === true;
-
-      let redirectedPath = '/dashboard';
-      if (mustChangePassword && !redirectedPath.startsWith('/change-password')) {
-        redirectedPath = '/change-password';
-      }
-
-      expect(redirectedPath).toBe('/dashboard');
+    test('renders children when not redirecting', () => {
+      renderGuardAt('/dashboard');
+      expect(screen.getByTestId('guarded-child')).toBeInTheDocument();
     });
   });
 });

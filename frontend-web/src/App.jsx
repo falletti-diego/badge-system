@@ -8,6 +8,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavig
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import DashboardPage from './features/dashboard/pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
+import TryDemoPage from './pages/TryDemoPage';
+import DemoExpiredPage from './pages/DemoExpiredPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { PlanningPage } from './features/planning/pages/PlanningPage';
@@ -88,7 +90,7 @@ const theme = createTheme({
  * Watches for must_change_password flag and redirects to /change-password
  * Allows access to /change-password and /login only when password change is required
  */
-function PasswordChangeGuard({ children }) {
+export function PasswordChangeGuard({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -96,8 +98,18 @@ function PasswordChangeGuard({ children }) {
     // Get must_change_password flag from localStorage
     const mustChangePassword = localStorage.getItem('badge_must_change_password') === 'true';
 
-    // If password must be changed but user is NOT on /change-password or /login
-    if (mustChangePassword && !location.pathname.startsWith('/change-password') && location.pathname !== '/login') {
+    // If password must be changed but user is NOT on /change-password, /login,
+    // or the public self-service demo pages (/prova-demo and /demo-expired
+    // must stay reachable by any anonymous visitor, even one with a stale
+    // must_change_password flag left over from an earlier real session on
+    // the same browser)
+    if (
+      mustChangePassword &&
+      !location.pathname.startsWith('/change-password') &&
+      location.pathname !== '/login' &&
+      location.pathname !== '/prova-demo' &&
+      location.pathname !== '/demo-expired'
+    ) {
       // Force redirect to /change-password (fail-closed, Opzione A)
       navigate('/change-password', { replace: true });
     }
@@ -120,6 +132,14 @@ function AppRouter() {
         {/* Auth Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
+
+        {/* Public self-service demo landing page — no ProtectedRoute wrapper */}
+        <Route path="/prova-demo" element={<TryDemoPage />} />
+
+        {/* Public demo-expired page — shown when DEMO_EXPIRED is detected by
+            apiClient.js's interceptor; no valid session exists by then, so
+            this must be reachable without ProtectedRoute too */}
+        <Route path="/demo-expired" element={<DemoExpiredPage />} />
 
           {/* Protected Routes */}
           <Route

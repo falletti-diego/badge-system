@@ -23,6 +23,50 @@ const LoginSchema = z.object({
 });
 
 // =====================================================
+// DEMO — POST /api/v1/demo/start
+// =====================================================
+// .strict() rejects any body field other than `email` (e.g. client_id, role)
+// so the public, unauthenticated caller cannot inject tenant/role data.
+const DemoStartSchema = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email format'),
+  }).strict(),
+});
+
+// =====================================================
+// DEMO — POST /api/v1/demo/switch-role
+// =====================================================
+// .strict() rejects any body field other than `role` — the caller is an
+// already-authenticated demo session, but the role must still be one of
+// exactly the 3 accepted values (never an arbitrary string).
+const DemoSwitchRoleSchema = z.object({
+  body: z.object({
+    role: z.enum(['admin', 'manager', 'employee'], {
+      errorMap: () => ({ message: 'role must be one of: admin, manager, employee' }),
+    }),
+  }).strict(),
+});
+
+// =====================================================
+// DEMO — POST /api/v1/demo/contact
+// =====================================================
+// .strict() rejects any body field other than `message` — same reasoning
+// as DemoSwitchRoleSchema: the caller is an already-authenticated demo
+// session, but a JWT-authenticated body must still not be able to inject
+// other fields (e.g. client_id) into a route that writes to the DB and
+// sends an email. min(1) rejects an empty message; max(2000) is a longer
+// bound than the 500-char `rejection_reason` field elsewhere in this file
+// (see ApproveLeaveSchema below) since this is meant to hold a free-form
+// "tell us about your use case" message rather than a short reason string.
+const DemoContactSchema = z.object({
+  body: z.object({
+    message: z.string()
+      .min(1, 'message is required')
+      .max(2000, 'message must be at most 2000 characters'),
+  }).strict(),
+});
+
+// =====================================================
 // 1. POST /api/checkin — Create check-in
 // =====================================================
 
@@ -501,6 +545,9 @@ const ApproveLeaveSchema = z.object({
 
 module.exports = {
   LoginSchema,
+  DemoStartSchema,
+  DemoSwitchRoleSchema,
+  DemoContactSchema,
   PostCheckinSchema,
   GetCheckinsSchema,
   PutCheckinSchema,

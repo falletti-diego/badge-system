@@ -403,9 +403,11 @@ router.post('/refresh', async (req, res) => {
         if (demoUser.site_id) tokenPayload.site_id = demoUser.site_id;
       } else {
         const result = await client.query(
-          `SELECT id, client_id, email, name, role, site_id
-           FROM employees
-           WHERE id = $1`,
+          `SELECT e.id, e.client_id, e.email, e.name, e.role, e.site_id,
+                  c.is_demo, c.demo_expires_at
+           FROM employees e
+           JOIN clients c ON c.id = e.client_id
+           WHERE e.id = $1`,
           [user_id]
         );
         const dbEmployee = result.rows[0];
@@ -413,6 +415,22 @@ router.post('/refresh', async (req, res) => {
           await client.query('COMMIT');
           return res.status(401).json({ error: 'USER_NOT_FOUND', message: 'User not found' });
         }
+
+        // Self-service demo tenant (Task 6 of 9 — Ambiente Demo
+        // Self-Service): once demo_expires_at has passed, this refresh
+        // token must be permanently unusable from here on, so the
+        // frontend can show DemoExpiredPage instead of retrying forever.
+        // The old jti was already consumed above (replay-check/consume
+        // sequence is untouched) -- that's intentional, matching "expired"
+        // semantics. Real customers have is_demo=false and
+        // demo_expires_at=NULL, so this short-circuits to false for them
+        // via the first two clauses without ever evaluating the Date
+        // comparison.
+        if (dbEmployee.is_demo && dbEmployee.demo_expires_at && new Date(dbEmployee.demo_expires_at) < new Date()) {
+          await client.query('COMMIT');
+          return res.status(401).json({ error: 'DEMO_EXPIRED', message: 'This demo has expired' });
+        }
+
         tokenPayload = {
           user_id: dbEmployee.id,
           name: dbEmployee.name,

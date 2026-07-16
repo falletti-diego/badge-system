@@ -12,7 +12,14 @@ vi.mock('../../hooks/useAuth', () => ({
 }));
 
 vi.mock('../../services/authService', () => ({
-  default: { logout: vi.fn().mockResolvedValue(undefined) },
+  default: {
+    logout: vi.fn().mockResolvedValue(undefined),
+    // NavBar mounts <DemoBanner /> unconditionally (Task 8) — DemoBanner
+    // gates itself on isDemo(), so this mock must provide it even though
+    // NavBar itself never calls it directly.
+    isDemo: vi.fn().mockReturnValue(false),
+    getDemoDaysRemaining: vi.fn().mockReturnValue(null),
+  },
 }));
 
 const mockNavigate = vi.fn();

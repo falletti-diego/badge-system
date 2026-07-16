@@ -92,23 +92,26 @@ const FilterBar = ({ onFilter = () => {}, onClear = () => {}, userRole, userSite
           fullWidth
         />
 
-        <TextField
-          select
-          label="Sede"
-          name="site_id"
-          value={filters.site_id}
-          onChange={handleInputChange}
-          size="small"
-          fullWidth
-          disabled={isSiteLocked}
-        >
-          {!isSiteLocked && <MenuItem value="">Tutte le sedi</MenuItem>}
-          {sites.map((site) => (
-            <MenuItem key={site.id} value={site.id}>
-              {site.name}
-            </MenuItem>
-          ))}
-        </TextField>
+        {/* DemoTour anchor — see DemoTour.jsx */}
+        <div id="demo-tour-site-filter">
+          <TextField
+            select
+            label="Sede"
+            name="site_id"
+            value={filters.site_id}
+            onChange={handleInputChange}
+            size="small"
+            fullWidth
+            disabled={isSiteLocked}
+          >
+            {!isSiteLocked && <MenuItem value="">Tutte le sedi</MenuItem>}
+            {sites.map((site) => (
+              <MenuItem key={site.id} value={site.id}>
+                {site.name}
+              </MenuItem>
+            ))}
+          </TextField>
+        </div>
 
         <TextField
           label="Employee (optional)"

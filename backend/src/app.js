@@ -41,10 +41,11 @@ const path = require('path');
 const { pool, closePool } = require('./db/pool');
 const { initializeRedis, closeRedis } = require('./db/redis');
 const { ApiError, RateLimitError } = require('./utils/errors');
-const { apiLimiter, authLimiter, csvLimiter } = require('./middleware/rateLimiter');
+const { apiLimiter, authLimiter, csvLimiter, demoStartLimiter } = require('./middleware/rateLimiter');
 const { optionalAuth } = require('./middleware/auth');
 const checkRevoked = require('./middleware/checkRevoked');
 const authRouter = require('./routes/auth');
+const demoRouter = require('./routes/demo');
 const employeesRouter = require('./routes/employees');
 const checkinsRouter = require('./routes/checkins');
 const shiftsRouter = require('./routes/shifts');
@@ -89,6 +90,8 @@ app.use('/api/auth/', authLimiter);
 app.use('/api/v1/auth/', authLimiter);
 app.use('/api/export/csv', csvLimiter);
 app.use('/api/v1/export/csv', csvLimiter);
+app.use('/api/demo/start', demoStartLimiter);
+app.use('/api/v1/demo/start', demoStartLimiter);
 
 // Structured request/response logging (method, path, statusCode, responseTime)
 // Used by CloudWatch metric filters for 5xx rate and slow request alarms
@@ -171,6 +174,7 @@ app.use(compositeAuthMiddleware);
 // v1 router — canonical API prefix
 const v1Router = express.Router();
 v1Router.use('/auth', authRouter);
+v1Router.use('/demo', demoRouter);
 v1Router.use('/employees', employeesRouter);
 v1Router.use('/checkins', checkinsRouter);
 v1Router.use('/shifts', shiftsRouter);

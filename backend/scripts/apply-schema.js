@@ -18,7 +18,11 @@ const dbConfig = {
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'Badge2026Simple',
   database: process.env.DB_NAME || 'badge_system',
-  ssl: { rejectUnauthorized: false },
+  // DB_SSL_REJECT_UNAUTHORIZED defaults to true in production, mirroring
+  // src/db/pool.js — never ship rejectUnauthorized:false unconditionally.
+  ssl: process.env.NODE_ENV === 'production'
+    ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
+    : false,
   statement_timeout: 60000,
 };
 
