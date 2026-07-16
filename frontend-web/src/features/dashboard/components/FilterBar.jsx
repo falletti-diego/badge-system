@@ -92,6 +92,7 @@ const FilterBar = ({ onFilter = () => {}, onClear = () => {}, userRole, userSite
           fullWidth
         />
 
+        {/* DemoTour anchor — see DemoTour.jsx */}
         <div id="demo-tour-site-filter">
           <TextField
             select

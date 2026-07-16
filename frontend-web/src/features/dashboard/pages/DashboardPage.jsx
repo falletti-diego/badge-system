@@ -243,11 +243,13 @@ const DashboardPage = () => {
         )}
 
         {/* KPI Cards */}
+        {/* DemoTour anchor — see DemoTour.jsx */}
         <div id="demo-tour-kpi-cards">
           <KpiCards stats={stats} />
         </div>
 
         {!isEmployee && (
+          /* DemoTour anchor — see DemoTour.jsx */
           <div id="demo-tour-trend">
             <TrendChart days={trendDays} loading={trendLoading} error={trendError} />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -274,6 +276,7 @@ const DashboardPage = () => {
         />
 
         {/* Export Button */}
+        {/* DemoTour anchor — see DemoTour.jsx */}
         <Box id="demo-tour-export" sx={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
           <ExportButton filters={filters} />
         </Box>
