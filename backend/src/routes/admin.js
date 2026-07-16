@@ -13,6 +13,7 @@ const sitesRouter = require('./admin/sites');
 const employeesRouter = require('./admin/employees');
 const viewersRouter = require('./admin/viewers');
 const settingsRouter = require('./admin/settings');
+const demoTenantsRouter = require('./admin/demo-tenants');
 
 const router = express.Router();
 
@@ -135,6 +136,7 @@ router.use('/sites', sitesRouter);
 router.use('/employees', employeesRouter);
 router.use('/viewers', viewersRouter);
 router.use('/settings', settingsRouter);
+router.use('/demo-tenants', demoTenantsRouter);
 
 // =====================================================
 // POST /api/admin/dpa-acknowledgement
