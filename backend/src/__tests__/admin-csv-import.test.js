@@ -217,15 +217,28 @@ describe('POST /api/v1/admin/employees/import — assigned_sites population', ()
     expect(res.body.data.skipped).toBe(1);
   });
 
-  test('rejects request without client_id', async () => {
+  test('admin role: client_id in body is not required — defaults to own tenant', async () => {
+    setupImportMocks({
+      sitesRows: [{ id: SITE_ID_TORINO, name: 'Torino' }],
+      insertRows: [{
+        rows: [{ id: 'emp-uuid-4', client_id: CLIENT_ID, email: 'emp@test.com', name: 'Emp', role: 'employee' }],
+        rowCount: 1,
+      }],
+    });
+
     const csvContent = 'email,name,phone,role,site_name\nemp@test.com,Emp,123,employee,Torino\n';
 
     const res = await request(app)
       .post('/api/v1/admin/employees/import')
+      // no client_id field — admin's own tenant (CLIENT_ID, from DISABLE_AUTH demo admin) is used
       .attach('file', Buffer.from(csvContent), 'employees.csv');
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe('VALIDATION_ERROR');
+    expect(res.status).toBe(200);
+    expect(res.body.data.created).toBe(1);
+
+    // Verify the client check queried the admin's own client_id, not an empty/undefined value
+    const clientCheckCall = pool.query.mock.calls[0];
+    expect(clientCheckCall[1]).toEqual([CLIENT_ID]);
   });
 
   test('rejects request without file', async () => {
