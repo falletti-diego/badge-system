@@ -226,14 +226,14 @@ describe('cleanup-expired-demos.js — cleanupExpiredDemos(pool) (real database)
       await cleanupExpiredDemos(pool);
 
       const auditRows = await pool.query(
-        `SELECT action, entity, entity_id FROM audit_log WHERE action = 'demo_tenant_cleanup' AND entity_id = $1`,
+        'SELECT action, entity, entity_id FROM audit_log WHERE action = \'demo_tenant_cleanup\' AND entity_id = $1',
         [clientId]
       );
       expect(auditRows.rows).toHaveLength(1);
       expect(auditRows.rows[0].entity).toBe('client');
     } finally {
       await pool.query('DELETE FROM clients WHERE email = $1', [email]);
-      await pool.query(`DELETE FROM audit_log WHERE action = 'demo_tenant_cleanup' AND entity_id = $1`, [clientId]);
+      await pool.query('DELETE FROM audit_log WHERE action = \'demo_tenant_cleanup\' AND entity_id = $1', [clientId]);
     }
   });
 });

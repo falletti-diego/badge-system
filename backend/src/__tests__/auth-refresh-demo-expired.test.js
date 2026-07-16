@@ -88,7 +88,7 @@ describe('POST /api/v1/auth/refresh — DEMO_EXPIRED (real database)', () => {
 
     try {
       await probePool.query(
-        `UPDATE clients SET demo_expires_at = now() - interval '1 day' WHERE id = $1`,
+        'UPDATE clients SET demo_expires_at = now() - interval \'1 day\' WHERE id = $1',
         [clientId]
       );
 

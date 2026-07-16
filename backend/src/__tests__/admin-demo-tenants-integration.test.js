@@ -119,15 +119,15 @@ describe('GET /api/v1/admin/demo-tenants (real database)', () => {
       // insertion order, to prove the endpoint sorts rather than relies on
       // creation order.
       await probePool.query(
-        "UPDATE clients SET demo_expires_at = now() + interval '1 day' WHERE id = $1",
+        'UPDATE clients SET demo_expires_at = now() + interval \'1 day\' WHERE id = $1',
         [demoClientIds[0]]
       );
       await probePool.query(
-        "UPDATE clients SET demo_expires_at = now() + interval '3 days' WHERE id = $1",
+        'UPDATE clients SET demo_expires_at = now() + interval \'3 days\' WHERE id = $1',
         [demoClientIds[1]]
       );
       await probePool.query(
-        "UPDATE clients SET demo_expires_at = now() + interval '5 days' WHERE id = $1",
+        'UPDATE clients SET demo_expires_at = now() + interval \'5 days\' WHERE id = $1',
         [demoClientIds[2]]
       );
 

@@ -91,7 +91,7 @@ describe('POST /api/v1/demo/switch-role (real database)', () => {
     const email = uniqueEmail('real-customer-switch');
 
     const realClient = await probePool.query(
-      "INSERT INTO clients (id, name, email, plan) VALUES (uuid_generate_v4(), 'Real Co', $1, 'starter') RETURNING id",
+      'INSERT INTO clients (id, name, email, plan) VALUES (uuid_generate_v4(), \'Real Co\', $1, \'starter\') RETURNING id',
       [email]
     );
     const realClientId = realClient.rows[0].id;
@@ -281,7 +281,7 @@ describe('POST /api/v1/demo/switch-role (real database)', () => {
       }
 
       const audit = await probePool.query(
-        "SELECT action FROM audit_log WHERE entity_id = $1 AND action = 'demo_role_switch'",
+        'SELECT action FROM audit_log WHERE entity_id = $1 AND action = \'demo_role_switch\'',
         [clientId]
       );
       expect(audit.rows.length).toBeGreaterThanOrEqual(3);
@@ -307,7 +307,7 @@ describe('POST /api/v1/demo/switch-role (real database)', () => {
 
     try {
       await probePool.query(
-        `UPDATE clients SET demo_expires_at = now() - interval '1 day' WHERE id = $1`,
+        'UPDATE clients SET demo_expires_at = now() - interval \'1 day\' WHERE id = $1',
         [clientId]
       );
 
