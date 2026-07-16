@@ -1,13 +1,15 @@
 'use strict';
 
 /**
- * Mocked-pool RBAC tests for GET /api/admin/demo-tenants (Task 9 of 9 —
- * Ambiente Demo Self-Service).
+ * Mocked-pool RBAC tests for GET /api/admin/demo-tenants.
  *
  * Mirrors admin-viewers.test.js's convention for the fast, mocked-pool RBAC
- * matrix. The real-database, real-demo-tenant behavior (correct fields,
- * ordering by demo_expires_at ASC, and the "admin of a demo tenant" 403
- * case using a genuinely seeded demo tenant) is covered separately in
+ * matrix. Updated by the admin-rbac-tenant-scoping plan (Task 7): this route
+ * now uses the shared requireSuperadmin middleware instead of its own
+ * bespoke is_demo-based inline check, so only role === 'superadmin' may see
+ * the list — a real tenant's plain 'admin' no longer qualifies. The real-
+ * database, real-demo-tenant behavior (correct fields, ordering by
+ * demo_expires_at ASC) is covered separately in
  * admin-demo-tenants-integration.test.js, which mirrors demo-start.test.js's
  * soft-skip real-Postgres pattern.
  */
@@ -47,6 +49,7 @@ const REAL_CLIENT_ID = '550e8400-e29b-41d4-a716-446655440001';
 const DEMO_CLIENT_ID = '550e8400-e29b-41d4-a716-446655440002';
 const SITE_ID = '550e8400-e29b-41d4-a716-446655440010';
 
+const SUPERADMIN_TOKEN = makeToken({ user_id: 'superadmin-uuid-1', client_id: REAL_CLIENT_ID, role: 'superadmin', name: 'Superadmin' });
 const REAL_ADMIN_TOKEN = makeToken({ user_id: 'admin-uuid-1', client_id: REAL_CLIENT_ID, role: 'admin', name: 'Admin' });
 const DEMO_ADMIN_TOKEN = makeToken({ user_id: 'demo-admin-uuid-1', client_id: DEMO_CLIENT_ID, role: 'admin', name: 'Demo Admin' });
 const MANAGER_TOKEN = makeToken({ user_id: 'mgr-uuid-1', client_id: REAL_CLIENT_ID, role: 'manager', site_id: SITE_ID, name: 'Manager' });
@@ -59,23 +62,21 @@ describe('GET /api/admin/demo-tenants', () => {
     jest.resetAllMocks();
   });
 
-  it('real admin gets the demo tenant list → 200', async () => {
-    pool.query
-      .mockResolvedValueOnce({ rows: [{ is_demo: false }] }) // caller client_id check
-      .mockResolvedValueOnce({
-        rows: [
-          {
-            id: DEMO_CLIENT_ID,
-            demo_contact_email: 'demo1@example.invalid',
-            created_at: new Date().toISOString(),
-            demo_expires_at: new Date().toISOString(),
-          },
-        ],
-      });
+  it('superadmin gets the demo tenant list → 200', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          id: DEMO_CLIENT_ID,
+          demo_contact_email: 'demo1@example.invalid',
+          created_at: new Date().toISOString(),
+          demo_expires_at: new Date().toISOString(),
+        },
+      ],
+    });
 
     const res = await request(app)
       .get('/api/v1/admin/demo-tenants')
-      .set('Authorization', `Bearer ${REAL_ADMIN_TOKEN}`);
+      .set('Authorization', `Bearer ${SUPERADMIN_TOKEN}`);
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -87,9 +88,15 @@ describe('GET /api/admin/demo-tenants', () => {
     expect(res.body.returned).toBe(1);
   });
 
-  it('admin of a demo tenant → 403 (blanket admin gate closes but this route rejects on its own is_demo check)', async () => {
-    pool.query.mockResolvedValueOnce({ rows: [{ is_demo: true }] }); // caller client_id check
+  it('real tenant\'s plain admin (role=admin) → 403 (requireSuperadmin rejects non-superadmin)', async () => {
+    const res = await request(app)
+      .get('/api/v1/admin/demo-tenants')
+      .set('Authorization', `Bearer ${REAL_ADMIN_TOKEN}`);
 
+    expect(res.status).toBe(403);
+  });
+
+  it('admin of a demo tenant → 403 (requireSuperadmin rejects role=admin regardless of tenant)', async () => {
     const res = await request(app)
       .get('/api/v1/admin/demo-tenants')
       .set('Authorization', `Bearer ${DEMO_ADMIN_TOKEN}`);
@@ -117,15 +124,5 @@ describe('GET /api/admin/demo-tenants', () => {
     const res = await request(app).get('/api/v1/admin/demo-tenants');
 
     expect(res.status).toBe(401);
-  });
-
-  it('caller client_id not found in clients table → 403 (fail closed)', async () => {
-    pool.query.mockResolvedValueOnce({ rows: [] }); // caller client_id lookup returns nothing
-
-    const res = await request(app)
-      .get('/api/v1/admin/demo-tenants')
-      .set('Authorization', `Bearer ${REAL_ADMIN_TOKEN}`);
-
-    expect(res.status).toBe(403);
   });
 });
