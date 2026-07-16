@@ -122,9 +122,11 @@ router.get('/debug/employee-assignment/:employeeId', async (req, res, next) => {
   }
 });
 
-// All routes below are admin-only
+// All routes below are admin-only (admin OR superadmin — individual routes
+// below narrow further to requireSuperadmin where cross-tenant access is
+// needed; see requireSuperadmin.js).
 router.use((req, res, next) => {
-  if (req.user.role !== 'admin') {
+  if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
     return next(new ForbiddenError('Admin access required', 'ADMIN_REQUIRED'));
   }
   next();
