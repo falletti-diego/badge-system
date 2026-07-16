@@ -148,4 +148,17 @@ describe('RBAC scoping: /api/v1/admin/employees', () => {
     expect(res.body.data.every((e) => e.client_id === clientB)).toBe(true);
     expect(res.body.data.length).toBeGreaterThan(0);
   });
+
+  it('POST /admin/employees/import: superadmin without client_id in body is rejected with 400', async () => {
+    if (!dbAvailable) return;
+    const token = tokenFor({ client_id: clientA, role: 'superadmin' });
+    const csvContent = 'email,name,phone,role,site_name\nemp@test.com,Emp,123,employee,\n';
+    const res = await request(app)
+      .post('/api/v1/admin/employees/import')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', Buffer.from(csvContent), 'employees.csv');
+    // No client_id field attached — superadmin must still specify a target tenant
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/client_id/);
+  });
 });
