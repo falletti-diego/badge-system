@@ -7,10 +7,11 @@ const { ValidationError } = require('../../utils/errors');
 const logger = require('../../utils/logger');
 const { logAudit } = require('../../middleware/audit');
 const { AdminClientSchema, createValidationMiddleware } = require('../../middleware/validation');
+const { requireSuperadmin } = require('../../middleware/requireSuperadmin');
 
 const router = express.Router();
 
-router.post('/', createValidationMiddleware(AdminClientSchema), async (req, res, next) => {
+router.post('/', requireSuperadmin, createValidationMiddleware(AdminClientSchema), async (req, res, next) => {
   try {
     const data = req.validated.body;
 
@@ -42,6 +43,12 @@ router.post('/', createValidationMiddleware(AdminClientSchema), async (req, res,
 
 router.get('/', async (req, res, next) => {
   try {
+    const params = [];
+    let where = '';
+    if (req.user.role !== 'superadmin') {
+      params.push(req.user.client_id);
+      where = 'WHERE c.id = $1';
+    }
     const result = await pool.query(
       `SELECT c.id, c.name, c.email, c.plan, c.created_at,
               c.meal_voucher_hours, c.geofencing_feature_enabled,
@@ -50,9 +57,11 @@ router.get('/', async (req, res, next) => {
        FROM clients c
        LEFT JOIN sites s ON s.client_id = c.id
        LEFT JOIN employees e ON e.client_id = c.id
+       ${where}
        GROUP BY c.id
        ORDER BY c.created_at DESC
-       LIMIT 500`
+       LIMIT 500`,
+      params
     );
     res.json({ success: true, data: result.rows, returned: result.rows.length });
   } catch (err) {
@@ -60,7 +69,7 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requireSuperadmin, async (req, res, next) => {
   try {
     const { id } = req.params;
     const uuidCheck = z.string().uuid().safeParse(id);
