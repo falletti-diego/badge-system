@@ -1,8 +1,47 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 16 Luglio 2026 (Session 68 — Task 8/9 demo self-service (`DemoBanner`/`DemoTour`/`DemoContactModal`/`DemoExpiredPage`) implementato e chiuso, 4 bug reali trovati dal code-review a 8 angoli e fixati)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 26 ✅ (vibrazione check-in) | Grafici Trend Dashboard ✅ LIVE (api.dataxiom.it) | Dropdown Sede in Dashboard ✅ LIVE | Export CSV date/ora ✅ fix live | Pipeline CI/CD ✅ funzionante (backend + mobile) | ✅ Hotfix `POST /auth/refresh` MERGIATO su main e verificato live in produzione (login → refresh reale confermato 200, replay correttamente rifiutato 401) | 🚧 Ambiente Demo Self-Service — Task 3/9-8/9 ✅ chiusi, Task 9/9 (`GET /api/admin/demo-tenants`, ultimo del piano) da iniziare (worktree isolato, non ancora in main)  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Ambiente Demo Self-Service da Task 9/9 (piano approvato, esecuzione a task singoli con pausa esplicita), poi MVP Hardening backlog residuo (Session 57) o staging environment + ONB.2
+**Last Updated:** 16 Luglio 2026 (Session 69 — Task 9/9 `GET /api/admin/demo-tenants` implementato e chiuso — ULTIMO task del piano — + verifica end-to-end completa prima della decisione merge/PR)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 26 ✅ (vibrazione check-in) | Grafici Trend Dashboard ✅ LIVE (api.dataxiom.it) | Dropdown Sede in Dashboard ✅ LIVE | Export CSV date/ora ✅ fix live | Pipeline CI/CD ✅ funzionante (backend + mobile) | ✅ Hotfix `POST /auth/refresh` MERGIATO su main e verificato live in produzione (login → refresh reale confermato 200, replay correttamente rifiutato 401) | ✅ Ambiente Demo Self-Service — **piano COMPLETO, tutti i 9 task chiusi**, in attesa della decisione merge/PR (worktree isolato, non ancora in main)  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Decisione merge/PR per il branch Ambiente Demo Self-Service (`superpowers:finishing-a-development-branch`), poi MVP Hardening backlog residuo (Session 57) o staging environment + ONB.2
+
+---
+
+## Session 69 — Task 9/9 demo self-service (`GET /api/admin/demo-tenants`): implementato e chiuso, ULTIMO task del piano, verifica end-to-end completa (16 Luglio 2026)
+
+### Contesto
+Ripreso il piano "Ambiente Demo Self-Service" dal Task 9/9 — l'ultimo dei 9 task — su richiesta esplicita dell'utente di usare `/superpowers:subagent-driven-development`, seguito da `/test-all`, `/api-test`, e infine una verifica end-to-end completa del piano prima di decidere merge/PR.
+
+### Implementazione
+Endpoint di sola lettura `GET /api/admin/demo-tenants` (`backend/src/routes/admin/demo-tenants.js`), montato dopo il gate condiviso `role==='admin'` già esistente in `routes/admin.js`. **Gap reale nel gate condiviso, chiuso specificamente per questo endpoint**: il gate esistente controlla solo `req.user.role === 'admin'`, mai se il tenant del chiamante è esso stesso un tenant demo — dato che `demoSeed.js` crea una tripla admin/manager/employee per ogni tenant demo, l'admin di un tenant demo passerebbe altrimenti questo controllo. Fix: query dedicata dentro il nuovo file (non nel gate condiviso, usato da tutte le altre route admin), polarità invertita rispetto a `requireDemoTenant.js` (che richiede `is_demo=true`; qui si rifiuta se `is_demo=true`) — deliberatamente non riusato `requireDemoTenant.js` per questo motivo.
+
+### `/code-review` (spec-compliance + code-quality), nessun Critical/Important
+Spec conforme al 100% (verificato indipendentemente: query esatta, ordinamento per scadenza ascendente, nessuna azione di scrittura, wiring corretto dopo il gate condiviso, test RBAC genuinamente mirati allo scenario "admin di un tenant demo"). Code-quality: "Approved with minor follow-ups" — 3 Minor non fixati (backlog esplicito, non bloccanti): (1) il rifiuto per admin-di-tenant-demo riusa il codice errore `ADMIN_REQUIRED` del gate condiviso invece di un codice dedicato, fuorviante per chi analizza i log; (2) nessun log `warn` sul tentativo di accesso cross-tenant, a differenza del pattern già stabilito in `requireDemoTenant.js`; (3) la query di rifiuto duplica la forma di `requireDemoTenant.js` invece di essere estratta in un middleware condiviso — lo stesso pattern DRY che questa feature aveva già imparato ad evitare nel Task 5.
+
+### `/test-all`
+Backend: **563/577 verdi** (14 skip noti, 0 fallimenti). Il reviewer di spec-compliance aveva inizialmente osservato 2 fallimenti in esecuzione parallela di default — investigati e confermati preesistenti e non correlati (stesso `auth-refresh-first-use.test.js` flake già documentato, riprodotto identico anche sul commit precedente al Task 9) prima di accettare il lavoro. Risolto con la pulizia preventiva ormai nota dello stato residuo `revoked_tokens`/fixture Pippo + esecuzione seriale. Frontend: 259/260 invariato (task backend-only).
+
+### `/api-test` — fallimento diagnosticato come gap ambientale, non del codice
+Lo script generico (`scripts/test-api.sh`) ha fallito 8/23 controlli contro il backend dev locale. Causa identificata leggendo la configurazione, non ipotizzata: `.env.development` di questo worktree ha `DISABLE_AUTH=true` (bypassa tutto l'RBAC — comportamento di sviluppo intenzionale, vedi CLAUDE.md Pattern 1), e il database locale (`badge_system`) non contiene gli account `diego@badge.local`/`luca.verdi@employee.it` che lo script si aspetta (solo `pippo@badge.local` esiste, con `password_hash NULL` — autenticato tramite un fallback legacy, non tramite bcrypt). Nessuna relazione col Task 9. **Verifica sostitutiva mirata**: riavviato il server locale con `DISABLE_AUTH=false`, poi verificato dal vivo con curl reali contro Postgres reale (non mock): login come `pippo` (admin reale) → `GET /admin/demo-tenants` 200 con lista vuota; creati 2 tenant demo reali via `POST /demo/start` → la lista li mostra correttamente; l'admin del tenant demo appena creato prova ad accedere allo stesso endpoint → **403 `ADMIN_REQUIRED`**; nessun token → 401 `MISSING_TOKEN`. Esattamente lo scenario critico del Checkpoint 9 del piano, verificato end-to-end contro un sistema reale.
+
+### Verifica end-to-end completa del piano (su richiesta esplicita dell'utente, prima della decisione merge/PR)
+Percorsi dal vivo con curl reali contro il server locale (auth reale attiva) i punti più critici della sezione "Verifica finale end-to-end" del piano:
+- **#6 (critico)**: `POST /demo/switch-role` con il JWT di `pippo` (admin REALE) → **403 `FORBIDDEN`**, nessun token emesso — il rischio più alto dell'intera feature (un endpoint che riemette JWT senza password) confermato fail-closed.
+- **#7**: creato un tenant demo, forzato `demo_expires_at` nel passato via SQL diretto → `POST /auth/refresh` con il suo refresh token → **401 `DEMO_EXPIRED`**, non un errore generico.
+- **#8**: spinta la scadenza oltre la finestra di grazia di 7 giorni → eseguito `cleanup-expired-demos.js` (richiede le variabili `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_PASSWORD`/`DB_NAME` singole, non `DATABASE_URL` — nota operativa per la prossima sessione che dovesse rieseguirlo manualmente) → verificato a query diretta che client/dipendenti/sedi sono a **zero righe** (cascata completa). Rieseguito una seconda volta → "0 expired demo tenants found. Nothing to delete." (copre anche la riga 9 della matrice supplementare: idempotenza).
+- **#5**: 4 richieste rapide di `/demo/start` dallo stesso IP → bloccate con `429 RATE_LIMIT_EXCEEDED` e messaggio chiaro (il blocco è scattato prima del 4° tentativo "pulito" perché la quota oraria era già in parte consumata dai test precedenti nella stessa sessione — comportamento atteso, non un bug).
+- **#1-4** (flusso frontend completo, tour, banner, selettore ruolo): **non verificati con un browser reale** — nessuno strumento di controllo browser disponibile in questo ambiente. Verificati per proxy tramite la suite di test frontend automatizzata esistente (259/260 verdi, include test dedicati per `TryDemoPage`/`DemoBanner`/`DemoTour`/`DemoContactModal`/`DemoExpiredPage` da Session 67-68) — **gap dichiarato esplicitamente**, non nascosto: una verifica visiva reale in un browser resta raccomandata prima del lancio a un prospect reale.
+
+**Matrice di test supplementare del piano (13 scenari) incrociata con la copertura automatica esistente**: 11/13 confermati con test dedicati già verdi (email duplicata ×3 percorsi, race condition reale via `Promise.all`, boundary `MAX_ACTIVE_DEMOS`, switch-role no-op/cross-tenant, fallimento SES → messaggio comunque salvato, cleanup idempotente). **2 gap identificati e accettati come non bloccanti**: riga 10 (richiesta API in-flight esattamente mentre lo scheduler cancella il tenant) non ha un test dedicato — ma è strutturalmente sicura grazie alle garanzie transazionali di Postgres (nessuna finestra per uno stato parziale rotto: una richiesta vede i dati vecchi o riceve un 401/404 pulito dopo, mai un 500 a metà); riga 12 (nessun test di regressione dedicato che confermi `is_demo=false` per `POST /api/admin/clients`/`onboard-client.js`) — protetto comunque dal `DEFAULT false` della colonna (`clients.is_demo BOOLEAN NOT NULL DEFAULT false`, verificato dal test sulle migration), ma non da un test comportamentale esplicito come il piano stesso raccomandava.
+
+### Ambiente ripulito
+Tutti i tenant demo di test creati durante questa verifica sono stati eliminati manualmente a fine sessione; `.env.development` ripristinato a `DISABLE_AUTH=true` (stato originale del worktree).
+
+### Commits
+`3058086` (feat: GET /api/admin/demo-tenants, Task 9/9).
+
+**Task 9/9 chiuso. Piano "Ambiente Demo Self-Service" COMPLETO — tutti i 9 task chiusi.** Prossimo: decisione merge/PR/keep tramite `superpowers:finishing-a-development-branch`.
+
+---
 
 ---
 
