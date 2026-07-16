@@ -100,7 +100,11 @@ async function run() {
     database: process.env.DB_NAME,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    // DB_SSL_REJECT_UNAUTHORIZED defaults to true in production, mirroring
+    // src/db/pool.js — never ship rejectUnauthorized:false unconditionally.
+    ssl: process.env.NODE_ENV === 'production'
+      ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
+      : false,
   });
 
   try {
