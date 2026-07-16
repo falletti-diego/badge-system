@@ -97,3 +97,21 @@ describe('Migration 029: demo_contact_requests table', () => {
     expect(sql).toContain('ON DELETE CASCADE');
   });
 });
+
+describe('Migration 031: superadmin role', () => {
+  const migrationPath = path.join(__dirname, '..', 'migrations', '031_add_superadmin_role.sql');
+  const sql = fs.readFileSync(migrationPath, 'utf8');
+
+  it('drops and re-adds employees_role_check idempotently', () => {
+    expect(sql).toContain('DROP CONSTRAINT IF EXISTS employees_role_check');
+    expect(sql).toContain('ADD CONSTRAINT employees_role_check');
+  });
+
+  it('preserves all 4 existing roles and adds superadmin', () => {
+    expect(sql).toContain("'employee'");
+    expect(sql).toContain("'manager'");
+    expect(sql).toContain("'admin'");
+    expect(sql).toContain("'viewer'");
+    expect(sql).toContain("'superadmin'");
+  });
+});
