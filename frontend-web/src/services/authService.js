@@ -7,6 +7,8 @@ const USER_KEY = 'badge_user';
 const EMPLOYEE_ID_KEY = 'badge_employee_id';
 const SITE_ID_KEY = 'badge_site_id';
 const MUST_CHANGE_PASSWORD_KEY = 'badge_must_change_password';
+const IS_DEMO_KEY = 'badge_is_demo';
+const DEMO_EXPIRES_AT_KEY = 'badge_demo_expires_at';
 
 /**
  * Authentication Service
@@ -24,9 +26,15 @@ const authService = {
    * other callers (like the self-service demo) can simply omit it and the
    * flag is cleared as if it were false.
    *
-   * @param {{ token: string, refresh_token?: string, user: object, must_change_password?: boolean }} session
+   * `is_demo`/`demo_expires_at` are optional too — only the demo endpoints
+   * (POST /demo/start, POST /demo/switch-role) send them, as top-level
+   * siblings of `user` (see routes/demo.js). A real login never sends
+   * these, so omitting them here clears any stale demo flag left over from
+   * an earlier demo session in the same browser.
+   *
+   * @param {{ token: string, refresh_token?: string, user: object, must_change_password?: boolean, is_demo?: boolean, demo_expires_at?: string }} session
    */
-  setSession({ token, refresh_token, user, must_change_password }) {
+  setSession({ token, refresh_token, user, must_change_password, is_demo, demo_expires_at }) {
     localStorage.setItem(TOKEN_KEY, token);
     if (refresh_token) localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
     localStorage.setItem(USER_KEY, JSON.stringify(user));
@@ -36,6 +44,19 @@ const authService = {
       localStorage.setItem(MUST_CHANGE_PASSWORD_KEY, 'true');
     } else {
       localStorage.removeItem(MUST_CHANGE_PASSWORD_KEY);
+    }
+
+    // Store demo-session flags (used by DemoBanner/DemoTour — isDemo() /
+    // getDemoDaysRemaining() below)
+    if (is_demo) {
+      localStorage.setItem(IS_DEMO_KEY, 'true');
+    } else {
+      localStorage.removeItem(IS_DEMO_KEY);
+    }
+    if (demo_expires_at) {
+      localStorage.setItem(DEMO_EXPIRES_AT_KEY, demo_expires_at);
+    } else {
+      localStorage.removeItem(DEMO_EXPIRES_AT_KEY);
     }
 
     // Store employee_id if present (for employee role users)
@@ -111,6 +132,8 @@ const authService = {
     localStorage.removeItem(EMPLOYEE_ID_KEY);
     localStorage.removeItem(SITE_ID_KEY);
     localStorage.removeItem(MUST_CHANGE_PASSWORD_KEY);
+    localStorage.removeItem(IS_DEMO_KEY);
+    localStorage.removeItem(DEMO_EXPIRES_AT_KEY);
   },
 
   /**
@@ -214,6 +237,30 @@ const authService = {
    */
   isEmployee() {
     return this.getUserRole() === 'employee';
+  },
+
+  /**
+   * Check if the current session is a self-service demo session (Task 8).
+   * @returns {boolean} True if the stored session came from POST /demo/start
+   *   or POST /demo/switch-role (see setSession's is_demo param).
+   */
+  isDemo() {
+    return localStorage.getItem(IS_DEMO_KEY) === 'true';
+  },
+
+  /**
+   * Days remaining before the current demo session's trial expires
+   * (Task 8). Returns null when there is no demo session (either not a
+   * demo at all, or no expiry was ever stored).
+   * @returns {number|null} Whole days remaining, floored at 0, or null.
+   */
+  getDemoDaysRemaining() {
+    if (!this.isDemo()) return null;
+    const expiresAtRaw = localStorage.getItem(DEMO_EXPIRES_AT_KEY);
+    if (!expiresAtRaw) return null;
+    const expiresAt = new Date(expiresAtRaw).getTime();
+    if (Number.isNaN(expiresAt)) return null;
+    return Math.max(0, Math.ceil((expiresAt - Date.now()) / 86400000));
   },
 
 };

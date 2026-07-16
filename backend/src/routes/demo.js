@@ -4,10 +4,18 @@
  * POST /api/v1/demo/start — public, unauthenticated, rate-limited.
  * Creates (or resumes) a self-service demo tenant from just an email
  * address, seeds it with realistic sample data (demoSeed.js), and returns
- * a login-shaped response `{ token, refresh_token, user, resumed }` so the
- * frontend can reuse the same authService.setSession(...) flow used by a
- * normal login — including transparently renewing the session past the
- * 15-minute access-token window via the existing POST /api/v1/auth/refresh.
+ * a login-shaped response `{ token, refresh_token, user, resumed, is_demo,
+ * demo_expires_at }` so the frontend can reuse the same
+ * authService.setSession(...) flow used by a normal login — including
+ * transparently renewing the session past the 15-minute access-token window
+ * via the existing POST /api/v1/auth/refresh. `is_demo`/`demo_expires_at`
+ * are top-level siblings of `user` (not nested inside it) so a real login's
+ * `user` shape stays untouched — they exist purely so the frontend can
+ * implement authService.isDemo()/getDemoDaysRemaining() (Task 8) without a
+ * separate lookup. POST /demo/switch-role's response includes the same two
+ * fields (reusing req.demoClient.demo_expires_at, already looked up by
+ * requireDemoTenant); POST /demo/contact does not, since it never issues a
+ * session.
  *
  * Security-sensitive: this is a public POST endpoint that creates database
  * rows and issues JWTs from nothing but caller-supplied input. See the
@@ -146,7 +154,7 @@ async function resumeDemoTenant(clientId) {
     const updateResult = await client.query(
       `UPDATE clients SET demo_expires_at = now() + $2::interval
        WHERE id = $1
-       RETURNING id`,
+       RETURNING id, demo_expires_at`,
       [clientId, DEMO_TENANT_EXPIRY_DAYS]
     );
 
@@ -175,6 +183,7 @@ async function resumeDemoTenant(clientId) {
     }
 
     const { token, refresh_token, user } = await issueDemoSession(admin, clientId);
+    const demo_expires_at = updateResult.rows[0].demo_expires_at;
 
     await logAudit(client, {
       action: 'demo_tenant_resumed',
@@ -186,7 +195,7 @@ async function resumeDemoTenant(clientId) {
 
     await client.query('COMMIT');
 
-    return { token, refresh_token, user };
+    return { token, refresh_token, user, demo_expires_at };
   } catch (err) {
     try {
       await client.query('ROLLBACK');
@@ -232,8 +241,8 @@ router.post('/start', createValidationMiddleware(DemoStartSchema), async (req, r
     }
 
     if (existing && existing.is_demo) {
-      const { token, refresh_token, user } = await resumeDemoTenant(existing.id);
-      return res.json({ data: { token, refresh_token, user, resumed: true } });
+      const { token, refresh_token, user, demo_expires_at } = await resumeDemoTenant(existing.id);
+      return res.json({ data: { token, refresh_token, user, resumed: true, is_demo: true, demo_expires_at } });
     }
 
     // ---- Global active-demo cap (resource guard for db.t3.micro) ----
@@ -266,15 +275,17 @@ router.post('/start', createValidationMiddleware(DemoStartSchema), async (req, r
     try {
       await client.query('BEGIN');
       let newClientId = null;
+      let newClientExpiresAt = null;
 
       try {
         const insertResult = await client.query(
           `INSERT INTO clients (id, name, email, plan, is_demo, demo_expires_at, demo_contact_email)
            VALUES (uuid_generate_v4(), $1, $2, 'demo', true, now() + $3::interval, $2)
-           RETURNING id`,
+           RETURNING id, demo_expires_at`,
           ['Demo Tenant', email, DEMO_TENANT_EXPIRY_DAYS]
         );
         newClientId = insertResult.rows[0].id;
+        newClientExpiresAt = insertResult.rows[0].demo_expires_at;
       } catch (insertErr) {
         if (insertErr.code === '23505' && insertErr.constraint === CLIENTS_EMAIL_UNIQUE_CONSTRAINT) {
           // Race: a concurrent request for the same email committed between
@@ -311,7 +322,7 @@ router.post('/start', createValidationMiddleware(DemoStartSchema), async (req, r
         });
 
         const { token, refresh_token, user } = await issueDemoSession(admin, newClientId);
-        res.json({ data: { token, refresh_token, user, resumed: false } });
+        res.json({ data: { token, refresh_token, user, resumed: false, is_demo: true, demo_expires_at: newClientExpiresAt } });
       }
     } catch (err) {
       try {
@@ -335,8 +346,8 @@ router.post('/start', createValidationMiddleware(DemoStartSchema), async (req, r
         // unique_violation and this re-query) — fail closed.
         throw new InternalServerError('Demo tenant creation conflict could not be resolved');
       }
-      const { token, refresh_token, user } = await resumeDemoTenant(winner.id);
-      res.json({ data: { token, refresh_token, user, resumed: true } });
+      const { token, refresh_token, user, demo_expires_at } = await resumeDemoTenant(winner.id);
+      res.json({ data: { token, refresh_token, user, resumed: true, is_demo: true, demo_expires_at } });
     }
   } catch (err) {
     next(err);
@@ -430,7 +441,7 @@ router.post('/switch-role', requireAuth, createValidationMiddleware(DemoSwitchRo
       new_user_id: targetEmployee.id,
     });
 
-    res.json({ data: { token, refresh_token, user } });
+    res.json({ data: { token, refresh_token, user, is_demo: true, demo_expires_at: req.demoClient.demo_expires_at } });
   } catch (err) {
     next(err);
   }

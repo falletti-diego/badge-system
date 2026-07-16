@@ -99,8 +99,17 @@ apiClient.interceptors.response.use(
         processQueue(refreshError);
         localStorage.removeItem('badge_auth_token');
         localStorage.removeItem('badge_refresh_token');
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
+
+        // A demo session's refresh (or a refresh triggered transitively by
+        // POST /demo/switch-role or /demo/contact's own 401 — see
+        // requireDemoTenant.js) hits this same catch block when the demo
+        // tenant is past its trial window. That case gets a dedicated
+        // landing page instead of the generic /login redirect, since a demo
+        // visitor never had credentials to log back in with.
+        const isDemoExpired = refreshError?.response?.data?.error === 'DEMO_EXPIRED';
+        const target = isDemoExpired ? '/demo-expired' : '/login';
+        if (window.location.pathname !== target) {
+          window.location.href = target;
         }
         return Promise.reject(refreshError);
       } finally {

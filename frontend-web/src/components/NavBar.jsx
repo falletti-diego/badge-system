@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import authService from '../services/authService';
 import { getInitials } from '../utils/getInitials';
+import DemoBanner from './DemoBanner';
 
 export const NavBar = ({ title, children }) => {
   const navigate = useNavigate();
@@ -177,6 +178,8 @@ export const NavBar = ({ title, children }) => {
           </MenuItem>
         </Box>
       </Popover>
+
+      <DemoBanner />
     </>
   );
 };

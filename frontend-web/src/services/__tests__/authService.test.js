@@ -13,6 +13,8 @@ const clearStorage = () => {
   localStorage.removeItem('badge_employee_id');
   localStorage.removeItem('badge_site_id');
   localStorage.removeItem('badge_must_change_password');
+  localStorage.removeItem('badge_is_demo');
+  localStorage.removeItem('badge_demo_expires_at');
 };
 
 describe('authService', () => {
@@ -65,6 +67,57 @@ describe('authService', () => {
     test('does not persist refresh_token when absent', () => {
       authService.setSession({ token: 'tok-1', user: { id: 'u1' } });
       expect(localStorage.getItem('badge_refresh_token')).toBeNull();
+    });
+
+    test('stores is_demo and demo_expires_at when present (Task 8)', () => {
+      authService.setSession({
+        token: 'tok-1',
+        user: { id: 'u1' },
+        is_demo: true,
+        demo_expires_at: '2026-08-01T00:00:00.000Z',
+      });
+      expect(localStorage.getItem('badge_is_demo')).toBe('true');
+      expect(localStorage.getItem('badge_demo_expires_at')).toBe('2026-08-01T00:00:00.000Z');
+    });
+
+    test('clears is_demo/demo_expires_at when absent (e.g. a real login after a demo session)', () => {
+      localStorage.setItem('badge_is_demo', 'true');
+      localStorage.setItem('badge_demo_expires_at', '2026-08-01T00:00:00.000Z');
+      authService.setSession({ token: 'tok-1', user: { id: 'u1' } });
+      expect(localStorage.getItem('badge_is_demo')).toBeNull();
+      expect(localStorage.getItem('badge_demo_expires_at')).toBeNull();
+    });
+  });
+
+  describe('isDemo / getDemoDaysRemaining (Task 8)', () => {
+    test('isDemo() is false when no session was ever a demo', () => {
+      expect(authService.isDemo()).toBe(false);
+    });
+
+    test('isDemo() is true after setSession with is_demo: true', () => {
+      authService.setSession({ token: 'tok-1', user: { id: 'u1' }, is_demo: true, demo_expires_at: '2099-01-01T00:00:00.000Z' });
+      expect(authService.isDemo()).toBe(true);
+    });
+
+    test('getDemoDaysRemaining() returns null when not a demo session', () => {
+      expect(authService.getDemoDaysRemaining()).toBeNull();
+    });
+
+    test('getDemoDaysRemaining() returns null when is_demo is true but expiry is missing', () => {
+      localStorage.setItem('badge_is_demo', 'true');
+      expect(authService.getDemoDaysRemaining()).toBeNull();
+    });
+
+    test('getDemoDaysRemaining() returns the correct whole-day count for a future expiry', () => {
+      const future = new Date(Date.now() + 3 * 86400000 + 3600000).toISOString(); // ~3 days + 1h, avoids timing flakiness at the exact boundary
+      authService.setSession({ token: 'tok-1', user: { id: 'u1' }, is_demo: true, demo_expires_at: future });
+      expect(authService.getDemoDaysRemaining()).toBe(4);
+    });
+
+    test('getDemoDaysRemaining() floors at 0 for an already-expired demo', () => {
+      const past = new Date(Date.now() - 86400000).toISOString();
+      authService.setSession({ token: 'tok-1', user: { id: 'u1' }, is_demo: true, demo_expires_at: past });
+      expect(authService.getDemoDaysRemaining()).toBe(0);
     });
   });
 

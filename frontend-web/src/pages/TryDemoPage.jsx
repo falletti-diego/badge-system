@@ -61,6 +61,10 @@ export default function TryDemoPage() {
     setLoading(true);
     try {
       const response = await apiClient.post('/api/v1/demo/start', { email });
+      // resumed is UI-only state for this page (drives the "Bentornato"
+      // banner below) — not part of the session, so it's destructured out
+      // rather than passed to setSession(). is_demo/demo_expires_at, added
+      // in Task 8, flow through via ...session exactly like token/user do.
       const { resumed: wasResumed, ...session } = response.data.data;
 
       logger.info('TryDemoPage', 'demo start successful', { email, resumed: wasResumed });

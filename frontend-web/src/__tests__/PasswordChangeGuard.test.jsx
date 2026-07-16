@@ -90,6 +90,15 @@ describe('PasswordChangeGuard (real component)', () => {
       renderGuardAt('/prova-demo');
       expect(mockNavigate).not.toHaveBeenCalled();
     });
+
+    // Regression test for Task 8: /demo-expired must also stay reachable
+    // without ProtectedRoute even with a stale must_change_password flag,
+    // same reasoning as /prova-demo above.
+    test('does NOT redirect when on /demo-expired', () => {
+      localStorage.setItem('badge_must_change_password', 'true');
+      renderGuardAt('/demo-expired');
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
   });
 
   describe('No redirect when must_change_password is false or absent', () => {

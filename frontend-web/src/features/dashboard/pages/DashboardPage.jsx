@@ -17,6 +17,7 @@ import ExportButton from '../components/ExportButton';
 import { ManagerLeaveApprovalPanel } from '../../leave/components/ManagerLeaveApprovalPanel';
 import authService from '../../../services/authService';
 import { NavBar } from '../../../components/NavBar';
+import DemoTour from '../../../components/DemoTour';
 
 const DashboardPage = () => {
   const navigate = useNavigate();
@@ -81,6 +82,8 @@ const DashboardPage = () => {
 
   return (
     <div className="min-h-screen bg-linen">
+      <DemoTour />
+
       {/* Navbar */}
       <NavBar title="Badge System">
         {/* Planning Button - Show for managers and admins */}
@@ -240,17 +243,19 @@ const DashboardPage = () => {
         )}
 
         {/* KPI Cards */}
-        <KpiCards stats={stats} />
+        <div id="demo-tour-kpi-cards">
+          <KpiCards stats={stats} />
+        </div>
 
         {!isEmployee && (
-          <>
+          <div id="demo-tour-trend">
             <TrendChart days={trendDays} loading={trendLoading} error={trendError} />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <MiniTrendCard title="Ore Lavorate" dataKey="ore_lavorate" days={trendDays} color="#1E3A5F" suffix="h" />
               <MiniTrendCard title="Ore Straordinarie" dataKey="ore_straordinarie" days={trendDays} color="#B45309" suffix="h" />
               <MiniTrendCard title="Assenteismo" dataKey="assenteismo_pct" days={trendDays} color="#C0392B" suffix="%" />
             </div>
-          </>
+          </div>
         )}
 
         {/* Manager Leave Approval Panel - Show for managers only */}
@@ -269,7 +274,7 @@ const DashboardPage = () => {
         />
 
         {/* Export Button */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
+        <Box id="demo-tour-export" sx={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
           <ExportButton filters={filters} />
         </Box>
 
