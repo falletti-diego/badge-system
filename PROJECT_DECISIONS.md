@@ -1,6 +1,6 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 16 Luglio 2026 (Session 69 — Task 9/9 `GET /api/admin/demo-tenants` implementato e chiuso — ULTIMO task del piano — + verifica end-to-end completa prima della decisione merge/PR)  
+**Last Updated:** 16 Luglio 2026 (Session 69 — Task 9/9 chiuso, piano completo, verifica e2e completa + review di sicurezza automatica: 1 fix TLS applicato, 1 finding RBAC cross-tenant documentato come backlog prioritario, non fixato)  
 **Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Mobile Build 26 ✅ (vibrazione check-in) | Grafici Trend Dashboard ✅ LIVE (api.dataxiom.it) | Dropdown Sede in Dashboard ✅ LIVE | Export CSV date/ora ✅ fix live | Pipeline CI/CD ✅ funzionante (backend + mobile) | ✅ Hotfix `POST /auth/refresh` MERGIATO su main e verificato live in produzione (login → refresh reale confermato 200, replay correttamente rifiutato 401) | ✅ Ambiente Demo Self-Service — **piano COMPLETO, tutti i 9 task chiusi**, in attesa della decisione merge/PR (worktree isolato, non ancora in main)  
 **MVP Launch Target:** Settembre 2026 | **Current Phase:** Decisione merge/PR per il branch Ambiente Demo Self-Service (`superpowers:finishing-a-development-branch`), poi MVP Hardening backlog residuo (Session 57) o staging environment + ONB.2
 
@@ -39,7 +39,25 @@ Tutti i tenant demo di test creati durante questa verifica sono stati eliminati 
 ### Commits
 `3058086` (feat: GET /api/admin/demo-tenants, Task 9/9).
 
-**Task 9/9 chiuso. Piano "Ambiente Demo Self-Service" COMPLETO — tutti i 9 task chiusi.** Prossimo: decisione merge/PR/keep tramite `superpowers:finishing-a-development-branch`.
+**Task 9/9 chiuso. Piano "Ambiente Demo Self-Service" COMPLETO — tutti i 9 task chiusi.**
+
+---
+
+### Addendum — Review di sicurezza automatica in background, 2 finding, 1 fixato (16 Luglio 2026)
+
+Subito dopo la chiusura del Task 9/9, una review di sicurezza automatica eseguita in background ha segnalato 2 finding sui file toccati/adiacenti a questa sessione. Entrambi verificati manualmente prima di agire, non accettati sulla fiducia.
+
+**Finding 1 — TLS certificate verification disabilitata (Medio) — FIXATO.** `cleanup-expired-demos.js`, `audit-log-retention.js`, `apply-schema.js` aprono ciascuno un proprio `pg.Pool` separato dal pool condiviso `src/db/pool.js`, con `rejectUnauthorized: false` incondizionato in produzione — MITM possibile contro RDS. Verificato che nessuno dei tre file era stato toccato dal diff del Task 9 (il primo, `cleanup-expired-demos.js`, risale alla Session 66; gli altri due sono ancora più vecchi) — non una regressione di questa sessione, ma un problema reale presente nel branch. **Fix**: allineati tutti e tre al pattern già sicuro di `db/pool.js` (`rejectUnauthorized` default `true` in produzione, `DB_SSL_REJECT_UNAUTHORIZED=false` come scappatoia esplicita e documentata, solo per un percorso di rete privato VPC-only). Nessun bundle CA RDS reale spedito nel repo — il fix si affida al trust store di sistema già riconoscere la CA di AWS RDS (comune negli ambienti moderni), non a un bundle custom. **Verificato**: sintassi corretta sui 3 file, suite backend 563/577 verdi dopo il fix (nessuna regressione). Commit `2659982`.
+
+**Finding 2 — Divulgazione cross-tenant su `/api/admin/*` (Alto) — NON fixato, documentato come backlog prioritario.** Il claim del review automatico ("qualunque admin non-demo vede tutti i tenant demo") è tecnicamente corretto, ma **non è una regressione del Task 9**: verificato che `GET /api/admin/clients` e `GET /api/admin/sites` (route preesistenti da molte sessioni fa, non toccate in questa sessione) hanno esattamente lo stesso comportamento — nessuno scoping per `client_id` del chiamante, quindi qualunque dipendente `role==='admin'` di *qualsiasi* tenant reale vede già tutti gli altri client/sedi del sistema. Il nuovo endpoint `demo-tenants.js` ha semplicemente ereditato il modello di accesso già stabilito per l'intero namespace `/api/admin`.
+
+**Perché non fixato in questa sessione**: (1) correggerlo solo su `demo-tenants.js` sarebbe incoerente — resterebbe comunque possibile ottenere la lista di tutti i client da `/admin/clients`; il problema è sistemico, non specifico di un endpoint. (2) Richiede prima una decisione di prodotto che il coordinatore non può prendere da solo: il ruolo `admin` è pensato per essere esclusivo dello staff Dataxiom, o un cliente reale può assegnarlo a un proprio dipendente? Chiesto esplicitamente all'utente, che ha preferito investigare insieme piuttosto che rispondere a memoria. **Evidenza raccolta** (non conclusiva ma indicativa): il flusso di onboarding self-service reale (`scripts/onboarding/parseWorkbook.js`) ha `ROLE_MAP = { dipendente: 'employee', responsabile: 'manager' }` — **non esiste un mapping verso `'admin'`** nell'import CSV che i clienti reali usano per i propri dipendenti. L'unico modo perché un tenant reale abbia un dipendente `admin` è che Dataxiom lo crei manualmente via `POST /api/admin/employees`. Questo suggerisce che `admin` sia stato pensato come ruolo controllato da Dataxiom, non auto-assegnabile dai clienti — ma non è una conferma certa (andrebbe verificato quanti tenant reali in produzione hanno oggi un dipendente `admin`, e se sono stati creati da Dataxiom o in altro modo).
+
+**Decisione presa con l'utente**: documentare come finding HIGH nel backlog di sicurezza (`TASKS.md`, sezione "SECURITY TECH DEBT"), con la proposta di fix (colonna `is_staff` su `clients`, o ruolo dedicato `superadmin`, applicato a **tutto** il namespace `/api/admin`) da pianificare in una sessione dedicata (probabilmente un ciclo `/grilling` + `/writing-plans`, dato l'impatto su più route esistenti) — non un fix reattivo a fine sessione mentre si chiude una feature non correlata.
+
+**Lezione**: quando una review di sicurezza automatica segnala un finding su un file toccato dalla sessione corrente, verificare sempre se il pattern esiste già altrove nel codebase prima di decidere lo scope del fix — un problema sistemico preesistente richiede una decisione diversa (documentare + pianificare) rispetto a una vera regressione introdotta dal proprio diff (fixare subito).
+
+**Prossimo**: decisione merge/PR/keep tramite `superpowers:finishing-a-development-branch`.
 
 ---
 

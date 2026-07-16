@@ -1,7 +1,7 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-07-16 (Session 69: Task 9/9 `GET /api/admin/demo-tenants` implementato e chiuso — ULTIMO task del piano — + verifica end-to-end completa del piano prima della decisione merge/PR)  
+**Last Updated:** 2026-07-16 (Session 69: Task 9/9 chiuso — piano completo — + review di sicurezza automatica, 1 fix TLS applicato, 1 finding RBAC documentato come backlog prioritario)  
 **Production:** https://badge.dataxiom.it · API: https://api.dataxiom.it
 
 ---
@@ -988,6 +988,20 @@ Go-live with first paying customer (pilota).
 ---
 
 ## 🔲 TODO — SECURITY TECH DEBT (open findings from code review)
+
+### 🚨 Findings da Review di Sicurezza Automatica (Session 69, 2026-07-16)
+
+- [x] **TLS certificate verification disabilitata in 3 script standalone** (MEDIUM) — ✅ **FIXATO Session 69**
+  - **Issue:** `cleanup-expired-demos.js`, `audit-log-retention.js`, `apply-schema.js` aprono ciascuno un proprio `pg.Pool` (separato dal pool condiviso `src/db/pool.js`) con `rejectUnauthorized: false` incondizionato in produzione — disabilita la verifica del certificato RDS, espone a MITM.
+  - **Fix:** allineato al pattern già sicuro di `src/db/pool.js` — `rejectUnauthorized` di default `true` in produzione, con `DB_SSL_REJECT_UNAUTHORIZED=false` come scappatoia esplicita e documentata (solo per un percorso di rete privato VPC-only).
+  - **Commit:** `2659982`. Nessuna regressione (backend 563/577 verdi dopo il fix).
+
+- [ ] **Namespace `/api/admin/*` non scoped per tenant chiamante — divulgazione cross-tenant** (HIGH, non fixato) — ⚠️ **Richiede una decisione di prodotto prima di poter essere corretto**
+  - **Issue:** Ogni route sotto `/api/admin/` (incluse `GET /admin/clients`, `GET /admin/sites`, preesistenti da molte sessioni fa, e ora anche la nuova `GET /admin/demo-tenants` del Task 9/9) applica solo il gate `role==='admin'`, senza mai controllare se il `client_id` del chiamante corrisponde al tenant su cui sta operando. Qualunque dipendente con ruolo `admin`, di **qualsiasi tenant reale**, vede oggi la lista di **tutti** i client, tutte le sedi, e (nuovo) tutte le email di contatto dei prospect demo di sistema.
+  - **Perché non è stato fixato in Session 69:** correggerlo solo su `demo-tenants.js` sarebbe incoerente (resterebbe comunque possibile ottenere la lista di tutti i client da `/admin/clients`) — il problema è sistemico su tutto il namespace `/api/admin`, non specifico di un endpoint. Serve prima decidere: il ruolo `admin` è pensato per essere esclusivo dello staff Dataxiom, o un cliente reale può assegnarlo a un proprio dipendente?
+  - **Evidenza raccolta (non conclusiva, ma indicativa)**: il flusso di onboarding self-service reale (`scripts/onboarding/parseWorkbook.js`, `ROLE_MAP = { dipendente: 'employee', responsabile: 'manager' }`) **non può mai produrre un dipendente con ruolo `admin`** tramite import CSV — l'unico modo perché un tenant reale abbia un dipendente `admin` è che Dataxiom lo crei manualmente via `POST /api/admin/employees`. Questo suggerisce (ma non conferma con certezza) che `admin` sia stato pensato come ruolo controllato da Dataxiom, non auto-assegnabile dai clienti.
+  - **Fix proposto, da decidere e pianificare in una sessione dedicata:** introdurre una distinzione esplicita (es. colonna `is_staff` su `clients`, o un ruolo dedicato tipo `superadmin`) e applicarla a **tutto** il namespace `/api/admin` — non solo al nuovo endpoint demo-tenants. Richiede probabilmente un ciclo `/grilling` + `/writing-plans` dedicato, dato l'impatto su più route esistenti e la necessità di non rompere l'accesso di Dataxiom stessa.
+  - **Trovato da:** review di sicurezza automatica in background durante la Session 69, verificato manualmente dal coordinatore prima di documentarlo (confermato che `/admin/clients` e `/admin/sites` hanno lo stesso comportamento, non introdotto dal Task 9).
 
 ### 🚨 GDPR/Privacy Findings from Session 31 Security Review
 **Bloccanti per commercializzazione in Italia — PRIORITÀ MASSIMA**

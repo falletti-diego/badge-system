@@ -1,8 +1,8 @@
 # Badge System — Session 69 Handoff
 
 **Date:** 2026-07-16
-**Session:** 69 — Task 9/9 (`GET /api/admin/demo-tenants`) implementato e chiuso — ULTIMO task del piano — + verifica end-to-end completa prima della decisione merge/PR
-**Status:** ✅ **Piano "Ambiente Demo Self-Service" COMPLETO. Tutti i 9 task chiusi. Prossimo step: decisione merge/PR.**
+**Session:** 69 — Task 9/9 (`GET /api/admin/demo-tenants`) implementato e chiuso — ULTIMO task del piano — + verifica end-to-end completa + review di sicurezza automatica (1 fix TLS applicato, 1 finding RBAC documentato come backlog)
+**Status:** ✅ **Piano "Ambiente Demo Self-Service" COMPLETO. Tutti i 9 task chiusi. Prossimo step: decisione merge/PR.** ⚠️ Prima di decidere merge, leggi la sezione "Finding di sicurezza" qui sotto — un finding HIGH resta aperto e non è specifico di questo branch.
 
 ---
 
@@ -119,6 +119,37 @@ regressione dedicato per `is_demo=false` su `POST /api/admin/clients` — protet
 - Nessun blocco grave. Uno script di utilità (`cleanup-expired-demos.js`) richiede variabili d'ambiente
   singole (`DB_HOST` etc.) invece di `DATABASE_URL` — non un bug, ma una discrepanza di convenzione
   rispetto al resto del progetto, utile da ricordare per la prossima esecuzione manuale.
+
+---
+
+## Finding di sicurezza (review automatica in background, subito dopo la chiusura del Task 9/9)
+
+Una review di sicurezza automatica ha segnalato 2 finding. Entrambi verificati manualmente (non accettati sulla fiducia) prima di agire.
+
+**Fixato**: TLS certificate verification disabilitata in 3 script standalone (`cleanup-expired-demos.js`,
+`audit-log-retention.js`, `apply-schema.js` — ciascuno apre un proprio `pg.Pool` separato dal pool
+condiviso, con `rejectUnauthorized: false` incondizionato in produzione). Nessuno dei tre file era stato
+toccato dal Task 9 — problema preesistente (il più recente risale alla Session 66), non una regressione
+di questa sessione. Allineati al pattern già sicuro di `src/db/pool.js`. Verificato: sintassi corretta,
+563/577 backend verdi dopo il fix. Commit `2659982`.
+
+**NON fixato, documentato come backlog HIGH in `TASKS.md`**: l'intero namespace `/api/admin/*`
+(incluse `GET /admin/clients` e `GET /admin/sites`, preesistenti da molte sessioni, non solo la nuova
+`GET /admin/demo-tenants`) non scopa mai l'accesso al `client_id` del chiamante — qualunque dipendente
+`role==='admin'` di *qualsiasi* tenant reale vede oggi tutti i client/sedi/ora anche tutte le email di
+contatto dei prospect demo del sistema. **Non è una regressione del Task 9** — `demo-tenants.js` ha solo
+ereditato il modello di accesso già stabilito per tutto il namespace. Non fixato perché: (1) correggerlo
+solo qui sarebbe incoerente (resterebbe comunque possibile vedere tutto da `/admin/clients`), (2) serve
+prima una decisione di prodotto (il ruolo `admin` è esclusivo di Dataxiom o assegnabile da un cliente
+reale a un proprio dipendente?) che l'utente ha preferito investigare insieme piuttosto che decidere a
+memoria. Evidenza raccolta (indicativa, non conclusiva): l'onboarding self-service reale
+(`scripts/onboarding/parseWorkbook.js`) non può mai produrre un dipendente `admin` tramite import CSV
+— solo Dataxiom può crearne uno manualmente. Vedi `PROJECT_DECISIONS.md` Session 69 (Addendum) per il
+ragionamento completo. **Prossimo passo consigliato**: un ciclo `/grilling` + `/writing-plans` dedicato
+per decidere e pianificare il fix (probabilmente una colonna `is_staff` su `clients` o un ruolo
+`superadmin`, applicato a tutto `/api/admin`), separato dalla decisione merge/PR di questo branch — il
+finding non è specifico del branch demo self-service e non dovrebbe bloccarne il merge, ma va tracciato
+con la priorità che merita.
 
 ---
 
