@@ -4,6 +4,8 @@ import { Container, Box, TextField, Button, Typography, Alert, CircularProgress 
 import apiClient from '../services/apiClient';
 import authService from '../services/authService';
 import logger from '../utils/logger';
+import { extractApiErrorMessage } from '../utils/apiError';
+import { demoHeroSx, demoGoldButtonSx } from '../components/demoHeroStyles';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -68,7 +70,14 @@ export default function TryDemoPage() {
       const { resumed: wasResumed, ...session } = response.data.data;
 
       logger.info('TryDemoPage', 'demo start successful', { email, resumed: wasResumed });
-      authService.setSession(session);
+      // resetDemoTour: true — this call site is POST /demo/start, which
+      // always establishes a new-or-resumed demo tenant (never a role
+      // switch within an ongoing session — that's DemoBanner's
+      // /demo/switch-role call, which passes no options and must NOT reset
+      // the flag). Without this, the same browser demoing to a second,
+      // unrelated prospect after an earlier demo session would never see
+      // the tour again (code-review Fix 2).
+      authService.setSession(session, { resetDemoTour: true });
 
       if (wasResumed) {
         // Brief confirmation before navigating away — the user gets to see
@@ -82,25 +91,18 @@ export default function TryDemoPage() {
       logger.error('TryDemoPage', 'demo start failed', err);
       const data = err.response?.data;
       let message;
+      // These 3 error codes are specific to POST /demo/start's own error
+      // taxonomy (not duplicated anywhere else), so they stay inline and
+      // are checked before falling back to the shared generic tail below
+      // (extractApiErrorMessage — code-review Fix 4b).
       if (data?.error === 'RATE_LIMIT_EXCEEDED') {
         message = 'Troppi tentativi da questo indirizzo — riprova tra un po\'.';
       } else if (data?.error === 'TOO_MANY_ACTIVE_DEMOS') {
         message = 'Ci sono già troppe demo attive in questo momento — riprova più tardi o contattaci.';
       } else if (data?.error === 'EMAIL_ALREADY_REGISTERED') {
-        message = data.message || 'Questo indirizzo è già registrato — contattaci se hai bisogno di aiuto.';
-      } else if (data?.message) {
-        message = data.message;
-      } else if (data?.details?.length) {
-        message = data.details[0].message;
-      } else if (!err.response && err.request) {
-        // axios sets err.request truthy for any dispatched request, even one
-        // that got a real HTTP response — so this must be gated on the
-        // *absence* of err.response, otherwise a response with a minimal/odd
-        // body (e.g. a bare 404 with no message/details) gets misreported as
-        // a network connectivity problem.
-        message = 'Errore di rete — controlla la connessione e riprova.';
+        message = extractApiErrorMessage(err, 'Questo indirizzo è già registrato — contattaci se hai bisogno di aiuto.');
       } else {
-        message = 'Qualcosa è andato storto — riprova tra un momento.';
+        message = extractApiErrorMessage(err);
       }
       setApiError(message);
     } finally {
@@ -111,14 +113,7 @@ export default function TryDemoPage() {
   return (
     <Box>
       {/* Hero */}
-      <Box
-        sx={{
-          bgcolor: 'var(--color-navy-900)',
-          color: 'var(--color-linen)',
-          py: { xs: 6, md: 10 },
-          px: 2,
-        }}
-      >
+      <Box sx={demoHeroSx}>
         <Container maxWidth="md">
           <Box
             sx={{
@@ -234,12 +229,9 @@ export default function TryDemoPage() {
                 variant="contained"
                 disabled={loading}
                 sx={{
-                  bgcolor: 'var(--color-gold-500)',
-                  color: 'var(--color-navy-900)',
-                  fontWeight: 700,
+                  ...demoGoldButtonSx,
                   whiteSpace: 'nowrap',
                   px: 3,
-                  '&:hover': { bgcolor: 'var(--color-gold-500)', opacity: 0.9 },
                   '&:disabled': { bgcolor: 'var(--color-gold-500)', opacity: 0.5 },
                 }}
               >

@@ -4,11 +4,17 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import DemoTour from '../components/DemoTour';
 import authService from '../services/authService';
 
+const TOUR_SEEN_KEY = 'badge_demo_tour_seen';
+
+// DemoTour.jsx imports DEMO_TOUR_SEEN_KEY as a *named* export from
+// authService.js (code-review Fix 2 — single source of truth for this key,
+// shared with setSession's resetDemoTour option), so the mock must provide
+// it alongside the default export, or DemoTour would read/write
+// localStorage[undefined] instead of the real key.
 vi.mock('../services/authService', () => ({
   default: { isDemo: vi.fn() },
+  DEMO_TOUR_SEEN_KEY: 'badge_demo_tour_seen',
 }));
-
-const TOUR_SEEN_KEY = 'badge_demo_tour_seen';
 
 // Renders the 4 target ids DemoTour anchors to, mirroring what
 // DashboardPage.jsx / FilterBar.jsx provide in the real app.
@@ -80,5 +86,44 @@ describe('DemoTour', () => {
       expect(screen.queryByTestId('demo-tour-step')).not.toBeInTheDocument();
     });
     expect(localStorage.getItem(TOUR_SEEN_KEY)).toBe('true');
+  });
+
+  // Regression test for code-review Fix 3: when a step's target isn't in
+  // the DOM (e.g. an employee-role demo session has no #demo-tour-trend
+  // block), the tour must skip straight to the next AVAILABLE step's
+  // content — it must never render a step's title/text while still
+  // anchored (even momentarily, from the test's black-box perspective) to
+  // an unrelated, previously-shown step's element. Simulates an
+  // employee-role session by omitting the #demo-tour-trend target
+  // entirely, mirroring how DashboardPage.jsx only renders that wrapper
+  // for non-employee roles.
+  test('skips a step with a missing target and shows only the next available step\'s content (no stale/mismatched render)', async () => {
+    authService.isDemo.mockReturnValue(true);
+    // Only kpi-cards and export exist — trend and site-filter are absent,
+    // simulating an employee-role demo session missing 2 of the 4 anchors.
+    render(
+      <>
+        <div id="demo-tour-kpi-cards">kpi</div>
+        <div id="demo-tour-export">export</div>
+        <DemoTour />
+      </>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/presenze in tempo reale/i)).toBeInTheDocument();
+    });
+    // The trend step's content must never appear — its target is missing.
+    expect(screen.queryByText(/grafici trend/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /avanti/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/export csv/i)).toBeInTheDocument();
+    });
+    // Still never rendered at any point during the skip.
+    expect(screen.queryByText(/grafici trend/i)).not.toBeInTheDocument();
+    // And the tooltip is anchored to the export target, not a stale one —
+    // verified by the Popper content actually being present and singular.
+    expect(screen.getAllByTestId('demo-tour-step')).toHaveLength(1);
   });
 });

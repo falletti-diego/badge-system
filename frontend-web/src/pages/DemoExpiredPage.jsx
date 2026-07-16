@@ -1,5 +1,6 @@
 import { Box, Container, Typography, Button } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
+import { demoHeroSx, demoGoldButtonSx } from '../components/demoHeroStyles';
 
 /**
  * DemoExpiredPage (Task 8 of 9)
@@ -24,19 +25,18 @@ import { Link as RouterLink } from 'react-router-dom';
  * resume path, extending their trial — Task 3) and a plain mailto: link.
  *
  * Visual style deliberately mirrors TryDemoPage.jsx's hero (navy-900 /
- * gold) — same public demo funnel family.
+ * gold) — same public demo funnel family. The shared background/CTA button
+ * treatment lives in components/demoHeroStyles.js (code-review Fix 4a) so
+ * the two pages don't each re-type the same sx values.
  */
 export default function DemoExpiredPage() {
   return (
     <Box
       sx={{
+        ...demoHeroSx,
         minHeight: '100vh',
-        bgcolor: 'var(--color-navy-900)',
-        color: 'var(--color-linen)',
         display: 'flex',
         alignItems: 'center',
-        py: { xs: 6, md: 10 },
-        px: 2,
       }}
     >
       <Container maxWidth="sm">
@@ -79,13 +79,7 @@ export default function DemoExpiredPage() {
             to="/prova-demo"
             variant="contained"
             size="large"
-            sx={{
-              bgcolor: 'var(--color-gold-500)',
-              color: 'var(--color-navy-900)',
-              fontWeight: 700,
-              px: 4,
-              '&:hover': { bgcolor: 'var(--color-gold-500)', opacity: 0.9 },
-            }}
+            sx={{ ...demoGoldButtonSx, px: 4 }}
           >
             Inizia una nuova demo →
           </Button>

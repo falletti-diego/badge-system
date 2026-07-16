@@ -15,6 +15,7 @@ const clearStorage = () => {
   localStorage.removeItem('badge_must_change_password');
   localStorage.removeItem('badge_is_demo');
   localStorage.removeItem('badge_demo_expires_at');
+  localStorage.removeItem('badge_demo_tour_seen');
 };
 
 describe('authService', () => {
@@ -86,6 +87,36 @@ describe('authService', () => {
       authService.setSession({ token: 'tok-1', user: { id: 'u1' } });
       expect(localStorage.getItem('badge_is_demo')).toBeNull();
       expect(localStorage.getItem('badge_demo_expires_at')).toBeNull();
+    });
+  });
+
+  describe('setSession — resetDemoTour option (code-review Fix 2)', () => {
+    test('clears badge_demo_tour_seen when resetDemoTour: true is passed (TryDemoPage / POST /demo/start)', () => {
+      localStorage.setItem('badge_demo_tour_seen', 'true');
+      authService.setSession(
+        { token: 'tok-1', user: { id: 'u1' }, is_demo: true, demo_expires_at: '2099-01-01T00:00:00.000Z' },
+        { resetDemoTour: true }
+      );
+      expect(localStorage.getItem('badge_demo_tour_seen')).toBeNull();
+    });
+
+    test('does NOT clear badge_demo_tour_seen when no options are passed (DemoBanner / POST /demo/switch-role)', () => {
+      localStorage.setItem('badge_demo_tour_seen', 'true');
+      authService.setSession({ token: 'tok-1', user: { id: 'u1' }, is_demo: true, demo_expires_at: '2099-01-01T00:00:00.000Z' });
+      expect(localStorage.getItem('badge_demo_tour_seen')).toBe('true');
+    });
+
+    test('does NOT clear badge_demo_tour_seen when resetDemoTour: false is passed explicitly', () => {
+      localStorage.setItem('badge_demo_tour_seen', 'true');
+      authService.setSession({ token: 'tok-1', user: { id: 'u1' } }, { resetDemoTour: false });
+      expect(localStorage.getItem('badge_demo_tour_seen')).toBe('true');
+    });
+
+    test('is a no-op (no error) when badge_demo_tour_seen was never set and resetDemoTour: true is passed', () => {
+      expect(() =>
+        authService.setSession({ token: 'tok-1', user: { id: 'u1' } }, { resetDemoTour: true })
+      ).not.toThrow();
+      expect(localStorage.getItem('badge_demo_tour_seen')).toBeNull();
     });
   });
 

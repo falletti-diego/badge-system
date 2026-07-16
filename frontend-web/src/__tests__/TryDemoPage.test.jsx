@@ -115,11 +115,17 @@ describe('TryDemoPage', () => {
     });
 
     await waitFor(() => {
-      expect(authService.setSession).toHaveBeenCalledWith({
-        token: 'demo.jwt.token',
-        refresh_token: 'demo.refresh.token',
-        user: { id: 'user-1', email: 'prospect@example.com', role: 'admin' },
-      });
+      // resetDemoTour: true — code-review Fix 2: POST /demo/start always
+      // establishes a new-or-resumed demo session, so the tour's
+      // "seen" flag must reset here (unlike DemoBanner's switch-role calls).
+      expect(authService.setSession).toHaveBeenCalledWith(
+        {
+          token: 'demo.jwt.token',
+          refresh_token: 'demo.refresh.token',
+          user: { id: 'user-1', email: 'prospect@example.com', role: 'admin' },
+        },
+        { resetDemoTour: true }
+      );
     });
 
     await waitFor(() => {

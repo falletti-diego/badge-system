@@ -3,6 +3,7 @@ import { Box, Typography, Button, Stack } from '@mui/material';
 import apiClient from '../services/apiClient';
 import authService from '../services/authService';
 import logger from '../utils/logger';
+import { extractApiErrorMessage } from '../utils/apiError';
 import DemoContactModal from './DemoContactModal';
 
 const ROLES = [
@@ -45,8 +46,7 @@ export default function DemoBanner() {
     } catch (err) {
       logger.error('DemoBanner', 'switch-role failed', err);
       setSwitching(null);
-      const data = err.response?.data;
-      setSwitchError(data?.message || 'Non è stato possibile cambiare ruolo — riprova.');
+      setSwitchError(extractApiErrorMessage(err, 'Non è stato possibile cambiare ruolo — riprova.'));
     }
   };
 

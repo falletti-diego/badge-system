@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Popper, Paper, Typography, Button, Box, Fade } from '@mui/material';
-import authService from '../services/authService';
-
-const TOUR_SEEN_KEY = 'badge_demo_tour_seen';
+import authService, { DEMO_TOUR_SEEN_KEY as TOUR_SEEN_KEY } from '../services/authService';
 
 // Anchored via document.getElementById — the ids below are set on wrapping
 // elements in DashboardPage.jsx (KPI Cards, Grafici Trend, Export CSV) and
@@ -39,16 +37,27 @@ const STEPS = [
 /**
  * DemoTour (Task 8 of 9)
  *
- * 3-4 sequential MUI Popper tooltips shown once per demo session (guarded
- * by localStorage[badge_demo_tour_seen]), skippable at any point. Only
- * rendered/started for an active demo session (authService.isDemo()).
+ * 3-4 sequential MUI Popper tooltips shown once per demo SESSION (not once
+ * per browser ever — code-review Fix 2), guarded by
+ * localStorage[badge_demo_tour_seen] (exported from authService.js as
+ * DEMO_TOUR_SEEN_KEY, the single source of truth for this key). That flag
+ * is cleared by authService.setSession(..., { resetDemoTour: true }),
+ * called only from TryDemoPage.jsx's POST /demo/start handler — so a new or
+ * resumed demo tenant always sees the tour again, while a role switch
+ * (DemoBanner's POST /demo/switch-role, same ongoing session) does not
+ * re-trigger it. Skippable at any point. Only rendered/started for an
+ * active demo session (authService.isDemo()).
  *
  * Anchoring: each target is looked up by document.getElementById at mount
  * and on step-change, rather than via refs, since the 4 target elements
  * live in sibling components (DashboardPage, FilterBar) that DemoTour has
  * no direct access to — a stable DOM id is the simplest anchor across that
  * boundary. If a target id isn't present in the DOM (e.g. this step doesn't
- * apply to the current role), that step is skipped automatically.
+ * apply to the current role — an employee-role demo session has no Grafici
+ * Trend block), that step is skipped automatically, and anchorEl is reset
+ * to null in the same update as the step-index advance (code-review Fix 3)
+ * so there's never an intermediate render pairing the new step's title/text
+ * against the previous step's stale, now-irrelevant DOM anchor.
  */
 export default function DemoTour() {
   const [stepIndex, setStepIndex] = useState(0);
@@ -71,7 +80,13 @@ export default function DemoTour() {
     const el = document.getElementById(step.id);
     if (!el) {
       // Target not present for this session (e.g. role without a trend
-      // chart) — skip straight to the next step.
+      // chart) — skip straight to the next step. Clear anchorEl in the same
+      // update as the stepIndex advance (code-review Fix 3): otherwise
+      // React can paint an intermediate render where stepIndex already
+      // points at the next step's title/text while anchorEl still holds
+      // the previous step's stale DOM node — a visible flicker of
+      // mismatched tooltip content anchored at the wrong position.
+      setAnchorEl(null);
       if (stepIndex < STEPS.length - 1) {
         setStepIndex((i) => i + 1);
       } else {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import apiClient from '../services/apiClient';
 import logger from '../utils/logger';
+import { extractApiErrorMessage } from '../utils/apiError';
 
 const MESSAGE_MAX_LENGTH = 2000;
 
@@ -35,15 +36,40 @@ export default function DemoContactModal({ open, onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [sent, setSent] = useState(false);
+  const resetTimeoutRef = useRef(null);
+
+  // DemoBanner renders a single, persistent DemoContactModal instance whose
+  // `open` prop toggles rather than remounting — so a stale reset timer from
+  // a previous close must never be allowed to fire against a live, reopened
+  // instance (code-review Fix 1: same setTimeout-leak bug class as Task 7's
+  // TryDemoPage fix). Cancel any pending reset the moment the dialog reopens.
+  useEffect(() => {
+    if (open && resetTimeoutRef.current) {
+      clearTimeout(resetTimeoutRef.current);
+      resetTimeoutRef.current = null;
+    }
+  }, [open]);
+
+  // Cancel any pending reset on unmount too (e.g. NavBar/DemoBanner
+  // unmounting on a route change while a close animation is still pending).
+  useEffect(() => {
+    return () => {
+      if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
+    };
+  }, []);
 
   const handleClose = () => {
     if (loading) return;
     onClose();
     // Reset for next time the modal is opened, after the close animation.
-    setTimeout(() => {
+    // Clear any previous pending reset first so rapid close/close cycles
+    // don't stack multiple timers.
+    if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
+    resetTimeoutRef.current = setTimeout(() => {
       setMessage('');
       setError(null);
       setSent(false);
+      resetTimeoutRef.current = null;
     }, 200);
   };
 
@@ -66,18 +92,7 @@ export default function DemoContactModal({ open, onClose }) {
       setSent(true);
     } catch (err) {
       logger.error('DemoContactModal', 'contact submit failed', err);
-      const data = err.response?.data;
-      let msg;
-      if (data?.details?.length) {
-        msg = data.details[0].message;
-      } else if (data?.message) {
-        msg = data.message;
-      } else if (!err.response && err.request) {
-        msg = 'Errore di rete — controlla la connessione e riprova.';
-      } else {
-        msg = 'Qualcosa è andato storto — riprova tra un momento.';
-      }
-      setError(msg);
+      setError(extractApiErrorMessage(err));
     } finally {
       setLoading(false);
     }

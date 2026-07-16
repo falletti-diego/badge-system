@@ -10,6 +10,11 @@ const MUST_CHANGE_PASSWORD_KEY = 'badge_must_change_password';
 const IS_DEMO_KEY = 'badge_is_demo';
 const DEMO_EXPIRES_AT_KEY = 'badge_demo_expires_at';
 
+// Exported (not just module-local) so DemoTour.jsx reads/writes the exact
+// same key rather than duplicating the string literal — see setSession's
+// `resetDemoTour` option below (code-review Fix 2).
+export const DEMO_TOUR_SEEN_KEY = 'badge_demo_tour_seen';
+
 /**
  * Authentication Service
  * Handles login, logout, token management
@@ -32,9 +37,21 @@ const authService = {
    * these, so omitting them here clears any stale demo flag left over from
    * an earlier demo session in the same browser.
    *
+   * `options.resetDemoTour` (code-review Fix 2): pass `true` only from a
+   * call site that establishes a genuinely NEW-OR-RESUMED demo tenant —
+   * i.e. TryDemoPage.jsx's POST /demo/start handler, for both the
+   * new-tenant and resumed-tenant cases. Without this, DemoTour.jsx's
+   * "shown once per demo session" flag (badge_demo_tour_seen) is scoped to
+   * the browser forever, so a second, unrelated demo (different prospect,
+   * different tenant) on the same browser would never see the tour.
+   * DemoBanner.jsx's POST /demo/switch-role call must NOT pass this — a
+   * role switch is the same ongoing demo session viewing a different role,
+   * not a new session, so the tour must stay "seen" across it.
+   *
    * @param {{ token: string, refresh_token?: string, user: object, must_change_password?: boolean, is_demo?: boolean, demo_expires_at?: string }} session
+   * @param {{ resetDemoTour?: boolean }} [options]
    */
-  setSession({ token, refresh_token, user, must_change_password, is_demo, demo_expires_at }) {
+  setSession({ token, refresh_token, user, must_change_password, is_demo, demo_expires_at }, { resetDemoTour = false } = {}) {
     localStorage.setItem(TOKEN_KEY, token);
     if (refresh_token) localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token);
     localStorage.setItem(USER_KEY, JSON.stringify(user));
@@ -57,6 +74,13 @@ const authService = {
       localStorage.setItem(DEMO_EXPIRES_AT_KEY, demo_expires_at);
     } else {
       localStorage.removeItem(DEMO_EXPIRES_AT_KEY);
+    }
+
+    // See options.resetDemoTour doc above — only a new-or-resumed demo
+    // session (TryDemoPage's POST /demo/start) resets this; a role switch
+    // (DemoBanner's POST /demo/switch-role) never passes it.
+    if (resetDemoTour) {
+      localStorage.removeItem(DEMO_TOUR_SEEN_KEY);
     }
 
     // Store employee_id if present (for employee role users)
