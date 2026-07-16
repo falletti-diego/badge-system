@@ -119,19 +119,19 @@ describe('GET /api/v1/admin/demo-tenants (real database)', () => {
       // insertion order, to prove the endpoint sorts rather than relies on
       // creation order.
       await probePool.query(
-        "UPDATE clients SET demo_expires_at = now() + interval '1 day' WHERE id = $1",
+        'UPDATE clients SET demo_expires_at = now() + interval \'1 day\' WHERE id = $1',
         [demoClientIds[0]]
       );
       await probePool.query(
-        "UPDATE clients SET demo_expires_at = now() + interval '3 days' WHERE id = $1",
+        'UPDATE clients SET demo_expires_at = now() + interval \'3 days\' WHERE id = $1',
         [demoClientIds[1]]
       );
       await probePool.query(
-        "UPDATE clients SET demo_expires_at = now() + interval '5 days' WHERE id = $1",
+        'UPDATE clients SET demo_expires_at = now() + interval \'5 days\' WHERE id = $1',
         [demoClientIds[2]]
       );
 
-      const token = tokenFor({ user_id: 'real-admin-user', client_id: realClientId, role: 'admin' });
+      const token = tokenFor({ user_id: 'real-admin-user', client_id: realClientId, role: 'superadmin' });
 
       const res = await request(app)
         .get('/api/v1/admin/demo-tenants')
@@ -177,6 +177,24 @@ describe('GET /api/v1/admin/demo-tenants (real database)', () => {
       expect(res.status).toBe(403);
     } finally {
       await cleanupByEmail(demoEmail);
+    }
+  });
+
+  it('a REAL (non-demo) tenant\'s plain admin (role=admin) also gets 403 — only superadmin may view this list', async () => {
+    if (!dbAvailable) return;
+
+    const realEmail = uniqueEmail('demo-tenants-real-plain-admin');
+    try {
+      const realClientId = await makeRealAdminClient(realEmail);
+      const token = tokenFor({ user_id: 'real-plain-admin-user', client_id: realClientId, role: 'admin' });
+
+      const res = await request(app)
+        .get('/api/v1/admin/demo-tenants')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+    } finally {
+      await cleanupByEmail(realEmail);
     }
   });
 });

@@ -47,14 +47,15 @@ function parseCsv(text) {
 router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, res, next) => {
   try {
     const data = req.validated.body;
+    const targetClientId = req.user.role === 'superadmin' ? data.client_id : req.user.client_id;
 
-    const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1', [data.client_id]);
+    const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1', [targetClientId]);
     if (clientCheck.rowCount === 0) return next(new ValidationError('Client not found'));
 
     if (data.site_id) {
       const siteCheck = await pool.query(
         'SELECT id FROM sites WHERE id = $1 AND client_id = $2',
-        [data.site_id, data.client_id]
+        [data.site_id, targetClientId]
       );
       if (siteCheck.rowCount === 0) return next(new ValidationError('Site not found for this client'));
     }
@@ -62,7 +63,7 @@ router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, re
     if (data.assigned_sites.length > 0) {
       const ownedSites = await pool.query(
         'SELECT id FROM sites WHERE id = ANY($1::UUID[]) AND client_id = $2',
-        [data.assigned_sites, data.client_id]
+        [data.assigned_sites, targetClientId]
       );
       if (ownedSites.rowCount !== data.assigned_sites.length) {
         return next(new ValidationError('One or more assigned_sites do not belong to this client'));
@@ -76,12 +77,12 @@ router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, re
       `INSERT INTO employees (client_id, email, name, phone, role, site_id, password_hash, assigned_sites)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::UUID[])
        RETURNING id, client_id, email, name, phone, role, site_id, assigned_sites, created_at`,
-      [data.client_id, data.email, data.name, data.phone || null,
+      [targetClientId, data.email, data.name, data.phone || null,
         data.role, data.site_id || null, passwordHash, data.assigned_sites]
     );
 
     const employee = result.rows[0];
-    logger.info({ action: 'admin_create_employee', employee_id: employee.id, client_id: data.client_id });
+    logger.info({ action: 'admin_create_employee', employee_id: employee.id, client_id: targetClientId });
     await logAudit(pool, {
       action: 'admin_create_employee',
       entity: 'employee',
@@ -107,11 +108,16 @@ router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, re
 router.post('/import', upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) return next(new ValidationError('CSV file is required'));
-    if (!req.body.client_id) return next(new ValidationError('client_id is required'));
 
-    const clientId = req.body.client_id;
-    const uuidCheck = z.string().uuid().safeParse(clientId);
-    if (!uuidCheck.success) return next(new ValidationError('Invalid client_id'));
+    let clientId;
+    if (req.user.role === 'superadmin') {
+      if (!req.body.client_id) return next(new ValidationError('client_id is required'));
+      const uuidCheck = z.string().uuid().safeParse(req.body.client_id);
+      if (!uuidCheck.success) return next(new ValidationError('Invalid client_id'));
+      clientId = req.body.client_id;
+    } else {
+      clientId = req.user.client_id;
+    }
 
     const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1', [clientId]);
     if (clientCheck.rowCount === 0) return next(new ValidationError('Client not found'));
@@ -238,13 +244,18 @@ router.post('/import', upload.single('file'), async (req, res, next) => {
 
 router.get('/', async (req, res, next) => {
   try {
-    const { client_id } = req.query;
     const params = [];
     let where = '';
-    if (client_id) {
-      const uuidCheck = z.string().uuid().safeParse(client_id);
-      if (!uuidCheck.success) return next(new ValidationError('Invalid client_id format'));
-      params.push(client_id);
+    if (req.user.role === 'superadmin') {
+      const { client_id } = req.query;
+      if (client_id) {
+        const uuidCheck = z.string().uuid().safeParse(client_id);
+        if (!uuidCheck.success) return next(new ValidationError('Invalid client_id format'));
+        params.push(client_id);
+        where = 'WHERE e.client_id = $1';
+      }
+    } else {
+      params.push(req.user.client_id);
       where = 'WHERE e.client_id = $1';
     }
     const result = await pool.query(

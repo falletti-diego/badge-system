@@ -163,7 +163,7 @@ describe('POST /api/v1/demo/contact (real database, mocked SES)', () => {
     const email = uniqueEmail('real-customer-contact');
 
     const realClient = await probePool.query(
-      "INSERT INTO clients (id, name, email, plan) VALUES (uuid_generate_v4(), 'Real Co', $1, 'starter') RETURNING id",
+      'INSERT INTO clients (id, name, email, plan) VALUES (uuid_generate_v4(), \'Real Co\', $1, \'starter\') RETURNING id',
       [email]
     );
     const realClientId = realClient.rows[0].id;
