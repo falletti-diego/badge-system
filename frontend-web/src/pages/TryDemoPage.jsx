@@ -141,7 +141,7 @@ export default function TryDemoPage() {
                 lineHeight: 1.05,
               }}
             >
-              Vedi le presenze del tuo negozio prima ancora di parlarci
+              Vedi le presenze del tuo negozio/attività/azienda prima ancora di parlarci
             </Typography>
 
             <Typography

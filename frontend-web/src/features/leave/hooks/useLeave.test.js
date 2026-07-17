@@ -645,6 +645,70 @@ describe('useLeave Hook', () => {
     });
   });
 
+  describe('getMyBalance', () => {
+    it('should fetch the caller\'s own leave balance', async () => {
+      const mockResponse = {
+        data: {
+          data: [
+            { leave_type: 'FERIE_1', year: 2026, total_days: 20, used_days: 5, remaining_days: 15 },
+            { leave_type: 'FERIE_2', year: 2026, total_days: 10, used_days: 0, remaining_days: 10 },
+          ],
+        },
+      };
+
+      apiClient.get.mockResolvedValue(mockResponse);
+
+      const { result } = renderHook(() => useLeave());
+
+      let balance;
+      await act(async () => {
+        balance = await result.current.getMyBalance();
+      });
+
+      expect(apiClient.get).toHaveBeenCalledWith('/api/v1/leave/balance');
+      expect(balance).toHaveLength(2);
+      expect(balance[0].remaining_days).toBe(15);
+      expect(result.current.loading).toBe(false);
+    });
+
+    it('should handle empty balance', async () => {
+      apiClient.get.mockResolvedValue({ data: { data: [] } });
+
+      const { result } = renderHook(() => useLeave());
+
+      let balance;
+      await act(async () => {
+        balance = await result.current.getMyBalance();
+      });
+
+      expect(balance).toEqual([]);
+    });
+
+    it('should handle error', async () => {
+      const mockError = {
+        response: {
+          data: {
+            error: 'SERVER_ERROR',
+          },
+        },
+      };
+
+      apiClient.get.mockRejectedValue(mockError);
+
+      const { result } = renderHook(() => useLeave());
+
+      await act(async () => {
+        try {
+          await result.current.getMyBalance();
+        } catch (err) {
+          // expected
+        }
+      });
+
+      expect(result.current.error).toBe('SERVER_ERROR');
+    });
+  });
+
   describe('getApprovedRequests', () => {
     it('should fetch approved leave requests', async () => {
       const mockResponse = {

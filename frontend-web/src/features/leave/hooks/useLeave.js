@@ -186,6 +186,27 @@ export const useLeave = () => {
     }
   }, []);
 
+  const getMyBalance = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await apiClient.get('/api/v1/leave/balance');
+      return response.data.data || [];
+    } catch (err) {
+      const errorMessage =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to fetch leave balance';
+
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const getApprovedRequests = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -214,6 +235,7 @@ export const useLeave = () => {
     getAllLeaveRequests,
     getApprovedRequests,
     getEmployeeSaldi,
+    getMyBalance,
     approveRequest,
     rejectRequest,
     loading,

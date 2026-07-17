@@ -47,10 +47,16 @@ const mockGetMyRequests = vi.fn(async () => [
 const mockClearError = vi.fn();
 const mockResetForm = vi.fn();
 
+const mockGetMyBalance = vi.fn(async () => [
+  { leave_type: 'FERIE_1', year: 2026, total_days: 20, used_days: 5, remaining_days: 15 },
+  { leave_type: 'FERIE_2', year: 2026, total_days: 10, used_days: 10, remaining_days: 0 },
+]);
+
 vi.mock('../hooks/useLeave', () => ({
   useLeave: () => ({
     createRequest: mockCreateRequest,
     getMyRequests: mockGetMyRequests,
+    getMyBalance: mockGetMyBalance,
     loading: false,
     error: null,
     clearError: mockClearError,
@@ -125,6 +131,17 @@ describe('EmployeeLeaveRequest Page', () => {
 
       expect(screen.getByRole('button', { name: /^Richiedi$/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Annulla/i })).toBeInTheDocument();
+    });
+
+    it('should render leave balance chips with remaining days per type', async () => {
+      renderWithRouter(<EmployeeLeaveRequest />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Ferie 1: 15 gg disponibili')).toBeInTheDocument();
+      });
+      expect(screen.getByText('Ferie 2: 0 gg disponibili')).toBeInTheDocument();
+      // Ferie 3 has no matching row in the mocked balance response — must default to 0, not crash.
+      expect(screen.getByText('Ferie 3: 0 gg disponibili')).toBeInTheDocument();
     });
 
     it('should render requests history section', () => {

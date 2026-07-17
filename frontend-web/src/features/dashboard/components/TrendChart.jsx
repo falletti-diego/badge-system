@@ -43,10 +43,10 @@ const TrendChart = ({ days = [], loading = false, error = null }) => {
 
       {!loading && !error && (
         <div role="img" aria-label={chartLabel}>
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={chartData}>
+          <ResponsiveContainer width="100%" height={320}>
+            <LineChart data={chartData} margin={{ bottom: 40 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5E1DA" />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} angle={-45} textAnchor="end" height={50} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip />
               <Line type="monotone" dataKey="presenze" stroke={NAVY} strokeWidth={2} dot={false} name="Presenze" />

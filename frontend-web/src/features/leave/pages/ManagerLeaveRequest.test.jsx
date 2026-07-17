@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { ManagerLeaveRequest } from './ManagerLeaveRequest';
 import * as authService from '../../../services/authService';
@@ -11,10 +11,15 @@ vi.mock('../../../services/authService', () => ({
   },
 }));
 
+const mockGetMyBalance = vi.fn(async () => [
+  { leave_type: 'FERIE_1', year: 2026, total_days: 20, used_days: 8, remaining_days: 12 },
+]);
+
 vi.mock('../hooks/useLeave', () => ({
   useLeave: () => ({
     createRequest: vi.fn(async () => ({})),
     getMyRequests: vi.fn(async () => []),
+    getMyBalance: mockGetMyBalance,
     loading: false,
     error: null,
     clearError: vi.fn(),
@@ -74,5 +79,16 @@ describe('ManagerLeaveRequest Page', () => {
     renderWithRouter(<ManagerLeaveRequest />);
     const submitBtn = screen.getByRole('button', { name: /Richiedi/i });
     expect(submitBtn.disabled).toBe(true);
+  });
+
+  it('should render leave balance chips with remaining days per type', async () => {
+    renderWithRouter(<ManagerLeaveRequest />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Ferie 1: 12 gg disponibili')).toBeInTheDocument();
+    });
+    // Ferie 2/3 have no matching row in the mocked balance response — must default to 0.
+    expect(screen.getByText('Ferie 2: 0 gg disponibili')).toBeInTheDocument();
+    expect(screen.getByText('Ferie 3: 0 gg disponibili')).toBeInTheDocument();
   });
 });

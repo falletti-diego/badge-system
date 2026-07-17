@@ -36,6 +36,10 @@ const LEAVE_TYPES = [
   { value: 'MALATTIA', label: 'Malattia' }, // kept for history display only — not shown in form dropdown
 ];
 
+// Only the 3 ferie types consume a balance — MALATTIA is excluded here for the
+// same reason it's excluded from the form dropdown above.
+const BALANCE_TYPES = LEAVE_TYPES.filter((t) => t.value !== 'MALATTIA');
+
 const STATUS_COLORS = {
   PENDING: 'warning',
   APPROVED: 'success',
@@ -47,7 +51,7 @@ const ITEMS_PER_PAGE = 10;
 
 export const ManagerLeaveRequest = () => {
   const navigate = useNavigate();
-  const { createRequest, getMyRequests, loading, error, clearError, resetForm } = useLeave();
+  const { createRequest, getMyRequests, getMyBalance, loading, error, clearError, resetForm } = useLeave();
 
   const [formData, setFormData] = useState({
     leave_type: '',
@@ -62,10 +66,21 @@ export const ManagerLeaveRequest = () => {
   const [successMessage, setSuccessMessage] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState('date_desc');
+  const [balance, setBalance] = useState([]);
 
   useEffect(() => {
     loadRequests();
+    loadBalance();
   }, []);
+
+  const loadBalance = async () => {
+    try {
+      const data = await getMyBalance();
+      setBalance(data || []);
+    } catch (err) {
+      // Non-critical: the form still works without the balance chips.
+    }
+  };
 
   const loadRequests = async () => {
     setRequestsLoading(true);
@@ -227,6 +242,22 @@ export const ManagerLeaveRequest = () => {
           <CardContent sx={{ p: 3 }}>
             <form onSubmit={handleSubmit}>
               <Stack spacing={3}>
+                {/* Saldo ferie residuo per tipologia */}
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap data-testid="leave-balance-chips">
+                  {BALANCE_TYPES.map((type) => {
+                    const row = balance.find((b) => b.leave_type === type.value);
+                    const remaining = row ? row.remaining_days : 0;
+                    return (
+                      <Chip
+                        key={type.value}
+                        label={`${type.label}: ${remaining} gg disponibili`}
+                        variant="outlined"
+                        sx={{ borderColor: '#374151', color: '#374151', fontWeight: 500 }}
+                      />
+                    );
+                  })}
+                </Stack>
+
                 {/* Leave Type Dropdown */}
                 <FormControl fullWidth>
                   <InputLabel>Tipo di Feria</InputLabel>
