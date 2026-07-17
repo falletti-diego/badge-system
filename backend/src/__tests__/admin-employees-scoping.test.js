@@ -107,6 +107,40 @@ describe('RBAC scoping: /api/v1/admin/employees', () => {
     await pool.query('DELETE FROM employees WHERE id = $1', [res.body.data.id]);
   });
 
+  it('POST /admin/employees: admin without client_id in body creates employee in own tenant (201)', async () => {
+    if (!dbAvailable) return;
+    const token = tokenFor({ client_id: clientA, role: 'admin' });
+    const res = await request(app)
+      .post('/api/v1/admin/employees')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        // client_id omitted entirely
+        email: uniqueEmail('no-client-id-employee'),
+        name: 'No Client Id Employee',
+        role: 'employee',
+        assigned_sites: [siteA],
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.client_id).toBe(clientA);
+    await pool.query('DELETE FROM employees WHERE id = $1', [res.body.data.id]);
+  });
+
+  it('POST /admin/employees: superadmin without client_id in body gets 400 CLIENT_ID_REQUIRED', async () => {
+    if (!dbAvailable) return;
+    const token = tokenFor({ client_id: clientA, role: 'superadmin' });
+    const res = await request(app)
+      .post('/api/v1/admin/employees')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        email: uniqueEmail('superadmin-no-client-id'),
+        name: 'Superadmin No Client Id',
+        role: 'employee',
+        assigned_sites: [siteA],
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.details?.code).toBe('CLIENT_ID_REQUIRED');
+  });
+
   it('GET /admin/employees: admin sees ONLY their own employees, query client_id param is ignored', async () => {
     if (!dbAvailable) return;
     const empEmail = uniqueEmail('employees-scoping-own');
@@ -160,5 +194,6 @@ describe('RBAC scoping: /api/v1/admin/employees', () => {
     // No client_id field attached — superadmin must still specify a target tenant
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/client_id/);
+    expect(res.body.details?.code).toBe('CLIENT_ID_REQUIRED');
   });
 });

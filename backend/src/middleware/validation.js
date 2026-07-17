@@ -428,7 +428,7 @@ const AdminClientSchema = z.object({
 
 const AdminSiteSchema = z.object({
   body: z.object({
-    client_id: z.string().uuid('client_id must be a valid UUID'),
+    client_id: z.string().uuid('client_id must be a valid UUID').optional(),
     name: z.string().min(2, 'name must be at least 2 characters').max(100),
     location: z.string().max(200).optional(),
   }),
@@ -440,7 +440,7 @@ const AdminSiteSchema = z.object({
 
 const AdminEmployeeSchema = z.object({
   body: z.object({
-    client_id: z.string().uuid('client_id must be a valid UUID'),
+    client_id: z.string().uuid('client_id must be a valid UUID').optional(),
     email: z.string().email('Invalid email format').max(100),
     name: z.string().min(2, 'name must be at least 2 characters').max(100),
     phone: z.string().max(20).optional(),

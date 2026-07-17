@@ -7,6 +7,7 @@ const { pool } = require('../../db/pool');
 const { ValidationError, NotFoundError } = require('../../utils/errors');
 const logger = require('../../utils/logger');
 const { logAudit } = require('../../middleware/audit');
+const { resolveTenantScope } = require('../../utils/tenantScope');
 const {
   AdminSiteSchema,
   UpdateSiteGeofenceSchema,
@@ -18,7 +19,7 @@ const router = express.Router();
 router.post('/', createValidationMiddleware(AdminSiteSchema), async (req, res, next) => {
   try {
     const data = req.validated.body;
-    const targetClientId = req.user.role === 'superadmin' ? data.client_id : req.user.client_id;
+    const targetClientId = resolveTenantScope(req.user, data.client_id);
 
     const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1', [targetClientId]);
     if (clientCheck.rowCount === 0) return next(new ValidationError('Client not found'));

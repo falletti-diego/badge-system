@@ -10,6 +10,7 @@ const { hashPassword } = require('../../auth/password');
 const { ValidationError, NotFoundError } = require('../../utils/errors');
 const logger = require('../../utils/logger');
 const { logAudit } = require('../../middleware/audit');
+const { resolveTenantScope } = require('../../utils/tenantScope');
 const { AdminEmployeeSchema, createValidationMiddleware } = require('../../middleware/validation');
 
 const router = express.Router();
@@ -47,7 +48,7 @@ function parseCsv(text) {
 router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, res, next) => {
   try {
     const data = req.validated.body;
-    const targetClientId = req.user.role === 'superadmin' ? data.client_id : req.user.client_id;
+    const targetClientId = resolveTenantScope(req.user, data.client_id);
 
     const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1', [targetClientId]);
     if (clientCheck.rowCount === 0) return next(new ValidationError('Client not found'));
@@ -109,15 +110,11 @@ router.post('/import', upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) return next(new ValidationError('CSV file is required'));
 
-    let clientId;
-    if (req.user.role === 'superadmin') {
-      if (!req.body.client_id) return next(new ValidationError('client_id is required'));
+    if (req.user.role === 'superadmin' && req.body.client_id) {
       const uuidCheck = z.string().uuid().safeParse(req.body.client_id);
       if (!uuidCheck.success) return next(new ValidationError('Invalid client_id'));
-      clientId = req.body.client_id;
-    } else {
-      clientId = req.user.client_id;
     }
+    const clientId = resolveTenantScope(req.user, req.body.client_id);
 
     const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1', [clientId]);
     if (clientCheck.rowCount === 0) return next(new ValidationError('Client not found'));
