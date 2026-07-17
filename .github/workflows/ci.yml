@@ -17,6 +17,21 @@ jobs:
     name: Backend - Lint & Test
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: badge_system_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,6 +54,33 @@ jobs:
         working-directory: ./backend
         run: npm run lint
 
+      - name: Bootstrap base database schema (uuid-ossp + base tables)
+        working-directory: ./backend
+        env:
+          PGPASSWORD: postgres  # pragma: allowlist secret
+        # schema.sql is written to be run manually via `psql -f` against a fresh
+        # cluster (it opens with DROP DATABASE/CREATE DATABASE/\c badge_system).
+        # The postgres:14 service container already created badge_system_test for
+        # us via POSTGRES_DB, so we strip those first 17 lines and apply the rest
+        # (CREATE EXTENSION "uuid-ossp" + all CREATE TABLE/seed statements)
+        # directly against it. See run-migrations.js step below: none of the
+        # migrations in backend/migrations/ create clients/sites/employees/
+        # checkins/audit_log — only schema.sql does — so this step must run first.
+        run: |
+          sed '1,17d' src/db/schema.sql | psql -v ON_ERROR_STOP=1 -h localhost -p 5432 -U postgres -d badge_system_test -f -
+
+      - name: Apply database migrations
+        working-directory: ./backend
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/badge_system_test  # pragma: allowlist secret
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_USER: postgres
+          DB_PASSWORD: postgres  # pragma: allowlist secret
+          DB_NAME: badge_system_test
+        run: node scripts/run-migrations.js
+
       - name: Run backend tests
         working-directory: ./backend
         env:
@@ -46,12 +88,14 @@ jobs:
           PORT: '3000'
           LOG_LEVEL: silent
           APP_NAME: badge-system-test
-          DATABASE_URL: postgres://test:test@localhost:5432/test  # pragma: allowlist secret
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/badge_system_test  # pragma: allowlist secret
           DB_HOST: localhost
           DB_PORT: '5432'
-          DB_USER: test
-          DB_PASSWORD: test  # pragma: allowlist secret
-          DB_NAME: test
+          DB_USER: postgres
+          DB_PASSWORD: postgres  # pragma: allowlist secret
+          DB_NAME: badge_system_test
+          DB_POOL_MIN: '1'
+          DB_POOL_MAX: '5'
           JWT_PRIVATE_KEY: ci-placeholder-overridden-by-jest-setup
           JWT_PUBLIC_KEY: ci-placeholder-overridden-by-jest-setup
           CORS_ORIGIN: http://localhost:5173
