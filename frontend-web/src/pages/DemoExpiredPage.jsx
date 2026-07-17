@@ -69,7 +69,7 @@ export default function DemoExpiredPage() {
               maxWidth: '30rem',
             }}
           >
-            La prova gratuita del Badge System dura fino a 14 giorni. Puoi iniziare una nuova
+            La prova gratuita del Badge System dura 7 giorni. Puoi iniziare una nuova
             demo in qualsiasi momento — se usi la stessa email, ripartirai da dove avevi
             lasciato.
           </Typography>
