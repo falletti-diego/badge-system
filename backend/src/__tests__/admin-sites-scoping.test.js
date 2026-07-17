@@ -161,4 +161,43 @@ describe('RBAC scoping: /api/v1/admin/sites', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
   });
+
+  it('superadmin can update geofence on a site of ANY tenant', async () => {
+    if (!dbAvailable) return;
+    const token = tokenFor({ client_id: clientA, role: 'superadmin' });
+    const res = await request(app)
+      .put(`/api/v1/admin/sites/${siteB}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        latitude: 45.0703,
+        longitude: 7.6869,
+        geofence_radius_meters: 200,
+        geofence_enabled: true,
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.data.geofence_enabled).toBe(true);
+
+    const check = await pool.query('SELECT geofence_enabled, geofence_radius_meters FROM sites WHERE id = $1', [siteB]);
+    expect(check.rows[0].geofence_enabled).toBe(true);
+    expect(check.rows[0].geofence_radius_meters).toBe(200);
+  });
+
+  it('admin still CANNOT update geofence on another tenant site (404)', async () => {
+    if (!dbAvailable) return;
+    const token = tokenFor({ client_id: clientA, role: 'admin' });
+    const res = await request(app)
+      .put(`/api/v1/admin/sites/${siteB}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        latitude: 45.0703,
+        longitude: 7.6869,
+        geofence_radius_meters: 200,
+        geofence_enabled: true,
+      });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('SITE_NOT_FOUND');
+
+    const check = await pool.query('SELECT geofence_enabled FROM sites WHERE id = $1', [siteB]);
+    expect(check.rows[0].geofence_enabled).not.toBe(true);
+  });
 });
