@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { AdminLeaveManagement } from './AdminLeaveManagement';
 import * as authService from '../../../services/authService';
@@ -37,8 +37,9 @@ vi.mock('../hooks/useLeave', () => ({
       },
     ]),
     getEmployeeSaldi: vi.fn(async () => ({
-      'emp-001': { FERIE_1: 15, FERIE_2: 10, FERIE_3: 5, MALATTIA: 10 },
-      'emp-002': { FERIE_1: 20, FERIE_2: 15, FERIE_3: 10, MALATTIA: 12 },
+      'emp-001': { name: 'Mario Rossi', FERIE_1: 15, FERIE_2: 10, FERIE_3: 5, MALATTIA: 10 },
+      'emp-002': { name: 'Luigi Bianchi', FERIE_1: 20, FERIE_2: 15, FERIE_3: 10, MALATTIA: 12 },
+      'emp-003-deleted': { name: null, FERIE_1: 0, FERIE_2: 0, FERIE_3: 0, MALATTIA: 0 },
     })),
     approveRequest: vi.fn(async () => ({})),
     rejectRequest: vi.fn(async () => ({})),
@@ -109,11 +110,21 @@ describe('AdminLeaveManagement Page', () => {
   });
 
   describe('Saldi Management', () => {
-    it('should display employee saldi', () => {
+    it('should display employee saldi', async () => {
       renderWithRouter(<AdminLeaveManagement />);
       // Saldi tab showing per-employee balance
-      const title = screen.getByText(/Gestione Ferie/i);
-      expect(title).toBeTruthy();
+      fireEvent.click(screen.getByRole('tab', { name: 'Saldi' }));
+      await waitFor(() => {
+        expect(screen.getByText('Mario Rossi')).toBeInTheDocument();
+      });
+    });
+
+    it('should fall back to a truncated employee id when the name is missing', async () => {
+      renderWithRouter(<AdminLeaveManagement />);
+      fireEvent.click(screen.getByRole('tab', { name: 'Saldi' }));
+      await waitFor(() => {
+        expect(screen.getByText('Employee emp-003-')).toBeInTheDocument();
+      });
     });
   });
 
