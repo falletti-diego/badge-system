@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -25,6 +25,17 @@ export const EmployeeIllnessReport = () => {
     certificateFile: null,
   });
   const [success, setSuccess] = useState(false);
+  const redirectTimeoutRef = useRef(null);
+
+  // Il timer di redirect post-successo non deve sopravvivere allo smontaggio:
+  // senza cleanup, un utente che naviga altrove entro 2s viene riportato
+  // forzatamente a /dashboard da un timer orfano (stesso pattern di
+  // TryDemoPage.jsx, code-review 2026-07-17).
+  useEffect(() => {
+    return () => {
+      if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,7 +43,7 @@ export const EmployeeIllnessReport = () => {
       await reportIllness(formData.startDate, formData.endDate, formData.reason);
       setSuccess(true);
       setFormData({ startDate: null, endDate: null, reason: '', certificateFile: null });
-      setTimeout(() => navigate('/dashboard'), 2000);
+      redirectTimeoutRef.current = setTimeout(() => navigate('/dashboard'), 2000);
     } catch (err) {
       // error handled by useIllness hook
     }
