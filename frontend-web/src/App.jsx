@@ -24,9 +24,6 @@ import { EmployeeIllnessReport } from './features/illness/pages/EmployeeIllnessR
 import { ManagerIllnessReport } from './features/illness/pages/ManagerIllnessReport';
 import { AdminIllnessManagement } from './features/illness/pages/AdminIllnessManagement';
 import SummaryPage from './pages/SummaryPage';
-import { useTokenRefresh } from './hooks/useTokenRefresh';
-import { setupAxiosInterceptor } from './lib/axiosInterceptor';
-import apiClient from './services/apiClient';
 
 // Create Material-UI theme with design system colors
 const theme = createTheme({
@@ -119,13 +116,6 @@ export function PasswordChangeGuard({ children }) {
 }
 
 function AppRouter() {
-  const tokenRefresh = useTokenRefresh();
-
-  // Setup axios interceptor for automatic token refresh on 401
-  useEffect(() => {
-    setupAxiosInterceptor(apiClient, () => tokenRefresh);
-  }, [tokenRefresh]);
-
   return (
     <PasswordChangeGuard>
       <Routes>
