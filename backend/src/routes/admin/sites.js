@@ -99,7 +99,7 @@ router.delete('/:id', async (req, res, next) => {
       `DELETE FROM sites WHERE id = $1 ${scopeClause} RETURNING id, name, client_id`,
       params
     );
-    if (result.rowCount === 0) return next(new ValidationError('Site not found'));
+    if (result.rowCount === 0) return next(new NotFoundError('Site not found', 'SITE_NOT_FOUND'));
 
     const site = result.rows[0];
     await logAudit(pool, {

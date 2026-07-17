@@ -156,13 +156,14 @@ describe('RBAC scoping: /api/v1/admin/sites', () => {
     expect(res.body.details?.code).toBe('CLIENT_ID_REQUIRED');
   });
 
-  it('DELETE /admin/sites/:id: admin cannot delete another tenant\'s site (400)', async () => {
+  it('DELETE /admin/sites/:id: admin cannot delete another tenant\'s site (404)', async () => {
     if (!dbAvailable) return;
     const token = tokenFor({ client_id: clientA, role: 'admin' });
     const res = await request(app)
       .delete(`/api/v1/admin/sites/${siteB}`)
       .set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(400); // matches existing ValidationError('Site not found') behavior, unchanged
+    expect(res.status).toBe(404); // uniform NotFoundError('Site not found', 'SITE_NOT_FOUND')
+    expect(res.body.error).toBe('SITE_NOT_FOUND');
     const check = await pool.query('SELECT id FROM sites WHERE id = $1', [siteB]);
     expect(check.rowCount).toBe(1); // still exists
   });
