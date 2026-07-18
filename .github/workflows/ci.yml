@@ -63,13 +63,16 @@ jobs:
         # schema.sql is written to be run manually via `psql -f` against a fresh
         # cluster (it opens with DROP DATABASE/CREATE DATABASE/\c badge_system).
         # The postgres:14 service container already created badge_system_test for
-        # us via POSTGRES_DB, so we strip those first 17 lines and apply the rest
-        # (CREATE EXTENSION "uuid-ossp" + all CREATE TABLE/seed statements)
-        # directly against it. See run-migrations.js step below: none of the
-        # migrations in backend/migrations/ create clients/sites/employees/
-        # checkins/audit_log — only schema.sql does — so this step must run first.
+        # us via POSTGRES_DB, so we strip that header — everything up to and
+        # including the "-- BOOTSTRAP:BEGIN" marker line in schema.sql — and
+        # apply the rest (CREATE EXTENSION "uuid-ossp" + all CREATE TABLE/seed
+        # statements) directly against it. See run-migrations.js step below:
+        # none of the migrations in backend/migrations/ create clients/sites/
+        # employees/checkins/audit_log — only schema.sql does — so this step
+        # must run first.
         run: |
-          sed '1,17d' src/db/schema.sql | psql -v ON_ERROR_STOP=1 -h localhost -p 5432 -U postgres -d badge_system_test -f -
+          grep -q -- '-- BOOTSTRAP:BEGIN' src/db/schema.sql || { echo '::error::BOOTSTRAP:BEGIN marker missing from src/db/schema.sql'; exit 1; }
+          sed '1,/^-- BOOTSTRAP:BEGIN/d' src/db/schema.sql | psql -v ON_ERROR_STOP=1 -h localhost -p 5432 -U postgres -d badge_system_test -f -
 
       - name: Apply database migrations
         working-directory: ./backend
@@ -103,10 +106,13 @@ jobs:
           CORS_ORIGIN: http://localhost:5173
           DISABLE_AUTH: 'true'
           SEED_TEST_DATA: 'false'
-        # --forceExit: on CI runners jest hangs after "Ran all test suites" on an
-        # open handle not reproducible locally (all tests pass in <1min). Safe here
-        # because the process is ephemeral; local runs keep --detectOpenHandles.
-        run: npm test -- --coverage --forceExit
+        # The 2026-07-18 post-suite hang (which briefly required --forceExit here)
+        # was root-caused to pg-pool never evicting idle clients at/below `min`:
+        # with DB_POOL_MIN=1 the shared app pool kept one ref'd idle socket open
+        # forever. Fixed at the source via allowExitOnIdle in src/db/pool.js
+        # (test env only), so jest exits on its own again and open-handle
+        # regressions stay detectable. timeout-minutes above is the safety net.
+        run: npm test -- --coverage
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4

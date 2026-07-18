@@ -15,6 +15,11 @@ CREATE DATABASE badge_system
 -- Connect to new database
 \c badge_system
 
+-- BOOTSTRAP:BEGIN — CI applies the schema from this line down (see ci.yml).
+-- Everything above creates/drops the database itself and only makes sense when
+-- running this file manually against a fresh cluster. Do not move or rename
+-- this marker without updating the "Bootstrap base database schema" CI step.
+
 -- Extension for UUID generation
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
