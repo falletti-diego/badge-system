@@ -20,6 +20,12 @@ const dbConfig = {
   min: parseInt(process.env.DB_POOL_MIN || '1', 10),
   max: parseInt(process.env.DB_POOL_MAX || '20', 10),
   idleTimeoutMillis: 30000,
+  // pg-pool never evicts (nor unrefs) idle clients at or below `min`, so with
+  // min>=1 the last idle client keeps the event loop referenced forever and
+  // jest hangs after the suite completes (the open handle behind the 2026-07-18
+  // CI hang). allowExitOnIdle unrefs idle clients so the test process can exit;
+  // irrelevant outside tests, where server.listen keeps the process alive.
+  allowExitOnIdle: process.env.NODE_ENV === 'test',
   connectionTimeoutMillis: 60000, // Increased for RDS cold starts
   statement_timeout: 30000,
   application_name: 'badge-system-api',
