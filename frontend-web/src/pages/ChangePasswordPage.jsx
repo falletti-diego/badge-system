@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Box, Button, TextField, Alert, CircularProgress, Container, Paper, Typography } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -40,6 +40,17 @@ export default function ChangePasswordPage() {
   const [apiError, setApiError] = useState(null);
   const [apiSuccess, setApiSuccess] = useState(null);
   const [loading, setLoading] = useState(false);
+  const redirectTimeoutRef = useRef(null);
+
+  // Il timer di redirect post-successo non deve sopravvivere allo smontaggio:
+  // senza cleanup, un utente che naviga altrove entro 2s viene riportato
+  // forzatamente a /login da un timer orfano (stesso pattern di
+  // TryDemoPage.jsx / EmployeeIllnessReport.jsx, code-review 2026-07-17).
+  useEffect(() => {
+    return () => {
+      if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
+    };
+  }, []);
 
   /**
    * Client-side validation
@@ -107,7 +118,7 @@ export default function ChangePasswordPage() {
       authService.logout();
 
       // Auto-redirect to login after 2 seconds (let user see success message)
-      setTimeout(() => {
+      redirectTimeoutRef.current = setTimeout(() => {
         navigate('/login', { replace: true });
       }, 2000);
     } catch (err) {
