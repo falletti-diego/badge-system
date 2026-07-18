@@ -14,7 +14,8 @@
     "testEnvironment": "node",
     "setupFiles": [
       "./jest.setup.js"
-    ]
+    ],
+    "globalSetup": "./jest.globalSetup.js"
   },
   "scripts": {
     "validate-env": "node scripts/validate-env.js",
