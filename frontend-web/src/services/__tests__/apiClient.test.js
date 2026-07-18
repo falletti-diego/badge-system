@@ -69,11 +69,12 @@ describe('apiClient request interceptor — Authorization header', () => {
  * see requireDemoTenant.js) must redirect to /demo-expired, not /login,
  * since a demo visitor never had credentials to log back in with.
  *
- * The second, pre-existing interceptor in lib/axiosInterceptor.js branches
- * on error.response.data.code, but every real backend error shape here uses
- * `.error` (e.g. `{ error: 'DEMO_EXPIRED' }') — so that interceptor never
- * actually matches anything and the real behavior lives entirely in
- * apiClient.js's own interceptor, which is what these tests exercise.
+ * A second, now-removed interceptor in lib/axiosInterceptor.js used to
+ * branch on error.response.data.code, but every real backend error shape
+ * uses `.error` (e.g. `{ error: 'DEMO_EXPIRED' }') — that interceptor never
+ * matched anything, so it was confirmed dead code and deleted. The real
+ * behavior lives entirely in apiClient.js's own interceptor, which is what
+ * these tests exercise.
  */
 describe('apiClient response interceptor — DEMO_EXPIRED redirect (Task 8)', () => {
   const originalLocation = window.location;

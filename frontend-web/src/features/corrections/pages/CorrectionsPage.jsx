@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Container,
   Box,
@@ -69,6 +69,13 @@ export const CorrectionsPage = () => {
   });
   const [saveError, setSaveError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
+  const successMsgTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (successMsgTimeoutRef.current) clearTimeout(successMsgTimeoutRef.current);
+    };
+  }, []);
 
   const memoizedFilters = useMemo(() => filters, [
     filters.site_id, filters.employee_id, filters.date_from,
@@ -123,7 +130,8 @@ export const CorrectionsPage = () => {
         correction_note: correction_note.trim() || undefined,
       });
       setSuccessMsg(`Check-in di ${checkin.employee_name} corretto con successo.`);
-      setTimeout(() => setSuccessMsg(null), 4000);
+      if (successMsgTimeoutRef.current) clearTimeout(successMsgTimeoutRef.current);
+      successMsgTimeoutRef.current = setTimeout(() => setSuccessMsg(null), 4000);
       closeModal();
       refetch();
     } catch (err) {

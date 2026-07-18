@@ -473,18 +473,20 @@ router.get('/admin/saldi', requireAuth, async (req, res, next) => {
     }
 
     const result = await pool.query(
-      `SELECT user_id, leave_type, year, total_days, used_days, remaining_days
-       FROM leave_saldi
-       WHERE client_id = $1::uuid
-       ORDER BY user_id, leave_type, year DESC`,
+      `SELECT ls.user_id, ls.leave_type, ls.year, ls.total_days, ls.used_days,
+              ls.remaining_days, e.name AS employee_name
+       FROM leave_saldi ls
+       LEFT JOIN employees e ON e.id = ls.user_id
+       WHERE ls.client_id = $1::uuid
+       ORDER BY ls.user_id, ls.leave_type, ls.year DESC`,
       [clientId]
     );
 
-    // Transform to nested object: { employee_id: { FERIE_1: N, FERIE_2: N, ... } }
+    // Transform to nested object: { employee_id: { name, FERIE_1: N, FERIE_2: N, ... } }
     const saldiByEmployee = {};
     result.rows.forEach(row => {
       if (!saldiByEmployee[row.user_id]) {
-        saldiByEmployee[row.user_id] = {};
+        saldiByEmployee[row.user_id] = { name: row.employee_name };
       }
       // Use remaining_days for current year; aggregate all years
       saldiByEmployee[row.user_id][row.leave_type] = row.remaining_days;

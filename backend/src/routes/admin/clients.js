@@ -3,7 +3,7 @@
 const express = require('express');
 const { z } = require('zod');
 const { pool } = require('../../db/pool');
-const { ValidationError } = require('../../utils/errors');
+const { ValidationError, NotFoundError } = require('../../utils/errors');
 const logger = require('../../utils/logger');
 const { logAudit } = require('../../middleware/audit');
 const { AdminClientSchema, createValidationMiddleware } = require('../../middleware/validation');
@@ -79,7 +79,7 @@ router.delete('/:id', requireSuperadmin, async (req, res, next) => {
       'DELETE FROM clients WHERE id = $1 RETURNING id, name',
       [id]
     );
-    if (result.rowCount === 0) return next(new ValidationError('Client not found'));
+    if (result.rowCount === 0) return next(new NotFoundError('Client not found', 'CLIENT_NOT_FOUND'));
 
     const client = result.rows[0];
     await logAudit(pool, {

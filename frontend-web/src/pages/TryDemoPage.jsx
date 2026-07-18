@@ -248,7 +248,8 @@ export default function TryDemoPage() {
                 maxWidth: '26rem',
               }}
             >
-              La useremo solo per questa demo (max 14 giorni in tutto), niente spam.
+              La useremo solo per questa demo: 7 giorni di prova, e tutti i dati
+              vengono cancellati del tutto entro 14. Niente spam.
             </Typography>
 
             {resumed && (

@@ -7,6 +7,7 @@ const { pool } = require('../../db/pool');
 const { ValidationError, NotFoundError } = require('../../utils/errors');
 const logger = require('../../utils/logger');
 const { logAudit } = require('../../middleware/audit');
+const { resolveTenantScope } = require('../../utils/tenantScope');
 const {
   AdminSiteSchema,
   UpdateSiteGeofenceSchema,
@@ -18,7 +19,7 @@ const router = express.Router();
 router.post('/', createValidationMiddleware(AdminSiteSchema), async (req, res, next) => {
   try {
     const data = req.validated.body;
-    const targetClientId = req.user.role === 'superadmin' ? data.client_id : req.user.client_id;
+    const targetClientId = resolveTenantScope(req.user, data.client_id);
 
     const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1', [targetClientId]);
     if (clientCheck.rowCount === 0) return next(new ValidationError('Client not found'));
@@ -98,7 +99,7 @@ router.delete('/:id', async (req, res, next) => {
       `DELETE FROM sites WHERE id = $1 ${scopeClause} RETURNING id, name, client_id`,
       params
     );
-    if (result.rowCount === 0) return next(new ValidationError('Site not found'));
+    if (result.rowCount === 0) return next(new NotFoundError('Site not found', 'SITE_NOT_FOUND'));
 
     const site = result.rows[0];
     await logAudit(pool, {
@@ -119,19 +120,26 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 router.put('/:id', createValidationMiddleware(UpdateSiteGeofenceSchema), async (req, res, next) => {
-  const { client_id } = req.user;
   const { id } = req.validated.params;
   const { latitude, longitude, geofence_radius_meters, geofence_enabled } = req.validated.body;
+  const isSuperadmin = req.user.role === 'superadmin';
 
   try {
+    const params = [latitude ?? null, longitude ?? null, geofence_radius_meters, geofence_enabled, id];
+    let where = 'WHERE id = $5::uuid';
+    if (!isSuperadmin) {
+      params.push(req.user.client_id);
+      where += ' AND client_id = $6::uuid';
+    }
+
     const result = await pool.query(
       `UPDATE sites
        SET latitude = $1, longitude = $2,
            geofence_radius_meters = $3, geofence_enabled = $4,
            updated_at = NOW()
-       WHERE id = $5::uuid AND client_id = $6::uuid
-       RETURNING id, name, latitude, longitude, geofence_radius_meters, geofence_enabled`,
-      [latitude ?? null, longitude ?? null, geofence_radius_meters, geofence_enabled, id, client_id]
+       ${where}
+       RETURNING id, name, client_id, latitude, longitude, geofence_radius_meters, geofence_enabled`,
+      params
     );
 
     if (result.rows.length === 0) return next(new NotFoundError('Site not found or not in your organization', 'SITE_NOT_FOUND'));
@@ -140,7 +148,7 @@ router.put('/:id', createValidationMiddleware(UpdateSiteGeofenceSchema), async (
       action: 'admin_update_site_geofence',
       entity: 'site',
       entityId: id,
-      clientId: client_id,
+      clientId: result.rows[0].client_id,
       oldValue: null,
       newValue: { latitude, longitude, geofence_radius_meters, geofence_enabled },
       userId: req.user.user_id,

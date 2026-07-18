@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -67,10 +67,14 @@ export const EmployeeLeaveRequest = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState('date_desc');
   const [balance, setBalance] = useState([]);
+  const reloadTimeoutRef = useRef(null);
 
   useEffect(() => {
     loadRequests();
     loadBalance();
+    return () => {
+      if (reloadTimeoutRef.current) clearTimeout(reloadTimeoutRef.current);
+    };
   }, []);
 
   const loadBalance = async () => {
@@ -153,7 +157,7 @@ export const EmployeeLeaveRequest = () => {
         motivation: '',
       });
 
-      setTimeout(() => {
+      reloadTimeoutRef.current = setTimeout(() => {
         loadRequests();
       }, 500);
     } catch (err) {

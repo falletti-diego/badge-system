@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -26,9 +26,16 @@ export const AdminIllnessManagement = () => {
   const [tabValue, setTabValue] = useState(0);
   const [successMessage, setSuccessMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  const successMessageTimeoutRef = useRef(null);
 
   useEffect(() => {
     loadIllnesses();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (successMessageTimeoutRef.current) clearTimeout(successMessageTimeoutRef.current);
+    };
   }, []);
 
   const loadIllnesses = async () => {
@@ -56,7 +63,8 @@ export const AdminIllnessManagement = () => {
       setSuccessMessage('Comunicazione malattia cancellata');
       setErrorMessage(null);
       await loadIllnesses();
-      setTimeout(() => setSuccessMessage(null), 3000);
+      if (successMessageTimeoutRef.current) clearTimeout(successMessageTimeoutRef.current);
+      successMessageTimeoutRef.current = setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       setErrorMessage(err.response?.data?.message || 'Errore nella cancellazione');
     }

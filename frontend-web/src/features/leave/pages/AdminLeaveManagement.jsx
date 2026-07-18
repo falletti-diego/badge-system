@@ -510,9 +510,11 @@ export const AdminLeaveManagement = () => {
                 </TableHead>
                 <TableBody>
                   {Object.entries(saldi).map(([empId, saldiData]) => {
-                    const request = allRequests.find((r) => r.employee_id === empId);
-                    const empName =
-                      request?.employee_name || `Employee ${empId.substring(0, 8)}`;
+                    // Il nome ora arriva dal backend (JOIN employees) — il
+                    // vecchio lookup su allRequests falliva per dipendenti
+                    // senza richieste. Fallback su ID troncato solo se il
+                    // dipendente è stato cancellato (LEFT JOIN → name null).
+                    const empName = saldiData.name || `Employee ${empId.substring(0, 8)}`;
 
                     return (
                       <TableRow key={empId} hover>

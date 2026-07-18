@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import authService from '../services/authService';
 import { getInitials } from '../utils/getInitials';
+import logger from '../utils/logger';
 import DemoBanner from './DemoBanner';
 
 export const NavBar = ({ title, children }) => {
@@ -36,7 +37,11 @@ export const NavBar = ({ title, children }) => {
     handleClose();
     try {
       await authService.logout();
-    } catch (_) {}
+    } catch (err) {
+      // Best-effort: la revoca server-side può fallire (rete, token già scaduto)
+      // ma la sessione locale va chiusa comunque — logghiamo e proseguiamo.
+      logger.warn('NavBar', 'server-side logout failed, proceeding to /login', err);
+    }
     navigate('/login');
   };
 
