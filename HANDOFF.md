@@ -1,87 +1,97 @@
-# Badge System — Session 74 Handoff
+# Badge System — Session 76 Handoff
 
-**Date:** 2026-07-17
-**Session:** 71-74 — Fix RBAC cross-tenant LIVE in produzione, QA funnel demo, 4 modifiche UX + scoperta gap AWS SES reale
-**Status:** ✅ Tutto il codice pianificato in queste sessioni è committato, pushato e deployato. ⏳ **In attesa dell'utente**: cliccare il link di verifica AWS SES arrivato a `diego@dataxiom.it`, poi ritestare il form di contatto della demo.
+**Date:** 2026-07-18
+**Session:** 76 — Code review completa della codebase (skill `/code-reviewer`) + piano fix eseguito: 12/12 task con subagent-driven-development
+**Status:** ⏳ **Branch `worktree-code-review-fixes` pushato (13 commit), NON ancora mergiato.** Prossimo passo: aprire la PR verso `main` — la verifica CI del nuovo job Postgres avviene lì (la CI si attiva solo su PR/push verso main). Decisione merge in sospeso (finishing-a-development-branch).
 
 ---
 
 ## Goal
 
-Chiudere il finding di sicurezza RBAC cross-tenant `/api/admin/*` (HIGH, noto da Session 69), fare QA del funnel demo self-service completato in Session 61-69, e implementare 4 modifiche UX richieste dall'utente dopo aver verificato la demo di persona.
+Review approfondita di tutto il codice sviluppato (~20.6k LOC di produzione), poi fix dei 3 bug nuovi trovati e consolidamento del tech-debt tracciato, in un unico branch di lavoro.
 
 ---
 
 ## Come riprendere (leggi in quest'ordine)
 
 1. **Questo file**
-2. **`TASKS.md`** Session Log righe 71-74 (in cima alla tabella) — dettaglio completo di ogni passaggio
-3. **`PROJECT_DECISIONS.md`** sezione "Session 71-74" — ragionamento e decisioni di prodotto
-4. **`TASKS.md`** sezione "SECURITY TECH DEBT" → riga "Infrastruttura reale non ancora provisionata" — stato aggiornato del gap AWS SES
+2. **`TASKS.md`** Session Log riga 76 — dettaglio completo
+3. **`PROJECT_DECISIONS.md`** sezione "Session 76" — le decisioni chiave (durata trial 7gg, cron vs EventBridge, la scoperta sulle migration non self-contained)
+4. **`docs/superpowers/plans/2026-07-17-code-review-fixes.md`** — il piano eseguito (12 task)
 
 ```bash
-cd "/Users/diegofalletti/DATAXIOM/Dataxiom – Analisi & BI/badge"
-git log --oneline -5
-git status   # verificare che non ci siano modifiche pendenti
+cd "/Users/diegofalletti/DATAXIOM/Dataxiom – Analisi & BI/badge/.claude/worktrees/code-review-fixes"
+git log --oneline e236667..HEAD   # i 13 commit del branch
+git status                        # deve essere pulito
 ```
 
-**Per riprendere:** nessun lavoro di codice è in sospeso. L'unico blocco è operativo — attendere che l'utente clicchi il link di verifica email AWS SES (inviato a `diego@dataxiom.it`, status `Pending` all'ultimo controllo). Dopo la conferma, ritestare il form "Parliamo" della demo (`/prova-demo` → banner → "Parliamo") end-to-end, sia in locale che in produzione.
+**Per riprendere:** eseguire `superpowers:finishing-a-development-branch` — l'opzione naturale è Push+PR (il branch è già pushato, manca `gh pr create`). Dopo l'apertura della PR, **guardare il run CI**: è la prima volta che il job backend gira con un Postgres reale — se emergono fallimenti non riproducibili in locale, sono da riportare senza fix creativi (istruzione esplicita del piano). Dopo il merge: deploy frontend Netlify esplicito (i fix timer/saldi/copy sono frontend, non deployano da soli) — procedura in memoria `feedback_deployment_procedure.md`.
 
 ---
 
-## Cosa è successo in queste sessioni
+## Cosa è stato fatto
 
-### Fix RBAC cross-tenant `/api/admin/*` — LIVE in produzione (Session 71/71b)
-Nuovo ruolo `superadmin` (migration 031) per le operazioni cross-tenant riservate allo staff Dataxiom; `admin` ora sempre scopato al proprio `client_id`. Rollout a 2 fasi pianificato per evitare rischi di sequenza, ma il deploy è partito **automaticamente** al merge della PR (CI/CD senza gate manuale) prima che un account fosse promosso — gestito in tempo reale, nessun impatto sui dati. Creato account dedicato **`superuser@dataxiom.it` / `Superuser1975`** (credenziale in memoria `superadmin_production_account_2026_07_16.md`). **Bug reale scoperto**: email `@badge.local` non può mai autenticarsi come account DB reale (hardcoded a fixture in `routes/auth.js`).
+### Review (nessuna vulnerabilità critica attiva)
+Verificato esplicitamente: 0 SQL injection, 0 secret hardcoded, no stack-leak, JWT verificati, paginazione, trust proxy. Score tool: backend 78.7/C, frontend 86.7/B (penalizzati da funzioni lunghe, non da difetti). 3 bug nuovi: timer `navigate` orfani, tab Saldi con ID troncati, catch silenzioso su logout.
 
-### QA funnel demo self-service (Session 72)
-Nessun tool di browser automation disponibile in questo ambiente — QA fatta via API reali + lettura codice. Tutto funziona. **2 bug documentati, non ancora fixati**: durata trial incoerente (backend 7gg, copy frontend "14 giorni"), placeholder grigi al posto di screenshot reali su `/prova-demo`.
+### I 13 commit del branch (base `e236667`)
+| Commit | Contenuto |
+|---|---|
+| `6bc1397` | Timer navigate illness ×2 (TDD, nuovo test file) |
+| `f6fcd77` | Timer minori leave ×2 + corrections |
+| `9e92dc2` | NavBar logout catch → logger.warn |
+| `c1214d6` | Saldi backend: JOIN employees, chiave `name` nel payload (TDD Postgres reale) |
+| `73533c1` | Saldi frontend: usa `saldiData.name` (TDD) |
+| `1ef5071` | Copy trial 7 giorni (2 pagine, micro-copy GDPR riformulato) |
+| `883ea7b` | PUT /admin/sites/:id percorso superadmin (TDD, audit col tenant della sede) |
+| `20da741` | Helper `resolveTenantScope` + client_id opzionale schemi admin (+6 test) |
+| `af9f4b8` | DELETE admin uniformati a 404 NotFoundError |
+| `7057009` | Rimozione dead code axiosInterceptor (App.jsx sganciato) |
+| `9e66b91` | CI: service Postgres 14 + bootstrap schema + migrations + migration 019a |
+| `1e8455b` | Migration 026 riscritta resiliente su DB freschi |
+| `7c6308f` | Sweep finale: timer AdminIllnessManagement + ChangePasswordPage, hook useTokenRefresh morto rimosso |
 
-### 4 modifiche UX + scoperta gap AWS SES (Session 73-74)
-1. Grafico trend: etichette X a **-45°**.
-2. Saldo ferie residuo per tipologia (Ferie 1/2/3) in `EmployeeLeaveRequest.jsx`/`ManagerLeaveRequest.jsx` — riusato un endpoint backend già esistente (`GET /api/v1/leave/balance`) mai chiamato dal frontend.
-3. Email destinatario form "Parliamo" → `diego@dataxiom.it` (SSM produzione). **L'utente ha verificato che non arrivava** — indagine ha rivelato che **AWS SES non ha nessuna identità verificata ed è in modalità Sandbox** (confermato con `aws ses list-identities` / `aws sesv2 get-account`, non supposizione). Fix rapido applicato: `diego@dataxiom.it` verificato come mittente+destinatario (funziona solo verso quell'indirizzo, non verso prospect reali).
-4. Titolo hero `/prova-demo` → "...negozio/attività/azienda...".
+### Produzione (Task 11, autorizzato esplicitamente)
+Cron su EC2 (`crontab` host) alle 3:30 UTC: `docker exec badge-system-api bash -c 'source /etc/badge/.env && node /app/scripts/cleanup-expired-demos.js'` → log `/home/ubuntu/cleanup-demos.log`. Chiude il gap GDPR (dati prospect scaduti mai cancellati prima). Run manuale verificato (0 tenant, idempotente). Preservato il cron retention preesistente delle 2:00.
 
-Commit `6048adb` pushato su `main`, poi pubblicato su Netlify (`badge.dataxiom.it`) seguendo la procedura documentata (build locale + `netlify deploy --prod` esplicito, mai `git push` come trigger).
+### Suite finali
+Backend **599 passed / 14 skip / 0 fail** (dopo pulizia stato residuo — vedi sotto), frontend **235 passed / 1 skip** (conteggio sceso per i test del codice morto rimosso), build pulita, catena migration da zero verde 2×.
 
 ---
 
 ## What Worked
 
-- **Verificare con evidenza diretta prima di agire**: invece di assumere "SES non è configurato" come sospetto generico, ho interrogato AWS direttamente (`list-identities`, `get-account`) e trovato la causa esatta — ha permesso di dare all'utente un fix mirato (verifica indirizzo singolo) invece di un setup completo non richiesto in quel momento.
-- **Chiedere esplicitamente prima di ogni azione in produzione** (SSM put-parameter, riavvio container EC2, verifica identità SES) — pattern ormai consolidato in questo progetto, mai violato.
-- Il pattern "riusa endpoint backend già esistente prima di scriverne uno nuovo" ha funzionato di nuovo (saldo ferie: `GET /api/v1/leave/balance` esisteva già, solo mai wired nel frontend) — zero lavoro backend necessario.
+- **Il subagent che rifiuta di fabbricare dati**: il Task 12 ha scoperto che la migration 026 referenzia 9 dipendenti mai versionati (esistono solo in produzione RDS) — l'implementer ha escalato invece di inventare dati per far passare la CI. La soluzione giusta (026 resiliente via `INSERT..SELECT..JOIN employees`) è emersa solo perché il coordinatore ha verificato come il runner traccia le migration (per filename, mai per checksum → modificare il corpo è sicuro).
+- **Attribuzione definitiva del flake `auth-refresh-first-use`** (aperto da Session 65): è stato residuo `revoked_tokens`/`used_tokens` nel DB test, dimostrato con pulizia+rerun identico su base e branch. Mai stato un bug del codice.
+- Verifica diretta del coordinatore sui task banali (copy, error code) invece di reviewer dedicati — più veloce senza perdere rigore; review subagent piene sui task RBAC/sicurezza.
 
 ## What Didn't Work / Attenzione
 
-- **Non fidarsi ciecamente di un fix "impostato" senza verifica end-to-end reale**: aver impostato `DEMO_CONTACT_NOTIFY_EMAIL` in Session 73 sembrava sufficiente, ma senza un test reale del form (fatto dall'utente, non da me) il gap SES sarebbe rimasto invisibile. Lezione: quando possibile, testare il percorso completo (invio reale), non solo che la configurazione sia "presente".
-- `backend/.env.development` **non è tracciato da git** (`.gitignore` pattern `.env.*`) nonostante il proprio commento interno dica il contrario — le modifiche fatte lì (SES_FROM_EMAIL, DEMO_CONTACT_NOTIFY_EMAIL per test locali) esistono solo su questo disco locale. Non ho forzato l'aggiunta (`git add -f`) senza autorizzazione esplicita — se si vuole risolvere l'incoerenza, va deciso con l'utente se correggere il commento o il `.gitignore`.
+- **Outage del classifier** (2 volte) ha bloccato Agent+Bash a metà esecuzione — gestito con review inline del coordinatore, dichiarate come deviazione (precedente Session 71).
+- **Session limit** ha ucciso il fix-subagent della 026 a metà (modifica non committata, non verificata) — completato dal coordinatore con verifica propria da zero. Lezione: dopo un crash di subagent, SEMPRE `git status` per capire cosa è rimasto a metà.
+- **Modifica spuria su main**: il subagent haiku del Task 3 ha applicato il fix NavBar anche sul checkout principale oltre che sul worktree — trovata e scartata (il fix vero è sul branch). Lezione: dopo sessioni con subagent, controllare `git status` anche sul checkout principale.
+- Backlog nuovo dal review finale: il `sed '1,17d'` in ci.yml per il bootstrap di schema.sql è fragile (numero di righe hardcoded — si rompe silenziosamente se qualcuno tocca l'header di schema.sql).
 
 ---
 
 ## Prossimi step
 
-### Immediato (bloccante)
-- **Attendere che l'utente clicchi il link di verifica AWS SES** (email a `diego@dataxiom.it`).
-- Ritestare il form "Parliamo" end-to-end (locale e/o produzione) dopo la conferma.
+### Immediato
+1. `finishing-a-development-branch` → aprire PR (`gh pr create` — branch già pushato), **guardare il run CI** (primo giro del job Postgres reale)
+2. Merge dopo CI verde
+3. Deploy frontend Netlify esplicito (fix timer/saldi/copy sono frontend)
 
-### Prima di mostrare la demo a un prospect reale (non bloccante per l'uso interno)
-- Setup SES completo: verifica dominio `dataxiom.it` via DNS + richiesta uscita da Sandbox ad AWS — senza questo, il form di contatto funziona solo verso `diego@dataxiom.it`, non verso un prospect reale.
-- Fix dei 2 bug trovati in QA (Session 72): durata trial "14 giorni" vs 7 reali, screenshot reali per "Cosa vedrai" invece dei placeholder.
-- Verifica IAM `ses:SendEmail` sul ruolo EC2, regola EventBridge Scheduler per `cleanup-expired-demos.js`, `MAX_ACTIVE_DEMOS` in produzione.
-
-### Backlog tecnico non bloccante
-Vedi `TASKS.md` sezione "SECURITY TECH DEBT" → "Backlog tecnico dal fix RBAC" e "Valutazione critica post-merge" per l'elenco completo con stime ore.
+### Backlog aggiornato (non bloccante)
+- Automatizzare la pulizia `revoked_tokens`/`used_tokens` pre-suite (elimina il flake ricorrente)
+- Rendere robusto il bootstrap schema.sql in ci.yml (marker invece di `sed '1,17d'`)
+- `logger.warn` frontend non normalizza gli oggetti Error come fa `logger.error` (minor, trovato in review Task 3)
+- Al 4° call-site del pattern timer: estrarre hook condiviso `useRedirectTimeout`
+- Restano da prima: SES setup completo (dominio+Sandbox exit), screenshot demo, S.26 GPS (trigger-based), httpOnly cookie (C.5.3)
 
 ---
 
 ## Note operative
 
-- Server locali (`localhost:3000` backend, `localhost:5173` frontend) potrebbero essere ancora attivi da questa sessione — verificare con `lsof -ti:3000` / `lsof -ti:5173` prima di riavviarli.
-- Ambiente produzione: container `badge-system-api` su EC2 riavviato 2 volte in questa sessione (SSM param changes), sano all'ultimo controllo.
-- Vedi `PROJECT_DECISIONS.md` sezione "Session 71-74" per il dettaglio completo del ragionamento dietro ogni decisione.
-
----
-
-Per riprendere: leggi questo file, controlla se l'utente ha confermato la verifica email SES, poi ritesta il form di contatto. Se confermato e funzionante, il prossimo lavoro naturale è uno dei 2 bug di QA (Session 72) o il setup SES completo per prospect reali.
+- Worktree: `.claude/worktrees/code-review-fixes` (branch `worktree-code-review-fixes`, tracking remoto attivo)
+- Il flake test si previene con: `psql -U postgres -h localhost -d badge_system_test -c "DELETE FROM revoked_tokens; DELETE FROM used_tokens;"` prima della suite
+- Cron produzione attivi su EC2: 2:00 UTC retention audit-log (preesistente), 3:30 UTC cleanup demo (nuovo)

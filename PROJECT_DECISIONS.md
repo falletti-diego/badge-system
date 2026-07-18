@@ -1,8 +1,55 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 17 Luglio 2026 (Session 71-74 — RBAC cross-tenant fixato e LIVE, QA funnel demo, 4 modifiche UX + setup AWS SES + deploy Netlify)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Fix RBAC cross-tenant `/api/admin/*` ✅ LIVE (ruolo `superadmin` creato, account dedicato `superuser@dataxiom.it`) | Ambiente Demo Self-Service ✅ LIVE (`/prova-demo`), QA funzionale completata | Grafico Trend etichette verticali ✅ LIVE | Saldo ferie residuo per tipologia ✅ LIVE | AWS SES — identità `diego@dataxiom.it` verificata (Sandbox, in attesa conferma email) | Pipeline CI/CD ✅ funzionante (backend + mobile)  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Confermare la verifica email SES (azione utente), poi valutare se completare il setup SES (dominio + uscita da Sandbox) prima di mostrare la demo a un prospect reale con form di contatto funzionante
+**Last Updated:** 18 Luglio 2026 (Session 76 — code review completa della codebase + piano fix 12/12 task su branch `worktree-code-review-fixes`, pushato, PR da aprire)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ ATTIVO su EC2 (3:30 UTC, gap GDPR chiuso) | **Branch code-review-fixes ⏳ pushato, NON mergiato** (13 commit: 3 bug nuovi + tech-debt consolidato + CI con Postgres reale + migration chain resa self-contained) | Pipeline CI/CD ✅ funzionante  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Aprire la PR del branch code-review-fixes (la CI col nuovo job Postgres si verifica lì), merge, poi deploy frontend Netlify per i fix visibili; restano SES setup completo e screenshot demo prima di un prospect reale
+
+---
+
+## Session 76 — Code review completa + piano fix 12 task eseguito, branch pronto per PR (17-18 Luglio 2026)
+
+### Contesto
+Su richiesta dell'utente: review approfondita di tutto il codice sviluppato (skill `/code-reviewer`: tool deterministici + regole universal/TypeScript + review manuale mirata sui file critici per sicurezza), poi piano di fix per i 3 bug nuovi trovati e il consolidamento del tech-debt tracciato, eseguito con `/superpowers:subagent-driven-development` in worktree isolato.
+
+### Esito della review (~20.6k LOC di produzione)
+Nessuna vulnerabilità critica attiva — verificato esplicitamente, non assunto: 0 interpolazioni SQL, 0 secret hardcoded, error handler senza stack-leak, JWT sempre verificati, paginazione presente, `trust proxy` corretto. 3 bug nuovi (tutti di robustezza frontend/UX, nessuno di sicurezza): timer `navigate` orfani, tab Saldi con ID troncati, catch silenzioso sul logout. Il grosso del valore è stato il consolidamento sistematico del debito già noto.
+
+### Decisioni di piano (grilling)
+1. **Perimetro**: fix di codice + infra demo (cron cleanup, CI Postgres); ESCLUSI deliberatamente: uscita SES da Sandbox (serve DNS utente), S.26 GPS (piano dedicato), httpOnly cookie (C.5.3), screenshot demo (servono immagini).
+2. **Durata trial: 7 giorni** — corretto il copy, non il backend (il "14" nel copy nasceva dalla confusione trial vs finestra totale di ritenzione 7+7; il micro-copy GDPR riformulato per distinguere le due cose).
+3. **Scheduler cleanup: cron sull'host EC2** (non EventBridge) — coerente col pattern retention già esistente (cron delle 2:00 preesistente, preservato).
+
+### Scoperta strutturale del Task 12 (la più importante della sessione)
+Le migration del progetto **non erano self-contained**: nessuna crea le tabelle base (vivono solo in `schema.sql`, applicato a mano in produzione all'inizio), e la seed-migration 026 referenzia 9 dipendenti creati via import CSV concierge direttamente in produzione, mai versionati ("Andrea Conti"/"Luca Verdi" nel repo sono dataset DIVERSI con UUID diversi). Ogni DB fresco (CI, laptop nuovo) rompeva la catena con una violazione FK. Il subagent ha correttamente **rifiutato di fabbricare i dati mancanti** e ha escalato. Soluzione del coordinatore, verificata sul funzionamento reale del runner: `run-migrations.js` traccia le migration applicate **solo per filename** (il checksum non è mai popolato) → riscrivere il corpo della 026 è sicuro (produzione non la rieseguirà mai) e cambia solo il comportamento sui DB freschi. 026 riscritta come `INSERT..SELECT..JOIN employees` (seeda solo dipendenti esistenti), + migration 019a di catch-up per Maria Rossi (unico dipendente ricostruibile da una fonte versionata: la fixture `DEMO_USERS`). Catena verificata da zero 2 volte, idempotente.
+
+### Flake `auth-refresh-first-use` — attribuzione definitiva
+Il fallimento intermittente che accompagna il progetto da Session 65 è stato riprodotto e attribuito con certezza: **stato residuo `revoked_tokens`/`used_tokens` nel DB di test** lasciato dai run precedenti (l'ID di Maria Rossi è condiviso con la fixture demo per design, migration 022). Dopo la pulizia, suite 100% verde sia su base che su branch — non è mai stato un bug del codice. La pulizia pre-run andrebbe automatizzata (backlog).
+
+### Processo
+12 task, ciascuno con implementer subagent + review (spec+quality). Deviazioni dichiarate: 2 review fatte inline dal coordinatore durante un outage del classifier (precedente Session 71); il fix-subagent della 026 ucciso a metà dal session limit e completato dal coordinatore con verifica propria. Review finale olistica: "Ready to merge", 3 minor di cui 2 fixati subito (sweep timer esteso a AdminIllnessManagement/ChangePasswordPage, hook `useTokenRefresh` orfano rimosso) e 1 a backlog (sed `1,17d` fragile in ci.yml per il bootstrap di schema.sql). Trovata e scartata una modifica spuria del Task 3 sul checkout main (subagent haiku aveva toccato entrambe le copie di NavBar.jsx).
+
+**Stato**: branch `worktree-code-review-fixes` pushato (13 commit), NON ancora mergiato. La verifica CI del nuovo job Postgres avverrà all'apertura della PR (la CI si attiva solo su PR/push verso main). Cron di produzione già attivo (Task 11, autorizzato esplicitamente).
+
+---
+
+## Session 75 — Form "Parliamo" FUNZIONANTE in produzione: trovato un secondo gap AWS, permesso IAM mancante (17 Luglio 2026)
+
+### Contesto
+L'utente ha cliccato il link di verifica AWS SES arrivato a `diego@dataxiom.it` (Session 74) e riconfermato con `aws ses get-identity-verification-attributes` → `VerificationStatus: Success`. Testando però il form "Parliamo" su `https://badge.dataxiom.it/prova-demo`, l'email continuava a non arrivare — mentre in locale funzionava perfettamente.
+
+### Causa reale: permesso IAM mancante, non un problema SES
+I log del container (`docker logs badge-system-api`) hanno mostrato l'errore esatto: `User 'arn:aws:sts::...assumed-role/badge-system-ec2-ecr-role/...' is not authorized to perform 'ses:SendEmail'`. Verificato con `aws iam list-attached-role-policies`/`list-role-policies` sul ruolo dell'istanza EC2: **nessuna policy SES era mai stata allegata** (solo CloudWatch, SSM read, ECR read-only). Il locale funzionava perché le credenziali AWS personali dell'utente hanno accesso pieno — la produzione gira con un ruolo IAM separato e deliberatamente più ristretto, che semplicemente non aveva mai avuto il permesso di inviare email.
+
+### Fix — policy IAM scoped, non un accesso SES completo
+Autorizzato esplicitamente dall'utente prima dell'esecuzione: `aws iam put-role-policy` con una policy inline (`BadgeSESSendEmail`) che concede solo `ses:SendEmail`/`ses:SendRawEmail`, risorsa limitata a `arn:aws:ses:eu-west-1:125579685235:identity/*` — non `AmazonSESFullAccess` o un ARN più ampio, minimo privilegio necessario.
+
+### Verifica — bypassato il rate-limit del funnel per testare direttamente il path di codice reale
+I primi 2 tentativi via il funnel demo reale hanno continuato a fallire per qualche decina di secondi (propagazione IAM non istantanea, comportamento normale AWS), fino a esaurire il rate-limit dell'endpoint (`RATE_LIMIT_EXCEEDED`, 3 richieste/ora per IP — impedendo ulteriori tentativi via `/demo/start`). Bypassato eseguendo lo stesso identico path di codice (`SESClient.send(SendEmailCommand)`) direttamente dentro il container via `docker exec`, senza passare dal funnel — confermato `SendEmail` riuscito con un `MessageId` valido restituito da AWS. Nessun riavvio container necessario: i permessi IAM si applicano alle richieste successive senza bisogno di un refresh esplicito delle credenziali.
+
+### Stato finale
+Il form "Parliamo" ora consegna davvero l'email in produzione — verso `diego@dataxiom.it` (SES resta in modalità Sandbox: funziona solo verso indirizzi pre-verificati, non ancora verso prospect reali). Per sbloccare l'invio verso qualunque prospect serve ancora il setup SES completo (verifica dominio `dataxiom.it` via DNS + richiesta di uscita dal Sandbox ad AWS) — rimandato su scelta esplicita dell'utente, non bloccante per l'uso interno.
+
+**Lezione**: un fix "configurato" (variabile impostata, identità SES verificata) non garantisce che il percorso end-to-end funzioni davvero in produzione — solo un test reale contro l'ambiente di produzione (non solo locale) ha rivelato questo secondo gap, indipendente dal primo e mascherato dal fatto che localmente tutto sembrava a posto.
 
 ---
 
