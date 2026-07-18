@@ -1,8 +1,21 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 18 Luglio 2026 (Session 76b — PR #5 code-review-fixes MERGIATA e LIVE: backend deployato via pipeline, frontend su Netlify, CI col job Postgres reale verde)  
+**Last Updated:** 18 Luglio 2026 (Session 76c — micro-manutenzione test/CI: flake token risolto alla radice, marker bootstrap CI, root cause hang Jest = pg-pool `min`, `--forceExit` rimosso; pushato, CI+deploy verdi)  
 **Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ ATTIVO su EC2 (3:30 UTC, gap GDPR chiuso — primo run automatico da verificare) | **Code review fixes ✅ MERGIATI e LIVE** (PR #5: 3 bug nuovi + tech-debt consolidato + CI con Postgres reale + migration chain self-contained) | Pipeline CI/CD ✅ funzionante (backend job con Postgres 14 reale, `--forceExit` + timeout 15min)  
 **MVP Launch Target:** Settembre 2026 | **Current Phase:** Tornare al prodotto — SES setup completo (dominio + Sandbox exit, serve DNS utente) e screenshot demo prima di un prospect reale; micro-manutenzione in coda (pulizia token pre-suite, marker bootstrap schema.sql, indagine handle CI)
+
+---
+
+## Session 76c — Micro-manutenzione: root cause del hang Jest = pg-pool `min` (18 Luglio 2026)
+
+### Scoperta tecnica chiave (vale la pena ricordarla)
+**pg-pool arma il timer di eviction `idleTimeoutMillis` solo quando il pool è SOPRA `min`** (`_isAboveMin()` nella sorgente). Con `DB_POOL_MIN=1`, l'ultimo client idle del pool condiviso di `app.js` non viene mai evitto né unref'd → il socket tiene vivo l'event loop → jest non esce mai dopo il summary. Conseguenze pratiche scoperte: (a) il hang c'era **anche in locale** da tempo (trovato un processo jest zombie del giorno prima) ma nessuno lo notava perché il summary viene stampato prima dell'exit; (b) `--detectOpenHandles` non lo segnala perché l'handle nasce a livello di modulo, non dentro un test. Metodo di diagnosi che ha funzionato: `lsof -p` sul processo appeso (socket ESTABLISHED oltre la finestra idle) + `pg_stat_activity` (state `idle`, last query `COMMIT` → il client ERA stato rilasciato, quindi il problema era l'eviction) + lettura diretta della sorgente pg-pool.
+
+### Decisioni
+1. **Fix alla radice, non workaround**: `allowExitOnIdle: NODE_ENV === 'test'` in `pool.js` (pg-pool fa `unref()` sui client idle → il processo test può uscire; in dev/prod irrilevante perché `server.listen` tiene vivo il processo). Di conseguenza **`--forceExit` rimosso** dalla CI: gli open-handle futuri tornano rilevabili. `timeout-minutes: 15` resta come rete di sicurezza.
+2. **Flake token: pulizia in `globalSetup`** (non in `setupFiles`): gira una volta in un processo singolo prima di qualunque worker — una pulizia per-file avrebbe creato race con i worker paralleli che inseriscono token durante i test.
+3. **Marker esplicito `-- BOOTSTRAP:BEGIN` in schema.sql** con guard che fa fallire la CI se sparisce — un taglio a numero di righe fisso si rompe in silenzio, un marker mancante urla.
+4. Push subito dopo la verifica locale (lezione Session 41: mai accumulare commit) — CI verde alla prima (job backend 1.5 min = marker ok + exit pulito), deploy EC2 ok, `/health` ok.
 
 ---
 
