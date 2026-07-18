@@ -16,6 +16,8 @@ jobs:
   backend:
     name: Backend - Lint & Test
     runs-on: ubuntu-latest
+    # Fail fast if jest ever hangs at exit again instead of burning the 6h runner limit
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -101,7 +103,10 @@ jobs:
           CORS_ORIGIN: http://localhost:5173
           DISABLE_AUTH: 'true'
           SEED_TEST_DATA: 'false'
-        run: npm test -- --coverage
+        # --forceExit: on CI runners jest hangs after "Ran all test suites" on an
+        # open handle not reproducible locally (all tests pass in <1min). Safe here
+        # because the process is ephemeral; local runs keep --detectOpenHandles.
+        run: npm test -- --coverage --forceExit
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
