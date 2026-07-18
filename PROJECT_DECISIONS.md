@@ -1,8 +1,21 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 18 Luglio 2026 (Session 76 — code review completa della codebase + piano fix 12/12 task su branch `worktree-code-review-fixes`, pushato, PR da aprire)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ ATTIVO su EC2 (3:30 UTC, gap GDPR chiuso) | **Branch code-review-fixes ⏳ pushato, NON mergiato** (13 commit: 3 bug nuovi + tech-debt consolidato + CI con Postgres reale + migration chain resa self-contained) | Pipeline CI/CD ✅ funzionante  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Aprire la PR del branch code-review-fixes (la CI col nuovo job Postgres si verifica lì), merge, poi deploy frontend Netlify per i fix visibili; restano SES setup completo e screenshot demo prima di un prospect reale
+**Last Updated:** 18 Luglio 2026 (Session 76b — PR #5 code-review-fixes MERGIATA e LIVE: backend deployato via pipeline, frontend su Netlify, CI col job Postgres reale verde)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ ATTIVO su EC2 (3:30 UTC, gap GDPR chiuso — primo run automatico da verificare) | **Code review fixes ✅ MERGIATI e LIVE** (PR #5: 3 bug nuovi + tech-debt consolidato + CI con Postgres reale + migration chain self-contained) | Pipeline CI/CD ✅ funzionante (backend job con Postgres 14 reale, `--forceExit` + timeout 15min)  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Tornare al prodotto — SES setup completo (dominio + Sandbox exit, serve DNS utente) e screenshot demo prima di un prospect reale; micro-manutenzione in coda (pulizia token pre-suite, marker bootstrap schema.sql, indagine handle CI)
+
+---
+
+## Session 76b — PR #5 mergiata e LIVE, hang Jest in CI risolto (18 Luglio 2026)
+
+### Decisioni
+1. **Chiusura branch: Push + PR (non merge locale)** — scelta utente su raccomandazione: la CI col nuovo job Postgres si attiva solo su PR/push verso `main`, quindi la PR era l'unico modo di verificarla prima del merge; coerente col processo delle PR precedenti (#3, #4).
+2. **Hang Jest in CI → `--forceExit` solo in CI + `timeout-minutes: 15`** — al primo run i test sono passati tutti (599/613 in 47s) ma Jest è rimasto appeso ~4h dopo "Ran all test suites" su un handle aperto presente solo sui runner GitHub (sospetti nel codice indagati ed esclusi: interval `unref()`, pool chiusi, Redis retry limitato; non riproducibile in locale). Rimedio canonico confinato a ci.yml: il comando locale conserva `--detectOpenHandles`, il job CI non può più superare 15 minuti. L'indagine sull'handle vero è a backlog, non bloccante.
+3. **Merge autorizzato dall'utente** (`39cb228`) sapendo che attiva il deploy backend automatico → pipeline ECR→EC2 riuscita; smoke test produzione ok (health, login). Deploy frontend Netlify esplicito subito dopo, copy e chip saldi verificati nel bundle pubblicato.
+4. **Superadmin e saldi ferie: lasciato fail-closed** — lo smoke test ha mostrato che `GET /leave/admin/saldi` risponde 403 al superadmin: è il guard preesistente `role !== 'admin'`, non una regressione della PR (verificato nel codice). Decisione di prodotto rimandata: estendere col pattern `resolveTenantScope` solo se/quando il back-office Dataxiom dovrà assistere i clienti sui saldi.
+
+### Nota operativa
+La risposta di `POST /auth/login` usa la chiave `data.token` (non `data.access_token`).
 
 ---
 

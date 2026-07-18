@@ -1,97 +1,72 @@
-# Badge System — Session 76 Handoff
+# Badge System — Session 76b Handoff
 
 **Date:** 2026-07-18
-**Session:** 76 — Code review completa della codebase (skill `/code-reviewer`) + piano fix eseguito: 12/12 task con subagent-driven-development
-**Status:** ⏳ **Branch `worktree-code-review-fixes` pushato (13 commit), NON ancora mergiato.** Prossimo passo: aprire la PR verso `main` — la verifica CI del nuovo job Postgres avviene lì (la CI si attiva solo su PR/push verso main). Decisione merge in sospeso (finishing-a-development-branch).
+**Session:** 76b — PR #5 (code-review-fixes) mergiata e deployata in produzione, backend + frontend
+**Status:** ✅ **Ciclo code review completamente chiuso.** Nessun lavoro in sospeso su branch: tutto mergiato in `main` e LIVE.
 
 ---
 
 ## Goal
 
-Review approfondita di tutto il codice sviluppato (~20.6k LOC di produzione), poi fix dei 3 bug nuovi trovati e consolidamento del tech-debt tracciato, in un unico branch di lavoro.
+Chiudere il branch `worktree-code-review-fixes` (13 commit, Session 76): PR, verifica CI col nuovo job Postgres reale, merge, deploy backend e frontend, verifica in produzione.
 
 ---
 
 ## Come riprendere (leggi in quest'ordine)
 
 1. **Questo file**
-2. **`TASKS.md`** Session Log riga 76 — dettaglio completo
-3. **`PROJECT_DECISIONS.md`** sezione "Session 76" — le decisioni chiave (durata trial 7gg, cron vs EventBridge, la scoperta sulle migration non self-contained)
-4. **`docs/superpowers/plans/2026-07-17-code-review-fixes.md`** — il piano eseguito (12 task)
+2. **`TASKS.md`** Session Log righe 76b e 76
+3. **`PROJECT_DECISIONS.md`** sezioni "Session 76b" e "Session 76"
 
-```bash
-cd "/Users/diegofalletti/DATAXIOM/Dataxiom – Analisi & BI/badge/.claude/worktrees/code-review-fixes"
-git log --oneline e236667..HEAD   # i 13 commit del branch
-git status                        # deve essere pulito
-```
-
-**Per riprendere:** eseguire `superpowers:finishing-a-development-branch` — l'opzione naturale è Push+PR (il branch è già pushato, manca `gh pr create`). Dopo l'apertura della PR, **guardare il run CI**: è la prima volta che il job backend gira con un Postgres reale — se emergono fallimenti non riproducibili in locale, sono da riportare senza fix creativi (istruzione esplicita del piano). Dopo il merge: deploy frontend Netlify esplicito (i fix timer/saldi/copy sono frontend, non deployano da soli) — procedura in memoria `feedback_deployment_procedure.md`.
+Non c'è nessun worktree/branch attivo da riprendere: `main` è la fonte di verità e coincide con la produzione. Il worktree `.claude/worktrees/code-review-fixes` esiste ancora ma è mergiato — rimuovibile con `git worktree remove` quando si vuole.
 
 ---
 
 ## Cosa è stato fatto
 
-### Review (nessuna vulnerabilità critica attiva)
-Verificato esplicitamente: 0 SQL injection, 0 secret hardcoded, no stack-leak, JWT verificati, paginazione, trust proxy. Score tool: backend 78.7/C, frontend 86.7/B (penalizzati da funzioni lunghe, non da difetti). 3 bug nuovi: timer `navigate` orfani, tab Saldi con ID troncati, catch silenzioso su logout.
-
-### I 13 commit del branch (base `e236667`)
-| Commit | Contenuto |
-|---|---|
-| `6bc1397` | Timer navigate illness ×2 (TDD, nuovo test file) |
-| `f6fcd77` | Timer minori leave ×2 + corrections |
-| `9e92dc2` | NavBar logout catch → logger.warn |
-| `c1214d6` | Saldi backend: JOIN employees, chiave `name` nel payload (TDD Postgres reale) |
-| `73533c1` | Saldi frontend: usa `saldiData.name` (TDD) |
-| `1ef5071` | Copy trial 7 giorni (2 pagine, micro-copy GDPR riformulato) |
-| `883ea7b` | PUT /admin/sites/:id percorso superadmin (TDD, audit col tenant della sede) |
-| `20da741` | Helper `resolveTenantScope` + client_id opzionale schemi admin (+6 test) |
-| `af9f4b8` | DELETE admin uniformati a 404 NotFoundError |
-| `7057009` | Rimozione dead code axiosInterceptor (App.jsx sganciato) |
-| `9e66b91` | CI: service Postgres 14 + bootstrap schema + migrations + migration 019a |
-| `1e8455b` | Migration 026 riscritta resiliente su DB freschi |
-| `7c6308f` | Sweep finale: timer AdminIllnessManagement + ChangePasswordPage, hook useTokenRefresh morto rimosso |
-
-### Produzione (Task 11, autorizzato esplicitamente)
-Cron su EC2 (`crontab` host) alle 3:30 UTC: `docker exec badge-system-api bash -c 'source /etc/badge/.env && node /app/scripts/cleanup-expired-demos.js'` → log `/home/ubuntu/cleanup-demos.log`. Chiude il gap GDPR (dati prospect scaduti mai cancellati prima). Run manuale verificato (0 tenant, idempotente). Preservato il cron retention preesistente delle 2:00.
-
-### Suite finali
-Backend **599 passed / 14 skip / 0 fail** (dopo pulizia stato residuo — vedi sotto), frontend **235 passed / 1 skip** (conteggio sceso per i test del codice morto rimosso), build pulita, catena migration da zero verde 2×.
-
----
+1. **PR #5 aperta** (scelta utente: Push+PR, per verificare la CI prima del merge) — https://github.com/falletti-diego/badge-system/pull/5
+2. **Primo run CI: test tutti verdi ma Jest appeso.** 599/613 passed in 47s (prima esecuzione in assoluto dei test DB-dependent in CI: bootstrap schema ✓, migrations ✓), poi hang di ~4h dopo "Ran all test suites" su un handle aperto presente solo sui runner GitHub. Sospetti nel codice indagati ed esclusi (interval rate-limiter già `unref()`, pool dei test chiusi in `afterAll`, Redis retry limitato a 3). Non riproducibile in locale.
+3. **Fix CI (`ede40e0`, solo ci.yml)**: `--forceExit` sul comando test in CI (il locale conserva `--detectOpenHandles`) + `timeout-minutes: 15` sul job. Run di verifica verde.
+4. **Merge (`39cb228`)** autorizzato dall'utente → deploy backend automatico ECR→EC2 riuscito.
+5. **Smoke test produzione**: `/health` ok (DB 5ms), login `superuser@dataxiom.it` ok. Il 403 del superadmin su `GET /leave/admin/saldi` è fail-closed preesistente (`role !== 'admin'`), non regressione — decisione di prodotto a backlog.
+6. **Deploy frontend Netlify** esplicito (build + `netlify deploy --prod --dir dist --site 29a79b49-5571-4249-8c2b-d0813de4bf17`) — verificato nel bundle pubblicato: copy "7 giorni di prova"/"dura 7 giorni" e chip "gg disponibili" presenti su badge.dataxiom.it.
 
 ## What Worked
 
-- **Il subagent che rifiuta di fabbricare dati**: il Task 12 ha scoperto che la migration 026 referenzia 9 dipendenti mai versionati (esistono solo in produzione RDS) — l'implementer ha escalato invece di inventare dati per far passare la CI. La soluzione giusta (026 resiliente via `INSERT..SELECT..JOIN employees`) è emersa solo perché il coordinatore ha verificato come il runner traccia le migration (per filename, mai per checksum → modificare il corpo è sicuro).
-- **Attribuzione definitiva del flake `auth-refresh-first-use`** (aperto da Session 65): è stato residuo `revoked_tokens`/`used_tokens` nel DB test, dimostrato con pulizia+rerun identico su base e branch. Mai stato un bug del codice.
-- Verifica diretta del coordinatore sui task banali (copy, error code) invece di reviewer dedicati — più veloce senza perdere rigore; review subagent piene sui task RBAC/sicurezza.
+- **Insistere sulla PR invece del merge locale**: il primo run CI ha rivelato l'hang di Jest che nessuna verifica locale avrebbe mai mostrato — esattamente il motivo per cui il piano chiedeva di guardare quel run.
+- **Cancellare il run appeso per estrarre i log**: i log GitHub non sono leggibili finché il job è vivo; la cancellazione ha mostrato che i test erano passati e il problema era solo l'exit.
+- Rimedio minimale confinato a ci.yml invece di toccare test o codice: nessun impatto sul comportamento locale.
 
 ## What Didn't Work / Attenzione
 
-- **Outage del classifier** (2 volte) ha bloccato Agent+Bash a metà esecuzione — gestito con review inline del coordinatore, dichiarate come deviazione (precedente Session 71).
-- **Session limit** ha ucciso il fix-subagent della 026 a metà (modifica non committata, non verificata) — completato dal coordinatore con verifica propria da zero. Lezione: dopo un crash di subagent, SEMPRE `git status` per capire cosa è rimasto a metà.
-- **Modifica spuria su main**: il subagent haiku del Task 3 ha applicato il fix NavBar anche sul checkout principale oltre che sul worktree — trovata e scartata (il fix vero è sul branch). Lezione: dopo sessioni con subagent, controllare `git status` anche sul checkout principale.
-- Backlog nuovo dal review finale: il `sed '1,17d'` in ci.yml per il bootstrap di schema.sql è fragile (numero di righe hardcoded — si rompe silenziosamente se qualcuno tocca l'header di schema.sql).
+- `gh run watch` è caduto 2 volte per reset di rete locale — rilanciarlo è innocuo, ma controllare sempre lo stato reale con `gh run view` prima di trarre conclusioni.
+- L'handle che tiene vivo Jest sui runner CI **non è stato identificato** — `--forceExit` è un workaround corretto ma l'indagine è a backlog (bassa priorità: il timeout di 15min protegge da recidive).
+- La risposta di `POST /auth/login` usa `data.token`, non `data.access_token` — errore facile negli script di smoke test.
 
 ---
 
 ## Prossimi step
 
-### Immediato
-1. `finishing-a-development-branch` → aprire PR (`gh pr create` — branch già pushato), **guardare il run CI** (primo giro del job Postgres reale)
-2. Merge dopo CI verde
-3. Deploy frontend Netlify esplicito (fix timer/saldi/copy sono frontend)
+### Immediato (domani, 2 minuti)
+- **Verifica primo run automatico del cron cleanup demo**: `ssh` su EC2 → `cat /home/ubuntu/cleanup-demos.log` (gira alle 3:30 UTC). Se ok, gap GDPR chiuso definitivamente.
 
-### Backlog aggiornato (non bloccante)
-- Automatizzare la pulizia `revoked_tokens`/`used_tokens` pre-suite (elimina il flake ricorrente)
-- Rendere robusto il bootstrap schema.sql in ci.yml (marker invece di `sed '1,17d'`)
-- `logger.warn` frontend non normalizza gli oggetti Error come fa `logger.error` (minor, trovato in review Task 3)
+### Prossima sessione di sviluppo — tornare al prodotto
+1. **SES setup completo** (il più alto valore di business rimasto): verifica dominio dataxiom.it + uscita dalla Sandbox — **serve accesso DNS dell'utente**, da pianificare insieme. Oggi le email demo funzionano solo verso `diego@dataxiom.it`.
+2. **Screenshot reali** nella pagina `/prova-demo` (oggi placeholder grigi).
+
+### Backlog (non bloccante)
+- Decisione prodotto: accesso superadmin ai saldi ferie cross-tenant (pattern `resolveTenantScope` pronto, ~30min quando servirà)
+- Pulizia automatica `revoked_tokens`/`used_tokens` pre-suite (elimina il flake ricorrente; comando: `psql -U postgres -h localhost -d badge_system_test -c "DELETE FROM revoked_tokens; DELETE FROM used_tokens;"`)
+- Marker robusto per il bootstrap di schema.sql in ci.yml (al posto del fragile `sed '1,17d'`)
+- Indagine handle aperto Jest sui runner CI (workaround `--forceExit` attivo)
+- `logger.warn` frontend non normalizza gli oggetti Error come `logger.error`
 - Al 4° call-site del pattern timer: estrarre hook condiviso `useRedirectTimeout`
-- Restano da prima: SES setup completo (dominio+Sandbox exit), screenshot demo, S.26 GPS (trigger-based), httpOnly cookie (C.5.3)
+- Restano da prima: S.26 GPS consent (piano dedicato), httpOnly cookie (C.5.3)
 
 ---
 
 ## Note operative
 
-- Worktree: `.claude/worktrees/code-review-fixes` (branch `worktree-code-review-fixes`, tracking remoto attivo)
-- Il flake test si previene con: `psql -U postgres -h localhost -d badge_system_test -c "DELETE FROM revoked_tokens; DELETE FROM used_tokens;"` prima della suite
-- Cron produzione attivi su EC2: 2:00 UTC retention audit-log (preesistente), 3:30 UTC cleanup demo (nuovo)
+- Cron produzione attivi su EC2: 2:00 UTC retention audit-log, 3:30 UTC cleanup demo
+- Deploy frontend: SEMPRE esplicito via `netlify deploy --prod --dir dist --site 29a79b49-5571-4249-8c2b-d0813de4bf17` (mai git push come trigger)
+- Deploy backend: automatico al push su `main` (pipeline ECR→EC2, nessun gate manuale)
