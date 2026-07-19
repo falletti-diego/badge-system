@@ -55,6 +55,20 @@ describe('TryDemoPage', () => {
     expect(screen.getByText('Export')).toBeInTheDocument();
   });
 
+  test('should render 3 real screenshots (img with alt) instead of grey placeholders', () => {
+    render(
+      <Router>
+        <TryDemoPage />
+      </Router>
+    );
+
+    const shots = screen.getAllByRole('img', { name: /anteprima del prodotto/i });
+    expect(shots).toHaveLength(3);
+    shots.forEach((img) => expect(img).toHaveAttribute('src'));
+    // i placeholder testuali grigi non devono più esistere
+    expect(screen.queryByText(/— anteprima$/)).not.toBeInTheDocument();
+  });
+
   test('should block submit and show inline error on invalid email', async () => {
     render(
       <Router>

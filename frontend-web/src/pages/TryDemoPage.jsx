@@ -9,10 +9,14 @@ import { demoHeroSx, demoGoldButtonSx } from '../components/demoHeroStyles';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+import dashboardShot from '../assets/demo/dashboard.png';
+import trendShot from '../assets/demo/trend.png';
+import exportShot from '../assets/demo/export.png';
+
 const SCREENSHOTS = [
-  { key: 'dashboard', title: 'Dashboard', caption: 'Presenze in tempo reale, KPI del mese, filtri per sede' },
-  { key: 'trend', title: 'Grafici Trend', caption: 'Andamento presenze e ore lavorate settimana per settimana' },
-  { key: 'export', title: 'Export', caption: 'Esporta tutto in CSV con un click, pronto per il commercialista' },
+  { key: 'dashboard', img: dashboardShot, title: 'Dashboard', caption: 'Presenze in tempo reale, KPI del mese, filtri per sede' },
+  { key: 'trend', img: trendShot, title: 'Grafici Trend', caption: 'Andamento presenze e ore lavorate settimana per settimana' },
+  { key: 'export', img: exportShot, title: 'Export', caption: 'Esporta tutto in CSV con un click, pronto per il commercialista' },
 ];
 
 /**
@@ -309,24 +313,23 @@ export default function TryDemoPage() {
                 }}
               >
                 {/*
-                  Placeholder — no real product screenshots are checked into
-                  the repo yet. Swap this Box for an <img> of the actual
-                  Dashboard/Grafici Trend/Export screens once captured.
+                  Screenshot reali del prodotto, catturati da una sessione demo
+                  con `npm run capture-screenshots` (vedi scripts/). La striscia
+                  visibile è la parte ALTA dell'immagine (object-position: top).
                 */}
                 <Box
+                  component="img"
+                  src={shot.img}
+                  alt={`${shot.title} — anteprima del prodotto`}
+                  loading="lazy"
                   sx={{
                     height: 160,
-                    bgcolor: 'var(--color-parchment)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--color-stone)',
-                    fontFamily: 'var(--font-sans)',
-                    fontSize: '0.85rem',
+                    width: '100%',
+                    objectFit: 'cover',
+                    objectPosition: 'top left',
+                    display: 'block',
                   }}
-                >
-                  {shot.title} — anteprima
-                </Box>
+                />
                 <Box sx={{ p: 2 }}>
                   <Typography sx={{ fontFamily: 'var(--font-sans)', fontWeight: 600, mb: 0.5 }}>
                     {shot.title}
