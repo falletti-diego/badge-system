@@ -1,68 +1,73 @@
-# Badge System — Session 76c Handoff
+# Badge System — Session 77 Handoff
 
-**Date:** 2026-07-18
-**Session:** 76c — micro-manutenzione test/CI: i 3 item di backlog chiusi, root cause del hang Jest trovata e fixata
-**Status:** ✅ Tutto pushato su `main`, CI verde, deploy EC2 riuscito, produzione sana. Nessun lavoro in sospeso.
+**Date:** 2026-07-19
+**Session:** 77 — cron GDPR verificato + screenshot reali del prodotto LIVE su /prova-demo (Parte A del piano demo-funnel)
+**Status:** ✅ Tutto pushato su `main` e deployato. **Resta UN solo bloccante prospect: SES (Parte B del piano), in attesa dell'accesso DNS dell'utente.**
 
 ---
 
 ## Goal
 
-Chiudere i 3 item di micro-manutenzione lasciati da Session 76b: (1) pulizia automatica `revoked_tokens`/`used_tokens` pre-suite, (2) marker robusto per il bootstrap di schema.sql in CI, (3) indagine sull'handle che aveva reso necessario `--forceExit`.
+Chiudere i bloccanti commerciali del funnel demo: screenshot reali al posto dei placeholder (fatto, LIVE) e SES produzione (pianificato, eseguibile appena l'utente ha accesso a register.it).
 
 ---
 
 ## Come riprendere (leggi in quest'ordine)
 
 1. **Questo file**
-2. **`TASKS.md`** Session Log righe 76c/76b/76
-3. **`PROJECT_DECISIONS.md`** sezione "Session 76c" — in particolare la scoperta pg-pool `min`
+2. **`docs/superpowers/plans/2026-07-19-demo-funnel-screenshots-ses.md`** — il piano: Parte A ✅ completata, **Parte B (Task 4-7) da eseguire**
+3. **`TASKS.md`** Session Log riga 77 + **`PROJECT_DECISIONS.md`** sezione "Session 77" (gotcha Puppeteer/SES)
 
-Nessun branch/worktree attivo: `main` = produzione. Il worktree `.claude/worktrees/code-review-fixes` (mergiato) è ancora su disco, rimuovibile a piacere.
+**Per riprendere (sessione SES, Parte B):** chiedere all'utente se ha accesso al pannello DNS register.it. Poi, dal piano: Task 4 (crea identità SES `dataxiom.it` → consegna 3 CNAME DKIM), Task 5 (verifica propagazione), Task 6 (sandbox exit via `aws sesv2 put-account-details` — testo caso d'uso GIÀ SCRITTO nel piano, farlo approvare prima), Task 7 (`MAX_ACTIVE_DEMOS` in SSM + restart container + test E2E email).
 
 ---
 
-## Cosa è stato fatto (3 commit: `dc5e43b`, `63d92a5`, `2ac7ff5`)
+## Cosa è stato fatto (commits `6fd77fb`, `913eb13`, `67565a7`)
 
-1. **Flake `auth-refresh-first-use` eliminato alla radice**: `jest.globalSetup.js` nuovo — gira una volta sola pre-suite e svuota `revoked_tokens`/`used_tokens`; soft-skip se DB irraggiungibile. Verificato seminando righe residue ad arte.
-2. **Bootstrap CI a marker**: `-- BOOTSTRAP:BEGIN` in `schema.sql`; lo step CI taglia lì (con errore esplicito se il marker manca) invece del fragile `sed '1,17d'`.
-3. **Root cause del hang Jest trovata**: pg-pool arma il timer di eviction **solo sopra `min`** — con `DB_POOL_MIN=1` l'ultimo client idle del pool condiviso resta ref'd per sempre. Fix: `allowExitOnIdle: NODE_ENV==='test'` in `pool.js`. `--forceExit` rimosso dalla CI (handle futuri di nuovo rilevabili), `timeout-minutes: 15` tenuto come safety net.
-4. **Push + verifica completa**: CI verde (job backend 1.5 min = doppia validazione marker+exit), deploy EC2 ok, `/health` produzione ok (il 502 durante il deploy è solo il riavvio del container, transitorio).
+1. **Cron GDPR verificato**: primo run automatico 3:30 UTC pulito su EC2 (`/home/ubuntu/cleanup-demos.log`) — gap chiuso definitivamente.
+2. **Piano demo-funnel** scritto (writing-plans + 3 decisioni grilling: DNS solo-piano, identità SES non creata in anticipo, sandbox-exit via CLI con testo pre-approvato).
+3. **Script di cattura riusabile** `npm run capture-screenshots` (frontend-web): puppeteer-core sul Chrome installato, sessione demo vera, attesa sui dati renderizzati, banner/tour soppressi solo nello scatto.
+4. **TryDemoPage**: 3 screenshot reali (dashboard/trend/export) al posto dei box grigi, TDD (13/13), `data-testid="trend-chart"` aggiunto.
+5. **Verifiche**: backend 599/0 fail (rerun), frontend 236/237 (+1), code-review 0 Critical/High, **deploy Netlify verificato** (bundle `index-E6ISM_F5.js`, 3 immagini → 200 su badge.dataxiom.it).
 
 ## What Worked
 
-- **Riprodurre il hang in locale su run a file singolo** invece di ragionare solo sui log CI: da lì `lsof` + `pg_stat_activity` + lettura della sorgente pg-pool hanno chiuso il caso in mezz'ora. Il momento chiave: `state=idle, last query=COMMIT` in `pg_stat_activity` → il client ERA stato rilasciato → il problema era l'eviction, non un leak di `release()`.
-- **globalSetup (non setupFiles)** per la pulizia token: processo singolo pre-suite, zero race coi worker paralleli.
-- Push immediato dopo verifica locale: CI verde alla prima.
+- **Verifica visiva dei PNG prima di dichiararli buoni** — ha intercettato i 2 problemi reali (regione sbagliata, grafico vuoto) che i log non avrebbero mai mostrato.
+- Sessione demo vera invece del seed statico: dati degli ultimi 30 giorni, dashboard di luglio popolata.
+- `waitForFunction` sui dati renderizzati invece di timeout fissi (il timeout raceva col seeding del tenant).
 
-## What Didn't Work / Attenzione
+## What Didn't Work / Gotcha
 
-- `--detectOpenHandles` **non vede** handle creati a livello di modulo (il pool condiviso importato da `app.js`) — inutile per questa classe di problemi.
-- Il summary di jest viene stampato **prima** dell'exit: una suite "verde" può essere appesa. C'era un processo jest zombie dal giorno prima mai notato. Dopo run locali lunghi vale un `ps aux | grep jest`.
-- macOS non ha `timeout`; `npx jest <file>` senza `NODE_ENV=test` prende il config sbagliato — usare sempre `NODE_ENV=test npx jest ...`.
+- Il `clip` di `page.screenshot` (Puppeteer) usa coordinate **documento**, non viewport: correggere con `window.scrollY`.
+- La card "Cosa vedrai" mostra solo la striscia ALTA dell'immagine (`object-position: top`) → comporre il soggetto in cima al frame.
+- Rate limit `POST /demo/start` 3/ora/IP, in-memory: riavvio backend dev lo azzera.
+- **Flake NUOVO (tracciato in TASKS.md, backlog Media)**: 3 test demo falliscono con scheduling sfortunato dei worker paralleli (boundary-test cap `MAX_ACTIVE_DEMOS` vs creazioni concorrenti di un altro worker); isolati/rerun verdi. Non un bug di codice.
 
 ---
 
 ## Prossimi step
 
-### Immediato (domani, 2 minuti)
-- **Verifica primo run automatico del cron cleanup demo**: ssh su EC2 → `cat /home/ubuntu/cleanup-demos.log` (gira alle 3:30 UTC). Se ok, gap GDPR chiuso definitivamente.
+### 1. Sessione SES (Parte B del piano) — l'UNICO bloccante prospect rimasto
+Serve l'accesso DNS dell'utente su register.it. Tutto il resto è pronto nel piano (comandi esatti + testo sandbox-exit). Stima: ~1h di lavoro + attese propagazione/approvazione AWS (24-48h).
 
-### Prossima sessione di sviluppo — prodotto
-1. **SES setup completo** (massimo valore di business rimasto): verifica dominio dataxiom.it + uscita Sandbox — **serve accesso DNS dell'utente**, pianificare insieme. Oggi le email demo funzionano solo verso `diego@dataxiom.it`.
-2. **Screenshot reali** su `/prova-demo` (oggi placeholder grigi).
+### 2. Scadenza calendario
+- **25 agosto**: reminder rinnovo TestFlight (Build 14 scade l'8 settembre). Valutare di includere la Build 17 (geofencing, item 10.9 mai submittato).
 
-### Backlog (solo minor, non bloccante)
-- Decisione prodotto: accesso superadmin ai saldi ferie cross-tenant (pattern `resolveTenantScope` pronto, ~30min quando servirà)
-- `logger.warn` frontend non normalizza gli oggetti Error come `logger.error`
-- Al 4° call-site del pattern timer: estrarre hook condiviso `useRedirectTimeout`
-- Restano da prima: S.26 GPS consent (piano dedicato), httpOnly cookie (C.5.3)
+### 3. Quando c'è una data per il primo cliente pilota
+- S.24/S.26 consenso+disclosure GPS (legale, PRIMA che un cliente chieda il geofencing)
+- Ambiente staging (STG.1-6): oggi ogni push su `main` va dritto in produzione
+
+### Backlog minor (non bloccante)
+- Flake inter-worker test demo (vedi sopra, 1-2h)
+- Saldi superadmin cross-tenant (~30min, pattern `resolveTenantScope` pronto)
+- `logger.warn` frontend, hook `useRedirectTimeout`, ONB.2 mezze giornate, httpOnly (C.5.3)
 
 ---
 
 ## Note operative
 
-- Cron produzione attivi su EC2: 2:00 UTC retention audit-log, 3:30 UTC cleanup demo
-- Deploy frontend: SEMPRE esplicito via `netlify deploy --prod --dir dist --site 29a79b49-5571-4249-8c2b-d0813de4bf17` (mai git push come trigger)
-- Deploy backend: automatico al push su `main` se tocca `backend/**` (pipeline ECR→EC2, nessun gate manuale)
-- La risposta di `POST /auth/login` usa `data.token`, non `data.access_token`
+- Ricatturare gli screenshot quando la UI cambia: stack locale attivo → `cd frontend-web && npm run capture-screenshots` → verifica visiva PNG → commit + deploy Netlify.
+- Deploy frontend: SEMPRE esplicito via `netlify deploy --prod --dir dist --site 29a79b49-5571-4249-8c2b-d0813de4bf17`.
+- Deploy backend: automatico al push su `main` se tocca `backend/**`.
+- Cron produzione EC2: 2:00 UTC retention audit-log, 3:30 UTC cleanup demo (entrambi verificati).
+- Login API: la risposta usa `data.token`, non `data.access_token`.

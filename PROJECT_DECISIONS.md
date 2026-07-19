@@ -1,8 +1,30 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 18 Luglio 2026 (Session 76c — micro-manutenzione test/CI: flake token risolto alla radice, marker bootstrap CI, root cause hang Jest = pg-pool `min`, `--forceExit` rimosso; pushato, CI+deploy verdi)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ ATTIVO su EC2 (3:30 UTC, gap GDPR chiuso — primo run automatico da verificare) | **Code review fixes ✅ MERGIATI e LIVE** (PR #5: 3 bug nuovi + tech-debt consolidato + CI con Postgres reale + migration chain self-contained) | Pipeline CI/CD ✅ funzionante (backend job con Postgres 14 reale, `--forceExit` + timeout 15min)  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Tornare al prodotto — SES setup completo (dominio + Sandbox exit, serve DNS utente) e screenshot demo prima di un prospect reale; micro-manutenzione in coda (pulizia token pre-suite, marker bootstrap schema.sql, indagine handle CI)
+**Last Updated:** 19 Luglio 2026 (Session 77 — cron GDPR verificato al primo run automatico; screenshot reali del prodotto LIVE su /prova-demo; piano Parte B SES pronto, in attesa accesso DNS utente)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ VERIFICATO (primo run automatico 3:30 UTC pulito — gap GDPR chiuso) | Screenshot reali su /prova-demo ✅ LIVE (script di cattura riusabile) | Pipeline CI/CD ✅ (backend job con Postgres 14 reale, exit pulito senza forceExit)  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Resta UN solo bloccante prospect: SES setup completo (Parte B del piano 2026-07-19 — dominio DKIM + Sandbox exit, serve accesso DNS utente su register.it). Poi: reminder TestFlight 25 agosto (Build 14 scade 8 settembre), staging + GPS consent quando c'è una data per il primo pilota
+
+---
+
+## Session 77 — Screenshot reali su /prova-demo LIVE, piano funnel demo (19 Luglio 2026)
+
+### Decisioni (grilling)
+1. **DNS register.it: solo-piano** — l'utente non aveva accesso al pannello in sessione; i 3 record CNAME DKIM verranno generati (creazione identità SES `dataxiom.it`) e consegnati pronti da incollare nella sessione Parte B.
+2. **Identità SES non creata in anticipo** — scelta utente: il comando è nel piano, si esegue quando si può completare il ciclo.
+3. **Sandbox exit via CLI** (`aws sesv2 put-account-details`): la inoltra Claude nella sessione post-DNS, con il testo del caso d'uso già scritto nel piano (Task 6) da approvare prima dell'invio.
+
+### Scelte tecniche che hanno funzionato
+- **puppeteer-core + Chrome locale** per gli screenshot: nessun download di browser, sessione demo VERA (`POST /demo/start` → dati ultimi 30 giorni; il seed statico di giugno avrebbe dato una dashboard di luglio vuota). Tour soppresso via localStorage, banner demo nascosto con CSS injection solo nello scatto.
+- **Attesa sui dati renderizzati, non timeout fissi**: il secondo tenant demo è stato catturato col grafico vuoto perché un `setTimeout(2000)` raceva col seeding — sostituito con `waitForFunction` su linea Recharts + righe tabella.
+- **Verifica visiva dei PNG obbligatoria prima di dichiararli buoni** (Read dell'immagine): ha intercettato entrambi i problemi reali (regione sbagliata, grafico vuoto).
+
+### Gotcha da ricordare
+- Il `clip` di `page.screenshot` in Puppeteer usa coordinate **documento**, non viewport: `getBoundingClientRect().top + window.scrollY`.
+- La card "Cosa vedrai" mostra solo la striscia ALTA dell'immagine (`object-position: top`): il soggetto va composto in cima al frame dello scatto.
+- Il rate limit di `POST /demo/start` (3/ora/IP) è in-memory: un riavvio del backend dev lo azzera.
+
+### Flake nuovo trovato (tracciato in TASKS.md)
+3 test demo falliti nel primo run completo per race tra worker Jest paralleli sulle tabelle demo condivise (boundary-test del cap vs creazioni concorrenti di un altro worker). Isolati e al rerun: verdi. Stessa famiglia del flake token (stato condiviso nel DB test).
 
 ---
 
