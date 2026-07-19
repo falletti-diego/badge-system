@@ -1,8 +1,27 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 19 Luglio 2026 (Session 77 — cron GDPR verificato al primo run automatico; screenshot reali del prodotto LIVE su /prova-demo; piano Parte B SES pronto, in attesa accesso DNS utente)  
+**Last Updated:** 19 Luglio 2026 (Session 77b — integrazione dataxiom.it ↔ Badge System implementata su nuovo repo `dataxiom-landing`, deploy previsto 2026-07-20 insieme al lancio LinkedIn)  
 **Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ VERIFICATO (primo run automatico 3:30 UTC pulito — gap GDPR chiuso) | Screenshot reali su /prova-demo ✅ LIVE (script di cattura riusabile) | Pipeline CI/CD ✅ (backend job con Postgres 14 reale, exit pulito senza forceExit)  
 **MVP Launch Target:** Settembre 2026 | **Current Phase:** Resta UN solo bloccante prospect: SES setup completo (Parte B del piano 2026-07-19 — dominio DKIM + Sandbox exit, serve accesso DNS utente su register.it). Poi: reminder TestFlight 25 agosto (Build 14 scade 8 settembre), staging + GPS consent quando c'è una data per il primo pilota
+
+---
+
+## Session 77b — Integrazione dataxiom.it ↔ Badge System + lancio LinkedIn (19 Luglio 2026)
+
+### Decisioni
+1. **Posizionamento (grilling): Badge System è "prodotto DI Dataxiom"** — visual armonizzato al brand della landing (Inter, navy/blu, oro), non brand autonomo né ombrello a due anime. Le 3 proposte mockup (sezione integrata / pagina dedicata / hero a due percorsi) restano come Artifact; scelta la **pagina dedicata** `dataxiom.it/badge-system.html`.
+2. **Niente prezzi nella pagina prodotto** — la trattativa economica avviene in sede separata; la chiusura invita esplicitamente alla call ("attivazione, sedi, condizioni: parliamone").
+3. **Claim integrazione paghe formulato onestamente**: "tracciati di export compatibili" con Zucchetti e TeamSystem (è l'export paghe FASE 8 esistente, non un'integrazione API) + disclaimer marchi.
+4. **Tema condiviso tra le due pagine**: stessa chiave localStorage `dataxiom-theme`, script pre-paint sulla pagina prodotto, toggle identico che scrive sulla stessa chiave (bidirezionale).
+5. **Landing sotto controllo di versione**: nuovo repo privato `falletti-diego/dataxiom-landing`; fonte di verità recuperata dalla produzione (la copia locale era vecchia di 2 mesi).
+
+### Scoperte operative importanti
+- ⚠️ **Footgun disinnescato**: la cartella madre era Netlify-linkata al sito `dataxiom-badge` — un `netlify deploy` per la landing avrebbe sovrascritto l'app Badge in produzione. Ora `Landing Page/` è linkata al sito giusto (`dataxiom`, `a31a2216…`) e il link sbagliato è stato rimosso.
+- La landing live (97KB, con i18n IT/EN) era più recente di qualunque copia locale (69KB, 18 maggio): per siti deployati a mano, la produzione può essere l'unica fonte di verità.
+- Bug classico da ricordare: `<img width height>` + CSS `width:100%` SENZA `height:auto` = immagine stirata.
+
+### Materiale lancio (LinkedIn/2026-07-20_badge-system-launch/)
+Post Variante A (problema-first, profilo editoriale v1.0) + carosello PDF 7 slide nello stile consolidato di maggio (navy blueprint, Oswald condensed, cifra fantasma, footer n/7), con lo screenshot reale della dashboard in slide 5. Sorgente HTML rigenerabile via Chrome `--print-to-pdf`.
 
 ---
 

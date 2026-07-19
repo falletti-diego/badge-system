@@ -1,73 +1,67 @@
-# Badge System — Session 77 Handoff
+# Badge System — Session 77b Handoff
 
 **Date:** 2026-07-19
-**Session:** 77 — cron GDPR verificato + screenshot reali del prodotto LIVE su /prova-demo (Parte A del piano demo-funnel)
-**Status:** ✅ Tutto pushato su `main` e deployato. **Resta UN solo bloccante prospect: SES (Parte B del piano), in attesa dell'accesso DNS dell'utente.**
+**Session:** 77b — integrazione dataxiom.it ↔ Badge System implementata (repo `dataxiom-landing`) + materiale lancio LinkedIn pronto
+**Status:** ⏳ **Tutto pronto e verificato dall'utente, NON deployato.** Domani (2026-07-20): deploy landing + pubblicazione LinkedIn.
 
 ---
 
 ## Goal
 
-Chiudere i bloccanti commerciali del funnel demo: screenshot reali al posto dei placeholder (fatto, LIVE) e SES produzione (pianificato, eseguibile appena l'utente ha accesso a register.it).
+Collegare la landing aziendale dataxiom.it a Badge System (pagina prodotto dedicata, scelta dall'utente tra 3 proposte mockup) e preparare l'annuncio LinkedIn del lancio.
 
 ---
 
-## Come riprendere (leggi in quest'ordine)
+## ⚡ DOMANI (2026-07-20) — sequenza esatta
 
-1. **Questo file**
-2. **`docs/superpowers/plans/2026-07-19-demo-funnel-screenshots-ses.md`** — il piano: Parte A ✅ completata, **Parte B (Task 4-7) da eseguire**
-3. **`TASKS.md`** Session Log riga 77 + **`PROJECT_DECISIONS.md`** sezione "Session 77" (gotcha Puppeteer/SES)
-
-**Per riprendere (sessione SES, Parte B):** chiedere all'utente se ha accesso al pannello DNS register.it. Poi, dal piano: Task 4 (crea identità SES `dataxiom.it` → consegna 3 CNAME DKIM), Task 5 (verifica propagazione), Task 6 (sandbox exit via `aws sesv2 put-account-details` — testo caso d'uso GIÀ SCRITTO nel piano, farlo approvare prima), Task 7 (`MAX_ACTIVE_DEMOS` in SSM + restart container + test E2E email).
+1. **Deploy landing** (⚠️ SITO GIUSTO: `dataxiom`, non `dataxiom-badge`):
+   ```bash
+   cd "/Users/diegofalletti/DATAXIOM/Dataxiom – Analisi & BI/Landing Page"
+   netlify deploy --prod --dir . --site a31a2216-fb06-47e0-b632-a1193a88039a
+   ```
+2. **Verifica live**: dataxiom.it (card "Il nostro prodotto" dopo i Case Study, nav "Badge System", toggle EN traduce la card) + dataxiom.it/badge-system.html (tema ereditato dalla home, hero nitida, link demo → badge.dataxiom.it/prova-demo)
+3. **Check funnel demo** funzionante (rate limit 3/ora/IP, cap 20 demo attive — ok per lancio organico, monitorare i log)
+4. **Pubblicazione LinkedIn** (Company Page): testo Variante A + allegato `carosello_badge_system.pdf` da `LinkedIn/2026-07-20_badge-system-launch/`
 
 ---
 
-## Cosa è stato fatto (commits `6fd77fb`, `913eb13`, `67565a7`)
+## Dove sono le cose
 
-1. **Cron GDPR verificato**: primo run automatico 3:30 UTC pulito su EC2 (`/home/ubuntu/cleanup-demos.log`) — gap chiuso definitivamente.
-2. **Piano demo-funnel** scritto (writing-plans + 3 decisioni grilling: DNS solo-piano, identità SES non creata in anticipo, sandbox-exit via CLI con testo pre-approvato).
-3. **Script di cattura riusabile** `npm run capture-screenshots` (frontend-web): puppeteer-core sul Chrome installato, sessione demo vera, attesa sui dati renderizzati, banner/tour soppressi solo nello scatto.
-4. **TryDemoPage**: 3 screenshot reali (dashboard/trend/export) al posto dei box grigi, TDD (13/13), `data-testid="trend-chart"` aggiunto.
-5. **Verifiche**: backend 599/0 fail (rerun), frontend 236/237 (+1), code-review 0 Critical/High, **deploy Netlify verificato** (bundle `index-E6ISM_F5.js`, 3 immagini → 200 su badge.dataxiom.it).
+- **Repo landing**: `/Users/diegofalletti/DATAXIOM/Dataxiom – Analisi & BI/Landing Page` → GitHub privato `falletti-diego/dataxiom-landing` (3 commit: recover `b6fd90a`, integrazione `7c7cbaf`, tema+hero `cf3f9b4`). README col contratto operativo.
+- **Materiale LinkedIn**: `LinkedIn/2026-07-20_badge-system-launch/` — `post_lancio_badge_system.md` (Variante A scelta + note operative), `carosello_badge_system.pdf` (7 slide 1080×1080), PNG singole slide, sorgente HTML rigenerabile.
+- **Mockup delle 3 proposte** (Artifact, per riferimento): sezione integrata / pagina dedicata v2 / hero a due percorsi.
+
+## Cosa è stato fatto
+
+1. **Fase 1 — riorganizzazione**: `Landing Page/` con index.html recuperato BYTE-IDENTICO dalla produzione (la copia locale era del 18 maggio, superata), favicon/robots/sitemap, archive/ con le copie storiche, git+GitHub, **link Netlify corretto** (il vecchio puntava al sito badge: deploy della landing avrebbe sovrascritto l'app!).
+2. **Fase 2 — integrazione**: `badge-system.html` (tracciabilità QR, totalmente online, dati dell'azienda, tracciati Zucchetti/TeamSystem con disclaimer, NIENTE prezzi, SEO completa) + card-ponte in home (i18n IT+EN, fix favicon.png rotto, sitemap aggiornata).
+3. **Rifinitura su feedback utente**: hero rifatta dal PNG retina (2880px, crop 1.89:1, era povera e stirata — mancava `height:auto` accanto agli attributi width/height) + **tema condiviso** con la home (chiave `dataxiom-theme`, script pre-paint anti-flash, toggle bidirezionale). Verificato con puppeteer (dark ereditato ✓, toggle ✓) e dall'utente ("verificato ed è ora corretto").
+4. **Lancio LinkedIn**: post Variante A (problema-first) + carosello 7 slide nello stile grafico consolidato del carosello Power Query di maggio.
 
 ## What Worked
 
-- **Verifica visiva dei PNG prima di dichiararli buoni** — ha intercettato i 2 problemi reali (regione sbagliata, grafico vuoto) che i log non avrebbero mai mostrato.
-- Sessione demo vera invece del seed statico: dati degli ultimi 30 giorni, dashboard di luglio popolata.
-- `waitForFunction` sui dati renderizzati invece di timeout fissi (il timeout raceva col seeding del tenant).
+- Leggere la landing di PRODUZIONE prima di fidarsi della copia locale (2 mesi di differenza, i18n aggiunto nel frattempo).
+- Mockup Artifact per far scegliere tra 3 proposte visive prima di scrivere una riga sulla landing vera.
+- Riusare il linguaggio grafico del carosello precedente: coerenza immediata, zero decisioni nuove.
 
-## What Didn't Work / Gotcha
+## Attenzione / gotcha
 
-- Il `clip` di `page.screenshot` (Puppeteer) usa coordinate **documento**, non viewport: correggere con `window.scrollY`.
-- La card "Cosa vedrai" mostra solo la striscia ALTA dell'immagine (`object-position: top`) → comporre il soggetto in cima al frame.
-- Rate limit `POST /demo/start` 3/ora/IP, in-memory: riavvio backend dev lo azzera.
-- **Flake NUOVO (tracciato in TASKS.md, backlog Media)**: 3 test demo falliscono con scheduling sfortunato dei worker paralleli (boundary-test cap `MAX_ACTIVE_DEMOS` vs creazioni concorrenti di un altro worker); isolati/rerun verdi. Non un bug di codice.
+- **MAI deployare la landing dalla cartella madre** (link rimosso, ma il rischio concettuale resta: due siti Netlify, `dataxiom` vs `dataxiom-badge`).
+- `<img width height>` + CSS `width:100%` senza `height:auto` = stiramento.
+- La pagina prodotto è IT-only (la home ha i18n IT/EN): se servirà l'inglese, va aggiunto.
 
 ---
 
-## Prossimi step
+## Dopo il lancio (già tracciato)
 
-### 1. Sessione SES (Parte B del piano) — l'UNICO bloccante prospect rimasto
-Serve l'accesso DNS dell'utente su register.it. Tutto il resto è pronto nel piano (comandi esatti + testo sandbox-exit). Stima: ~1h di lavoro + attese propagazione/approvazione AWS (24-48h).
-
-### 2. Scadenza calendario
-- **25 agosto**: reminder rinnovo TestFlight (Build 14 scade l'8 settembre). Valutare di includere la Build 17 (geofencing, item 10.9 mai submittato).
-
-### 3. Quando c'è una data per il primo cliente pilota
-- S.24/S.26 consenso+disclosure GPS (legale, PRIMA che un cliente chieda il geofencing)
-- Ambiente staging (STG.1-6): oggi ogni push su `main` va dritto in produzione
-
-### Backlog minor (non bloccante)
-- Flake inter-worker test demo (vedi sopra, 1-2h)
-- Saldi superadmin cross-tenant (~30min, pattern `resolveTenantScope` pronto)
-- `logger.warn` frontend, hook `useRedirectTimeout`, ONB.2 mezze giornate, httpOnly (C.5.3)
+- **SES Parte B** (piano 2026-07-19): resta l'unico bloccante per email ai prospect — serve accesso DNS register.it. Col lancio LinkedIn il form "Parliamo" notifica comunque diego@dataxiom.it (già funzionante).
+- **25 agosto**: reminder rinnovo TestFlight (Build 14 scade 8 settembre).
+- Backlog minor invariato (flake inter-worker test demo, saldi superadmin, ecc. — vedi TASKS.md).
 
 ---
 
 ## Note operative
 
-- Ricatturare gli screenshot quando la UI cambia: stack locale attivo → `cd frontend-web && npm run capture-screenshots` → verifica visiva PNG → commit + deploy Netlify.
-- Deploy frontend: SEMPRE esplicito via `netlify deploy --prod --dir dist --site 29a79b49-5571-4249-8c2b-d0813de4bf17`.
-- Deploy backend: automatico al push su `main` se tocca `backend/**`.
-- Cron produzione EC2: 2:00 UTC retention audit-log, 3:30 UTC cleanup demo (entrambi verificati).
-- Login API: la risposta usa `data.token`, non `data.access_token`.
+- Deploy landing: SEMPRE `--site a31a2216-fb06-47e0-b632-a1193a88039a` · Deploy badge frontend: `--site 29a79b49-...` · Backend: automatico su push `main` (`backend/**`)
+- Server locale di verifica (se ancora attivo): http://localhost:8765
+- Cron produzione EC2: 2:00 retention, 3:30 cleanup demo (verificati)
