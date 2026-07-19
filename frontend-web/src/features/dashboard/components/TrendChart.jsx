@@ -25,6 +25,7 @@ const TrendChart = ({ days = [], loading = false, error = null }) => {
 
   return (
     <Card
+      data-testid="trend-chart"
       sx={{
         padding: '24px',
         marginBottom: '24px',
