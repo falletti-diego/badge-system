@@ -37,6 +37,7 @@ Collegare la landing aziendale dataxiom.it a Badge System (pagina prodotto dedic
 2. **Fase 2 — integrazione**: `badge-system.html` (tracciabilità QR, totalmente online, dati dell'azienda, tracciati Zucchetti/TeamSystem con disclaimer, NIENTE prezzi, SEO completa) + card-ponte in home (i18n IT+EN, fix favicon.png rotto, sitemap aggiornata).
 3. **Rifinitura su feedback utente**: hero rifatta dal PNG retina (2880px, crop 1.89:1, era povera e stirata — mancava `height:auto` accanto agli attributi width/height) + **tema condiviso** con la home (chiave `dataxiom-theme`, script pre-paint anti-flash, toggle bidirezionale). Verificato con puppeteer (dark ereditato ✓, toggle ✓) e dall'utente ("verificato ed è ora corretto").
 4. **Lancio LinkedIn**: post Variante A (problema-first) + carosello 7 slide nello stile grafico consolidato del carosello Power Query di maggio.
+5. **Ritocchi post-analisi competitiva (sera del 19/07, commit landing `1f4e6cb`)**: riposizionamento "presenze + turni + paghe per il retail multi-sede" (l'analisi di mercato ha mostrato che il QR da solo è commodity a €2-5/dip e che il retail compra i turni), card benefici "Turni pianificati" al posto di "Totalmente online", disclaimer biometria on-device (provvedimento Garante 22/02/2024: biometria per presenze vietata — noi non trattiamo dati biometrici, va detto per primi). Stessi ritocchi su carosello (slide 3-4-5, PDF+PNG rigenerati) e testo Variante A.
 
 ## What Worked
 
