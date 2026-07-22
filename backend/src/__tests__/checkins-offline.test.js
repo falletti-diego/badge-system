@@ -244,6 +244,43 @@ describe('POST /api/checkins — offline dedup (route)', () => {
     expect(insertCalls).toHaveLength(1);
   });
 
+  it('is_offline è derivato dal server da occurred_at, non dal valore inviato dal client (il client mente: is_offline=false con occurred_at vecchio)', async () => {
+    const { fn, insertCalls } = makeClientQuery();
+    pool.connect.mockResolvedValue({ query: fn, release: jest.fn() });
+
+    const res = await request(app)
+      .post('/api/v1/checkins')
+      .set('Authorization', `Bearer ${EMP_TOKEN}`)
+      .send({
+        employee_id: EMP_ID, site_id: SITE_ID, type: 'IN',
+        occurred_at: isoHoursAgo(2),
+        client_uuid: '88888888-8888-8888-8888-888888888888',
+        is_offline: false, // client lies — server must not trust this
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.is_offline).toBe(true);
+    const [, , , , , , , , , insertedIsOffline] = insertCalls[0];
+    expect(insertedIsOffline).toBe(true);
+  });
+
+  it('is_offline è false quando occurred_at è assente o recente, anche se il client dichiara is_offline=true', async () => {
+    const { fn } = makeClientQuery();
+    pool.connect.mockResolvedValue({ query: fn, release: jest.fn() });
+
+    const res = await request(app)
+      .post('/api/v1/checkins')
+      .set('Authorization', `Bearer ${EMP_TOKEN}`)
+      .send({
+        employee_id: EMP_ID, site_id: SITE_ID, type: 'IN',
+        client_uuid: '99999999-1111-1111-1111-111111111111',
+        is_offline: true, // client lies — no occurred_at means this was a normal online check-in
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.is_offline).toBe(false);
+  });
+
   it('due POST con lo stesso client_uuid creano UNA riga: il secondo risponde 200 deduplicated:true', async () => {
     const clientUuid = '55555555-5555-5555-5555-555555555555';
     const existingRow = {

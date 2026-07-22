@@ -24,9 +24,19 @@ const router = express.Router();
 // POST /api/checkins — Create check-in
 // =====================================================
 
+// A check-in is only ever "offline" if the client backdated it via occurred_at.
+// is_offline is NEVER read from client input (security review, 2026-07-22):
+// a client cannot be trusted to self-report this, since it drives an audit trail
+// and a manager-facing dashboard badge — both meant to be trustworthy signals.
+// OFFLINE_SYNC_THRESHOLD_MS tolerates normal request latency without flagging
+// ordinary online check-ins as offline.
+const OFFLINE_SYNC_THRESHOLD_MS = 60 * 1000;
+
 router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), async (req, res, next) => {
-  const { employee_id, site_id, type, occurred_at, client_uuid, is_offline } = req.validated.body;
+  const { employee_id, site_id, type, occurred_at, client_uuid } = req.validated.body;
   const clientId = req.user.client_id;
+  const is_offline = occurred_at != null &&
+    Math.abs(Date.now() - new Date(occurred_at).getTime()) > OFFLINE_SYNC_THRESHOLD_MS;
 
   try {
     // S.32.1: ownership check — only admins may create check-ins for other employees

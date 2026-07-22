@@ -92,7 +92,9 @@ const PostCheckinSchema = z.object({
         }
       }),
     client_uuid: z.string().uuid('Invalid client_uuid: must be valid UUID').optional(),
-    is_offline: z.boolean().optional(),
+    // is_offline is intentionally NOT accepted here: the server derives it from
+    // occurred_at (see routes/checkins.js) rather than trusting client input —
+    // it's not a client fact, it drives an audit trail and a dashboard badge.
   }),
   query: z.object({
     client_id: z.string().uuid('Invalid client_id: must be valid UUID').optional(),
