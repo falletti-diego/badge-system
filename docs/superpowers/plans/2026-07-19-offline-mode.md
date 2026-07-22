@@ -32,26 +32,31 @@
 ### Task A1: Migration — client_uuid, is_offline, UNIQUE
 
 **Files:**
-- Create: `backend/src/db/migrations/031_add_offline_checkin_fields.sql` (verificare il prossimo numero libero in `backend/src/db/migrations/`)
+- Create: `backend/migrations/032_add_offline_checkin_fields.sql` (la directory reale è `backend/migrations/`, non `backend/src/db/migrations/`; `031` era già occupata da `031_add_superadmin_role.sql`, quindi usata `032`)
 
-- [ ] **Step 1: scrivere la migration (idempotente)**
+> **Deviazioni dal piano (scoperte durante l'esecuzione):**
+> - Directory e numero migration corretti come sopra.
+> - Step 3 (aggiornare `schema.sql`) **non eseguito deliberatamente**: il bootstrap CI applica `schema.sql` (solo tabelle base) e poi TUTTE le migration in `backend/migrations/` in sequenza (vedi `.github/workflows/ci.yml` + `scripts/run-migrations.js`) — la migration 030 (client_id) non è mai stata backportata in `schema.sql` per lo stesso motivo. Aggiungere le colonne anche lì sarebbe stato ridondante e contrario alla convenzione già in uso.
+> - L'indice UNIQUE finale è su `(client_id, client_uuid)`, non su `client_uuid` da solo — corretto durante il gate `/code-review` (A-G2) per garantire isolamento multi-tenant a livello DB. Vedi Task A3 per il dettaglio.
+
+- [x] **Step 1: scrivere la migration (idempotente)**
 
 ```sql
--- 031: Offline mode — idempotency key + flag timbratura offline
+-- 032: Offline mode — idempotency key + flag timbratura offline
 ALTER TABLE checkins ADD COLUMN IF NOT EXISTS client_uuid UUID;
 ALTER TABLE checkins ADD COLUMN IF NOT EXISTS is_offline BOOLEAN NOT NULL DEFAULT false;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_checkins_client_uuid
-  ON checkins (client_uuid) WHERE client_uuid IS NOT NULL;
+DROP INDEX IF EXISTS idx_checkins_client_uuid;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_checkins_client_id_uuid
+  ON checkins (client_id, client_uuid) WHERE client_uuid IS NOT NULL;
 ```
 
-- [ ] **Step 2: applicare in locale e verificare**
+- [x] **Step 2: applicare in locale e verificare**
 
-Run: `psql $DATABASE_URL -f backend/src/db/migrations/031_add_offline_checkin_fields.sql` (x2 — la seconda esecuzione deve essere no-op)
-Expected: nessun errore in entrambe le esecuzioni; `\d checkins` mostra le 2 colonne e l'indice parziale.
+Applicata con `psql -f` su `badge_system` e `badge_system_test` (x2 ciascuna — la seconda esecuzione no-op, confermato dai NOTICE "already exists, skipping"). `\d checkins` mostra le 2 colonne e l'indice UNIQUE composito.
 
-- [ ] **Step 3: aggiornare `backend/src/db/schema.sql`** (sezione checkins, dopo il marker BOOTSTRAP) aggiungendo le stesse colonne/indice, così il bootstrap CI resta allineato.
+- [x] ~~Step 3: aggiornare schema.sql~~ — **non eseguito, deliberatamente** (vedi nota sopra)
 
-- [ ] **Step 4: commit** — `git commit -m "feat(db): client_uuid + is_offline su checkins per offline mode (migration 031)"`
+- [x] **Step 4: commit** — `feat(db): client_uuid + is_offline su checkins per offline mode (migration 032)` (a344dee), poi corretto dal gate code-review in `f89b933`
 
 ### Task A2: Schema Zod — occurred_at, client_uuid, is_offline (TDD)
 
@@ -59,7 +64,7 @@ Expected: nessun errore in entrambe le esecuzioni; `\d checkins` mostra le 2 col
 - Modify: `backend/src/middleware/validation.js:73-86` (`PostCheckinSchema`)
 - Test: `backend/src/__tests__/checkins-offline.test.js` (nuovo)
 
-- [ ] **Step 1: scrivere i test fallenti** (seguire il pattern di mock pool/auth di `checkins-geofence.test.js`)
+- [x] **Step 1: scrivere i test fallenti** (seguire il pattern di mock pool/auth di `checkins-geofence.test.js`)
 
 ```javascript
 // checkins-offline.test.js — casi schema
@@ -70,9 +75,9 @@ it('rifiuta client_uuid non-UUID', ...);             // 400 VALIDATION_ERROR
 it('POST senza campi nuovi funziona come prima', ...); // 201, retrocompatibilità
 ```
 
-- [ ] **Step 2: run test → FAIL** — `cd backend && npx jest checkins-offline`
+- [x] **Step 2: run test → FAIL** — `cd backend && npx jest checkins-offline`
 
-- [ ] **Step 3: estendere lo schema**
+- [x] **Step 3: estendere lo schema**
 
 ```javascript
 // in PostCheckinSchema.body, dopo longitude:
@@ -91,7 +96,7 @@ is_offline: z.boolean().optional(),
 
 (La finestra 48h/+5min è la decisione anti-frode; +5 min tollera clock skew del device.)
 
-- [ ] **Step 4: run test → PASS, poi commit**
+- [x] **Step 4: run test → PASS, poi commit**
 
 ### Task A3: Route — INSERT con occurred_at + risposta idempotente (TDD)
 
@@ -99,7 +104,7 @@ is_offline: z.boolean().optional(),
 - Modify: `backend/src/routes/checkins.js:27-168` (handler POST)
 - Test: `backend/src/__tests__/checkins-offline.test.js` (estendere)
 
-- [ ] **Step 1: test fallenti**
+- [x] **Step 1: test fallenti**
 
 ```javascript
 it('salva occurred_at come timestamp della timbratura e is_offline=true', ...);
@@ -107,9 +112,9 @@ it('due POST con lo stesso client_uuid creano UNA riga; il secondo risponde 200 
 it('audit log include is_offline nel newValue', ...);
 ```
 
-- [ ] **Step 2: run → FAIL**
+- [x] **Step 2: run → FAIL**
 
-- [ ] **Step 3: implementare nel handler**
+- [x] **Step 3: implementare nel handler**
 
 ```javascript
 // prima dell'INSERT, dentro withTransaction:
@@ -134,9 +139,9 @@ VALUES ($1, $2, $3, $4, COALESCE($8::timestamptz, NOW()), $5, NOW(), $6, $7, $9,
 
 Gestire anche la race sul UNIQUE (due sync simultanei): catch dell'errore pg `23505` su `idx_checkins_client_uuid` → ri-SELECT e risposta 200 `deduplicated:true`. Includere `is_offline` nel `newValue` di `logAudit` (`action:'checkin_created'`).
 
-- [ ] **Step 4: run → PASS; suite completa** — `npm test` (599+ test verdi)
+- [x] **Step 4: run → PASS; suite completa** — `npm test` (599+ test verdi)
 
-- [ ] **Step 5: commit** — `git commit -m "feat(api): offline check-in — occurred_at (finestra 48h), idempotenza client_uuid, flag is_offline"`
+- [x] **Step 5: commit** — `git commit -m "feat(api): offline check-in — occurred_at (finestra 48h), idempotenza client_uuid, flag is_offline"`
 
 ### Task A4: Dashboard — badge "registrata offline" (TDD)
 
@@ -145,25 +150,26 @@ Gestire anche la race sul UNIQUE (due sync simultanei): catch dell'errore pg `23
 - Modify: `frontend-web/src/pages/PresencesPage.jsx` (o il componente tabella presenze — individuarlo con grep `timestamp` in `frontend-web/src/pages/`)
 - Test: test Vitest del componente tabella (pattern dei test esistenti in `frontend-web/src/__tests__/`)
 
-- [ ] **Step 1: test fallente frontend** — riga con `is_offline: true` mostra un Chip MUI "Offline" (size small, color warning, con tooltip "Timbratura registrata senza rete e sincronizzata in seguito"); riga con `is_offline: false/undefined` NON lo mostra.
-- [ ] **Step 2: run → FAIL** — `cd frontend-web && npm run test -- --run <file>` — Expected: FAIL (chip non trovato)
-- [ ] **Step 3: implementare il Chip accanto all'orario nella cella timestamp**
-- [ ] **Step 4: run → PASS** — stesso comando, Expected: PASS; poi suite intera `npm run test -- --run` senza regressioni
-- [ ] **Step 5: verifica visiva** — `npm run dev`, aprire la tabella presenze con un record fittizio `is_offline: true` (mock o seed locale): il chip appare, il tooltip è leggibile, il layout della cella non si rompe su viewport stretto
-- [ ] **Step 6: commit**
+- [x] **Step 1: test fallente frontend** — riga con `is_offline: true` mostra un Chip MUI "Offline" (size small, color warning, con tooltip "Timbratura registrata senza rete e sincronizzata in seguito"); riga con `is_offline: false/undefined` NON lo mostra.
+- [x] **Step 2: run → FAIL** — `cd frontend-web && npm run test -- --run <file>` — Expected: FAIL (chip non trovato)
+- [x] **Step 3: implementare il Chip accanto all'orario nella cella timestamp**
+- [x] **Step 4: run → PASS** — stesso comando, Expected: PASS; poi suite intera `npm run test -- --run` senza regressioni
+- [x] **Step 5: verifica visiva** — `npm run dev`, aprire la tabella presenze con un record fittizio `is_offline: true` (mock o seed locale): il chip appare, il tooltip è leggibile, il layout della cella non si rompe su viewport stretto
+- [x] **Step 6: commit**
 
 ### Gate di fine FASE A (obbligatorio prima del deploy)
 
-- [ ] **A-G1: suite completa** — `cd backend && npm test -- --coverage` → tutti i test verdi (599+ preesistenti + nuovi), nessun hang a fine suite (verificare che il processo esca da solo, lezione pg-pool)
-- [ ] **A-G2: /code-review** sul diff della fase (focus: race 23505, finestra 48h, retrocompatibilità schema) — findings CONFIRMED fixati prima di procedere
-- [ ] **A-G3: migration in produzione** — applicare la 031 su RDS, poi ri-eseguire le query interessate (regola CLAUDE.md): `SELECT client_uuid, is_offline FROM checkins LIMIT 1;` → nessun errore
+- [x] **A-G1: suite completa** — 608/608 backend (Jest) + 239/240 frontend-web (Vitest, 1 skip pre-esistente) verdi. Un fallimento visto in run parallela (`demo-start.test.js`, cap conteggio demo attive) è il flake inter-worker già noto in backlog — passa in isolamento, non causato da questa fase.
+- [x] **A-G2: /code-review** (medium effort, 8 finder-agent + verifica) sul diff A1-A4. **1 finding CRITICO confermato empiricamente contro Postgres reale**: il catch(23505) lasciava la transazione in stato aborted → la SELECT di recovery falliva sempre con `25P02` invece di rispondere `deduplicated:true` (il mock dei test non lo copriva, non simulando lo stato reale della transazione). Fix: sostituito con `INSERT ... ON CONFLICT (client_id, client_uuid) DO NOTHING RETURNING` (nessuna eccezione mai lanciata) — riverificato con script diretto contro `badge_system_test` reale. Altri 2 fix applicati: indice UNIQUE scoped per tenant (`client_id, client_uuid` invece di solo `client_uuid`); recovery SELECT ora filtra anche per `employee_id`, con risposta `409 CHECKIN_UUID_COLLISION` fail-closed se un client_uuid risulta riusato da un employee diverso. Commit fix: `f89b933`.
+- [ ] **A-G3: migration in produzione** — applicare la 032 su RDS, poi ri-eseguire le query interessate (regola CLAUDE.md): `SELECT client_uuid, is_offline FROM checkins LIMIT 1;` → nessun errore. **Non ancora eseguito in questa sessione — richiede deploy esplicito.**
 - [ ] **A-G4: smoke test API live** con token valido su api.dataxiom.it:
   1. `POST /api/v1/checkins` SENZA campi nuovi → 201 (retrocompatibilità: l'app mobile attuale continua a funzionare)
   2. POST con `occurred_at` = 1h fa + `client_uuid` nuovo + `is_offline: true` → 201, `timestamp` nel DB = occurred_at (non NOW)
   3. Stesso identico POST ripetuto → 200 `deduplicated: true`, `SELECT COUNT(*) WHERE client_uuid=…` = 1
   4. POST con `occurred_at` = 3 giorni fa → 400 `OFFLINE_TIMESTAMP_OUT_OF_WINDOW`
   5. Pulizia: DELETE dei record di test creati
-- [ ] **A-G5: dashboard live** — badge "Offline" visibile sul record del punto 2 prima della pulizia
+  **Non ancora eseguito — richiede deploy esplicito.**
+- [ ] **A-G5: dashboard live** — badge "Offline" visibile sul record del punto 2 prima della pulizia. **Non ancora eseguito — richiede deploy esplicito.**
 
 ---
 
