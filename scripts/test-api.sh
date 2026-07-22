@@ -82,12 +82,12 @@ echo -e "  ${BOLD}Login come admin (pippo@badge.local)${NC}"
 TOKEN_ADMIN=$(login "pippo@badge.local" "pippo01")
 [[ -n "$TOKEN_ADMIN" ]] && pass "Login admin → token ricevuto" || fail "Login admin → nessun token"
 
-echo -e "  ${BOLD}Login come manager (diego@badge.local / Torino)${NC}"
-TOKEN_MANAGER=$(login "diego@badge.local" "Diego1975")
+echo -e "  ${BOLD}Login come manager (pino@badge.local / Torino)${NC}"
+TOKEN_MANAGER=$(login "pino@badge.local" "pino01")
 [[ -n "$TOKEN_MANAGER" ]] && pass "Login manager Torino → token ricevuto" || fail "Login manager → nessun token"
 
-echo -e "  ${BOLD}Login come employee (luca.verdi@employee.it)${NC}"
-TOKEN_EMPLOYEE=$(login "luca.verdi@employee.it" "Luca1975")
+echo -e "  ${BOLD}Login come employee (maria@badge.local)${NC}"
+TOKEN_EMPLOYEE=$(login "maria@badge.local" "maria01")
 [[ -n "$TOKEN_EMPLOYEE" ]] && pass "Login employee → token ricevuto" || fail "Login employee → nessun token"
 
 echo -e "  ${BOLD}Credenziali errate → deve dare 4xx (rifiutato)${NC}"

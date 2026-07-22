@@ -53,8 +53,8 @@ Lo script si trova in `scripts/test-api.sh` e non richiede dipendenze oltre
 
 **Account demo usati:**
 - Admin: `pippo@badge.local / pippo01`
-- Manager Torino: `diego@badge.local / Diego1975`
-- Employee: `luca.verdi@employee.it / Luca1975`
+- Manager Torino: `pino@badge.local / pino01`
+- Employee: `maria@badge.local / maria01`
 
 ---
 
