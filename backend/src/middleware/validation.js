@@ -79,6 +79,20 @@ const PostCheckinSchema = z.object({
     }),
     latitude: z.number().min(-90, 'latitude must be between -90 and 90').max(90, 'latitude must be between -90 and 90').nullable().optional(),
     longitude: z.number().min(-180, 'longitude must be between -180 and 180').max(180, 'longitude must be between -180 and 180').nullable().optional(),
+    // Offline mode (docs/superpowers/plans/2026-07-19-offline-mode.md): the client always
+    // generates client_uuid + occurred_at. The 48h/+5min window is the anti-fraud bound;
+    // +5min tolerates device clock skew.
+    occurred_at: z.string().datetime({ offset: true }).optional()
+      .superRefine((val, ctx) => {
+        if (!val) return;
+        const t = new Date(val).getTime();
+        const now = Date.now();
+        if (t < now - 48 * 3600 * 1000 || t > now + 5 * 60 * 1000) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'OFFLINE_TIMESTAMP_OUT_OF_WINDOW' });
+        }
+      }),
+    client_uuid: z.string().uuid('Invalid client_uuid: must be valid UUID').optional(),
+    is_offline: z.boolean().optional(),
   }),
   query: z.object({
     client_id: z.string().uuid('Invalid client_id: must be valid UUID').optional(),

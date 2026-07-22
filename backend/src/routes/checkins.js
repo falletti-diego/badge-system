@@ -25,7 +25,7 @@ const router = express.Router();
 // =====================================================
 
 router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), async (req, res, next) => {
-  const { employee_id, site_id, type } = req.validated.body;
+  const { employee_id, site_id, type, occurred_at, client_uuid, is_offline } = req.validated.body;
   const clientId = req.user.client_id;
 
   try {
@@ -48,6 +48,18 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
     }
 
     const result = await withTransaction(async (client) => {
+      // 0. Offline mode idempotency: if client_uuid was already synced, return the
+      // existing row instead of creating a duplicate (sync retries are safe to repeat).
+      if (client_uuid) {
+        const dup = await client.query(
+          'SELECT id, employee_id, site_id, type, timestamp, created_at, is_offline FROM checkins WHERE client_uuid = $1::uuid AND client_id = $2::uuid',
+          [client_uuid, clientId]
+        );
+        if (dup.rows.length > 0) {
+          return { checkin: dup.rows[0], deduplicated: true };
+        }
+      }
+
       // 1. Verify employee exists and belongs to authenticated client
       const employeeResult = await client.query(
         'SELECT id, client_id FROM employees WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1',
@@ -109,18 +121,39 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
       // 4. Create check-in
       // Use employee_id as created_by: mock user IDs are non-UUID strings,
       // but employee_id is always a valid UUID for self check-ins.
-      const checkinResult = await client.query(
-        `INSERT INTO checkins (
-          employee_id, site_id, client_id, type, timestamp, created_by, created_at,
-          checkin_latitude, checkin_longitude
-        ) VALUES ($1, $2, $3, $4, NOW(), $5, NOW(), $6, $7)
-        RETURNING id, employee_id, site_id, type, timestamp, created_at`,
-        [employee_id, site_id, clientId, type, employee_id,
-          checkinLat != null ? checkinLat : null,
-          checkinLng != null ? checkinLng : null]
-      );
+      // occurred_at (client-declared timestamp, offline mode) falls back to NOW() when absent.
+      let checkin;
+      try {
+        const checkinResult = await client.query(
+          `INSERT INTO checkins (
+            employee_id, site_id, client_id, type, timestamp, created_by, created_at,
+            checkin_latitude, checkin_longitude, client_uuid, is_offline
+          ) VALUES ($1, $2, $3, $4, COALESCE($8::timestamptz, NOW()), $5, NOW(), $6, $7, $9, COALESCE($10, false))
+          RETURNING id, employee_id, site_id, type, timestamp, created_at, is_offline`,
+          [employee_id, site_id, clientId, type, employee_id,
+            checkinLat != null ? checkinLat : null,
+            checkinLng != null ? checkinLng : null,
+            occurred_at || null,
+            client_uuid || null,
+            is_offline === true]
+        );
+        checkin = checkinResult.rows[0];
+      } catch (err) {
+        // Race: two concurrent sync retries both passed the dedup SELECT above,
+        // then both tried to INSERT the same client_uuid. Whichever loses the
+        // UNIQUE index race re-reads the winner's row and reports it as deduplicated.
+        if (err.code === '23505' && client_uuid) {
+          const dup = await client.query(
+            'SELECT id, employee_id, site_id, type, timestamp, created_at, is_offline FROM checkins WHERE client_uuid = $1::uuid AND client_id = $2::uuid',
+            [client_uuid, clientId]
+          );
+          if (dup.rows.length > 0) {
+            return { checkin: dup.rows[0], deduplicated: true };
+          }
+        }
+        throw err;
+      }
 
-      const checkin = checkinResult.rows[0];
       checkin.site_name = site.name;
 
       // 5. Log audit trail
@@ -135,16 +168,19 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
           site_id,
           type,
           timestamp: checkin.timestamp,
+          is_offline: checkin.is_offline === true,
         },
         userId: req.user.user_id,
       });
 
-      return checkin;
+      return { checkin, deduplicated: false };
     });
 
+    const { checkin, deduplicated } = result;
+
     logger.info({
-      action: 'checkin_created',
-      checkin_id: result.id,
+      action: deduplicated ? 'checkin_deduplicated' : 'checkin_created',
+      checkin_id: checkin.id,
       employee_id,
       site_id,
       type,
@@ -158,10 +194,19 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
       });
     });
 
-    res.status(201).json({
-      data: result,
-      message: 'Check-in created successfully',
-    });
+    if (deduplicated) {
+      res.status(200).json({
+        success: true,
+        deduplicated: true,
+        data: checkin,
+        message: 'Check-in already synced',
+      });
+    } else {
+      res.status(201).json({
+        data: checkin,
+        message: 'Check-in created successfully',
+      });
+    }
   } catch (err) {
     next(err);
   }
