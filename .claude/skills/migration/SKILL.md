@@ -104,7 +104,9 @@ Per applicare la migration al database di produzione su AWS RDS, l'utente deve e
 npm run migrations
 ```
 
-Da `backend/`. Questo esegue il runner `backend/src/db/migrations.js`.
+Da `backend/`. Questo esegue il runner `backend/scripts/run-migrations.js` (idempotente, traccia le migration applicate in `schema_migrations`).
+
+**Nota:** RDS non è raggiungibile direttamente dalla rete locale (security group VPC-only) — per applicare una migration in produzione va eseguito da dentro la VPC: `scp` del file su EC2, poi `ssh` + `psql -f` da lì (vedi `aws_ec2_instance.md` in memoria per le credenziali SSH).
 
 **Non applicare la migration automaticamente a produzione.** Chiedi sempre conferma prima.
 

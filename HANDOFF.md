@@ -57,7 +57,7 @@ Commit range Fase A: `a344dee` → `451a7cd` (7 commit, tutti pushati e deployat
 
 - **Il design iniziale "SELECT dedup + INSERT + catch(23505) + re-SELECT" era rotto**: dopo un'eccezione 23505, Postgres marca la transazione come *aborted* — qualunque query successiva sullo stesso client (inclusa la SELECT di recovery) fallisce con `25P02`. Il mock dei test (funzione JS pura) non ha stato di transazione reale, quindi non lo rilevava: **9/9 test verdi su un design rotto**. Il fix corretto (`INSERT ... ON CONFLICT DO NOTHING RETURNING`) non lancia mai eccezioni — architetturalmente più semplice E corretto, non solo una patch. **Lezione**: quando un mock deve simulare comportamento transazionale di Postgres (stato aborted, SAVEPOINT), un test verde non è sufficiente garanzia — va riprodotto contro un DB reale prima di fidarsi.
 - **Un fix di sicurezza trovato dopo un push in produzione richiede correzione e ri-deploy immediati**, non un rimando a fine sessione — il codice vulnerabile (`is_offline` fidato dal client) è rimasto live per alcuni minuti prima di essere corretto.
-- **`npm run migrations` in `backend/package.json` punta a un file inesistente** (`src/db/migrations.js`) — script rotto, mai notato perché in pratica si usa sempre `scripts/run-migrations.js` (il runner reale, usato anche in CI). Non corretto in questa sessione (fuori perimetro), segnalato per non ripeterlo.
+- **`npm run migrations` in `backend/package.json` puntava a un file inesistente** (`src/db/migrations.js`) — script rotto, mai notato perché in pratica si usa sempre `scripts/run-migrations.js` (il runner reale, usato anche in CI). **Corretto** prima di iniziare la Fase B (verificato con una run reale contro il DB di test locale).
 
 ---
 
@@ -65,8 +65,7 @@ Commit range Fase A: `a344dee` → `451a7cd` (7 commit, tutti pushati e deployat
 
 1. **Offline Mode — Fase B (mobile)**: coda offline (`offlineQueue.js`, AsyncStorage), sync automatico (NetInfo+AppState), UI "in attesa di rete" su check-in/QRScanner/SuccessScreen, cache read-only turni/presenze. Piano già scritto in dettaglio (task B1-B6 + gate B-G1/B-G2/B-G3) in `docs/superpowers/plans/2026-07-19-offline-mode.md`. Prevista per la prossima build TestFlight — comunque necessaria entro l'8 settembre (scadenza Build 14, reminder 25 agosto).
 2. **SES Parte B** (email a prospect reali): resta l'unico bloccante commerciale — serve accesso DNS register.it dell'utente per verifica dominio + uscita Sandbox.
-3. **(Minor, non bloccante)** Correggere `npm run migrations` in `backend/package.json` (punta a un file inesistente) — usare `scripts/run-migrations.js` come target reale.
-4. Backlog invariato: flake inter-worker test demo, saldi superadmin — vedi TASKS.md sezione SECURITY TECH DEBT.
+3. Backlog invariato: flake inter-worker test demo, saldi superadmin — vedi TASKS.md sezione SECURITY TECH DEBT.
 
 ---
 
