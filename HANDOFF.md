@@ -1,8 +1,8 @@
-# Badge System — Session 77b Handoff
+# Badge System — Session 77b/78 Handoff
 
-**Date:** 2026-07-19
-**Session:** 77b — integrazione dataxiom.it ↔ Badge System implementata (repo `dataxiom-landing`) + materiale lancio LinkedIn pronto
-**Status:** ⏳ **Tutto pronto e verificato dall'utente, NON deployato.** Domani (2026-07-20): deploy landing + pubblicazione LinkedIn.
+**Date:** 2026-07-22
+**Session:** 77b/78 — integrazione dataxiom.it ↔ Badge System implementata (repo `dataxiom-landing`), **DEPLOYATA in produzione**, post LinkedIn **PUBBLICATO**
+**Status:** ✅ **LANCIO COMPLETO.** Landing live + verificata, post LinkedIn (Variante A + carosello 7 slide) pubblicato dall'utente sulla Company Page. Prossimo step: esecuzione del piano Offline Mode (sbloccata, era in attesa proprio del lancio).
 
 ---
 
@@ -12,16 +12,15 @@ Collegare la landing aziendale dataxiom.it a Badge System (pagina prodotto dedic
 
 ---
 
-## ⚡ DOMANI (2026-07-20) — sequenza esatta
+## ✅ FATTO (2026-07-22) — lancio completo
 
-1. **Deploy landing** (⚠️ SITO GIUSTO: `dataxiom`, non `dataxiom-badge`):
-   ```bash
-   cd "/Users/diegofalletti/DATAXIOM/Dataxiom – Analisi & BI/Landing Page"
-   netlify deploy --prod --dir . --site a31a2216-fb06-47e0-b632-a1193a88039a
-   ```
-2. **Verifica live**: dataxiom.it (card "Il nostro prodotto" dopo i Case Study, nav "Badge System", toggle EN traduce la card) + dataxiom.it/badge-system.html (tema ereditato dalla home, hero nitida, link demo → badge.dataxiom.it/prova-demo)
-3. **Check funnel demo** funzionante (rate limit 3/ora/IP, cap 20 demo attive — ok per lancio organico, monitorare i log)
-4. **Pubblicazione LinkedIn** (Company Page): testo Variante A + allegato `carosello_badge_system.pdf` da `LinkedIn/2026-07-20_badge-system-launch/`
+1. **Deploy landing** eseguito (sito `dataxiom`, id `a31a2216-fb06-47e0-b632-a1193a88039a`), deploy id `6a60c43ed2d5421c57dad0ea`.
+2. **Verifica live confermata**: `dataxiom.it/badge-system.html` → 200, title corretto; home contiene link + nav "Badge System"; hero image 200; demo funnel `badge.dataxiom.it/prova-demo` → 200 (non impattato dal deploy landing, siti separati).
+3. **Post LinkedIn pubblicato** (manuale, dall'utente sulla Company Page): testo Variante A + carosello `carosello_badge_system.pdf` da `LinkedIn/2026-07-20_badge-system-launch/`. Confermato dall'utente il 2026-07-22.
+
+## 🚀 Prossimo step
+
+**Piano Offline Mode** (`docs/superpowers/plans/2026-07-19-offline-mode.md`, commit `1af3e37`) — scritto, revisionato (con step di verifica/test aggiunti su richiesta utente), approvato, ed esplicitamente vincolato a partire "dopo il lancio". Il lancio è ora completo: via libera per iniziare la Fase A (backend, deployabile indipendentemente e retrocompatibile), poi Fase B (mobile, prossima build TestFlight — comunque necessaria entro l'8 settembre, scadenza Build 14).
 
 ---
 
