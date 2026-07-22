@@ -11,7 +11,7 @@ const { createValidationMiddleware, PostCheckinSchema, GetCheckinsSchema, PutChe
 const { logAudit } = require('../middleware/audit');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
-const { NotFoundError, ValidationError, ForbiddenError, GeofenceError } = require('../utils/errors');
+const { NotFoundError, ValidationError, ForbiddenError, GeofenceError, ConflictError } = require('../utils/errors');
 const { haversineDistance } = require('../utils/geo');
 const { deleteCacheByPattern } = require('../db/redis');
 const { resolveEmployeeId, resolveSiteId } = require('../utils/resolvers');
@@ -48,18 +48,6 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
     }
 
     const result = await withTransaction(async (client) => {
-      // 0. Offline mode idempotency: if client_uuid was already synced, return the
-      // existing row instead of creating a duplicate (sync retries are safe to repeat).
-      if (client_uuid) {
-        const dup = await client.query(
-          'SELECT id, employee_id, site_id, type, timestamp, created_at, is_offline FROM checkins WHERE client_uuid = $1::uuid AND client_id = $2::uuid',
-          [client_uuid, clientId]
-        );
-        if (dup.rows.length > 0) {
-          return { checkin: dup.rows[0], deduplicated: true };
-        }
-      }
-
       // 1. Verify employee exists and belongs to authenticated client
       const employeeResult = await client.query(
         'SELECT id, client_id FROM employees WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1',
@@ -122,58 +110,69 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
       // Use employee_id as created_by: mock user IDs are non-UUID strings,
       // but employee_id is always a valid UUID for self check-ins.
       // occurred_at (client-declared timestamp, offline mode) falls back to NOW() when absent.
+      //
+      // Idempotency via ON CONFLICT DO NOTHING (not a catch-23505 pattern): a duplicate
+      // client_uuid simply inserts zero rows instead of throwing, so it never leaves the
+      // transaction in Postgres's aborted state — a thrown 23505 here would poison every
+      // later statement on this client (including a recovery SELECT) with a 25P02 error.
+      const checkinResult = await client.query(
+        `INSERT INTO checkins (
+          employee_id, site_id, client_id, type, timestamp, created_by, created_at,
+          checkin_latitude, checkin_longitude, client_uuid, is_offline
+        ) VALUES ($1, $2, $3, $4, COALESCE($8::timestamptz, NOW()), $5, NOW(), $6, $7, $9, $10)
+        ON CONFLICT (client_id, client_uuid) WHERE client_uuid IS NOT NULL DO NOTHING
+        RETURNING id, employee_id, site_id, type, timestamp, created_at, is_offline`,
+        [employee_id, site_id, clientId, type, employee_id,
+          checkinLat != null ? checkinLat : null,
+          checkinLng != null ? checkinLng : null,
+          occurred_at || null,
+          client_uuid || null,
+          is_offline === true]
+      );
+
       let checkin;
-      try {
-        const checkinResult = await client.query(
-          `INSERT INTO checkins (
-            employee_id, site_id, client_id, type, timestamp, created_by, created_at,
-            checkin_latitude, checkin_longitude, client_uuid, is_offline
-          ) VALUES ($1, $2, $3, $4, COALESCE($8::timestamptz, NOW()), $5, NOW(), $6, $7, $9, COALESCE($10, false))
-          RETURNING id, employee_id, site_id, type, timestamp, created_at, is_offline`,
-          [employee_id, site_id, clientId, type, employee_id,
-            checkinLat != null ? checkinLat : null,
-            checkinLng != null ? checkinLng : null,
-            occurred_at || null,
-            client_uuid || null,
-            is_offline === true]
-        );
+      let deduplicated = false;
+
+      if (checkinResult.rows.length > 0) {
         checkin = checkinResult.rows[0];
-      } catch (err) {
-        // Race: two concurrent sync retries both passed the dedup SELECT above,
-        // then both tried to INSERT the same client_uuid. Whichever loses the
-        // UNIQUE index race re-reads the winner's row and reports it as deduplicated.
-        if (err.code === '23505' && client_uuid) {
-          const dup = await client.query(
-            'SELECT id, employee_id, site_id, type, timestamp, created_at, is_offline FROM checkins WHERE client_uuid = $1::uuid AND client_id = $2::uuid',
-            [client_uuid, clientId]
-          );
-          if (dup.rows.length > 0) {
-            return { checkin: dup.rows[0], deduplicated: true };
-          }
+      } else {
+        // ON CONFLICT fired: this client_uuid was already synced for this tenant.
+        // Scope the recovery SELECT to employee_id too — a client_uuid collision with a
+        // DIFFERENT employee's check-in is a bug (idempotency keys must never be shared
+        // across employees), not something to silently paper over by returning their data.
+        deduplicated = true;
+        const dup = await client.query(
+          'SELECT id, employee_id, site_id, type, timestamp, created_at, is_offline FROM checkins WHERE client_id = $1::uuid AND client_uuid = $2::uuid AND employee_id = $3::uuid',
+          [clientId, client_uuid, employee_id]
+        );
+        if (dup.rows.length === 0) {
+          throw new ConflictError('client_uuid already used by a different employee', 'CHECKIN_UUID_COLLISION');
         }
-        throw err;
+        checkin = dup.rows[0];
       }
 
       checkin.site_name = site.name;
 
-      // 5. Log audit trail
-      await logAudit(client, {
-        action: 'checkin_created',
-        entity: 'checkin',
-        entityId: checkin.id,
-        clientId,
-        oldValue: null,
-        newValue: {
-          employee_id,
-          site_id,
-          type,
-          timestamp: checkin.timestamp,
-          is_offline: checkin.is_offline === true,
-        },
-        userId: req.user.user_id,
-      });
+      // 5. Log audit trail (skip for a deduplicated retry: no new record was created)
+      if (!deduplicated) {
+        await logAudit(client, {
+          action: 'checkin_created',
+          entity: 'checkin',
+          entityId: checkin.id,
+          clientId,
+          oldValue: null,
+          newValue: {
+            employee_id,
+            site_id,
+            type,
+            timestamp: checkin.timestamp,
+            is_offline: checkin.is_offline === true,
+          },
+          userId: req.user.user_id,
+        });
+      }
 
-      return { checkin, deduplicated: false };
+      return { checkin, deduplicated };
     });
 
     const { checkin, deduplicated } = result;

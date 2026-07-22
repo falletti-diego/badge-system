@@ -58,14 +58,13 @@ const app = require('../app');
 //
 // Uses SQL-based dispatch so call order (BEGIN/COMMIT/ROLLBACK) doesn't matter.
 // existingByUuid: { [client_uuid]: rowToReturnAsDuplicate } — simulates a checkin
-// already present with that client_uuid (idempotent dedup path).
-// insertShouldThrowUniqueViolation: simulates the race where two concurrent syncs
-// both pass the dedup SELECT, then the INSERT itself hits the UNIQUE index.
+// already present with that client_uuid (recovery SELECT after ON CONFLICT fires).
+// insertConflicts: simulates the INSERT ... ON CONFLICT DO NOTHING RETURNING
+// returning zero rows (the UNIQUE index already has this client_id+client_uuid).
 
-function makeClientQuery({ existingByUuid = {}, insertShouldThrowUniqueViolation = false } = {}) {
+function makeClientQuery({ existingByUuid = {}, insertConflicts = false } = {}) {
   const insertCalls = [];
   const auditCalls = [];
-  let insertAttempts = 0;
 
   const fn = jest.fn().mockImplementation((sql, params = []) => {
     const s = sql.trim().toUpperCase();
@@ -93,17 +92,9 @@ function makeClientQuery({ existingByUuid = {}, insertShouldThrowUniqueViolation
     if (s.includes('ANY(ASSIGNED_SITES)')) {
       return Promise.resolve({ rows: [{ '?column?': 1 }] });
     }
-    if (s.includes('SELECT') && s.includes('FROM CHECKINS') && s.includes('CLIENT_UUID')) {
-      const [uuid] = params;
-      const existing = existingByUuid[uuid];
-      return Promise.resolve({ rows: existing ? [existing] : [] });
-    }
     if (s.startsWith('INSERT INTO CHECKINS')) {
-      insertAttempts += 1;
-      if (insertShouldThrowUniqueViolation && insertAttempts === 1) {
-        const err = new Error('duplicate key value violates unique constraint "idx_checkins_client_uuid"');
-        err.code = '23505';
-        throw err;
+      if (insertConflicts) {
+        return Promise.resolve({ rows: [] }); // ON CONFLICT DO NOTHING fired
       }
       insertCalls.push(params);
       const [employee_id, site_id, , type, , , , occurred_at, client_uuid, is_offline] = params;
@@ -118,6 +109,13 @@ function makeClientQuery({ existingByUuid = {}, insertShouldThrowUniqueViolation
         is_offline: is_offline === true,
       };
       return Promise.resolve({ rows: [row] });
+    }
+    // Recovery SELECT after ON CONFLICT DO NOTHING (WHERE client_id = $1 AND client_uuid = $2 AND employee_id = $3)
+    if (s.includes('SELECT') && s.includes('FROM CHECKINS') && s.includes('CLIENT_UUID')) {
+      const [, uuid, empId] = params;
+      const existing = existingByUuid[uuid];
+      const matches = existing && existing.employee_id === empId;
+      return Promise.resolve({ rows: matches ? [existing] : [] });
     }
     if (s.startsWith('INSERT INTO AUDIT_LOG')) {
       auditCalls.push(params);
@@ -253,8 +251,8 @@ describe('POST /api/checkins — offline dedup (route)', () => {
       timestamp: isoHoursAgo(2), created_at: isoHoursAgo(2), client_uuid: clientUuid, is_offline: true,
     };
 
-    // First call: no existing row yet, INSERT happens.
-    const { fn: fnFirst, insertCalls } = makeClientQuery({ existingByUuid: {} });
+    // First call: INSERT succeeds normally (no conflict yet).
+    const { fn: fnFirst, insertCalls } = makeClientQuery();
     pool.connect.mockResolvedValue({ query: fnFirst, release: jest.fn() });
 
     const payload = {
@@ -265,8 +263,12 @@ describe('POST /api/checkins — offline dedup (route)', () => {
     expect(res1.status).toBe(201);
     expect(insertCalls).toHaveLength(1);
 
-    // Second call: dedup SELECT now finds the existing row → 200 deduplicated, no second INSERT.
-    const { fn: fnSecond, insertCalls: insertCallsSecond } = makeClientQuery({ existingByUuid: { [clientUuid]: existingRow } });
+    // Second call: INSERT ... ON CONFLICT DO NOTHING fires (0 rows), recovery SELECT
+    // finds the existing row → 200 deduplicated, no second row ever created.
+    const { fn: fnSecond, insertCalls: insertCallsSecond } = makeClientQuery({
+      insertConflicts: true,
+      existingByUuid: { [clientUuid]: existingRow },
+    });
     pool.connect.mockResolvedValue({ query: fnSecond, release: jest.fn() });
 
     const res2 = await request(app).post('/api/v1/checkins').set('Authorization', `Bearer ${EMP_TOKEN}`).send(payload);
@@ -276,17 +278,17 @@ describe('POST /api/checkins — offline dedup (route)', () => {
     expect(insertCallsSecond).toHaveLength(0);
   });
 
-  it('gestisce la race sul vincolo UNIQUE (23505): ri-seleziona e risponde deduplicated:true', async () => {
+  it('client_uuid riusato da un employee diverso: 409 CHECKIN_UUID_COLLISION (fail-closed, non restituisce dati altrui)', async () => {
     const clientUuid = '66666666-6666-6666-6666-666666666666';
+    const OTHER_EMP_ID = '550e8400-e29b-41d4-a716-446655440999';
+    // The conflicting row belongs to a different employee — the recovery SELECT
+    // (scoped to employee_id too) must NOT match it.
     const existingRow = {
-      id: 'ci-race-1', employee_id: EMP_ID, site_id: SITE_ID, type: 'IN',
+      id: 'ci-other-employee-1', employee_id: OTHER_EMP_ID, site_id: SITE_ID, type: 'IN',
       timestamp: isoHoursAgo(1), created_at: isoHoursAgo(1), client_uuid: clientUuid, is_offline: true,
     };
 
-    // Dedup SELECT finds nothing (race: the other request hasn't committed yet),
-    // but the INSERT itself throws 23505. Route must catch it, re-SELECT, and
-    // respond as deduplicated using the now-committed row.
-    const { fn } = makeClientQuery({ insertShouldThrowUniqueViolation: true, existingByUuid: { [clientUuid]: existingRow } });
+    const { fn } = makeClientQuery({ insertConflicts: true, existingByUuid: { [clientUuid]: existingRow } });
     pool.connect.mockResolvedValue({ query: fn, release: jest.fn() });
 
     const res = await request(app)
@@ -297,9 +299,8 @@ describe('POST /api/checkins — offline dedup (route)', () => {
         occurred_at: isoHoursAgo(1), client_uuid: clientUuid, is_offline: true,
       });
 
-    expect(res.status).toBe(200);
-    expect(res.body.deduplicated).toBe(true);
-    expect(res.body.data.id).toBe('ci-race-1');
+    expect(res.status).toBe(409);
+    expect(JSON.stringify(res.body)).toContain('CHECKIN_UUID_COLLISION');
   });
 
   it('audit log include is_offline nel newValue', async () => {
