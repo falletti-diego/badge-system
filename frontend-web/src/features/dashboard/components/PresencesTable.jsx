@@ -4,7 +4,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button, Box, Chip } from '@mui/material';
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button, Box, Chip, Tooltip } from '@mui/material';
 
 /**
  * Pairs IN and OUT records in the loaded rows and returns a Map of
@@ -165,6 +165,11 @@ const PresencesTable = ({ data = { rows: [], total: 0 }, loading = false, curren
                 <TableCell sx={{ color: '#2A2520' }}>{row.site_name || '—'}</TableCell>
                 <TableCell sx={{ color: '#2A2520' }}>
                   {row.timestamp ? new Date(row.timestamp).toLocaleString() : '—'}
+                  {row.is_offline && (
+                    <Tooltip title="Timbratura registrata senza rete e sincronizzata in seguito">
+                      <Chip label="Offline" size="small" color="warning" sx={{ ml: 1, height: '20px', fontSize: '0.7rem' }} />
+                    </Tooltip>
+                  )}
                 </TableCell>
                 <TableCell>
                   <Box

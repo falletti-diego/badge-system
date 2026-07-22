@@ -259,6 +259,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
         c.modified_by,
         c.modified_by_name,
         c.correction_note,
+        c.is_offline,
         e.name as employee_name,
         e.email as employee_email,
         s.name as site_name
