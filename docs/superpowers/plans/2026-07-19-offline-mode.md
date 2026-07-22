@@ -161,15 +161,16 @@ Gestire anche la race sul UNIQUE (due sync simultanei): catch dell'errore pg `23
 
 - [x] **A-G1: suite completa** — 608/608 backend (Jest) + 239/240 frontend-web (Vitest, 1 skip pre-esistente) verdi. Un fallimento visto in run parallela (`demo-start.test.js`, cap conteggio demo attive) è il flake inter-worker già noto in backlog — passa in isolamento, non causato da questa fase.
 - [x] **A-G2: /code-review** (medium effort, 8 finder-agent + verifica) sul diff A1-A4. **1 finding CRITICO confermato empiricamente contro Postgres reale**: il catch(23505) lasciava la transazione in stato aborted → la SELECT di recovery falliva sempre con `25P02` invece di rispondere `deduplicated:true` (il mock dei test non lo copriva, non simulando lo stato reale della transazione). Fix: sostituito con `INSERT ... ON CONFLICT (client_id, client_uuid) DO NOTHING RETURNING` (nessuna eccezione mai lanciata) — riverificato con script diretto contro `badge_system_test` reale. Altri 2 fix applicati: indice UNIQUE scoped per tenant (`client_id, client_uuid` invece di solo `client_uuid`); recovery SELECT ora filtra anche per `employee_id`, con risposta `409 CHECKIN_UUID_COLLISION` fail-closed se un client_uuid risulta riusato da un employee diverso. Commit fix: `f89b933`.
-- [ ] **A-G3: migration in produzione** — applicare la 032 su RDS, poi ri-eseguire le query interessate (regola CLAUDE.md): `SELECT client_uuid, is_offline FROM checkins LIMIT 1;` → nessun errore. **Non ancora eseguito in questa sessione — richiede deploy esplicito.**
-- [ ] **A-G4: smoke test API live** con token valido su api.dataxiom.it:
-  1. `POST /api/v1/checkins` SENZA campi nuovi → 201 (retrocompatibilità: l'app mobile attuale continua a funzionare)
-  2. POST con `occurred_at` = 1h fa + `client_uuid` nuovo + `is_offline: true` → 201, `timestamp` nel DB = occurred_at (non NOW)
-  3. Stesso identico POST ripetuto → 200 `deduplicated: true`, `SELECT COUNT(*) WHERE client_uuid=…` = 1
-  4. POST con `occurred_at` = 3 giorni fa → 400 `OFFLINE_TIMESTAMP_OUT_OF_WINDOW`
-  5. Pulizia: DELETE dei record di test creati
-  **Non ancora eseguito — richiede deploy esplicito.**
-- [ ] **A-G5: dashboard live** — badge "Offline" visibile sul record del punto 2 prima della pulizia. **Non ancora eseguito — richiede deploy esplicito.**
+- [x] **A-G3: migration in produzione** — applicata la 032 su RDS via EC2 (RDS non raggiungibile direttamente dal locale, corretto: security group VPC-only). Idempotenza riverificata con doppia esecuzione (2° run tutto no-op). Query di verifica CLAUDE.md eseguita: `SELECT client_uuid, is_offline FROM checkins LIMIT 1;` → nessun errore, `\d checkins` conferma le 2 colonne + l'indice UNIQUE composito `(client_id, client_uuid)`.
+- [x] **A-G4: smoke test API live** eseguito su `api.dataxiom.it` con un tenant demo self-service isolato (nessun dato di cliente reale toccato), poi eliminato a fine test:
+  1. `POST /api/v1/checkins` SENZA campi nuovi → 201, `is_offline:false` ✓ (retrocompatibilità confermata)
+  2. POST con `occurred_at` = 1h fa + `client_uuid` nuovo → 201, `timestamp` = occurred_at esatto (non NOW), `is_offline:true` derivato server-side ✓
+  3. Stesso identico POST ripetuto → 200 `deduplicated:true`, stesso `id` restituito (nessuna riga duplicata) ✓
+  4. POST con `occurred_at` = 3 giorni fa → 400 `OFFLINE_TIMESTAMP_OUT_OF_WINDOW` ✓
+  5. Pulizia: `DELETE FROM clients WHERE id = ...` (cascata su employees/sites/checkins) — eseguita ✓
+
+  **Finding aggiuntivo durante lo smoke test (non nel piano originale):** un security review automatico post-push ha segnalato che `is_offline` era accettato as-is dal client e finiva senza verifica nell'audit trail e nel badge dashboard — un client (bug o malevolo) poteva falsare entrambi i segnali di trasparenza pensati per il manager. Corretto **dopo che la Fase A era già stata deployata una prima volta** (breve finestra, nessun dato reale compromesso — `is_offline` è solo informativo, non un controllo di autorizzazione): `is_offline` ora è calcolato server-side da `occurred_at` (distanza da `now()` > 60s), mai letto dall'input client; rimosso dallo schema Zod. Commit `5067e01`, ri-deployato e ri-verificato con lo smoke test sopra (che riflette già il comportamento corretto).
+- [x] **A-G5: dashboard live** — verificato a livello di contratto dati: `GET /api/v1/checkins` (l'endpoint che alimenta `PresencesTable`) espone `is_offline:true` esattamente sul record creato al punto 2, `is_offline:false` su tutti gli altri. Il rendering del Chip MUI su quel campo è già coperto da test Vitest (Task A4). **Non verificato visivamente in un browser reale** (nessun tool di rendering browser disponibile in questa sessione) — solo verifica a livello di API/dati.
 
 ---
 
