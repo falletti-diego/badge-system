@@ -1,8 +1,31 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 19 Luglio 2026 (Session 77b — integrazione dataxiom.it ↔ Badge System implementata su nuovo repo `dataxiom-landing`, deploy previsto 2026-07-20 insieme al lancio LinkedIn)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ VERIFICATO (primo run automatico 3:30 UTC pulito — gap GDPR chiuso) | Screenshot reali su /prova-demo ✅ LIVE (script di cattura riusabile) | Pipeline CI/CD ✅ (backend job con Postgres 14 reale, exit pulito senza forceExit)  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Resta UN solo bloccante prospect: SES setup completo (Parte B del piano 2026-07-19 — dominio DKIM + Sandbox exit, serve accesso DNS utente su register.it). Poi: reminder TestFlight 25 agosto (Build 14 scade 8 settembre), staging + GPS consent quando c'è una data per il primo pilota
+**Last Updated:** 22 Luglio 2026 (Session 78 — lancio landing+LinkedIn completato; Fase A del piano Offline Mode implementata, code-reviewata e deployata LIVE in produzione)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Landing dataxiom.it+badge-system.html ✅ LIVE, lancio LinkedIn ✅ pubblicato | Offline Mode Fase A (backend) ✅ LIVE — timbrature con `occurred_at`/`client_uuid`/`is_offline`, dedup idempotente, badge dashboard | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ VERIFICATO | Pipeline CI/CD ✅ (backend job con Postgres 14 reale, exit pulito senza forceExit)  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Offline Mode Fase B (mobile — coda offline, sync automatico), prevista per la prossima build TestFlight (comunque necessaria entro l'8 settembre, scadenza Build 14). Resta UN solo bloccante prospect: SES setup completo (Parte B del piano 2026-07-19 — dominio DKIM + Sandbox exit, serve accesso DNS utente su register.it)
+
+---
+
+## Session 78 — Lancio landing+LinkedIn completato; Offline Mode Fase A implementata e deployata LIVE (22 Luglio 2026)
+
+### Decisioni
+1. **Deploy del lancio eseguito su verifica esplicita, non su fiducia**: prima di procedere, verificato lo stato reale (git log, curl live su dataxiom.it/badge-system.html, netlify status) — i commit di Session 77b erano pushati su GitHub ma il deploy Netlify "previsto domani" non era mai partito. Deploy eseguito solo dopo conferma esplicita dell'utente.
+2. **Fase A del piano Offline Mode eseguita con `/superpowers:test-driven-development` + `/superpowers:executing-plans`** (skill esplicitamente richieste dall'utente), non `subagent-driven-development` nonostante suggerito dalla skill stessa — le istruzioni utente prevalgono sul suggerimento della skill.
+3. **`/test-all` + `/code-review` obbligatori prima del commit finale di ogni fase** (istruzione esplicita dell'utente) — ha pagato: il code-review ha trovato un bug critico invisibile ai test con mock.
+4. **Deviazioni dal piano documentate, non nascoste**: numero/directory migration corretti (`032`/`backend/migrations/`, non `031`/`backend/src/db/migrations/` come assunto dal piano), `schema.sql` deliberatamente non toccato (coerente con la convenzione già stabilita dalla migration 030 — il bootstrap CI applica `schema.sql` + tutte le migration in sequenza, non serve duplicare le colonne).
+5. **Smoke test di produzione su tenant demo isolato, mai su dati cliente reali** — creato via `/api/v1/demo/start`, ripulito con `DELETE FROM clients` a fine test (cascata su employees/sites/checkins).
+
+### Bug critico trovato dal code-review (confermato empiricamente, non solo per ispezione)
+Il pattern iniziale "SELECT dedup preventiva + INSERT + catch(23505) → re-SELECT" lasciava la transazione Postgres in stato **aborted** dopo l'eccezione 23505: qualunque query successiva sullo stesso client (inclusa la SELECT di recovery) falliva con `25P02` invece di restituire la riga deduplicata. Il mock dei test (funzione JS pura, nessuno stato di transazione reale) non poteva rilevarlo — **verificato riproducendo lo scenario contro Postgres reale** (script Node diretto) prima e dopo il fix. **Fix architetturale, non una patch**: sostituito con `INSERT ... ON CONFLICT (client_id, client_uuid) DO NOTHING RETURNING` — nessuna eccezione mai lanciata, dedup interamente a livello SQL atomico. Corretti insieme: indice UNIQUE reso per-tenant (`client_id, client_uuid`, non solo `client_uuid` — coerenza con l'isolamento multi-tenant del resto dello schema) e risposta `409 CHECKIN_UUID_COLLISION` fail-closed se un `client_uuid` risulta riusato da un employee diverso (invece di restituire silenziosamente il check-in di qualcun altro).
+
+### Vulnerabilità trovata da un security review automatico post-push (durante lo smoke test)
+`is_offline` era accettato as-is dall'input del client e finiva senza verifica nell'audit trail e nel badge "Offline" della dashboard — un client (bug o malevolo) poteva falsare entrambi i segnali di trasparenza pensati per il manager. **Il codice vulnerabile era già live in produzione per alcuni minuti** prima di essere notato e corretto. Fix: `is_offline` ora calcolato **server-side** da `occurred_at` (distanza da `now()` > 60s), mai letto dal body validato; rimosso dallo schema Zod come campo accettato in input. Nessun dato reale compromesso (`is_offline` è puramente informativo, non un controllo di autorizzazione), ma la lezione resta: un fix di sicurezza trovato dopo un push in produzione va corretto e ri-deployato immediatamente, non alla fine della sessione.
+
+### Scoperta operativa: RDS non raggiungibile dal locale
+Il security group di RDS è VPC-only (nessun accesso pubblico) — la migration in produzione è stata applicata via SSH sull'istanza EC2 (che è nella stessa VPC), copiando il file `.sql` con `scp` e usando `psql` già presente sull'istanza. `npm run migrations` in `backend/package.json` punta a un file inesistente (`src/db/migrations.js`) — script rotto, mai notato perché in pratica si usa sempre `scripts/run-migrations.js` (quello reale, usato anche in CI). Non corretto in questa sessione (fuori perimetro), segnalato qui per non ripeterlo.
+
+### Materiale lancio pubblicato
+Landing `badge-system.html` live su dataxiom.it (verificato: 200, title corretto, nav+card home, hero, tema condiviso, funnel demo invariato). Post LinkedIn Variante A + carosello 7 slide pubblicato dall'utente sulla Company Page (nessun tool MCP LinkedIn disponibile in questo ambiente per farlo direttamente).
 
 ---
 
