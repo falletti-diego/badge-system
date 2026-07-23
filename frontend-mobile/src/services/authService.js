@@ -24,7 +24,12 @@ const authService = {
     } catch {
       // best-effort
     }
-    await AsyncStorage.multiRemove([TOKEN_KEY, REFRESH_KEY, USER_KEY]);
+    // Clear read-only UI caches too — retail devices are often shared between employees,
+    // and a stale cache would otherwise show the previous employee's shifts/presences to
+    // whoever logs in next (offline mode, Task B5). The pending check-in queue is
+    // deliberately NOT cleared here: those check-ins belong to the employee who created
+    // them and must still sync even after they've logged out on this device.
+    await AsyncStorage.multiRemove([TOKEN_KEY, REFRESH_KEY, USER_KEY, STORAGE_KEYS.CACHE_SHIFTS, STORAGE_KEYS.CACHE_PRESENCES]);
   },
 
   async getToken() {

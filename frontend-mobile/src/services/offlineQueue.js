@@ -112,30 +112,45 @@ export async function flushQueue() {
       if (isTooOld(item)) {
         queue = queue.map((q) => (q.client_uuid === item.client_uuid ? { ...q, status: 'failed' } : q));
         failed += 1;
-        continue;
+      } else {
+        try {
+          await apiClient.post(ENDPOINTS.CHECKINS_POST, item);
+          // Success (2xx) — includes deduplicated:true responses
+          queue = queue.filter((q) => q.client_uuid !== item.client_uuid);
+          synced += 1;
+        } catch (error) {
+          if (error && error.response) {
+            // Definitive application-level rejection — mark failed, keep going
+            queue = queue.map((q) => (q.client_uuid === item.client_uuid ? { ...q, status: 'failed' } : q));
+            failed += 1;
+          } else {
+            // Network/timeout error — stop processing entirely, leave remaining items untouched
+            networkErrorHit = true;
+          }
+        }
       }
 
-      try {
-        await apiClient.post(ENDPOINTS.CHECKINS_POST, item);
-        // Success (2xx) — includes deduplicated:true responses
-        queue = queue.filter((q) => q.client_uuid !== item.client_uuid);
-        synced += 1;
-      } catch (error) {
-        if (error && error.response) {
-          // Definitive application-level rejection — mark failed, keep going
-          queue = queue.map((q) => (q.client_uuid === item.client_uuid ? { ...q, status: 'failed' } : q));
-          failed += 1;
-        } else {
-          // Network/timeout error — stop processing entirely, leave remaining items untouched
-          networkErrorHit = true;
-        }
+      // Persist after every mutation, not just at the end: if the app is killed
+      // mid-flush, already-resolved items (synced or failed) stay resolved on next
+      // launch instead of being re-attempted from a stale in-memory copy. Deliberately
+      // OUTSIDE the apiClient.post try/catch above — a storage failure here must never
+      // be mistaken for a network error on the check-in POST itself; it propagates to
+      // the outer catch instead.
+      if (!networkErrorHit) {
+        await writeQueue(queue);
       }
     }
 
-    await writeQueue(queue);
-
     const remaining = queue.filter((q) => q.status === 'pending').length;
     return { synced, failed, remaining };
+  } catch (unexpectedError) {
+    // flushQueue is called fire-and-forget from RootNavigator (startup, NetInfo
+    // reconnect, AppState foreground) with no .catch() at the call site — it must
+    // never reject, or an unexpected failure (e.g. AsyncStorage itself throwing)
+    // would surface as an unhandled promise rejection.
+    const current = await readQueue().catch(() => []);
+    const remaining = current.filter((i) => i.status === 'pending').length;
+    return { synced: 0, failed: 0, remaining };
   } finally {
     isFlushing = false;
   }

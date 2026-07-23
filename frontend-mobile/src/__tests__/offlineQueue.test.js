@@ -292,4 +292,36 @@ describe('flushQueue', () => {
     await flushQueue();
     expect(listener).not.toHaveBeenCalled();
   });
+
+  test('persists incrementally: a synced item is written to storage even if a later item in the same run fails unexpectedly', async () => {
+    const first = item({ client_uuid: 'first' });
+    const second = item({ client_uuid: 'second' });
+    mockStoredQueue([first, second]);
+    const writes = captureWrites();
+
+    apiClient.post
+      .mockResolvedValueOnce({ data: { data: {} } }) // first succeeds
+      .mockRejectedValueOnce(makeError({ response: { status: 400 } })); // second fails (4xx)
+
+    await flushQueue();
+
+    // The write recorded right after the first item's success must already
+    // reflect it removed — not just the final write at the very end — proving
+    // persistence happens per-item, not only once after the whole loop.
+    const writeAfterFirstSync = writes.find(
+      (w) => !w.some((i) => i.client_uuid === 'first')
+    );
+    expect(writeAfterFirstSync).toBeDefined();
+    expect(writes.length).toBeGreaterThanOrEqual(2); // at least one write per resolved item
+  });
+
+  test('never rejects: an unexpected error (e.g. storage failure) resolves with a safe default instead of throwing', async () => {
+    mockStoredQueue([item()]);
+    AsyncStorage.setItem.mockRejectedValue(new Error('storage full'));
+    apiClient.post.mockResolvedValue({ data: { data: {} } });
+
+    await expect(flushQueue()).resolves.toEqual(
+      expect.objectContaining({ synced: 0, failed: 0 })
+    );
+  });
 });
