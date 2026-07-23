@@ -11,9 +11,14 @@ jest.mock('../services/apiClient', () => ({
   post: jest.fn(),
 }));
 
+jest.mock('../services/authService', () => ({
+  getUser: jest.fn(),
+}));
+
 const AsyncStorage = require('@react-native-async-storage/async-storage');
 const Crypto = require('expo-crypto');
 const apiClient = require('../services/apiClient').default || require('../services/apiClient');
+const authService = require('../services/authService').default || require('../services/authService');
 const { STORAGE_KEYS, OFFLINE_CONFIG, ENDPOINTS } = require('../config/endpoints');
 
 const {
@@ -53,6 +58,9 @@ function makeError({ response } = {}) {
 beforeEach(() => {
   jest.clearAllMocks();
   Crypto.randomUUID.mockReturnValue('generated-uuid-1234');
+  // Default: logged in as the same employee the `item()` helper below builds items
+  // for ('e1'), so existing flushQueue tests are unaffected by the ownership filter.
+  authService.getUser.mockResolvedValue({ employee_id: 'e1' });
 });
 
 describe('enqueueCheckin', () => {
@@ -323,5 +331,42 @@ describe('flushQueue', () => {
     await expect(flushQueue()).resolves.toEqual(
       expect.objectContaining({ synced: 0, failed: 0 })
     );
+  });
+
+  test('shared device: skips items belonging to a DIFFERENT employee than the one currently logged in — leaves them pending, never attempts or fails them', async () => {
+    const mine = item({ client_uuid: 'mine', employee_id: 'e1' });
+    const someoneElses = item({ client_uuid: 'not-mine', employee_id: 'e2' });
+    mockStoredQueue([mine, someoneElses]);
+    const writes = captureWrites();
+    authService.getUser.mockResolvedValue({ employee_id: 'e1' }); // logged in as e1
+
+    apiClient.post.mockResolvedValue({ data: { data: {} } });
+
+    const result = await flushQueue();
+
+    // Only the current employee's item was attempted.
+    expect(apiClient.post).toHaveBeenCalledTimes(1);
+    expect(apiClient.post.mock.calls[0][1].client_uuid).toBe('mine');
+    expect(result.synced).toBe(1);
+    expect(result.failed).toBe(0); // the other employee's item was skipped, NOT marked failed
+    expect(result.remaining).toBe(1); // someone-else's item is still pending, untouched
+
+    const finalWrite = writes[writes.length - 1];
+    const untouched = finalWrite.find((i) => i.client_uuid === 'not-mine');
+    expect(untouched).toBeDefined();
+    expect(untouched.status).toBe('pending');
+  });
+
+  test('no one logged in: skips every item, leaves the whole queue pending untouched', async () => {
+    const a = item({ client_uuid: 'a', employee_id: 'e1' });
+    const b = item({ client_uuid: 'b', employee_id: 'e2' });
+    mockStoredQueue([a, b]);
+    captureWrites();
+    authService.getUser.mockResolvedValue(null);
+
+    const result = await flushQueue();
+
+    expect(apiClient.post).not.toHaveBeenCalled();
+    expect(result).toEqual({ synced: 0, failed: 0, remaining: 2 });
   });
 });

@@ -13,6 +13,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import apiClient from './apiClient';
+import authService from './authService';
 import { STORAGE_KEYS, OFFLINE_CONFIG, ENDPOINTS } from '../config/endpoints';
 
 let listeners = [];
@@ -94,7 +95,23 @@ export async function flushQueue() {
   isFlushing = true;
   try {
     let queue = await readQueue();
-    const pendingOrdered = sortFifo(queue.filter((i) => i.status === 'pending'));
+
+    // Shared retail devices: the queue is NOT cleared on logout (an employee's
+    // pending check-ins must still sync after they log out — see authService.logout).
+    // But that means a DIFFERENT employee's leftover items can still be sitting in
+    // the queue when this runs. Only attempt items owned by whoever is CURRENTLY
+    // authenticated: the backend's ownership check (S.32.1) would reject someone
+    // else's check-in with a 403 anyway, and a 403 is treated as a definitive
+    // rejection (item marked 'failed', never retried) — attempting it under the
+    // wrong session would permanently lose that check-in. Leaving it untouched
+    // (still 'pending') means it correctly syncs once its real owner logs back in
+    // and triggers a flush themselves.
+    const currentUser = await authService.getUser().catch(() => null);
+    const currentEmployeeId = currentUser?.employee_id ?? null;
+
+    const pendingOrdered = sortFifo(
+      queue.filter((i) => i.status === 'pending' && i.employee_id === currentEmployeeId)
+    );
 
     let synced = 0;
     let failed = 0;

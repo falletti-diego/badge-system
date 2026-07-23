@@ -30,9 +30,19 @@ export default function CheckInScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
-    getQueue().then((q) => setPendingCount(q.filter((i) => i.status === 'pending').length));
+    // Scope the counter to the CURRENTLY logged-in employee: on a shared retail
+    // device, a previous employee's still-pending items (left in the queue on
+    // purpose — see authService.logout) must not be shown as "your" pending count.
+    const countMine = (queue, employeeId) =>
+      queue.filter((i) => i.status === 'pending' && i.employee_id === employeeId).length;
+
+    authService.getUser().then((u) => {
+      const employeeId = u?.employee_id;
+      getQueue().then((q) => setPendingCount(countMine(q, employeeId)));
+    });
+
     const unsubscribe = subscribe((queue) => {
-      setPendingCount(queue.filter((i) => i.status === 'pending').length);
+      authService.getUser().then((u) => setPendingCount(countMine(queue, u?.employee_id)));
     });
     return unsubscribe;
   }, []);
