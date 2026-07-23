@@ -1,13 +1,15 @@
-import React, { useState, useEffect, createContext } from 'react';
+import React, { useState, useEffect, useRef, createContext } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, AppState } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import { STORAGE_KEYS, ENDPOINTS } from '../config/endpoints';
 import { navigationRef } from '../utils/navigationRef';
 import apiClient from '../services/apiClient';
+import { flushQueue } from '../services/offlineQueue';
 
 // Single source of truth for manager pending-leave badge count.
 // ManagerLeaveApprovalScreen updates this via context after every load.
@@ -145,11 +147,41 @@ function MainTabs() {
 
 export default function RootNavigator() {
   const [initialRoute, setInitialRoute] = useState(null);
+  const listenersRegisteredRef = useRef(false);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN).then(token => {
       setInitialRoute(token ? 'Main' : 'Login');
     });
+  }, []);
+
+  // Auto-sync the offline check-in queue at app startup, on network reconnect,
+  // and whenever the app returns to foreground. Guarded with a ref (same idiom
+  // as QRScannerScreen's processingRef) so the listeners are never registered
+  // twice even if this effect were to re-run.
+  useEffect(() => {
+    if (listenersRegisteredRef.current) return;
+    listenersRegisteredRef.current = true;
+
+    // Best-effort sync attempt at app startup.
+    flushQueue();
+
+    const unsubscribeNetInfo = NetInfo.addEventListener((state) => {
+      if (state.isConnected && state.isInternetReachable) {
+        flushQueue();
+      }
+    });
+
+    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        flushQueue();
+      }
+    });
+
+    return () => {
+      unsubscribeNetInfo();
+      appStateSubscription.remove();
+    };
   }, []);
 
   if (initialRoute === null) {
