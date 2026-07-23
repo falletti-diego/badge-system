@@ -1,79 +1,71 @@
-# Badge System — Session 79 Handoff
+# Badge System — Session 80 Handoff
 
 **Date:** 2026-07-23
-**Session:** 79 — Offline Mode Fase B (mobile) implementata via `/superpowers:subagent-driven-development`, code-reviewata con 2 giri di fix
-**Status:** ✅ **Fase B completa lato codice, testata (43/43), pushata.** ⏳ Non ancora buildata/verificata su device reale (Task B6 — richiede iPhone fisico + autorizzazione utente per l'EAS build).
+**Session:** 80 — Task B6 (Offline Mode su device reale): 3 crash trovati e fixati, sessione interrotta a metà checklist
+**Status:** 🟡 **Task B6 IN CORSO.** Build 30 pronta per il retest sul device dell'utente. Checklist `docs/offline-mode-test-checklist.md` interrotta a metà Sezione 3 di 8.
 
 ---
 
 ## Goal
 
-Implementare la Fase B (mobile) del piano Offline Mode: coda offline persistente per le timbrature, sync automatico al ritorno della rete, UI "in attesa di rete", cache read-only per turni/presenze. Prosegue dalla Session 78 (Fase A backend, già live in produzione).
+Verificare su un iPhone reale il codice Offline Mode (Fase A backend + Fase B mobile, Session 78-79) mai testato prima d'ora fuori da smoke test da server e lettura statica del codice — esattamente lo scopo del Task B6 del piano `docs/superpowers/plans/2026-07-19-offline-mode.md`.
 
 ---
 
 ## Current Progress
 
-Eseguita con `/superpowers:subagent-driven-development` (su richiesta esplicita dell'utente): un subagent implementer per task, ciascuno verificato indipendentemente dal coordinatore (rilettura diretta del diff/commit, mai fiducia cieca nel solo report del subagent) prima di passare al task successivo.
+L'utente ha avviato manualmente la build su Codemagic (workflow consolidato: bump `buildNumber` in `app.json` → push su `main` → build automatica → TestFlight) e condotto la checklist `docs/offline-mode-test-checklist.md` in prima persona, riportando i risultati man mano.
 
-- **B1** — `STORAGE_KEYS`/`OFFLINE_CONFIG` in `endpoints.js` + dipendenza `expo-crypto` (aggiunta — il piano assumeva erroneamente fosse già presente).
-- **B2** (TDD, 14→18 test) — `offlineQueue.js`: coda persistente in AsyncStorage, flush sequenziale mutex-guarded, dedup-aware (`deduplicated:true` conta come successo), FIFO.
-- **B3** — listener `NetInfo`/`AppState` in `RootNavigator.jsx` (useRef guard, stesso pattern del fix duplicati "Build 7").
-- **B4** — `QRScannerScreen` genera sempre `client_uuid`+`occurred_at` prima del POST; su errore di rete/timeout mette in coda e naviga a un `SuccessScreen` variante "pending"; su errore applicativo comportamento invariato (mai messo in coda). Contatore "N in attesa" in `CheckInScreen`.
-- **B5** — cache read-only (`AsyncStorage`) per turni/presenze, banner "Sei offline — dati aggiornati al..." su `MyScheduleScreen`/`MyPresencesScreen` quando il GET fallisce per rete e una cache compatibile esiste.
+**Sezione 1 (sanity online)**: OK. Nota UX non bloccante: la cella "in corso" al posto dell'orario di uscita in `MyPresencesScreen.jsx` — comportamento pre-esistente e semanticamente corretto (sostituisce l'orario di uscita mancante, non è un'etichetta del tipo di timbratura), non modificato.
 
-**`/test-all`**: backend 610/610, frontend-web 239/240 (1 skip pre-esistente), mobile 39/39 → 43/43 (dopo i fix del code-review).
+**Sezione 2 (errore applicativo)**: OK, nessuna timbratura finita in coda per errore.
 
-**`/code-review`** (medium effort, 8 finder-agent + verifica) — **primo giro**, 3 problemi trovati e corretti (commit `0cde2eb`):
-1. Leak cache cross-utente: `authService.logout()` non ripuliva `CACHE_SHIFTS`/`CACHE_PRESENCES`.
-2. `flushQueue` persisteva la coda una sola volta a fine ciclo (non incrementale) — rischio re-invio su kill app a metà flush.
-3. `flushQueue` poteva propagare un'eccezione inattesa come promise rejection non gestita (chiamata fire-and-forget da `RootNavigator`).
+**Sezione 3 (timbratura offline singola)**: ha rivelato **3 crash reali in sequenza**, uno per ogni build re-testata (Build 27→30):
 
-**Secondo giro — security review automatico POST-COMMIT** (non dal code-review iniziale, scattato dopo il push): il fix #1 sopra non bastava. La coda offline (deliberatamente non ripulita al logout — le timbrature restano di chi le ha create) non era **scoped per utente**. Su un device condiviso tra dipendenti (scenario comune nel retail, il caso d'uso primario del prodotto), se l'employee B faceva scattare un flush con timbrature dell'employee A ancora in coda, il backend le avrebbe rifiutate con `403` (ownership check, Fase A) e `flushQueue` le marcava `failed` **permanentemente** — perdendo la timbratura reale di A. Vanificava esattamente "mai persa una timbratura". **Fix**: `flushQueue` ora tenta solo gli item dell'employee attualmente autenticato; gli altri restano `pending` intatti. Commit `8a5e6ad`.
+1. **`ReferenceError` su `payload`** (`frontend-mobile/src/screens/checkin/QRScannerScreen.jsx`) — `const payload` dichiarata dentro `try{}`, letta da `catch{}`: scope lessicali separati in JS. Fix: hoist a `let payload = null` prima del `try`, più distinzione corretta tra vero errore di rete (`err.isAxiosError && !err.response`) ed errore di validazione client-side. Commit `3b00882`, Build 28.
+2. **Stesso bug su `siteId`** — mascherato dal primo, emerso solo dopo averlo corretto. Diagnosticato con l'aiuto della skill `/grill-me` (durata hang 10-30s, nessun evento Sentry nemmeno dopo riavvio con rete → esclude crash nativo, conferma eccezione JS sfuggita). Fix: hoist di `siteId`, intera sequenza enqueue+navigazione in un unico try/catch. Commit `1f6c63e`, Build 29.
+3. **Date perse nella cache offline** (`frontend-mobile/src/screens/presences/MyPresencesScreen.jsx`) — `firstIn`/`lastOut` sono oggetti `Date`, ma `JSON.stringify`/`JSON.parse` li trasforma in stringhe senza ricostruirli; `renderItem` chiamava `.toLocaleTimeString()` su una stringa → crash aprendo "Presenze" offline. Fix: revive esplicito in `new Date(...)` dopo la lettura dalla cache. Commit `eedf9e1`, Build 30.
 
-**Gate B-G3 (regressione flusso online)**: nessun simulatore/device disponibile in questo ambiente. Verificato con smoke test diretto su `api.dataxiom.it` (tenant demo isolato, poi ripulito): il payload esatto ora inviato da `QRScannerScreen` per un check-in online produce `201`/`is_offline:false` — nessuna regressione lato backend.
+Tutti e tre riprodotti isolatamente con uno script Node **prima** di applicare il fix (mai un fix "a sensazione"). 43/43 test mobile invariati per tutti e tre — **nessuna test coverage esiste per componenti React Native in questo progetto** (Jest mobile è node-only, nessun `jest-expo`/`@testing-library/react-native`), quindi nessuno di questi bug poteva emergere prima di un vero test su device.
 
-Commit range Fase B: `52ced4b` → `ef135a4` (9 commit), tutti pushati su `origin/main`.
+**Sessione interrotta dall'utente a fine giornata**, a metà della Sezione 3 (verificata su Build 27, prima dei fix — da ripetere su Build 30). Sezioni 4-8 non ancora testate.
 
 ---
 
 ## What Worked
 
-- Verificare ogni commit dei subagent **direttamente** (non solo leggere il loro report) — ha permesso di correggere l'ordine sbagliato di un `writeQueue` dentro il try/catch del POST, introdotto dal mio stesso primo fix del code-review.
-- `/test-all` + `/code-review` come gate obbligatorio ha trovato 3 problemi reali nel primo giro; il secondo giro (security review automatico) ne ha trovato un quarto più serio dopo il commit — nessuno dei due controlli da solo sarebbe bastato.
-- Simulare il payload esatto che il mobile ora invia con curl contro `api.dataxiom.it` (tenant demo isolato) per compensare l'assenza di un simulatore/device — non perfetto ma meglio di nessuna verifica end-to-end.
+- **Riprodurre ogni ipotesi isolatamente in Node prima di toccare il codice** — per tutti e 3 i bug, uno script minimale ha confermato la causa (scoping try/catch, round-trip JSON di un `Date`) prima di scrivere qualsiasi fix. Nessuna correzione "al buio".
+- **Usare `/grill-me` quando l'informazione mancante non era ricavabile dal codice** (bug 2): invece di indovinare, ho chiesto all'utente durata dell'hang e stato Sentry — la risposta ("nessun evento anche dopo riavvio con rete") ha escluso una pista (crash nativo) e confermato l'altra (eccezione JS non gestita), restringendo la ricerca invece di allargarla.
+- **Rileggere l'intero file dopo ogni fix** cercando ATTIVAMENTE altre istanze dello stesso errore, non solo correggere il sintomo puntuale — ha permesso di trovare `siteId` prima che l'utente lo segnalasse una terza volta.
 
-## What Didn't Work (lezioni)
+## What Didn't Work / Lezioni
 
-- **Il piano sottostimava le dipendenze e i percorsi test reali**: `expo-crypto` non era installato nonostante "zero dipendenze nuove"; il percorso test proposto (`src/services/__tests__/`) non sarebbe mai stato eseguito da `npm test` (jest `testMatch` piatto). Entrambi scoperti PRIMA di dispatchare i subagent (esplorazione diretta del codice), non durante l'esecuzione — buona pratica da ripetere.
-- **Un fix del code-review può introdurre un bug nuovo**: spostare `writeQueue` dentro lo stesso try/catch del POST ha fatto sì che un fallimento di storage venisse scambiato per un errore di rete sul check-in. Trovato rieseguendo io stesso i test dopo il fix (non fidandosi che "il fix è ovviamente corretto").
-- **Il code-review a un certo effort non è garanzia assoluta**: il finding più serio di questa fase (perdita permanente di timbrature su device condivisi) è arrivato da un secondo controllo automatico DOPO il commit, non dal primo giro di `/code-review`. Vale la stessa lezione della Fase A: continuare a verificare anche dopo aver "chiuso" un gate.
+- **Il code-review statico (8 finder-agent, Session 79) non ha trovato nessuno dei 3 bug** — tutti e tre sono errori che "sembrano corretti" leggendo il codice linearmente (uno scope try/catch che sembra un unico blocco logico; una cache che sembra funzionare perché testata solo con mock, mai con un vero round-trip JSON). Nessuna quantità di lettura statica sostituisce un test reale su device per bug di questa classe.
+- **Gap di test coverage confermato reale, non teorico**: l'assenza di test per componenti React Native in questo progetto ha lasciato 3 bug di produzione (2 crash totali dell'app) invisibili fino al test manuale. Da valutare, non urgente ora: se vale la pena investire in `@testing-library/react-native` almeno per i file critici del flusso offline, prima di espandere ulteriormente la feature.
+- **Un bug può nascondere un secondo bug identico** (`payload` → `siteId`): dopo un fix, non fermarsi al primo caso trovato — controllare se lo stesso pattern di errore si ripete altrove nello stesso file/funzione.
 
 ---
 
 ## Next Steps
 
-1. **Task B6** — EAS build TestFlight (skill `/build-mobile`) + checklist E2E in modalità aereo su iPhone reale (6 scenari nel piano: coda persiste dopo kill app, sync automatico al reconnect, timestamp reali + badge Offline in dashboard, nessun duplicato su retry ripetuti). **Richiede un device fisico e un'autorizzazione esplicita dell'utente** per consumare un build EAS — non eseguibile in questo ambiente. Reminder: Build 14 scade l'8 settembre, rinnovo entro il 25 agosto.
-2. Dopo B6: claim marketing "Mai persa una timbratura — funziona anche senza rete" su `badge-system.html` e materiale LinkedIn futuro — esplicitamente subordinato all'ok dell'utente (non fatto finché B6 non è verificato su device reale).
-3. **SES Parte B** (email a prospect reali): resta l'unico bloccante commerciale — serve accesso DNS register.it dell'utente.
-4. **Fuori scope, segnalato non affrontato**: la pipeline CI ha uno step `Security Check` rosso pre-esistente (3 vulnerabilità npm `high` su dipendenze backend) — non causato da questa sessione (il diff Fase B è mobile-only).
-5. Backlog minor invariato (flake inter-worker test demo, saldi superadmin, pattern di cache-fallback duplicato tra `MyScheduleScreen`/`MyPresencesScreen` — candidato per un hook condiviso futuro) — vedi TASKS.md.
+1. **Riprendere il test su device reale**: ripetere la Sezione 3 (3.1-3.3) su **Build 30** (i fix precedenti erano su build già superate). Se passa, proseguire con le **Sezioni 4-8** della checklist (`docs/offline-mode-test-checklist.md`) con la stessa cautela — probabile presenza di altri bug della stessa natura (mai esercitati offline prima d'ora): coda multipla + persistenza dopo kill app, sync automatico, no-duplicati, **device condiviso tra dipendenti** (Sezione 7, priorità alta — testa il bug di sicurezza corretto in Session 79), cache turni/presenze.
+2. Per la Sezione 7 (device condiviso), l'utente ha scelto di usare un **tenant demo isolato** (`POST /api/v1/demo/start`) con due dipendenti fittizi invece di un secondo account reale — da preparare quando si arriva a quel punto.
+3. Solo dopo che TUTTE le sezioni passano: chiudere Task B6 in TASKS.md/PROJECT_DECISIONS.md/HANDOFF.md, poi valutare il claim marketing "Mai persa una timbratura" (subordinato all'ok esplicito dell'utente).
+4. Backlog invariato: SES fuori Sandbox (unico bloccante commerciale reale), staging ambiente (obbligatorio solo prima del primo cliente pagante), CI `Security Check` rosso pre-esistente (3 vulnerabilità npm high, non affrontato).
 
 ---
 
 ## Dove sono le cose
 
-- **Piano Offline Mode**: `docs/superpowers/plans/2026-07-19-offline-mode.md` (Fase A ✅, Fase B ✅ tranne verifica device — checkbox + note deviazioni complete, Task B6 da eseguire)
-- **Servizio coda**: `frontend-mobile/src/services/offlineQueue.js` + test in `frontend-mobile/src/__tests__/offlineQueue.test.js` (18 test)
-- **Sync automatico**: `frontend-mobile/src/navigation/RootNavigator.jsx`
-- **Flusso timbratura**: `frontend-mobile/src/screens/checkin/{CheckInScreen,QRScannerScreen,SuccessScreen}.jsx`
-- **Cache read-only**: `frontend-mobile/src/screens/schedule/MyScheduleScreen.jsx`, `frontend-mobile/src/screens/presences/MyPresencesScreen.jsx`
-- **Logout (fix leak cache)**: `frontend-mobile/src/services/authService.js`
-- **Backend Fase A** (già live): migration `backend/migrations/032_add_offline_checkin_fields.sql`, route `backend/src/routes/checkins.js`, dashboard `frontend-web/src/features/dashboard/components/PresencesTable.jsx`
+- **Checklist di test in corso**: `docs/offline-mode-test-checklist.md` — Sezioni 1-2 ✅, Sezione 3 da riverificare su Build 30, Sezioni 4-8 da fare
+- **Piano Offline Mode**: `docs/superpowers/plans/2026-07-19-offline-mode.md` (Fase A ✅, Fase B ✅ codice, Task B6 in corso)
+- **File corretti in questa sessione**: `frontend-mobile/src/screens/checkin/QRScannerScreen.jsx` (2 fix), `frontend-mobile/src/screens/presences/MyPresencesScreen.jsx` (1 fix)
+- **buildNumber attuale**: 30 (`frontend-mobile/app.json`)
+- **Commit range Session 80**: `d019c72` (bump 27) → `eedf9e1` (fix Date cache, bump 30)
 
 ## Note operative
 
-- Deploy landing: SEMPRE `--site a31a2216-fb06-47e0-b632-a1193a88039a` · Deploy badge frontend: `--site 29a79b49-...` · Backend: automatico su push `main` (`backend/**`) · **Mobile: nessun auto-deploy, EAS build sempre manuale** (skill `/build-mobile`)
-- **RDS non raggiungibile dal locale** (security group VPC-only) — per migration su produzione: SSH su EC2 (`ssh -i ~/.ssh/badge-system-ec2-v2.pem ubuntu@34.245.145.143`), poi `psql` da lì (già installato).
-- Credenziali RDS/EC2 in memoria (`aws_rds_postgres.md`, `rds_new_instance_2026_06_03.md`, `aws_ec2_instance.md`).
-- Cron produzione EC2: 2:00 retention, 3:30 cleanup demo (verificati in sessioni precedenti).
+- Deploy landing: SEMPRE `--site a31a2216-fb06-47e0-b632-a1193a88039a` · Deploy badge frontend: `--site 29a79b49-...` · Backend: automatico su push `main` (`backend/**`) · **Mobile: build via Codemagic (workflow `badge-ios-testflight`), trigger manuale dall'utente sulla dashboard Codemagic dopo un push** — non `eas build` diretto (la skill `/build-mobile` documenta ancora il comando EAS ma il pipeline reale in uso da diverse sessioni è Codemagic)
+- **Credenziali test mobile**: `maria@badge.local` / `maria01` (employee, sede Torino) — unico account employee reale in produzione. Per test multi-employee (Sezione 7 checklist) serve un tenant demo isolato.
+- **RDS non raggiungibile dal locale** (security group VPC-only) — per migration su produzione: SSH su EC2 (`ssh -i ~/.ssh/badge-system-ec2-v2.pem ubuntu@34.245.145.143`), poi `psql` da lì.
+- TestFlight Build (numerazione corrente) scade **2026-09-08** — reminder rinnovo **2026-08-25**.

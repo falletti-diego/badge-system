@@ -1,8 +1,29 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 23 Luglio 2026 (Session 79 — Fase B mobile del piano Offline Mode implementata via subagent-driven-development: coda offline, sync automatico, flusso timbratura garantito, cache read-only)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Landing dataxiom.it+badge-system.html ✅ LIVE, lancio LinkedIn ✅ pubblicato | Offline Mode Fase A (backend) ✅ LIVE | Offline Mode Fase B (mobile) ✅ codice completo e testato, **non ancora buildato/verificato su device reale** | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ VERIFICATO | Pipeline CI/CD ✅ (backend job con Postgres 14 reale, exit pulito senza forceExit)  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Offline Mode Task B6 (EAS build TestFlight + checklist E2E in modalità aereo su iPhone reale) — richiede un device fisico e un'autorizzazione esplicita dell'utente per il build EAS, non eseguibile in questo ambiente. Resta UN solo bloccante prospect: SES setup completo (Parte B del piano 2026-07-19 — dominio DKIM + Sandbox exit, serve accesso DNS utente su register.it)
+**Last Updated:** 23 Luglio 2026 (Session 80 — Task B6 in corso: 3 crash reali trovati e fixati testando l'Offline Mode su iPhone fisico, sessione interrotta a metà checklist)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Landing dataxiom.it+badge-system.html ✅ LIVE, lancio LinkedIn ✅ pubblicato | Offline Mode Fase A (backend) ✅ LIVE | Offline Mode Fase B (mobile) ✅ codice completo, **in test su device reale (Task B6), 3 crash trovati e fixati (Build 27→30), test non ancora concluso** | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ VERIFICATO | Pipeline CI/CD ✅ (backend job con Postgres 14 reale, exit pulito senza forceExit)  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Offline Mode Task B6 in corso — Build 30 pronta per il retest, checklist E2E (`docs/offline-mode-test-checklist.md`) interrotta a metà Sezione 3 di 8. Resta UN solo bloccante prospect: SES setup completo (Parte B del piano 2026-07-19 — dominio DKIM + Sandbox exit, serve accesso DNS utente su register.it)
+
+---
+
+## Session 80 — Task B6: 3 crash reali su device fisico, trovati e fixati (23 Luglio 2026)
+
+### Contesto
+Prima volta che il codice Offline Mode (Fase A+B, Session 78-79) viene esercitato su un iPhone reale invece che per lettura statica/smoke test da server. L'utente ha avviato le build su Codemagic (manuale, come da workflow consolidato) e condotto la checklist `docs/offline-mode-test-checklist.md` in prima persona, riportando ogni risultato in tempo reale.
+
+### 3 crash trovati in sequenza, tutti nella Sezione 3 (timbratura offline singola)
+
+Tutti e tre non erano rilevabili né dal `/code-review` né dai 43 test automatici della Fase B: **non esiste alcuna test coverage per componenti React Native in questo progetto** (l'infra Jest mobile è pura, node-only — nessun `jest-expo`/`@testing-library/react-native` configurato), quindi nessun bug di scoping o di rendering in questi file poteva emergere prima di un vero test su device. Questo è esattamente il motivo per cui il piano prevedeva un Task B6 dedicato.
+
+1. **`ReferenceError` su `payload`** (`QRScannerScreen.jsx`) — `const payload` dichiarata dentro `try{}`, letta dentro `catch{}`: scope lessicali separati in JS, quindi la variabile non è visibile lì. L'errore veniva mostrato come Alert ("Property 'payload' doesn't exist") perché catturato da un try/catch annidato. Fix: hoist a `let payload = null` prima del `try`. **Bonus fix collegato**: la classificazione "errore di rete → metti in coda" usava solo `!err.response`, che è vero anche per errori di validazione client-side (QR incompleto, employee mancante) — corretto a `err.isAxiosError && !err.response`. Commit `3b00882`.
+2. **Stesso bug di scoping, su `siteId`** — mascherato dal primo: una volta risolto `payload`, l'esecuzione arrivava più avanti nello stesso `catch` e colpiva `siteId` (stessa causa, stesso file), ma qui SENZA alcun try/catch locale a intercettarlo → eccezione non gestita, nessun Alert, spinner bloccato, poi crash. **Diagnosi per esclusione, non per intuizione**: usata la skill `/grill-me` per interrogare l'utente (durata dell'hang: 10-30s; nessun evento su Sentry nemmeno dopo un riavvio con rete attiva) prima di proporre un fix — questo ha escluso un vero crash nativo/watchdog kill e confermato che si trattava di un'eccezione JS sfuggita. Fix: hoist di `siteId` come `payload`; l'intera sequenza enqueue+navigazione ora è in un unico try/catch, dato che lo stesso errore si è ripetuto due volte di fila nello stesso punto. Commit `1f6c63e`.
+3. **Date perse nella cache read-only** (`MyPresencesScreen.jsx`, Task B5) — `pairCheckins()`/`mergeWithSmartWorking()` costruiscono `firstIn`/`lastOut` come oggetti `Date` reali per la UI. La cache offline li serializza con `JSON.stringify`, che converte silenziosamente i `Date` in stringhe; alla lettura (`JSON.parse`) restano stringhe, e `renderItem` chiama `.toLocaleTimeString()` su di esse → crash aprendo "Presenze" in modalità aereo. Fix: revive esplicito (`new Date(...)`) di `firstIn`/`lastOut` subito dopo la lettura dalla cache. Commit `eedf9e1`.
+
+### Metodo seguito per tutti e tre
+Nessun fix "a sensazione": ogni ipotesi è stata riprodotta isolatamente con un piccolo script Node (`try{const x=...} catch{...x...}`, poi il round-trip `JSON.stringify`/`JSON.parse` su un oggetto `Date`) **prima** di toccare il codice mobile, per avere conferma empirica della causa e non solo un'ipotesi plausibile. Per il bug 2, dove la causa non era ricavabile dalla sola lettura del codice, usata `/grill-me` per raccogliere i dati diagnostici mancanti dall'utente invece di indovinare.
+
+### Stato a fine sessione
+Sessione interrotta dall'utente a fine giornata, **a metà della Sezione 3** della checklist (3.1-3.3 verificate ma su Build 27, prima dei 3 fix — da ripetere su Build 30). Sezioni 4-8 (coda multipla, sync automatico, no-duplicati, device condiviso, cache turni/presenze) non ancora testate: probabile presenza di altri bug della stessa natura (mai esercitati offline prima d'ora).
 
 ---
 
