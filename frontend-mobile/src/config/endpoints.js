@@ -108,6 +108,17 @@ export const STORAGE_KEYS = {
   REFRESH_TOKEN: 'badge_refresh_token',
   USER_DATA: 'badge_user',
   FACE_ID_ENABLED: 'badge_face_id_enabled',
+  OFFLINE_QUEUE: 'badge_offline_queue',
+  CACHE_SHIFTS: 'badge_cache_shifts',
+  CACHE_PRESENCES: 'badge_cache_presences',
 };
 
-export default { API_BASE, ENDPOINTS, LEAVE_TYPES, SHIFTS_CONFIG, CHECKINS_CONFIG, DEMO_ACCOUNTS, TIMING, STORAGE_KEYS };
+// Offline mode (docs/superpowers/plans/2026-07-19-offline-mode.md, Phase B)
+export const OFFLINE_CONFIG = {
+  MAX_QUEUE_SIZE: 200,          // hard cap anti-abuse on storage
+  MAX_AGE_HOURS: 48,            // aligned with the backend anti-fraud window (Phase A)
+  FLUSH_DELAY_MS: 700,          // pause between sequential POSTs (backend rate limit: 100 req/min)
+  POST_TIMEOUT_OFFLINE_MS: 6000 // short timeout to decide quickly "you're offline"
+};
+
+export default { API_BASE, ENDPOINTS, LEAVE_TYPES, SHIFTS_CONFIG, CHECKINS_CONFIG, DEMO_ACCOUNTS, TIMING, STORAGE_KEYS, OFFLINE_CONFIG };
