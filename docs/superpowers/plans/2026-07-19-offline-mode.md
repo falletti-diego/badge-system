@@ -181,7 +181,9 @@ Gestire anche la race sul UNIQUE (due sync simultanei): catch dell'errore pg `23
 **Files:**
 - Modify: `frontend-mobile/src/config/endpoints.js`
 
-- [ ] **Step 1: estendere le costanti centralizzate**
+> **Deviazione dal piano (scoperta durante l'esecuzione):** il piano affermava "già tutto presente — zero dipendenze nuove", ma `expo-crypto` **non era installato** (né in `package.json` né in `node_modules`). Aggiunto con `npx expo install expo-crypto` (versione compatibile SDK 54 risolta automaticamente, `~15.0.9`) — nessun codice nativo da toccare (`ios/` è gitignored, Continuous Native Generation via EAS Build). API `Crypto.randomUUID()` confermata esistente prima dell'uso.
+
+- [x] **Step 1: estendere le costanti centralizzate**
 
 ```javascript
 // in STORAGE_KEYS:
@@ -198,19 +200,21 @@ export const OFFLINE_CONFIG = {
 };
 ```
 
-- [ ] **Step 2: commit**
+- [x] **Step 2: commit**
 
 ### Task B2: offlineQueue service (TDD)
 
 **Files:**
 - Create: `frontend-mobile/src/services/offlineQueue.js`
-- Test: `frontend-mobile/src/services/__tests__/offlineQueue.test.js` (mock AsyncStorage + apiClient, come i test service esistenti se presenti; altrimenti jest-expo standard)
+- Test: `frontend-mobile/src/__tests__/offlineQueue.test.js` (percorso corretto — vedi nota sotto)
 
-- [ ] **Step 1: test fallenti** — enqueue persiste su AsyncStorage; flush POSTa in ordine FIFO con `client_uuid`/`occurred_at`/`is_offline:true`; su successo o `deduplicated` rimuove dalla coda; su errore di rete interrompe e mantiene; su 400 `OFFLINE_TIMESTAMP_OUT_OF_WINDOW` (o altra 4xx definitiva) sposta l'item in stato `failed` (non ritenta all'infinito); rispetta `MAX_QUEUE_SIZE`; scarta item più vecchi di `MAX_AGE_HOURS` marcandoli `failed`.
+> **Deviazione dal piano (scoperta durante l'esecuzione):** il percorso indicato dal piano (`frontend-mobile/src/services/__tests__/`) non sarebbe mai stato eseguito da `npm test` — lo script è `jest src/__tests__/` e il `testMatch` di Jest è ristretto a `**/src/__tests__/**/*.test.js` (piatto, nessuna sottocartella). Test creato nel percorso corretto, coerente con `dateUtils.test.js`/`presenceUtils.test.js` già esistenti.
 
-- [ ] **Step 2: run → FAIL**
+- [x] **Step 1: test fallenti** — enqueue persiste su AsyncStorage; flush POSTa in ordine FIFO con `client_uuid`/`occurred_at`/`is_offline:true`; su successo o `deduplicated` rimuove dalla coda; su errore di rete interrompe e mantiene; su 400 `OFFLINE_TIMESTAMP_OUT_OF_WINDOW` (o altra 4xx definitiva) sposta l'item in stato `failed` (non ritenta all'infinito); rispetta `MAX_QUEUE_SIZE`; scarta item più vecchi di `MAX_AGE_HOURS` marcandoli `failed`.
 
-- [ ] **Step 3: implementare**
+- [x] **Step 2: run → FAIL**
+
+- [x] **Step 3: implementare**
 
 ```javascript
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -227,18 +231,18 @@ export function subscribe(listener)             // notifica la UI a ogni cambio 
 
 Mutex semplice (flag module-level `isFlushing`) per evitare flush concorrenti. Il flush usa `apiClient` così il 401→refresh esistente funziona gratis.
 
-- [ ] **Step 4: run → PASS** — `cd frontend-mobile && npx jest offlineQueue` — Expected: tutti i casi del passo 1 verdi, inclusi i 3 critici: (a) flush interrotto a metà da errore rete lascia in coda SOLO gli item non ancora inviati, (b) risposta `deduplicated: true` rimuove l'item come un successo, (c) due `flushQueue()` concorrenti non generano POST doppi (mutex)
-- [ ] **Step 5: commit**
+- [x] **Step 4: run → PASS** — `cd frontend-mobile && npx jest offlineQueue` — Expected: tutti i casi del passo 1 verdi, inclusi i 3 critici: (a) flush interrotto a metà da errore rete lascia in coda SOLO gli item non ancora inviati, (b) risposta `deduplicated: true` rimuove l'item come un successo, (c) due `flushQueue()` concorrenti non generano POST doppi (mutex)
+- [x] **Step 5: commit**
 
 ### Task B3: Sync automatico — listener NetInfo + foreground
 
 **Files:**
 - Modify: root dell'app (`frontend-mobile/App.js` o dove sta il NavigationContainer)
 
-- [ ] **Step 1:** all'avvio: `flushQueue()` best-effort. Registrare `NetInfo.addEventListener`: transizione a `isConnected && isInternetReachable` → `flushQueue()`. Registrare `AppState` listener: `active` → `flushQueue()`.
-- [ ] **Step 2:** verificare che il listener sia registrato una sola volta (useRef guard — stesso pattern del fix duplicati di Build 7).
-- [ ] **Step 3: verifica su simulatore/Expo Go** — con backend locale attivo: mettere 2 item finti in coda (`AsyncStorage.setItem` da debug), riaprire l'app → log del flush parte da solo; spegnere il backend, toggle wifi off/on → il listener scatta UNA volta sola (contare i log, no doppioni)
-- [ ] **Step 4: commit**
+- [x] **Step 1:** all'avvio: `flushQueue()` best-effort. Registrare `NetInfo.addEventListener`: transizione a `isConnected && isInternetReachable` → `flushQueue()`. Registrare `AppState` listener: `active` → `flushQueue()`.
+- [x] **Step 2:** verificare che il listener sia registrato una sola volta (useRef guard — stesso pattern del fix duplicati di Build 7).
+- [ ] ~~Step 3: verifica su simulatore/Expo Go~~ — **non eseguita, nessun simulatore/device disponibile in questa sessione.** Verificato solo staticamente (rilettura del file, regressione dei 41 test esistenti invariati). Deferita a Task B6.
+- [x] **Step 4: commit**
 
 ### Task B4: Flusso timbratura — successo garantito
 
@@ -247,28 +251,30 @@ Mutex semplice (flag module-level `isFlushing`) per evitare flush concorrenti. I
 - Modify: `frontend-mobile/src/screens/checkin/QRScannerScreen.jsx` (handleBarCodeScanned)
 - Modify: `frontend-mobile/src/screens/checkin/SuccessScreen.jsx` (variante "in attesa di rete")
 
-- [ ] **Step 1:** in QRScannerScreen, generare SEMPRE `client_uuid` + `occurred_at` prima del POST (innocuo online, e se il POST va in timeout ma il server l'ha ricevuto, il retry dalla coda viene deduplicato — chiude anche il bug del "doppio tap"). POST con timeout `POST_TIMEOUT_OFFLINE_MS`.
-- [ ] **Step 2:** su errore di rete/timeout (no `error.response`): `await enqueueCheckin(payload)` → navigare a Success con param `{ pending: true }`. Su errore applicativo (4xx/5xx con response): comportamento attuale (errore mostrato).
-- [ ] **Step 3:** SuccessScreen con `pending: true`: stessa schermata verde ma sottotitolo "Timbratura salvata sul telefono — verrà sincronizzata appena torna la rete" + icona cloud-off.
-- [ ] **Step 4:** CheckInScreen: rimosso il gate; aggiungere sotto i bottoni il contatore coda (via `subscribe`): "🕓 N timbrature in attesa di sincronizzazione" (visibile solo se N>0) e, al completamento di un flush, toast/banner "✓ N timbrature sincronizzate".
-- [ ] **Step 5: verifica su simulatore** — (a) online: timbratura normale → Success classica, nessun contatore; (b) backend spento: timbratura → Success "in attesa di rete" entro ~6s (timeout corto), contatore = 1; (c) errore applicativo simulato (403 ownership): NIENTE coda, errore mostrato come oggi; (d) backend riacceso: contatore torna a 0 e toast di conferma
-- [ ] **Step 6: commit**
+- [x] **Step 1:** in QRScannerScreen, generare SEMPRE `client_uuid` + `occurred_at` prima del POST (innocuo online, e se il POST va in timeout ma il server l'ha ricevuto, il retry dalla coda viene deduplicato — chiude anche il bug del "doppio tap"). POST con timeout `POST_TIMEOUT_OFFLINE_MS`.
+- [x] **Step 2:** su errore di rete/timeout (no `error.response`): `await enqueueCheckin(payload)` → navigare a Success con param `{ pending: true }`. Su errore applicativo (4xx/5xx con response): comportamento attuale (errore mostrato).
+- [x] **Step 3:** SuccessScreen con `pending: true`: stessa schermata verde ma sottotitolo "Timbratura salvata sul telefono — verrà sincronizzata appena torna la rete" + icona cloud-off.
+- [x] **Step 4:** CheckInScreen: rimosso il gate; aggiungere sotto i bottoni il contatore coda (via `subscribe`): "🕓 N timbrature in attesa di sincronizzazione" (visibile solo se N>0) e, al completamento di un flush, toast/banner "✓ N timbrature sincronizzate".
+- [ ] ~~Step 5: verifica su simulatore~~ — **non eseguita, nessun simulatore/device disponibile in questa sessione.** Verificato invece con uno smoke test diretto contro `api.dataxiom.it` (tenant demo isolato) che il payload esatto ora inviato da QRScannerScreen per il flusso online produce `201`/`is_offline:false` (vedi Gate B-G3). I sotto-casi (b)/(c)/(d) — comportamento offline/errore applicativo/contatore — richiedono un device reale, deferiti a Task B6.
+- [x] **Step 6: commit**
 
 ### Task B5: Cache read-only turni e presenze
 
 **Files:**
 - Modify: `frontend-mobile/src/screens/…/MyScheduleScreen.jsx` e `MyPresencesScreen.jsx` (individuare i fetch esistenti)
 
-- [ ] **Step 1:** dopo ogni GET riuscita: `AsyncStorage.setItem(CACHE_SHIFTS/CACHE_PRESENCES, JSON.stringify({ savedAt: Date.now(), data }))`.
-- [ ] **Step 2:** su GET fallita per rete: leggere la cache; se presente, renderizzare i dati con banner giallo "Sei offline — dati aggiornati al {data/ora}"; se assente, l'attuale schermata errore/Riprova.
-- [ ] **Step 3: verifica su simulatore** — aprire turni e presenze online (popola cache) → spegnere il backend → riaprire le schermate: dati visibili + banner con orario corretto; svuotare AsyncStorage → stessa prova: schermata errore/Riprova classica (no crash su cache assente)
-- [ ] **Step 4: commit**
+- [x] **Step 1:** dopo ogni GET riuscita: `AsyncStorage.setItem(CACHE_SHIFTS/CACHE_PRESENCES, JSON.stringify({ savedAt: Date.now(), data }))`.
+- [x] **Step 2:** su GET fallita per rete: leggere la cache; se presente, renderizzare i dati con banner giallo "Sei offline — dati aggiornati al {data/ora}"; se assente, l'attuale schermata errore/Riprova.
+- [ ] ~~Step 3: verifica su simulatore~~ — **non eseguita, nessun simulatore/device disponibile in questa sessione.** Verificato solo staticamente (rilettura dei file, edge case corrotti/mismatch gestiti esplicitamente nel codice). Deferita a Task B6.
+- [x] **Step 4: commit**
 
 ### Gate di fine FASE B (prima della build)
 
-- [ ] **B-G1: /test-all** (backend Jest + frontend Vitest + jest mobile) — tutto verde, riportare il sommario nel formato della skill
-- [ ] **B-G2: /code-review** sul diff mobile (focus: persistenza coda dopo kill app, mutex flush, listener singolo, nessun dato sensibile in AsyncStorage oltre l'esistente)
-- [ ] **B-G3: regressione flusso online** — timbratura online classica su simulatore end-to-end (scan QR demo → Success → record in DB con is_offline=false)
+- [x] **B-G1: /test-all** — backend 610/610 (Jest), frontend-web 239/240 (Vitest, 1 skip pre-esistente), mobile 41/41 (Jest) — tutto verde.
+- [x] **B-G2: /code-review** (medium effort, 8 finder-agent + verifica manuale) sul diff mobile A1-B5. **3 problemi reali trovati e corretti**: (1) **leak cache cross-utente** — `authService.logout()` non ripuliva `CACHE_SHIFTS`/`CACHE_PRESENCES`, su device condiviso (comune nel retail) un dipendente poteva vedere dati cache del precedente; fix: aggiunte le 2 chiavi al `multiRemove` del logout (la coda offline NON viene ripulita, di proposito — le timbrature in coda restano di chi le ha create). (2) `flushQueue` persisteva la coda una sola volta a fine ciclo invece che dopo ogni item — un kill dell'app a metà flush poteva causare un re-invio di item già sincronizzati (innocuo per il dedup server, ma spreco); fix: persistenza incrementale, deliberatamente fuori dal try/catch del POST. (3) `flushQueue` poteva propagare un'eccezione inattesa come promise rejection non gestita (è chiamata fire-and-forget da `RootNavigator`); fix: mai un reject, default sicuro su errore imprevisto. 2 nuovi test TDD aggiunti. Backlog non bloccante: pattern di cache-fallback duplicato tra `MyScheduleScreen`/`MyPresencesScreen` (candidato per hook condiviso futuro); item della coda mescola campi wire-payload e bookkeeping interno. Commit fix: `0cde2eb`.
+
+**Finding aggiuntivo (security review automatico post-commit su `0cde2eb`)**: la coda offline non ripulita al logout (di proposito) poteva contenere timbrature di un employee precedente su un device condiviso — verificato che il rischio reale non è solo un leak informativo ma un **bug funzionale**: un flush scattato durante la sessione di un employee B con timbrature di un employee A in coda le avrebbe fatte rifiutare dal backend (403 ownership, S.32.1) e marcare `failed` permanentemente, perdendo la timbratura reale di A. Fix: `flushQueue` ora tenta solo gli item il cui `employee_id` corrisponde all'utente attualmente autenticato (`authService.getUser()`); gli item di un altro employee (o nessun utente loggato) restano `pending` intatti, mai tentati né marcati failed. Contatore in `CheckInScreen` scoped allo stesso modo. 2 nuovi test TDD, 43/43 suite mobile. Commit fix: `8a5e6ad`.
+- [x] **B-G3: regressione flusso online** — **nessun simulatore/device disponibile in questa sessione** (non "su simulatore" come da piano originale). Verificato invece con uno smoke test diretto contro `api.dataxiom.it` (tenant demo isolato, creato e ripulito): il payload esatto ora inviato da `QRScannerScreen` per un check-in online normale (`client_id` tenant + `client_uuid` + `occurred_at` ≈ now) produce `201`/`is_offline:false` — nessuna regressione sul flusso online lato backend. La verifica UI/UX end-to end reale (scan QR fisico → Success → contatore) resta da fare su device in Task B6.
 
 ### Task B6: Build, E2E device e chiusura
 
