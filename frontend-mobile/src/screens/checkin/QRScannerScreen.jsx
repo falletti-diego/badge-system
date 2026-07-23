@@ -65,6 +65,12 @@ export default function QRScannerScreen({ navigation }) {
     setScanned(true);
     setLoading(true);
 
+    // Declared here (not `const` inside the try block below) because `try`/`catch` are
+    // separate lexical scopes in JS — a `const`/`let` declared inside `try {}` is NOT
+    // visible inside `catch {}`. Referencing it from the catch block would throw a
+    // ReferenceError (surfaced by Hermes as "Property 'payload' doesn't exist").
+    let payload = null;
+
     try {
       // Robust parsing: new URL() crashes on custom schemes (badge://) in Hermes production
       const qmark = data.indexOf('?');
@@ -90,7 +96,7 @@ export default function QRScannerScreen({ navigation }) {
       // creating a second check-in ("doppio tap" bug).
       const clientUuid = Crypto.randomUUID();
       const occurredAt = new Date().toISOString();
-      const payload = {
+      payload = {
         employee_id: employeeId,
         site_id: siteId,
         client_id: clientId,     // tenant id — unrelated to client_uuid
@@ -114,12 +120,17 @@ export default function QRScannerScreen({ navigation }) {
         });
       }, SUCCESS_FLASH_DURATION);
     } catch (err) {
-      if (!err.response) {
-        // Network/timeout error — never reached the server (offline or POST_TIMEOUT_OFFLINE_MS
-        // hit). Queue it for later sync instead of failing the user's check-in outright.
-        // Reuse the same payload object (same client_uuid/occurred_at) so that if the original
-        // request actually reached the server despite the client-side timeout, the backend
-        // recognizes the retry as a duplicate.
+      // `err.isAxiosError && !err.response` — a request that was actually sent but never got
+      // a response (offline or POST_TIMEOUT_OFFLINE_MS hit). This must NOT match the manually
+      // thrown validation errors above (QR incompleto, employee_id mancante): those have no
+      // `.response` either, but they're genuine application errors caught before any request
+      // was made, so they must never be queued (and `payload` may still be null at that point).
+      if (payload && err.isAxiosError && !err.response) {
+        // Network/timeout error — never reached the server. Queue it for later sync instead
+        // of failing the user's check-in outright. Reuse the same payload object (same
+        // client_uuid/occurred_at) so that if the original request actually reached the
+        // server despite the client-side timeout, the backend recognizes the retry as a
+        // duplicate.
         try {
           await enqueueCheckin(payload);
         } catch (queueErr) {
