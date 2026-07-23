@@ -65,11 +65,14 @@ export default function QRScannerScreen({ navigation }) {
     setScanned(true);
     setLoading(true);
 
-    // Declared here (not `const` inside the try block below) because `try`/`catch` are
+    // Declared here (not `const`/`let` inside the try block below) because `try`/`catch` are
     // separate lexical scopes in JS — a `const`/`let` declared inside `try {}` is NOT
-    // visible inside `catch {}`. Referencing it from the catch block would throw a
-    // ReferenceError (surfaced by Hermes as "Property 'payload' doesn't exist").
+    // visible inside `catch {}`. Referencing either from the catch block would throw a
+    // ReferenceError (surfaced by Hermes as "Property 'x' doesn't exist"). `siteId` had the
+    // exact same bug as `payload` here — it just never surfaced because execution used to
+    // crash on `payload` first, earlier in the same catch block.
     let payload = null;
+    let siteId = null;
 
     try {
       // Robust parsing: new URL() crashes on custom schemes (badge://) in Hermes production
@@ -80,7 +83,7 @@ export default function QRScannerScreen({ navigation }) {
         const eq = pair.indexOf('=');
         if (eq >= 0) params[pair.slice(0, eq)] = decodeURIComponent(pair.slice(eq + 1));
       });
-      const siteId = params.site_id || null;
+      siteId = params.site_id || null;
       const clientId = params.client_id || null;
 
       if (!siteId || !clientId) throw new Error('QR incompleto: parametri site_id o client_id mancanti');
@@ -131,11 +134,19 @@ export default function QRScannerScreen({ navigation }) {
         // client_uuid/occurred_at) so that if the original request actually reached the
         // server despite the client-side timeout, the backend recognizes the retry as a
         // duplicate.
+        //
+        // Everything below (enqueue + navigate) is wrapped in one try/catch: this exact
+        // catch block already crashed the app twice on an unhandled ReferenceError from a
+        // variable declared in the try block above but read here (first `payload`, then
+        // `siteId` — try/catch are separate lexical scopes in JS). Both are fixed now, but
+        // given the same mistake happened twice in a row, any future slip here must surface
+        // as a visible alert instead of an untrapped exception that hangs the spinner and
+        // takes the app down.
         try {
           await enqueueCheckin(payload);
+          navigation.replace('Success', { pending: true, siteId });
+          return;
         } catch (queueErr) {
-          // Queue full or storage failure — fall through to the generic error alert below
-          // so the user isn't left thinking the check-in silently vanished.
           const msg = queueErr.message || 'Check-in fallito';
           Alert.alert('Errore check-in', msg, [
             { text: 'Riprova', onPress: () => {
@@ -148,8 +159,6 @@ export default function QRScannerScreen({ navigation }) {
           setLoading(false);
           return;
         }
-        navigation.replace('Success', { pending: true, siteId });
-        return;
       }
 
       // Application error — a real 4xx/5xx from the server (e.g. wrong site assignment,
