@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "it.dataxiom.badge",
-      "buildNumber": "29",
+      "buildNumber": "30",
       "infoPlist": {
         "NSCameraUsageDescription": "Utilizzato per scansionare il QR code della sede",
         "NSFaceIDUsageDescription": "Utilizzato per autenticare il check-in",

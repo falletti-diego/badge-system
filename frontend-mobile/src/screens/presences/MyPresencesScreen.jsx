@@ -110,7 +110,16 @@ export default function MyPresencesScreen() {
           const raw = await AsyncStorage.getItem(STORAGE_KEYS.CACHE_PRESENCES);
           const cached = raw ? JSON.parse(raw) : null;
           if (cached && cached.filterIndex === filterIndex) {
-            setEntries(cached.entries ?? []);
+            // JSON round-tripping turns the `firstIn`/`lastOut` Date objects (set by
+            // pairCheckins/mergeWithSmartWorking) into plain strings — the renderItem
+            // below calls .toLocaleTimeString() on them, which doesn't exist on a
+            // string and crashes. Revive them back into real Dates before rendering.
+            const revived = (cached.entries ?? []).map((e) => ({
+              ...e,
+              ...(e.firstIn ? { firstIn: new Date(e.firstIn) } : {}),
+              ...(e.lastOut ? { lastOut: new Date(e.lastOut) } : {}),
+            }));
+            setEntries(revived);
             setOfflineBanner({ savedAt: cached.savedAt });
             return;
           }
