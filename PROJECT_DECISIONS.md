@@ -1,8 +1,30 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 22 Luglio 2026 (Session 78 — lancio landing+LinkedIn completato; Fase A del piano Offline Mode implementata, code-reviewata e deployata LIVE in produzione)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Landing dataxiom.it+badge-system.html ✅ LIVE, lancio LinkedIn ✅ pubblicato | Offline Mode Fase A (backend) ✅ LIVE — timbrature con `occurred_at`/`client_uuid`/`is_offline`, dedup idempotente, badge dashboard | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ VERIFICATO | Pipeline CI/CD ✅ (backend job con Postgres 14 reale, exit pulito senza forceExit)  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Offline Mode Fase B (mobile — coda offline, sync automatico), prevista per la prossima build TestFlight (comunque necessaria entro l'8 settembre, scadenza Build 14). Resta UN solo bloccante prospect: SES setup completo (Parte B del piano 2026-07-19 — dominio DKIM + Sandbox exit, serve accesso DNS utente su register.it)
+**Last Updated:** 23 Luglio 2026 (Session 79 — Fase B mobile del piano Offline Mode implementata via subagent-driven-development: coda offline, sync automatico, flusso timbratura garantito, cache read-only)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Landing dataxiom.it+badge-system.html ✅ LIVE, lancio LinkedIn ✅ pubblicato | Offline Mode Fase A (backend) ✅ LIVE | Offline Mode Fase B (mobile) ✅ codice completo e testato, **non ancora buildato/verificato su device reale** | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ VERIFICATO | Pipeline CI/CD ✅ (backend job con Postgres 14 reale, exit pulito senza forceExit)  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Offline Mode Task B6 (EAS build TestFlight + checklist E2E in modalità aereo su iPhone reale) — richiede un device fisico e un'autorizzazione esplicita dell'utente per il build EAS, non eseguibile in questo ambiente. Resta UN solo bloccante prospect: SES setup completo (Parte B del piano 2026-07-19 — dominio DKIM + Sandbox exit, serve accesso DNS utente su register.it)
+
+---
+
+## Session 79 — Offline Mode Fase B (mobile) implementata e code-reviewata (23 Luglio 2026)
+
+### Decisioni
+1. **Esecuzione con `/superpowers:subagent-driven-development`** (skill esplicitamente richiesta dall'utente): un subagent implementer per task (B1-B5), ciascuno verificato indipendentemente dal coordinatore — rilettura diretta del commit/diff, non fiducia cieca nel report del subagent (ha permesso di individuare un bug reale introdotto da un fix del code-review, vedi sotto).
+2. **`/test-all` + `/code-review` obbligatori prima del commit finale di ogni fase** (istruzione esplicita dell'utente, stessa disciplina della Fase A) — di nuovo ha pagato: due giri di problemi reali trovati.
+3. **Coda offline mai ripulita al logout** (deliberato): le timbrature in coda appartengono a chi le ha create, devono sincronizzarsi anche dopo un logout. Ma questo ha richiesto poi lo scoping per-employee di `flushQueue` (vedi sotto) per evitare un data-loss reale su device condivisi.
+
+### Deviazioni dal piano scoperte durante l'esecuzione
+- `expo-crypto` **non era installato** nonostante il piano affermasse "zero dipendenze nuove" — aggiunto con `npx expo install expo-crypto` (nessun codice nativo da toccare, `ios/` è gitignored/CNG via EAS Build).
+- Il percorso test indicato dal piano (`frontend-mobile/src/services/__tests__/`) non sarebbe mai stato eseguito da `npm test` — `testMatch` di Jest è ristretto e piatto (`**/src/__tests__/**/*.test.js`). Corretto in `frontend-mobile/src/__tests__/offlineQueue.test.js`.
+
+### Bug critico trovato da un security review automatico POST-COMMIT (non dal code-review iniziale)
+Il primo giro di `/code-review` (medium effort, 8 finder-agent) aveva già trovato e corretto un leak di cache cross-utente (`authService.logout()` non ripuliva `CACHE_SHIFTS`/`CACHE_PRESENCES` — commit `0cde2eb`). Ma un secondo security review, scattato automaticamente DOPO quel commit, ha rilevato che il fix non bastava: la **coda offline** (deliberatamente non ripulita al logout) non era scoped per utente. Su un device condiviso — scenario comune nel retail, il caso d'uso primario di questo prodotto — se l'employee B faceva scattare un flush (reconnect, foreground) mentre in coda c'erano timbrature dell'employee A, il backend le avrebbe rifiutate con `403` (ownership check S.32.1, Fase A) e `flushQueue` le marcava `failed` **permanentemente** (i 4xx non vengono mai ritentati) — perdendo la timbratura reale di A. Questo vanificava esattamente la promessa centrale della feature ("mai persa una timbratura"). **Fix**: `flushQueue` ora recupera l'utente autenticato (`authService.getUser()`) e tenta solo gli item il cui `employee_id` corrisponde; gli item di altri employee (o nessun utente loggato) restano `pending` intatti, mai tentati né falliti — si sincronizzano quando il loro vero proprietario rifà login. Contatore in `CheckInScreen` scoped allo stesso modo. Commit `8a5e6ad`.
+
+### Verifica del flusso online (Gate B-G3) senza simulatore
+Nessun simulatore/device fisico disponibile in questo ambiente. Verificato invece con uno smoke test diretto contro `api.dataxiom.it` (tenant demo self-service isolato, creato e ripulito): il payload esatto ora inviato da `QRScannerScreen` per un check-in online (con `client_uuid`/`occurred_at`/`client_id` tenant) produce `201`/`is_offline:false` — nessuna regressione lato backend sul flusso online. La verifica E2E reale su device (scan QR fisico, timing, UI) resta per Task B6.
+
+### Nota fuori scope
+La pipeline CI ha uno step `Security Check` rosso pre-esistente (3 vulnerabilità npm `high` su dipendenze del backend) — non causato da questa sessione (il diff Fase B è mobile-only), segnalato ma non affrontato.
 
 ---
 

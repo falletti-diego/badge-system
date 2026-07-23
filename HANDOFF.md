@@ -1,88 +1,79 @@
-# Badge System — Session 78 Handoff
+# Badge System — Session 79 Handoff
 
-**Date:** 2026-07-22
-**Session:** 78 — lancio landing+LinkedIn completato; Fase A del piano Offline Mode (backend) implementata, code-reviewata e **DEPLOYATA LIVE in produzione**
-**Status:** ✅ **Lancio completo. Offline Mode Fase A live e verificata.** Prossimo step: Fase B (mobile), non ancora iniziata.
+**Date:** 2026-07-23
+**Session:** 79 — Offline Mode Fase B (mobile) implementata via `/superpowers:subagent-driven-development`, code-reviewata con 2 giri di fix
+**Status:** ✅ **Fase B completa lato codice, testata (43/43), pushata.** ⏳ Non ancora buildata/verificata su device reale (Task B6 — richiede iPhone fisico + autorizzazione utente per l'EAS build).
 
 ---
 
 ## Goal
 
-1. Collegare la landing aziendale dataxiom.it a Badge System (pagina prodotto dedicata) e lanciare l'annuncio LinkedIn — ereditato dalla Session 77b, completato in questa sessione.
-2. Implementare la Fase A (backend) del piano Offline Mode: timbrature IN/OUT che funzionano senza rete, con timestamp fedele, zero duplicati, badge "offline" visibile al manager.
+Implementare la Fase B (mobile) del piano Offline Mode: coda offline persistente per le timbrature, sync automatico al ritorno della rete, UI "in attesa di rete", cache read-only per turni/presenze. Prosegue dalla Session 78 (Fase A backend, già live in produzione).
 
 ---
 
 ## Current Progress
 
-### 1. Lancio landing + LinkedIn — ✅ COMPLETO
+Eseguita con `/superpowers:subagent-driven-development` (su richiesta esplicita dell'utente): un subagent implementer per task, ciascuno verificato indipendentemente dal coordinatore (rilettura diretta del diff/commit, mai fiducia cieca nel solo report del subagent) prima di passare al task successivo.
 
-- Verificato lo stato reale prima di agire: i commit di Session 77b erano pushati su GitHub ma il deploy Netlify non era mai partito (nonostante fosse "previsto per il giorno dopo").
-- Deploy eseguito (`netlify deploy --prod`, sito `dataxiom` — id `a31a2216-fb06-47e0-b632-a1193a88039a`, verificato con `netlify status` prima di procedere per non toccare per errore il sito `dataxiom-badge`).
-- Verificato live: `dataxiom.it/badge-system.html` → 200, title corretto, nav+card home, hero, tema condiviso, funnel demo (`badge.dataxiom.it/prova-demo`) invariato.
-- Post LinkedIn (Variante A + carosello 7 slide) pubblicato dall'utente sulla Company Page — confermato manualmente (nessun tool MCP LinkedIn disponibile in questo ambiente per farlo direttamente).
+- **B1** — `STORAGE_KEYS`/`OFFLINE_CONFIG` in `endpoints.js` + dipendenza `expo-crypto` (aggiunta — il piano assumeva erroneamente fosse già presente).
+- **B2** (TDD, 14→18 test) — `offlineQueue.js`: coda persistente in AsyncStorage, flush sequenziale mutex-guarded, dedup-aware (`deduplicated:true` conta come successo), FIFO.
+- **B3** — listener `NetInfo`/`AppState` in `RootNavigator.jsx` (useRef guard, stesso pattern del fix duplicati "Build 7").
+- **B4** — `QRScannerScreen` genera sempre `client_uuid`+`occurred_at` prima del POST; su errore di rete/timeout mette in coda e naviga a un `SuccessScreen` variante "pending"; su errore applicativo comportamento invariato (mai messo in coda). Contatore "N in attesa" in `CheckInScreen`.
+- **B5** — cache read-only (`AsyncStorage`) per turni/presenze, banner "Sei offline — dati aggiornati al..." su `MyScheduleScreen`/`MyPresencesScreen` quando il GET fallisce per rete e una cache compatibile esiste.
 
-### 2. Piano Offline Mode — scritto e committato
+**`/test-all`**: backend 610/610, frontend-web 239/240 (1 skip pre-esistente), mobile 39/39 → 43/43 (dopo i fix del code-review).
 
-`/superpowers:writing-plans` + `/grilling` (decisioni: perimetro = timbrature+consultazione read-only; anti-frode = finestra 48h + badge "offline" visibile, non hash-chain "sigillato"; UX = successo garantito con contatore coda; rollout = piano ora, esecuzione dopo il lancio). Piano respinto una prima volta in Plan Mode per mancanza di step di verifica/test — corretto aggiungendoli a ogni task e a ogni gate. Salvato in `docs/superpowers/plans/2026-07-19-offline-mode.md`, commit `1af3e37`.
+**`/code-review`** (medium effort, 8 finder-agent + verifica) — **primo giro**, 3 problemi trovati e corretti (commit `0cde2eb`):
+1. Leak cache cross-utente: `authService.logout()` non ripuliva `CACHE_SHIFTS`/`CACHE_PRESENCES`.
+2. `flushQueue` persisteva la coda una sola volta a fine ciclo (non incrementale) — rischio re-invio su kill app a metà flush.
+3. `flushQueue` poteva propagare un'eccezione inattesa come promise rejection non gestita (chiamata fire-and-forget da `RootNavigator`).
 
-### 3. Offline Mode — Fase A (backend) — ✅ COMPLETA e LIVE
+**Secondo giro — security review automatico POST-COMMIT** (non dal code-review iniziale, scattato dopo il push): il fix #1 sopra non bastava. La coda offline (deliberatamente non ripulita al logout — le timbrature restano di chi le ha create) non era **scoped per utente**. Su un device condiviso tra dipendenti (scenario comune nel retail, il caso d'uso primario del prodotto), se l'employee B faceva scattare un flush con timbrature dell'employee A ancora in coda, il backend le avrebbe rifiutate con `403` (ownership check, Fase A) e `flushQueue` le marcava `failed` **permanentemente** — perdendo la timbratura reale di A. Vanificava esattamente "mai persa una timbratura". **Fix**: `flushQueue` ora tenta solo gli item dell'employee attualmente autenticato; gli altri restano `pending` intatti. Commit `8a5e6ad`.
 
-Eseguita con `/superpowers:test-driven-development` + `/superpowers:executing-plans` (skill esplicitamente richieste dall'utente, non `subagent-driven-development` nonostante suggerito dalla skill stessa).
+**Gate B-G3 (regressione flusso online)**: nessun simulatore/device disponibile in questo ambiente. Verificato con smoke test diretto su `api.dataxiom.it` (tenant demo isolato, poi ripulito): il payload esatto ora inviato da `QRScannerScreen` per un check-in online produce `201`/`is_offline:false` — nessuna regressione lato backend.
 
-- **A1** — migration `032_add_offline_checkin_fields.sql` (`client_uuid`, `is_offline`, indice UNIQUE). Deviazioni dal piano: directory reale è `backend/migrations/` (non `backend/src/db/migrations/`), numero `032` non `031` (già occupato). `schema.sql` **deliberatamente non toccato** — il bootstrap CI applica `schema.sql` + tutte le migration in sequenza (`scripts/run-migrations.js`), duplicare le colonne sarebbe stato ridondante, coerente con la convenzione già stabilita dalla migration 030.
-- **A2** — schema Zod: `occurred_at` (finestra anti-frode 48h/+5min), `client_uuid`.
-- **A3** — route `POST /api/checkins`: dedup idempotente.
-- **A4** — dashboard: Chip MUI "Offline" in `PresencesTable`, `GET /api/v1/checkins` estesa con `is_offline`.
-- **`/test-all`**: 608/608 backend, 239/240 frontend (1 skip pre-esistente).
-- **`/code-review`** (medium effort, 8 finder-agent + verifica): **1 bug CRITICO trovato e confermato empiricamente contro Postgres reale** (non solo per ispezione) — vedi "What Didn't Work" sotto. Corretto, commit `f89b933`.
-- **Deploy produzione**: migration applicata su RDS (via EC2 — RDS non raggiungibile direttamente dal locale, security group VPC-only), push su `main` → pipeline CI/CD standard verificata verde.
-- **Vulnerabilità trovata da un security review automatico POST-PUSH** (durante lo smoke test, quando il codice vulnerabile era già live per alcuni minuti): `is_offline` fidato dal client. Corretto con TDD e ri-deployato entro pochi minuti, commit `5067e01`.
-- **Smoke test live (4/4)** eseguito su un tenant demo self-service isolato (creato via `/api/v1/demo/start`, ripulito con `DELETE FROM clients` a fine test — nessun dato cliente reale toccato): retrocompatibilità ✓, `occurred_at` rispettato nel DB (non `NOW()`) ✓, dedup (`200 deduplicated:true`, nessuna riga doppia) ✓, finestra 48h rifiutata (`400 OFFLINE_TIMESTAMP_OUT_OF_WINDOW`) ✓.
-- **Badge Offline**: verificato a livello di contratto dati (`GET /api/v1/checkins` espone `is_offline:true` correttamente sul record atteso, `false` su tutti gli altri) — **non verificato visivamente in un browser reale** (nessun tool di rendering browser disponibile in questa sessione).
-
-Commit range Fase A: `a344dee` → `451a7cd` (7 commit, tutti pushati e deployati).
+Commit range Fase B: `52ced4b` → `ef135a4` (9 commit), tutti pushati su `origin/main`.
 
 ---
 
 ## What Worked
 
-- **Verificare lo stato reale prima di agire**, sia per il deploy landing (git log + curl live, non fidarsi di "domani era previsto") sia per le credenziali RDS (testate da EC2 prima di assumerle valide dalla memoria).
-- **`/test-all` + `/code-review` come gate obbligatorio prima del commit finale** (istruzione esplicita dell'utente): il code-review ha trovato un bug critico che i test con mock non potevano vedere.
-- **Riprodurre un bug sospetto contro l'infrastruttura reale prima di dichiararlo risolto** (script Node diretto contro Postgres reale per il bug 25P02, poi contro `api.dataxiom.it` per il fix finale) — non fidarsi della sola teoria/lettura del codice.
-- **Usare un tenant demo self-service per lo smoke test di produzione** invece di toccare dati reali o inventare fixture — creato e ripulito in modo pulito, cascata FK verificata.
-- **Documentare le deviazioni dal piano nel piano stesso** (numero migration, directory, schema.sql non toccato, redesign ON CONFLICT) invece di lasciarle solo nei commit — il prossimo che legge il piano capisce cosa è cambiato e perché.
+- Verificare ogni commit dei subagent **direttamente** (non solo leggere il loro report) — ha permesso di correggere l'ordine sbagliato di un `writeQueue` dentro il try/catch del POST, introdotto dal mio stesso primo fix del code-review.
+- `/test-all` + `/code-review` come gate obbligatorio ha trovato 3 problemi reali nel primo giro; il secondo giro (security review automatico) ne ha trovato un quarto più serio dopo il commit — nessuno dei due controlli da solo sarebbe bastato.
+- Simulare il payload esatto che il mobile ora invia con curl contro `api.dataxiom.it` (tenant demo isolato) per compensare l'assenza di un simulatore/device — non perfetto ma meglio di nessuna verifica end-to-end.
 
 ## What Didn't Work (lezioni)
 
-- **Il design iniziale "SELECT dedup + INSERT + catch(23505) + re-SELECT" era rotto**: dopo un'eccezione 23505, Postgres marca la transazione come *aborted* — qualunque query successiva sullo stesso client (inclusa la SELECT di recovery) fallisce con `25P02`. Il mock dei test (funzione JS pura) non ha stato di transazione reale, quindi non lo rilevava: **9/9 test verdi su un design rotto**. Il fix corretto (`INSERT ... ON CONFLICT DO NOTHING RETURNING`) non lancia mai eccezioni — architetturalmente più semplice E corretto, non solo una patch. **Lezione**: quando un mock deve simulare comportamento transazionale di Postgres (stato aborted, SAVEPOINT), un test verde non è sufficiente garanzia — va riprodotto contro un DB reale prima di fidarsi.
-- **Un fix di sicurezza trovato dopo un push in produzione richiede correzione e ri-deploy immediati**, non un rimando a fine sessione — il codice vulnerabile (`is_offline` fidato dal client) è rimasto live per alcuni minuti prima di essere corretto.
-- **`npm run migrations` in `backend/package.json` puntava a un file inesistente** (`src/db/migrations.js`) — script rotto, mai notato perché in pratica si usa sempre `scripts/run-migrations.js` (il runner reale, usato anche in CI). **Corretto** prima di iniziare la Fase B (verificato con una run reale contro il DB di test locale).
+- **Il piano sottostimava le dipendenze e i percorsi test reali**: `expo-crypto` non era installato nonostante "zero dipendenze nuove"; il percorso test proposto (`src/services/__tests__/`) non sarebbe mai stato eseguito da `npm test` (jest `testMatch` piatto). Entrambi scoperti PRIMA di dispatchare i subagent (esplorazione diretta del codice), non durante l'esecuzione — buona pratica da ripetere.
+- **Un fix del code-review può introdurre un bug nuovo**: spostare `writeQueue` dentro lo stesso try/catch del POST ha fatto sì che un fallimento di storage venisse scambiato per un errore di rete sul check-in. Trovato rieseguendo io stesso i test dopo il fix (non fidandosi che "il fix è ovviamente corretto").
+- **Il code-review a un certo effort non è garanzia assoluta**: il finding più serio di questa fase (perdita permanente di timbrature su device condivisi) è arrivato da un secondo controllo automatico DOPO il commit, non dal primo giro di `/code-review`. Vale la stessa lezione della Fase A: continuare a verificare anche dopo aver "chiuso" un gate.
 
 ---
 
 ## Next Steps
 
-1. **Offline Mode — Fase B (mobile)**: coda offline (`offlineQueue.js`, AsyncStorage), sync automatico (NetInfo+AppState), UI "in attesa di rete" su check-in/QRScanner/SuccessScreen, cache read-only turni/presenze. Piano già scritto in dettaglio (task B1-B6 + gate B-G1/B-G2/B-G3) in `docs/superpowers/plans/2026-07-19-offline-mode.md`. Prevista per la prossima build TestFlight — comunque necessaria entro l'8 settembre (scadenza Build 14, reminder 25 agosto).
-2. **SES Parte B** (email a prospect reali): resta l'unico bloccante commerciale — serve accesso DNS register.it dell'utente per verifica dominio + uscita Sandbox.
-3. Backlog invariato: flake inter-worker test demo, saldi superadmin — vedi TASKS.md sezione SECURITY TECH DEBT.
+1. **Task B6** — EAS build TestFlight (skill `/build-mobile`) + checklist E2E in modalità aereo su iPhone reale (6 scenari nel piano: coda persiste dopo kill app, sync automatico al reconnect, timestamp reali + badge Offline in dashboard, nessun duplicato su retry ripetuti). **Richiede un device fisico e un'autorizzazione esplicita dell'utente** per consumare un build EAS — non eseguibile in questo ambiente. Reminder: Build 14 scade l'8 settembre, rinnovo entro il 25 agosto.
+2. Dopo B6: claim marketing "Mai persa una timbratura — funziona anche senza rete" su `badge-system.html` e materiale LinkedIn futuro — esplicitamente subordinato all'ok dell'utente (non fatto finché B6 non è verificato su device reale).
+3. **SES Parte B** (email a prospect reali): resta l'unico bloccante commerciale — serve accesso DNS register.it dell'utente.
+4. **Fuori scope, segnalato non affrontato**: la pipeline CI ha uno step `Security Check` rosso pre-esistente (3 vulnerabilità npm `high` su dipendenze backend) — non causato da questa sessione (il diff Fase B è mobile-only).
+5. Backlog minor invariato (flake inter-worker test demo, saldi superadmin, pattern di cache-fallback duplicato tra `MyScheduleScreen`/`MyPresencesScreen` — candidato per un hook condiviso futuro) — vedi TASKS.md.
 
 ---
 
 ## Dove sono le cose
 
-- **Piano Offline Mode**: `docs/superpowers/plans/2026-07-19-offline-mode.md` (Fase A ✅ checkbox complete + note deviazioni, Fase B da eseguire)
-- **Migration**: `backend/migrations/032_add_offline_checkin_fields.sql`
-- **Route**: `backend/src/routes/checkins.js` (POST /api/checkins, dedup + is_offline server-derived)
-- **Validazione**: `backend/src/middleware/validation.js` (`PostCheckinSchema`)
-- **Test**: `backend/src/__tests__/checkins-offline.test.js` (11 test)
-- **Dashboard**: `frontend-web/src/features/dashboard/components/PresencesTable.jsx` (Chip Offline)
-- **Repo landing** (fuori da questo repo): `/Users/diegofalletti/DATAXIOM/Dataxiom – Analisi & BI/Landing Page` → GitHub privato `falletti-diego/dataxiom-landing`
-- **Materiale LinkedIn**: `LinkedIn/2026-07-20_badge-system-launch/` (post + carosello, già pubblicati)
+- **Piano Offline Mode**: `docs/superpowers/plans/2026-07-19-offline-mode.md` (Fase A ✅, Fase B ✅ tranne verifica device — checkbox + note deviazioni complete, Task B6 da eseguire)
+- **Servizio coda**: `frontend-mobile/src/services/offlineQueue.js` + test in `frontend-mobile/src/__tests__/offlineQueue.test.js` (18 test)
+- **Sync automatico**: `frontend-mobile/src/navigation/RootNavigator.jsx`
+- **Flusso timbratura**: `frontend-mobile/src/screens/checkin/{CheckInScreen,QRScannerScreen,SuccessScreen}.jsx`
+- **Cache read-only**: `frontend-mobile/src/screens/schedule/MyScheduleScreen.jsx`, `frontend-mobile/src/screens/presences/MyPresencesScreen.jsx`
+- **Logout (fix leak cache)**: `frontend-mobile/src/services/authService.js`
+- **Backend Fase A** (già live): migration `backend/migrations/032_add_offline_checkin_fields.sql`, route `backend/src/routes/checkins.js`, dashboard `frontend-web/src/features/dashboard/components/PresencesTable.jsx`
 
 ## Note operative
 
-- Deploy landing: SEMPRE `--site a31a2216-fb06-47e0-b632-a1193a88039a` · Deploy badge frontend: `--site 29a79b49-...` · Backend: automatico su push `main` (`backend/**`)
+- Deploy landing: SEMPRE `--site a31a2216-fb06-47e0-b632-a1193a88039a` · Deploy badge frontend: `--site 29a79b49-...` · Backend: automatico su push `main` (`backend/**`) · **Mobile: nessun auto-deploy, EAS build sempre manuale** (skill `/build-mobile`)
 - **RDS non raggiungibile dal locale** (security group VPC-only) — per migration su produzione: SSH su EC2 (`ssh -i ~/.ssh/badge-system-ec2-v2.pem ubuntu@34.245.145.143`), poi `psql` da lì (già installato).
-- Credenziali RDS/EC2 in memoria (`aws_rds_postgres.md`, `rds_new_instance_2026_06_03.md`, `aws_ec2_instance.md`) — verificate valide in questa sessione.
+- Credenziali RDS/EC2 in memoria (`aws_rds_postgres.md`, `rds_new_instance_2026_06_03.md`, `aws_ec2_instance.md`).
 - Cron produzione EC2: 2:00 retention, 3:30 cleanup demo (verificati in sessioni precedenti).
