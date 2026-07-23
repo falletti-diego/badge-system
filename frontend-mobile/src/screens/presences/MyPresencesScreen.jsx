@@ -4,8 +4,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/apiClient';
-import { ENDPOINTS } from '../../config/endpoints';
+import { ENDPOINTS, STORAGE_KEYS } from '../../config/endpoints';
 import SkeletonLoader from '../../components/SkeletonLoader';
 import { pairCheckins, mergeWithSmartWorking, formatDuration } from '../../utils/presenceUtils';
 import { COLORS, FONTS } from '../../config/theme';
@@ -73,6 +74,7 @@ export default function MyPresencesScreen() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [offlineBanner, setOfflineBanner] = useState(null);
   const abortControllerRef = useRef(null);
 
   const fetchData = useCallback(async (filterIndex) => {
@@ -82,6 +84,7 @@ export default function MyPresencesScreen() {
 
     setLoading(true);
     setError(null);
+    setOfflineBanner(null);
 
     try {
       const { date_from, date_to } = FILTERS[filterIndex].range();
@@ -95,10 +98,28 @@ export default function MyPresencesScreen() {
       const dailyEntries = pairCheckins(checkinsRes.data.data ?? []);
       const merged = mergeWithSmartWorking(dailyEntries, smartWorkingRes.data.data ?? []);
       setEntries(merged);
+      AsyncStorage.setItem(
+        STORAGE_KEYS.CACHE_PRESENCES,
+        JSON.stringify({ savedAt: Date.now(), filterIndex, entries: merged }),
+      ).catch(() => {});
     } catch (err) {
-      if (!controller.signal.aborted) {
-        setError(err.response?.data?.message || 'Errore caricamento presenze');
+      if (controller.signal.aborted) return;
+
+      if (!err.response) {
+        try {
+          const raw = await AsyncStorage.getItem(STORAGE_KEYS.CACHE_PRESENCES);
+          const cached = raw ? JSON.parse(raw) : null;
+          if (cached && cached.filterIndex === filterIndex) {
+            setEntries(cached.entries ?? []);
+            setOfflineBanner({ savedAt: cached.savedAt });
+            return;
+          }
+        } catch (cacheErr) {
+          // corrupt cache or storage failure — fall through to normal error
+        }
       }
+
+      setError(err.response?.data?.message || 'Errore caricamento presenze');
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
@@ -164,6 +185,13 @@ export default function MyPresencesScreen() {
 
       {!loading && !error && entries.length > 0 && (
         <>
+          {offlineBanner && (
+            <View style={styles.offlineBanner}>
+              <Text style={styles.offlineBannerText}>
+                Sei offline — dati aggiornati al {new Date(offlineBanner.savedAt).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            </View>
+          )}
           <FlatList
             data={listData}
             keyExtractor={(row) => row.key}
@@ -263,4 +291,9 @@ const styles = StyleSheet.create({
   errorText: { color: COLORS.error, textAlign: 'center', fontFamily: FONTS.body, fontSize: 16, marginBottom: 16 },
   retryButton: { backgroundColor: COLORS.navy500, borderRadius: 8, paddingHorizontal: 24, paddingVertical: 12 },
   retryButtonText: { color: COLORS.white, fontFamily: FONTS.bodyMedium, fontSize: 15 },
+  offlineBanner: {
+    backgroundColor: COLORS.warningBg, marginHorizontal: 16, marginBottom: 8,
+    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10,
+  },
+  offlineBannerText: { color: COLORS.warning, fontFamily: FONTS.bodyMedium, fontSize: 13, textAlign: 'center' },
 });

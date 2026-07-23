@@ -3,8 +3,9 @@ import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/apiClient';
-import { ENDPOINTS, SHIFTS_CONFIG } from '../../config/endpoints';
+import { ENDPOINTS, SHIFTS_CONFIG, STORAGE_KEYS } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
 
 const { LABELS: SHIFT_LABELS, COLORS: SHIFT_COLORS, ICONS: SHIFT_ICONS } = SHIFTS_CONFIG;
@@ -25,6 +26,7 @@ export default function MyScheduleScreen({ navigation }) {
   const [shiftsData, setShiftsData] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [offlineBanner, setOfflineBanner] = useState(null);
   const abortControllerRef = useRef(null);
 
   const fetchSchedule = (m = month, y = year) => {
@@ -33,6 +35,7 @@ export default function MyScheduleScreen({ navigation }) {
 
     setLoading(true);
     setError(null);
+    setOfflineBanner(null);
 
     apiClient.get(ENDPOINTS.SHIFTS_MY_SCHEDULE, {
       params: { month: m, year: y },
@@ -40,13 +43,32 @@ export default function MyScheduleScreen({ navigation }) {
     })
       .then(r => {
         if (!abortControllerRef.current?.signal.aborted) {
-          setShiftsData(r.data.data?.shifts_data ?? {});
+          const data = r.data.data?.shifts_data ?? {};
+          setShiftsData(data);
+          AsyncStorage.setItem(
+            STORAGE_KEYS.CACHE_SHIFTS,
+            JSON.stringify({ savedAt: Date.now(), month: m, year: y, shiftsData: data }),
+          ).catch(() => {});
         }
       })
-      .catch(e => {
-        if (!abortControllerRef.current?.signal.aborted) {
-          setError(e.response?.data?.message || 'Errore caricamento turni');
+      .catch(async e => {
+        if (abortControllerRef.current?.signal.aborted) return;
+
+        if (!e.response) {
+          try {
+            const raw = await AsyncStorage.getItem(STORAGE_KEYS.CACHE_SHIFTS);
+            const cached = raw ? JSON.parse(raw) : null;
+            if (cached && cached.month === m && cached.year === y) {
+              setShiftsData(cached.shiftsData ?? {});
+              setOfflineBanner({ savedAt: cached.savedAt });
+              return;
+            }
+          } catch (cacheErr) {
+            // corrupt cache or storage failure — fall through to normal error
+          }
         }
+
+        setError(e.response?.data?.message || 'Errore caricamento turni');
       })
       .finally(() => {
         if (!abortControllerRef.current?.signal.aborted) {
@@ -110,6 +132,14 @@ export default function MyScheduleScreen({ navigation }) {
           >
             <Text style={styles.retryButtonText}>Riprova</Text>
           </TouchableOpacity>
+        </View>
+      )}
+
+      {!loading && offlineBanner && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineBannerText}>
+            Sei offline — dati aggiornati al {new Date(offlineBanner.savedAt).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+          </Text>
         </View>
       )}
 
@@ -197,4 +227,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563EB', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 12,
   },
   retryButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+  offlineBanner: {
+    backgroundColor: '#FEF6EC', marginHorizontal: 16, marginBottom: 8,
+    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10,
+  },
+  offlineBannerText: { color: '#B45309', fontSize: 13, fontWeight: '600', textAlign: 'center' },
 });
