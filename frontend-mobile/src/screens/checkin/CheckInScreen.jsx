@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Alert,
+  View, Text, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as LocalAuthentication from 'expo-local-authentication';
-import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import authService from '../../services/authService';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { getQueue, subscribe } from '../../services/offlineQueue';
 import { TIMING, STORAGE_KEYS } from '../../config/endpoints';
 import { COLORS, FONTS } from '../../config/theme';
 
@@ -16,6 +16,7 @@ export default function CheckInScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [time, setTime] = useState(new Date());
   const [faceIdAvailable, setFaceIdAvailable] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     setLoading(true);
@@ -28,13 +29,15 @@ export default function CheckInScreen({ navigation }) {
     return () => clearInterval(tick);
   }, []);
 
-  const handleCheckIn = async () => {
-    const net = await NetInfo.fetch();
-    if (!net.isConnected) {
-      Alert.alert('Nessuna connessione', 'Verifica la connessione internet e riprova.');
-      return;
-    }
+  useEffect(() => {
+    getQueue().then((q) => setPendingCount(q.filter((i) => i.status === 'pending').length));
+    const unsubscribe = subscribe((queue) => {
+      setPendingCount(queue.filter((i) => i.status === 'pending').length);
+    });
+    return unsubscribe;
+  }, []);
 
+  const handleCheckIn = async () => {
     // Biometric verification gets its own dedicated screen (FaceIDScreen) — skipped
     // both when the hardware is unavailable and when the user disabled it in
     // Impostazioni (Preferenze > Face ID). Neither bypass weakens check-in security:
@@ -75,6 +78,12 @@ export default function CheckInScreen({ navigation }) {
           <Text style={styles.smartWorkingButtonText}>Smart Working</Text>
           <Text style={styles.smartWorkingSubtext}>Autogiustifica la giornata odierna</Text>
         </TouchableOpacity>
+
+        {pendingCount > 0 && (
+          <Text style={styles.pendingQueueText}>
+            🕓 {pendingCount} timbratura{pendingCount > 1 ? 'e' : ''} in attesa di sincronizzazione
+          </Text>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -111,4 +120,7 @@ const styles = StyleSheet.create({
   },
   smartWorkingButtonText: { fontFamily: FONTS.bodySemiBold, color: COLORS.navy500, fontSize: 15 },
   smartWorkingSubtext: { fontFamily: FONTS.body, color: COLORS.stone, fontSize: 12, marginTop: 4 },
+  pendingQueueText: {
+    fontFamily: FONTS.body, color: COLORS.stone, fontSize: 13, textAlign: 'center',
+  },
 });

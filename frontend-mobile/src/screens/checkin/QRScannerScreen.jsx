@@ -2,9 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Animated, Easing, Vibration } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Crypto from 'expo-crypto';
 import apiClient from '../../services/apiClient';
 import authService from '../../services/authService';
-import { ENDPOINTS } from '../../config/endpoints';
+import { enqueueCheckin } from '../../services/offlineQueue';
+import { ENDPOINTS, OFFLINE_CONFIG } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import StepIndicator from '../../components/StepIndicator';
 import { COLORS, FONTS } from '../../config/theme';
@@ -82,12 +84,24 @@ export default function QRScannerScreen({ navigation }) {
 
       if (!employeeId) throw new Error('Employee ID non trovato — assicurati di accedere con un account dipendente');
 
-      const response = await apiClient.post(ENDPOINTS.CHECKINS_POST, {
+      // client_uuid/occurred_at are generated for every attempt (even when online): if this
+      // POST times out but the server actually received and processed it, the retry (queued
+      // below on failure) will be recognized as a duplicate by the backend instead of
+      // creating a second check-in ("doppio tap" bug).
+      const clientUuid = Crypto.randomUUID();
+      const occurredAt = new Date().toISOString();
+      const payload = {
         employee_id: employeeId,
         site_id: siteId,
-        client_id: clientId,
+        client_id: clientId,     // tenant id — unrelated to client_uuid
         type: checkType,
-        timestamp: new Date().toISOString(),
+        timestamp: occurredAt,   // legacy field, harmless to keep sending
+        occurred_at: occurredAt, // the field the backend actually reads
+        client_uuid: clientUuid, // idempotency key
+      };
+
+      const response = await apiClient.post(ENDPOINTS.CHECKINS_POST, payload, {
+        timeout: OFFLINE_CONFIG.POST_TIMEOUT_OFFLINE_MS,
       });
 
       // Success feedback: vibration + corner brackets flash green before navigating to Conferma
@@ -100,6 +114,35 @@ export default function QRScannerScreen({ navigation }) {
         });
       }, SUCCESS_FLASH_DURATION);
     } catch (err) {
+      if (!err.response) {
+        // Network/timeout error — never reached the server (offline or POST_TIMEOUT_OFFLINE_MS
+        // hit). Queue it for later sync instead of failing the user's check-in outright.
+        // Reuse the same payload object (same client_uuid/occurred_at) so that if the original
+        // request actually reached the server despite the client-side timeout, the backend
+        // recognizes the retry as a duplicate.
+        try {
+          await enqueueCheckin(payload);
+        } catch (queueErr) {
+          // Queue full or storage failure — fall through to the generic error alert below
+          // so the user isn't left thinking the check-in silently vanished.
+          const msg = queueErr.message || 'Check-in fallito';
+          Alert.alert('Errore check-in', msg, [
+            { text: 'Riprova', onPress: () => {
+              processingRef.current = false;
+              setScanned(false);
+              setLoading(false);
+            }},
+            { text: 'Annulla', onPress: () => navigation.goBack() },
+          ]);
+          setLoading(false);
+          return;
+        }
+        navigation.replace('Success', { pending: true, siteId });
+        return;
+      }
+
+      // Application error — a real 4xx/5xx from the server (e.g. wrong site assignment,
+      // ownership violation, validation error). Genuinely invalid, don't enqueue.
       const msg = err.response?.data?.message || err.message || 'Check-in fallito';
 
       Alert.alert('Errore check-in', msg, [

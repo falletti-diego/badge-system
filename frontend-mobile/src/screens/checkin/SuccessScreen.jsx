@@ -8,7 +8,7 @@ import { TIMING } from '../../config/endpoints';
 import { COLORS, FONTS, ROLE_LABELS } from '../../config/theme';
 
 export default function SuccessScreen({ navigation, route }) {
-  const { checkIn } = route.params ?? {};
+  const { checkIn, pending } = route.params ?? {};
   const [user, setUser] = useState(null);
   const checkScale = useRef(new Animated.Value(0)).current;
 
@@ -44,8 +44,15 @@ export default function SuccessScreen({ navigation, route }) {
           </Svg>
         </Animated.View>
 
-        <Text style={styles.greeting}>Check-in Registrato</Text>
+        <Text style={styles.greeting}>
+          {pending ? 'Timbratura salvata sul telefono' : 'Check-in Registrato'}
+        </Text>
         <Text style={styles.name}>Buongiorno,{'\n'}{firstName}</Text>
+        {pending ? (
+          <View style={styles.offlinePill}>
+            <Text style={styles.offlinePillText}>☁️ Offline</Text>
+          </View>
+        ) : null}
         {roleLabel ? <Text style={styles.role}>{roleLabel}</Text> : null}
         {user?.external_employee_id ? (
           <Text style={styles.employeeId}>#{user.external_employee_id}</Text>
@@ -55,6 +62,12 @@ export default function SuccessScreen({ navigation, route }) {
           <Text style={styles.timeBig}>{timeStr}</Text>
           <Text style={styles.date}>{dateStr}</Text>
         </View>
+
+        {pending ? (
+          <Text style={styles.pendingSubtitle}>
+            Verrà sincronizzata automaticamente appena torna la rete.
+          </Text>
+        ) : null}
 
         <View style={styles.detailCard}>
           {user?.external_employee_id && (
@@ -115,6 +128,15 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display, fontSize: 32, color: COLORS.ink, textAlign: 'center', marginBottom: 4,
   },
   role: { fontFamily: FONTS.body, fontSize: 13, color: COLORS.stone },
+  offlinePill: {
+    backgroundColor: COLORS.warningBg, paddingHorizontal: 12, paddingVertical: 5,
+    borderRadius: 20, marginBottom: 8,
+  },
+  offlinePillText: { fontFamily: FONTS.bodySemiBold, fontSize: 12, color: COLORS.warning },
+  pendingSubtitle: {
+    fontFamily: FONTS.body, fontSize: 13, color: COLORS.stone, textAlign: 'center',
+    marginBottom: 16, paddingHorizontal: 8,
+  },
   employeeId: {
     fontFamily: 'monospace', fontSize: 11, color: COLORS.dust, marginTop: 4, marginBottom: 20, letterSpacing: 0.5,
   },
