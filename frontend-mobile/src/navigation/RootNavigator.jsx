@@ -149,10 +149,21 @@ export default function RootNavigator() {
   const [initialRoute, setInitialRoute] = useState(null);
   const listenersRegisteredRef = useRef(false);
 
+  // Deliberately never restore a previous session on cold start (retail devices
+  // are often shared between employees — see authService.logout's same reasoning
+  // for CACHE_SHIFTS/CACHE_PRESENCES). This effect only runs once per app process,
+  // so it fires on a real kill+reopen but not on background/foreground (RootNavigator
+  // stays mounted for those — see the listener-registration effect below). The
+  // pending offline check-in queue is NOT touched: those check-ins survive a kill
+  // by design (Task B6, Section 4) and sync once their owner logs back in.
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN).then(token => {
-      setInitialRoute(token ? 'Main' : 'Login');
-    });
+    AsyncStorage.multiRemove([
+      STORAGE_KEYS.AUTH_TOKEN,
+      STORAGE_KEYS.REFRESH_TOKEN,
+      STORAGE_KEYS.USER_DATA,
+      STORAGE_KEYS.CACHE_SHIFTS,
+      STORAGE_KEYS.CACHE_PRESENCES,
+    ]).finally(() => setInitialRoute('Login'));
   }, []);
 
   // Auto-sync the offline check-in queue at app startup, on network reconnect,
