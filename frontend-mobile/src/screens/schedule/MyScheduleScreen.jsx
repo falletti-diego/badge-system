@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/apiClient';
 import { ENDPOINTS, SHIFTS_CONFIG, STORAGE_KEYS } from '../../config/endpoints';
@@ -29,7 +30,7 @@ export default function MyScheduleScreen({ navigation }) {
   const [offlineBanner, setOfflineBanner] = useState(null);
   const abortControllerRef = useRef(null);
 
-  const fetchSchedule = (m = month, y = year) => {
+  const fetchSchedule = useCallback((m = month, y = year) => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = new AbortController();
 
@@ -75,12 +76,19 @@ export default function MyScheduleScreen({ navigation }) {
           setLoading(false);
         }
       });
-  };
-
-  useEffect(() => {
-    fetchSchedule(month, year);
-    return () => abortControllerRef.current?.abort();
   }, [month, year]);
+
+  // useFocusEffect (not plain useEffect) so returning to this tab re-attempts the
+  // fetch even when month/year haven't changed — otherwise, since bottom-tab screens
+  // stay mounted across tab switches, going offline and back to this tab would just
+  // keep showing whatever was last in memory with no retry, no offline banner, and
+  // no way to notice the data might be stale until the month is changed.
+  useFocusEffect(
+    useCallback(() => {
+      fetchSchedule(month, year);
+      return () => abortControllerRef.current?.abort();
+    }, [month, year, fetchSchedule]),
+  );
 
   const days = getDaysInMonth(month, year);
   const monthLabel = new Date(year, month - 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
