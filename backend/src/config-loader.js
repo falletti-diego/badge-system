@@ -45,4 +45,25 @@ if (fs.existsSync(envLocalPath)) {
   }
 }
 
+// Production doesn't ship a .env.production file in the image at all — entrypoint.sh
+// fetches secrets from AWS SSM at container boot and writes them to /etc/badge/.env
+// (as `export KEY=value` lines, which dotenv's parser strips the `export ` prefix
+// from automatically), then sources that file into PID 1's own shell before exec-ing
+// into the app. That means only the app's original boot process ever sees these as
+// real OS env vars — any other process in the container (e.g. a one-off
+// `docker exec ... npm run migrations`) starts with an empty process.env and must
+// load this file itself. Neither of the two paths above exist in production, so this
+// is additive there; in dev/CI, .env.development / .env already won, and dotenv never
+// overrides an already-set process.env value, so this is a no-op when the file is
+// absent (dev machines) or redundant (nothing left to fill in).
+const ssmBootstrapPath = '/etc/badge/.env';
+if (fs.existsSync(ssmBootstrapPath)) {
+  const result = dotenv.config({ path: ssmBootstrapPath });
+  if (result.error) {
+    console.error(`[config-loader] Error loading ${ssmBootstrapPath}:`, result.error.message);
+  } else {
+    console.log(`[config-loader] ✅ Loaded ${ssmBootstrapPath} (${Object.keys(result.parsed).length} vars)`);
+  }
+}
+
 module.exports = true; // Indicate success
