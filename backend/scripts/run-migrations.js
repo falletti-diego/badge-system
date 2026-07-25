@@ -15,6 +15,16 @@ const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
 
+// The running app gets DB_HOST/etc. from .env.{NODE_ENV} via src/config-loader.js
+// (app.js requires it first, before any module reads process.env) — those are
+// never real OS-level env vars, so a bare `docker exec ... node scripts/run-migrations.js`
+// (or any other invocation that skips app.js's bootstrap) sees an empty
+// process.env and silently falls back to the 'localhost' default below,
+// failing with ECONNREFUSED against a production RDS host. Load the same file
+// here so this script behaves identically whether run via `npm run migrations`
+// during app boot or manually against production.
+require('../src/config-loader');
+
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5432,
