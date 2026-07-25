@@ -31,6 +31,7 @@ const DEMO_USERS = [
     role: 'manager',
     client_id: '550e8400-e29b-41d4-a716-446655440001', // ✅ VALID UUID (same client)
     site_id: '550e8400-e29b-41d4-a716-446655440012', // Torino Store ✅ VALID UUID (matches Maria's site)
+    employee_id: '550e8400-e29b-41d4-a716-446655440011', // same as id — real employees row (migration 018, site fixed by 025)
   },
   {
     // Employee user — minimal access

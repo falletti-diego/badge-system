@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import authService from '../../services/authService';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { DEMO_ACCOUNTS } from '../../config/endpoints';
+import { flushQueue } from '../../services/offlineQueue';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -21,6 +22,12 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     try {
       await authService.login(email.trim(), password);
+      // Login is not one of RootNavigator's flush triggers (startup / network
+      // reconnect / foreground) — on a shared device, re-logging in as the
+      // owner of a pending queue item with the network already up would
+      // otherwise sit unsynced until the next network transition. Fire-and-forget:
+      // same pattern as RootNavigator's own calls, never blocks navigation.
+      flushQueue();
       try {
         navigation.navigate('Main');
       } catch (navErr) {
