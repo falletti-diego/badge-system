@@ -1,8 +1,53 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 23 Luglio 2026 (Session 80 — Task B6 in corso: 3 crash reali trovati e fixati testando l'Offline Mode su iPhone fisico, sessione interrotta a metà checklist)  
-**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Landing dataxiom.it+badge-system.html ✅ LIVE, lancio LinkedIn ✅ pubblicato | Offline Mode Fase A (backend) ✅ LIVE | Offline Mode Fase B (mobile) ✅ codice completo, **in test su device reale (Task B6), 3 crash trovati e fixati (Build 27→30), test non ancora concluso** | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ VERIFICATO | Pipeline CI/CD ✅ (backend job con Postgres 14 reale, exit pulito senza forceExit)  
-**MVP Launch Target:** Settembre 2026 | **Current Phase:** Offline Mode Task B6 in corso — Build 30 pronta per il retest, checklist E2E (`docs/offline-mode-test-checklist.md`) interrotta a metà Sezione 3 di 8. Resta UN solo bloccante prospect: SES setup completo (Parte B del piano 2026-07-19 — dominio DKIM + Sandbox exit, serve accesso DNS utente su register.it)
+**Last Updated:** 25 Luglio 2026 (Session 81 — Task B6 proseguito: Sezioni 3-8 testate, 5 bug reali trovati e fixati [2 mobile, 3 backend/infra], Build 33 pronta per il retest finale, sessione interrotta)  
+**Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Landing dataxiom.it+badge-system.html ✅ LIVE, lancio LinkedIn ✅ pubblicato | Offline Mode Fase A (backend) ✅ LIVE | Offline Mode Fase B (mobile) ✅ codice completo, **in test su device reale (Task B6), Sezioni 1-8 testate almeno una volta, 8 bug totali trovati e fixati tra Session 80-81, Build 33 pronta per il retest finale** | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ VERIFICATO | Pipeline CI/CD ✅ (backend job con Postgres 14 reale, exit pulito senza forceExit) | `scripts/run-migrations.js`/`config-loader.js` ✅ FIXATI (non caricavano mai i segreti SSM di produzione — ogni migration manuale in prod falliva prima di questa sessione)  
+**MVP Launch Target:** Settembre 2026 | **Current Phase:** Offline Mode Task B6 quasi concluso — Build 33 pronta per il retest finale (Sezione 7 e 8 riverificate coi fix di oggi, poi Sezione 4 con l'accorgimento del nuovo login-forzato-dopo-kill). Resta UN solo bloccante prospect: SES setup completo (Parte B del piano 2026-07-19 — dominio DKIM + Sandbox exit, serve accesso DNS utente su register.it)
+
+---
+
+## Session 81 — Task B6 proseguito: Sezioni 3-8 testate, 5 bug reali + 1 feature (25 Luglio 2026)
+
+### Contesto
+Ripresa diretta da dove interrotta la Session 80 (checklist `docs/offline-mode-test-checklist.md` a metà Sezione 3). Obiettivo: completare il test su device reale di tutte le sezioni rimanenti (3-8) prima di chiudere Task B6.
+
+### Falso allarme: login Maria fallito
+Prima di riprendere i test, l'utente ha segnalato che il login `maria@badge.local` falliva con un messaggio generico ("Email o password non corretti"). Verificato via `curl` diretto su `api.dataxiom.it/api/auth/login`: le credenziali erano valide (200 OK, token emesso) — il messaggio generico dell'app scatta solo quando la richiesta non riceve affatto risposta dal server (non quando le credenziali sono effettivamente rifiutate, nel qual caso il server risponde con un testo diverso). Causa reale: il telefono era rimasto in modalità aereo dai test della sera prima. Nessun fix necessario — confermato dall'utente dopo aver disattivato la modalità aereo.
+
+### Sezioni 3-6: retest pulito
+Sezione 3 (Build 30, con i 3 fix della Session 80) e Sezioni 4-6 (coda multipla+persistenza, sync automatico, no-duplicati): tutte OK, nessun nuovo bug.
+
+### Sezione 7 (device condiviso) — 3 bug reali
+
+Per testare lo scenario "device condiviso tra dipendenti diversi" si è scelto `pino@badge.local` (manager, già assegnato allo stesso sito di Maria — Torino, dalla migration 025) invece di creare un tenant demo isolato: più semplice e diretto, evita di dover reimplementare il flusso `POST /demo/start` + `switch-role` nell'app mobile solo per un test manuale.
+
+1. **`pino` non aveva mai `employee_id` nel fixture `DEMO_USERS`** (`backend/src/__fixtures__/demo-users.js`) — solo `maria` lo aveva. Login riusciva, ma ogni scan QR falliva client-side con "Employee ID non trovato": bug indipendente dall'offline mode, esisteva anche nel flusso online normale, semplicemente mai esercitato prima perché Pino veniva usato solo per approvazioni ferie/vista presenze store, mai per timbrare. Fix: aggiunto `employee_id` (uguale a `id`, che corrisponde già a un record `employees` reale — migration 018).
+2. **Anche con `employee_id` corretto, `pino` non era in `assigned_sites` per Torino** — `POST /checkins` richiede `site_id = ANY(assigned_sites)`, non solo `site_id` sulla riga employee. La migration 025 (che ha spostato Pino a Torino) aveva aggiornato solo `site_id`, mai `assigned_sites` (rimasto `{}` dal default, mai popolato dalla migration 018 che ha creato la riga). Scoperto rileggendo `checkins.js` per verificare l'intero percorso PRIMA di dichiarare il primo fix sufficiente (regola CLAUDE.md: ri-verificare dopo modifiche a schema/FK). Fix: migration `033_add_torino_to_pino_assigned_sites.sql` (idempotente, `array_append` condizionale).
+3. **Sync mancato dopo il re-login** (step 7.6 della checklist): dopo che Maria si ri-loggava con la timbratura ancora in coda, il sync non partiva finché non si toccava manualmente la modalità aereo. Causa: `flushQueue()` in `RootNavigator.jsx` scatta solo su avvio app / riconnessione `NetInfo` / foreground `AppState` — un login all'interno della stessa sessione JS (senza cambi di stato rete) non è tra i trigger. Fix: `LoginScreen.jsx` ora chiama `flushQueue()` (fire-and-forget) subito dopo un login riuscito.
+
+Fix 1+3 nello stesso commit `9397354` (Build 31). Fix 2 in `aee35f3` (migration, applicata e verificata live in produzione più avanti nella sessione).
+
+### Sezione 8 (cache turni/presenze) — 1 bug reale
+
+Banner "Sei offline — dati aggiornati al..." mai visibile su "I Miei Turni", nemmeno sul mese già in cache aprendo la schermata la prima volta in aereo; cambiando mese, sempre errore di caricamento (atteso solo per mesi mai aperti online). Causa: `MyScheduleScreen.jsx` usava un semplice `useEffect` con dipendenze `[month, year]`, mentre `MyPresencesScreen.jsx` (dove il banner funzionava correttamente) usa `useFocusEffect`. Le schermate dentro un `Tab.Navigator` restano montate quando si cambia tab — tornare su "Turni" senza cambiare mese non rifaceva mai la fetch, quindi restava visibile lo stato in memoria dell'ultima volta online, senza mai tentare (e quindi senza mai mostrare il banner offline). Fix: allineato a `useFocusEffect`, stesso pattern già in uso. Commit `39b7676` (Build 32).
+
+### Feature richiesta dall'utente: login sempre richiesto dopo kill dell'app
+
+Prima di questa sessione, l'ultima sessione restava valida anche dopo un kill completo dell'app — inaccettabile su un device condiviso in negozio (un dipendente potrebbe ritrovarsi con la sessione di un collega). `RootNavigator.jsx` monta una sola volta per processo dell'app: il suo effetto iniziale è quindi un segnale affidabile di "l'app è stata davvero killata e riaperta" (background/foreground non lo rimonta — gestiti da un effetto separato, quello dei listener `NetInfo`/`AppState`). Fix: a ogni mount, cancella token/refresh-token/user/cache-turni/cache-presenze e forza sempre la route su Login. La coda offline NON viene toccata — deve sopravvivere al kill per design (Task B6, Sezione 4) e sincronizza al primo login del proprietario. Commit `6c1c60c` (Build 33). **Nota operativa per i prossimi retest**: dopo un kill in Sezione 4, ora serve un re-login prima di poter controllare il contatore della coda.
+
+### Bug 5 (infra): `scripts/run-migrations.js` non ha mai funzionato in produzione
+
+Verificando il fix 2 della Sezione 7 (migration 033) prima di dichiararlo chiuso, il comando standard per applicare migration manualmente in produzione (`docker exec badge-system-api npm run migrations`) falliva sempre con `ECONNREFUSED` contro `localhost`. Causa: `scripts/run-migrations.js` costruiva il proprio `Pool` leggendo `process.env` senza mai richiedere `src/config-loader.js` (che invece `app.js` richiede per primo, prima di ogni altro modulo). Primo fix (`091ecca`): richiedere `config-loader` anche in `run-migrations.js` — funziona in locale/CI, **non sufficiente in produzione**: l'immagine di produzione non contiene alcun file `.env.production`, i segreti arrivano da AWS SSM via `entrypoint.sh`, che li scrive in `/etc/badge/.env` (righe `export KEY=value`) e li sorgente SOLO nella shell del processo di boot originale (PID 1) prima di eseguire l'app — invisibili a qualunque `docker exec` successivo, che parte con un `process.env` vuoto indipendentemente da cosa fa `config-loader`. Fix reale (`3b7cbc6`): `config-loader.js` carica anche `/etc/badge/.env` se presente (verificato che `dotenv` 16.6.1 gestisce nativamente il prefisso `export `); no-op in locale/CI dove il file non esiste. Effetto collaterale positivo: questo sblocca in modo permanente ogni futura migration manuale in produzione, non solo la 033.
+
+### Ostacolo: disco EC2 pieno
+
+Il deploy del fix precedente è fallito una volta: `no space left on device` durante l'estrazione del nuovo layer Docker — disco al 99% (517MB liberi su 29GB), accumulo di immagini Docker vecchie dai numerosi deploy della giornata. I comandi SSH verso EC2 sono stati inizialmente bloccati dal classificatore di sicurezza della sessione (anche letture innocue tipo `df -h`); dopo l'autorizzazione esplicita dell'utente ("puoi eseguire tu i comandi..."), eseguito `docker system prune -af` (rimuove solo immagini/container inutilizzati, nessun dato/volume toccato) — liberati 5GB, disco tornato al 17%. Deploy poi riuscito.
+
+### Verifica finale in produzione
+Migration 033 confermata applicata e verificata con una query diretta: `assigned_sites` di Pino contiene correttamente l'UUID del sito Torino. Nessun fix di questa sessione dichiarato completo senza una verifica diretta (query reale, log CI/deploy, o conferma esplicita dell'utente) — coerente con la regola CLAUDE.md su schema/FK.
+
+### Stato a fine sessione
+610/610 test backend, 43/43 test mobile invariati per tutti i fix. Build 33 pushata su Codemagic ma **non ancora lanciata/testata dall'utente** — sessione interrotta qui. Da riprendere: lancio Build 33, retest Sezione 7 completa (Pino ora sbloccato a entrambi i livelli), retest Sezione 8 (banner), poi le sezioni rimanenti tenendo conto del nuovo comportamento di login forzato dopo kill.
 
 ---
 
