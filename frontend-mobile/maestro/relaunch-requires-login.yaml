@@ -70,5 +70,10 @@ appId: it.dataxiom.badge
     optional: true
 
 # 6. The real assertion: Login must be shown again, never the Home screen.
-- assertVisible: "Accedi"
+# Extended timeout: relaunch + Metro reconnect + RootNavigator's async
+# AsyncStorage read before it decides which screen to show can outrun
+# Maestro's default wait (same rationale as the step-3 assertion above).
+- extendedWaitUntil:
+    visible: "Accedi"
+    timeout: 15000
 - assertNotVisible: "Scannerizza QR Code.*"
