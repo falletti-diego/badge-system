@@ -1,0 +1,97 @@
+appId: it.dataxiom.badge
+---
+# Crash-free smoke test for the employee tab bar: log in once, then tap
+# through all 6 tabs (Badge, Ferie, Malattia, Turni, Presenze, Profilo) and
+# assert one distinctive, screen-specific title is visible on each. This is
+# NOT a content test (see the *Screen.test.jsx component tests for that) —
+# just confirmation that navigating to each tab renders without crashing.
+
+# 1. Clean first launch (clearState wipes AsyncStorage, simulating a fresh
+# install). Dev-client shows its own launcher screen (server list) on cold
+# start rather than auto-connecting to Metro — tap the known dev server to
+# load the actual app bundle.
+- launchApp:
+    clearState: true
+- tapOn: "http://localhost:8081"
+# Dev-client opens its developer menu overlay on top of the freshly loaded
+# app (sometimes with an extra one-time "Continue" tooltip first) — dismiss
+# both before interacting with the app underneath.
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    id: "xmark"
+    optional: true
+
+# 2. Log in as the demo employee account (maria@badge.local — employee role,
+# so the tab bar shows Ferie/Turni=MyScheduleScreen, not the manager variants
+# Approvazioni/Turni=ManagerScheduleScreen).
+- tapOn: "Email"
+- inputText: "maria@badge.local"
+# The first tap on "Password" while the Email field still has focus only
+# dismisses the keyboard (iOS tap-outside-to-dismiss) without moving focus to
+# the new field — a second tap actually focuses the Password input.
+- tapOn: "Password"
+- tapOn: "Password"
+- inputText: "maria01"
+- tapOn: "Accedi"
+# The iOS simulator offers to save the just-typed password via its own
+# system dialog — dismiss it so it doesn't cover the tab bar below.
+- tapOn:
+    text: "Non ora"
+    optional: true
+
+# 3. Badge tab (default landing tab after login — no tap needed, but assert
+# anyway for symmetry and to establish the baseline before switching tabs).
+# iOS merges this button's two Text children into a single accessibility
+# label ("Scannerizza QR Code, Face ID richiesto") and Maestro's text
+# selector does a full-string regex match against it — hence the trailing
+# ".*". Extended timeout: login (network round-trip) + the "save password"
+# dialog dismissal can push the Home screen's render past Maestro's default
+# wait.
+- extendedWaitUntil:
+    visible: "Scannerizza QR Code.*"
+    timeout: 15000
+
+# 4. Ferie tab (LeaveRequestScreen).
+# iOS's bottom tab bar exposes each tab as a single accessibility element
+# whose label combines the tab name with its role/position (e.g.
+# "Ferie, tab, 2 of 6"), so Maestro's text selector (a full-string regex
+# match) needs the trailing ".*" — same pattern as the merged Text-children
+# label in relaunch-requires-login.yaml.
+- tapOn: "Ferie.*"
+- extendedWaitUntil:
+    visible: "Richiesta Ferie"
+    timeout: 15000
+
+# 5. Malattia tab (IllnessReportScreen).
+- tapOn: "Malattia.*"
+- extendedWaitUntil:
+    visible: "Comunicazione Malattia"
+    timeout: 15000
+
+# 6. Turni tab (MyScheduleScreen for the employee role).
+- tapOn: "Turni.*"
+- extendedWaitUntil:
+    visible: "I Miei Turni"
+    timeout: 15000
+
+# 7. Presenze tab (PresenzaTabScreen → MyPresencesScreen for the employee
+# role).
+- tapOn: "Presenze.*"
+- extendedWaitUntil:
+    visible: "Le mie presenze"
+    timeout: 15000
+
+# 8. Profilo tab (SettingsScreen).
+- tapOn: "Profilo.*"
+- extendedWaitUntil:
+    visible: "Impostazioni"
+    timeout: 15000
+
+# 9. Back to Badge to confirm the tab bar still works after a full round
+# trip through every other tab (no residual state corruption).
+- tapOn: "Badge.*"
+- extendedWaitUntil:
+    visible: "Scannerizza QR Code.*"
+    timeout: 15000
