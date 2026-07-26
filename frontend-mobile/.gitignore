@@ -12,3 +12,7 @@ android/
 google-play-service-account.json
 .env
 .env.local
+
+# EAS local build artifacts (eas build --local output, e.g. development-simulator profile)
+build-*.tar.gz
+*.app
