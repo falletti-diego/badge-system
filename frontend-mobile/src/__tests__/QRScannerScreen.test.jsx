@@ -121,7 +121,10 @@ describe('QRScannerScreen', () => {
     expect(enqueuedPayload.client_id).toBe('client-1');
 
     expect(navigation.replace).toHaveBeenCalledWith('Success', { pending: true, siteId: 'site-99' });
-  });
+  }, 15000); // CI's shared ubuntu-latest runners are slower than a local Mac and occasionally
+  // exceed Jest's default 5000ms here (reproduced on 2 consecutive real CI runs, never
+  // locally) — this test does no more work than its neighbors, just enough slower on a
+  // throttled CI CPU to tip over the default. Bumped only for this test, not file-wide.
 
   test('QR missing site_id/client_id shows a validation error and never enqueues a check-in', async () => {
     const { navigation } = renderScreen();
