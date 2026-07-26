@@ -1,0 +1,74 @@
+appId: it.dataxiom.badge
+---
+# Regression guard for RootNavigator's cold-start behavior: a real app kill
+# must never leave the user logged in. This exercises the actual process
+# (real app, real simulator, real AsyncStorage persisted to disk) — not just
+# the isolated component logic already covered by RootNavigator.test.jsx.
+
+# 1. Clean first launch (clearState wipes AsyncStorage, simulating a fresh install).
+# A dev-client build shows its own launcher screen (server list) on cold start
+# rather than auto-connecting to Metro — tap the known dev server to load the
+# actual app bundle.
+- launchApp:
+    clearState: true
+- tapOn: "http://localhost:8081"
+# Dev-client opens its developer menu overlay on top of the freshly loaded app
+# (sometimes with an extra one-time "Continue" tooltip first) — dismiss both
+# before interacting with the app underneath.
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    id: "xmark"
+    optional: true
+
+# 2. Log in as the demo employee account.
+- tapOn: "Email"
+- inputText: "maria@badge.local"
+# The first tap on "Password" while the Email field still has focus only
+# dismisses the keyboard (iOS tap-outside-to-dismiss) without moving focus to
+# the new field — a second tap actually focuses the Password input.
+- tapOn: "Password"
+- tapOn: "Password"
+- inputText: "maria01"
+- tapOn: "Accedi"
+# The iOS simulator offers to save the just-typed password via its own system
+# dialog — dismiss it so it doesn't cover the Home screen assertion below.
+- tapOn:
+    text: "Non ora"
+    optional: true
+
+# 3. Confirm we actually landed on the Badge/CheckIn home screen.
+# iOS merges this button's two Text children into a single accessibility
+# label ("Scannerizza QR Code, Face ID richiesto") and Maestro's text selector
+# does a full-string regex match against it — hence the trailing ".*".
+# Extended timeout: login (network round-trip) + the "save password" dialog
+# dismissal can push the Home screen's render past Maestro's default wait.
+- extendedWaitUntil:
+    visible: "Scannerizza QR Code.*"
+    timeout: 15000
+
+# 4. Kill the app for real (not just background it).
+- stopApp
+
+# 5. Relaunch WITHOUT clearing state — AsyncStorage stays on disk exactly as
+# it would after a real user kill+reopen. The dev-client remembers the last
+# connected bundler URL across a plain relaunch (unlike the clearState:true
+# launch above), so it reconnects to Metro straight away here without
+# re-showing its own launcher screen — but the dismissals stay in place
+# (all optional) in case that hasn't happened yet in a given environment.
+- launchApp:
+    clearState: false
+- tapOn:
+    text: "http://localhost:8081"
+    optional: true
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    id: "xmark"
+    optional: true
+
+# 6. The real assertion: Login must be shown again, never the Home screen.
+- assertVisible: "Accedi"
+- assertNotVisible: "Scannerizza QR Code.*"
