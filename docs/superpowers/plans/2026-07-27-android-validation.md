@@ -596,6 +596,65 @@ git add src/screens/checkin/FaceIDScreen.jsx src/__tests__/FaceIDScreen.test.jsx
 git commit -m "fix(mobile): Face ID mostra un messaggio distinto invece del loop Riprova quando il device non ha alcun blocco schermo"
 ```
 
+### Task 6bis: Audit del bug "render() non awaited" negli altri file di test
+
+**Contesto (aggiunto dopo un'analisi critica dei Task 1-10):** il Task 5 ha scoperto che `renderScreen()` in `QRScannerScreen.test.jsx` non faceva `await` su `render()`, diventata asincrona in `@testing-library/react-native` v14 — il bug era invisibile perché nessun test destrutturava le query functions dal risultato. Lo stesso helper pattern è stato scritto nella Sessione 82 (test infra iOS) anche in `MyPresencesScreen.test.jsx`, `MyScheduleScreen.test.jsx`, `LoginScreen.test.jsx` — mai controllati per lo stesso bug, che potrebbe essere presente e silenzioso allo stesso modo.
+
+**Files:**
+- Verify (fix se necessario): `frontend-mobile/src/__tests__/MyPresencesScreen.test.jsx`
+- Verify (fix se necessario): `frontend-mobile/src/__tests__/MyScheduleScreen.test.jsx`
+- Verify (fix se necessario): `frontend-mobile/src/__tests__/LoginScreen.test.jsx`
+
+- [ ] **Step 1: ispezionare ciascun file** — cercare l'helper di rendering locale (potrebbe non chiamarsi `renderScreen`, verificare il nome usato in ciascun file) e controllare se chiama `render(...)` senza `await`.
+
+- [ ] **Step 2: per ciascun file dove il bug è presente**, applicare lo stesso fix del Task 5: rendere l'helper `async`, `await render(...)` internamente, propagare `await` a tutte le chiamate esistenti nel file.
+
+- [ ] **Step 3: rieseguire il file di test corretto e verificare che tutti gli scenari esistenti passino ancora con le loro asserzioni reali intatte** (non solo "nessuna eccezione"):
+```bash
+npm test -- <nome-file>
+```
+
+- [ ] **Step 4: eseguire l'intera suite mobile** per confermare nessuna regressione:
+```bash
+npm test -- --coverage
+```
+
+- [ ] **Step 5: commit** (un commit per file corretto, o uno unico se il fix è identico e piccolo — a discrezione, purché il messaggio sia chiaro):
+```bash
+git add <file corretto>
+git commit -m "fix(mobile): corregge render() non awaited in <nome-file> (stesso bug del Task 5)"
+```
+Se NESSUN file ha il bug, non fare commit — riportarlo esplicitamente nel report finale.
+
+### Task 7bis: Fix permanente della configurazione GPU su `Pixel_6_API_34`
+
+**Contesto:** il fix "Software GLES 2.0" per `Android_Go_LowSpec` è stato applicato in modo permanente via GUI (Task 1). Per `Pixel_6_API_34`, il fix è rimasto solo un flag runtime (`-gpu swiftshader_indirect`) ripetuto ad ogni comando/script — mai scritto in modo permanente. Se in futuro l'AVD viene lanciato senza quel flag (manualmente, o da uno script che non lo include), si ripresenta lo schermo nero già visto due volte in questa sessione.
+
+**Files:**
+- Modify: `~/.android/avd/Pixel_6_API_34.avd/config.ini` (fuori dal repository, file di sistema)
+
+- [ ] **Step 1: chiudere l'AVD se in esecuzione**:
+```bash
+adb -s emulator-5554 emu kill 2>/dev/null || true
+```
+
+- [ ] **Step 2: individuare e modificare la chiave GPU nel config.ini**:
+```bash
+grep -n "hw.gpu" "$HOME/.android/avd/Pixel_6_API_34.avd/config.ini"
+```
+Impostare `hw.gpu.enabled=yes` e `hw.gpu.mode=swiftshader_indirect` (o il valore equivalente già confermato funzionante via il flag `-gpu swiftshader_indirect` — verificare la corrispondenza esatta flag-CLI ↔ chiave config.ini prima di modificare, non assumerla).
+
+- [ ] **Step 3: verificare che l'AVD si avvii correttamente SENZA passare il flag `-gpu` esplicito da riga di comando**:
+```bash
+emulator -avd Pixel_6_API_34 &
+adb wait-for-device
+until [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 2; done
+adb shell screencap -p /sdcard/s.png && adb pull /sdcard/s.png /tmp/s.png
+```
+Guardare `/tmp/s.png` col tool di lettura immagini — deve mostrare la home screen Android, non uno schermo nero.
+
+- [ ] **Step 4: chiudere l'emulatore** e riportare l'esito. Questo task non modifica file del repository — nessun commit necessario, ma va riportato nel report finale del piano (Task 18) come configurazione di sistema resa persistente.
+
 ### Gate di fine Fase 2
 
 - [ ] **G1:** `cd frontend-mobile && npm test -- --coverage` → tutti i test verdi, nessun hang
@@ -604,6 +663,17 @@ git commit -m "fix(mobile): Face ID mostra un messaggio distinto invece del loop
 ---
 
 # FASE 3 — Maestro Android E2E (Rischi 1, 3, 5, 6 lato Maestro)
+
+## Lezione operativa (dal Task 10) — applicare a tutti i task Maestro rimanenti (11, 12, 13)
+
+Il Task 10 ha richiesto 6 run Maestro consecutivi e diversi interventi attivi del coordinatore per sbloccare il subagent, che alla fine ha esaurito il proprio limite di sessione API prima di completare la pulizia finale. Cause osservate:
+1. Il subagent, dopo aver lanciato un run Maestro in background, terminava il proprio turno "in attesa della notifica" senza che nulla monitorasse effettivamente quel processo — la notifica non arrivava mai da sola, serviva un messaggio esplicito del coordinatore per farlo riprendere e controllare lo stato reale.
+2. Questo pattern si è ripetuto per ogni singolo run (6 volte), consumando una quantità di turni/token sproporzionata rispetto al lavoro utile.
+
+**Istruzioni da includere esplicitamente nel prompt di dispatch dei Task 11, 12 e 13 (suite Maestro sull'AVD a fascia bassa):**
+- Dare un numero massimo di tentativi (es. 3 run totali per raggiungere 2 successi consecutivi) prima di fermarsi e riportare al coordinatore, invece di ritentare indefinitamente.
+- Dopo OGNI singolo run Maestro (non solo alla fine), riportare esplicitamente l'esito (verde/rosso, con l'errore se rosso) nel proprio output prima di procedere al run successivo — evitare di "sparire" in attesa silenziosa di una notifica che potrebbe non arrivare mai.
+- Se un run fallisce per un motivo diverso dalla logica testata (flakiness ambientale, Metro non pronto), applicare un fix di robustezza mirato (es. `extendedWaitUntil`) piuttosto che ripetere lo stesso run identico più volte sperando in un esito diverso.
 
 ### Task 7: Setup Maestro per Android
 
@@ -898,9 +968,70 @@ git add maestro/android-date-picker.yaml
 git commit -m "test(mobile): flow Maestro Android per il date picker in Ferie/Malattia"
 ```
 
+### Task 12bis: Build e smoke test di una build Android non-dev-client
+
+**Contesto (aggiunto dopo un'analisi critica dei Task 1-10):** ogni flow Maestro eseguito finora (Task 8-12) dipende da Metro attivo e passa attraverso il launcher/menu sviluppatore del profilo `development-android` (dev-client). Non è mai stata costruita né avviata una build Android senza dev-client (bundle JS incorporato, nessuna dipendenza da Metro, nessun overlay del menu sviluppatore) — il comportamento reale che un cliente vedrebbe non è mai stato osservato. Questo è il gap più importante rimasto prima di dichiarare Android validato.
+
+**Files:**
+- Verify (nessuna modifica di codice attesa): `frontend-mobile/eas.json` (il profilo `preview` esiste già, con `distribution: internal`, ma senza sezione `android` esplicita — verificare se serve aggiungerne una, o se eredita correttamente dal default)
+
+- [ ] **Step 1: verificare/estendere il profilo `preview` per Android, se necessario**. Il profilo attuale:
+```json
+"preview": {
+  "distribution": "internal",
+  "ios": {
+    "simulator": false
+  },
+  "channel": "preview"
+}
+```
+non ha una chiave `android` esplicita — verificare con `eas build --profile preview --platform android --local --dry-run` (se il flag esiste in questa versione di EAS CLI) o direttamente con un build reale se il dry-run non è supportato, se questo produce una build non-dev-client valida. Se necessario, aggiungere:
+```json
+"preview": {
+  "distribution": "internal",
+  "ios": {
+    "simulator": false
+  },
+  "android": {},
+  "channel": "preview"
+}
+```
+
+- [ ] **Step 2: build locale non-dev-client**:
+```bash
+cd frontend-mobile
+eas build --profile preview --platform android --local
+```
+Expected: APK generato, diverso da quello `development-android` già esistente (nessuna dipendenza da `expo-dev-client` in questo bundle).
+
+- [ ] **Step 3: installare e avviare senza Metro attivo** (punto cruciale del test — Metro NON deve essere in esecuzione):
+```bash
+adb uninstall it.dataxiom.badge  # rimuove la build dev-client precedente per evitare conflitti di firma
+adb install <path-nuovo-apk>
+adb shell am start -n it.dataxiom.badge/.MainActivity
+sleep 5
+adb shell screencap -p /sdcard/preview.png && adb pull /sdcard/preview.png /tmp/preview.png
+```
+Guardare `/tmp/preview.png` col tool di lettura immagini: deve mostrare direttamente la schermata di Login dell'app reale, **non** il launcher/menu sviluppatore del dev-client (che non dovrebbe più esistere in questa build).
+
+- [ ] **Step 4: smoke test manuale minimo** — login (`maria@badge.local`/`maria01`), verificare che la Home (tab Badge) sia raggiungibile, verificare che non ci siano crash nei primi 30 secondi di utilizzo. Non serve eseguire l'intera suite Maestro contro questa build (sarebbe un lavoro duplicato) — è sufficiente una conferma visiva che l'app funzioni in modo indipendente da Metro.
+
+- [ ] **Step 5: ripristinare l'APK `development-android` per i task Maestro successivi** (Task 13 e oltre continuano a usare il dev-client):
+```bash
+adb uninstall it.dataxiom.badge
+adb install frontend-mobile/build-1785156534843.apk
+```
+
+- [ ] **Step 6: commit SOLO se `eas.json` è stato modificato allo Step 1** (altrimenti nessun commit — questo task produce principalmente un APK non versionato e un'osservazione, non codice):
+```bash
+git add eas.json
+git commit -m "build(mobile): verifica profilo preview Android non-dev-client"
+```
+
 ### Gate di fine Fase 3
 
 - [ ] **G3:** tutti i flow Maestro (2 ereditati + 4 nuovi) verdi su `Pixel_6_API_34`, eseguiti almeno 2 volte consecutive per escludere flakiness (stessa disciplina della Sessione 82)
+- [ ] **G3bis:** build non-dev-client (Task 12bis) verificata funzionante senza Metro attivo, APK `development-android` ripristinato per la Fase 4
 
 ---
 
