@@ -112,8 +112,33 @@ Nuovi flow mirati ai rischi testabili via Maestro: back-button (Rischio 5, 3 var
 
 ---
 
+## Test aggiuntivi — ridurre al minimo il gap "nessun device fisico"
+
+Un solo AVD con configurazione unica approssima l'hardware reale meno di quanto sembri: un emulatore su Mac gira su un profilo hardware "pulito" (stock Android, nessuna skin OEM, nessun risparmio energetico aggressivo), diverso dal telefono economico che un commesso probabilmente usa davvero. Le 5 verifiche seguenti non eliminano questo gap (vedi "Rischi residui" per cosa resta genuinamente irriducibile), ma lo riducono in modo concreto e verificabile, non solo "più test per stare tranquilli":
+
+**A. Secondo AVD a specifica bassa, non solo Pixel 6 gamma alta**
+Il Pixel 6 è un profilo di fascia medio-alta — non rappresentativo del device economico tipico del personale retail a ore. Creare un secondo AVD con RAM ridotta (1-2GB) e l'API level minimo effettivamente supportato dalla build (verificare il `minSdkVersion` reale generato da EAS/Expo SDK 54 nell'output della build — non assumerlo a priori). Eseguire l'intera suite Maestro Android anche su questo secondo profilo, non solo su quello di fascia alta: differenze di layout, lentezza percepita, o crash legati a RAM limitata emergono solo qui.
+
+**B. Verifica della fotocamera reale via "Virtual Scene", non solo eventi simulati**
+Tutti i test QR attuali (component test e Maestro) iniettano l'evento `onBarcodeScanned` direttamente — **non passano mai per la vera pipeline nativa di scansione della fotocamera Android**. L'emulatore Android supporto una fotocamera virtuale "Virtual Scene" configurabile con un'immagine personalizzata: caricare un QR code reale generato da BadgeSystem come immagine di scena e verificare che `expo-camera` lo rilevi e triggeri `onBarcodeScanned` per davvero, end-to-end. Questo è l'unico modo per validare che la libreria di scansione funzioni sul motore camera Android nativo, non solo che la logica a valle dello scan sia corretta.
+
+**C. Profiling prestazionale delle schermate animate (Android Studio Profiler)**
+`QRScannerScreen` (scan-line loop) e `FaceIDScreen` (pulse ring + arc rotation) usano `Animated` con `useNativeDriver: true` — compatibile in teoria su entrambe le piattaforme, ma il motore di rendering Android può comportarsi diversamente sotto carico. Eseguire un profiling CPU/memoria/frame-rate (Android Studio Profiler) durante l'uso reale di queste due schermate sul secondo AVD (punto A, specifica bassa) per individuare jank o leak di memoria che un test funzionale non rileverebbe.
+
+**D. Simulazione backgrounding + Doze mode per la coda offline**
+I test Maestro attuali su `AppState`/`NetInfo` (ereditati da iOS) assumono un ciclo foreground/background pulito. I device Android reali, specialmente con battery manager OEM aggressivi (Samsung, Xiaomi — non riproducibili in AVD, vedi residui), possono sospendere il processo in modo più brusco. Simulare con `adb shell input keyevent KEYCODE_HOME` (backgrounding) seguito da `adb shell dumpsys deviceidle force-idle` (forza Doze mode) e poi la riattivazione, verificando che `flushQueue()` scatti comunque al ritorno in foreground — uno stress test più realistico del semplice "vai in background e torna" già coperto.
+
+**E. Benchmark cold-start e dimensione APK**
+Misurare il tempo di avvio a freddo (`adb shell am start -W it.dataxiom.badge/.MainActivity`) e la dimensione dell'APK generato sul secondo AVD (specifica bassa). Non è un test pass/fail in senso stretto, ma stabilisce una baseline numerica oggettiva — un proxy misurabile dell'esperienza su device economico reale, in assenza di uno fisico da cronometrare.
+
+---
+
 ## Rischi residui (non eliminabili in questo piano)
 
-- Nessun device fisico Android testato — l'AVD approssima ma non sostituisce l'hardware reale (fotocamera virtuale, sensori virtuali). Il primo cliente pilota Android reale è la prova definitiva.
+Anche con le verifiche aggiuntive sopra, alcuni aspetti restano genuinamente non testabili senza un device fisico — è onesto dirlo esplicitamente piuttosto che implicare una copertura totale:
+
+- **Skin OEM e battery manager reali** (One UI Samsung, MIUI Xiaomi, ecc.) — l'AVD gira su Android "stock", nessuna skin del produttore replica realmente il comportamento aggressivo di risparmio energetico di questi produttori, molto diffusi in Italia nella fascia di prezzo del personale retail. Il punto D sopra approssima ma non riproduce un vero battery manager OEM.
+- **Sensori biometrici reali** — l'impronta virtuale dell'AVD (`adb -e emu finger touch`) prova il fallback PIN e il percorso "nessun enrollment", ma non il comportamento di un vero sensore di impronta o Face Unlock Android, che ha margini di errore e UX diversi da quello virtuale.
 - Il posizionamento "Face ID anti-frode" resta un'ipotesi commerciale non validata (già segnalato nel documento di pricing) — questo piano rende il fallback PIN funzionante e verificato, ma non misura quanti dipendenti Android reali si troveranno effettivamente senza alcun blocco schermo configurato.
-- Nessuna verifica su versioni Android più vecchie della API scelta per l'AVD (API 34) — se un cliente reale ha dipendenti con device Android datati, potrebbero emergere comportamenti diversi non coperti qui.
+- Nessuna verifica su versioni Android più vecchie del secondo AVD a specifica bassa (punto A) — se un cliente reale ha dipendenti con device ancora più datati, potrebbero emergere comportamenti diversi non coperti qui.
+- **Il primo cliente pilota Android reale resta la prova definitiva** — questo piano riduce il rischio al minimo ragionevolmente ottenibile senza hardware, non lo azzera.
