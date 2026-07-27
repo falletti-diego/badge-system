@@ -1,0 +1,112 @@
+appId: it.dataxiom.badge
+---
+# Regression guard for the Android camera-permission-denial UX path in
+# QRScannerScreen: the first system denial (canAskAgain still true) must show
+# the "Concedi permesso" retry button. The permanently-denied case
+# (canAskAgain: false, "Apri Impostazioni" button) is NOT tested here — Maestro
+# cannot reliably force Android's "don't ask again" flag in automation; that
+# case is covered only by the component test in QRScannerScreen.test.jsx.
+#
+# Prerequisite: the Pixel_6_API_34 AVD must have a PIN (1234) configured as its
+# screen lock (Settings > Security > Screen lock), so FaceIDScreen's
+# authenticateAsync() can fall back to the system device-credential prompt
+# instead of dead-ending on "nessun blocco schermo configurato" (see Task 10
+# setup notes). This is a one-time AVD setting, not part of this flow.
+
+- launchApp:
+    clearState: true
+    # `clearState: true` only wipes the app's data/storage — it does NOT reset
+    # OS-level runtime permission grants, which live in the package manager
+    # separately (confirmed via `adb shell dumpsys package it.dataxiom.badge`
+    # showing `android.permission.CAMERA: granted=true` even right after a
+    # clearState launch, once the emulator granted it in a prior run/session).
+    # "unset" resets it to the undetermined state so the app genuinely
+    # doesn't know the answer yet — same as a real fresh install — which is
+    # what makes the system dialog appear when the app requests it below.
+    permissions:
+      camera: "unset"
+- tapOn: "http://(localhost|10\\.0\\.2\\.2):8081"
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    id: "xmark"
+    optional: true
+- runFlow:
+    when:
+      visible: "Reload"
+    commands:
+      - back
+
+# The dev-client's bundle load/transition off the launcher screen (or off the
+# native dev menu, dismissed above) can occasionally outrun a plain tapOn's
+# default wait on this software-rendered emulator — observed as an
+# intermittent "Email" not-found failure unrelated to the camera-permission
+# logic this flow actually tests. extendedWaitUntil gives it the same
+# generous margin already used for the "Scannerizza QR Code.*" wait below.
+- extendedWaitUntil:
+    visible: "Email"
+    timeout: 10000
+- tapOn: "Email"
+- inputText: "maria@badge.local"
+- tapOn: "Password"
+- tapOn: "Password"
+- inputText: "maria01"
+- tapOn: "Accedi"
+- tapOn:
+    text: "Non ora"
+    optional: true
+- extendedWaitUntil:
+    visible: "Scannerizza QR Code.*"
+    timeout: 15000
+
+- tapOn: "Scannerizza QR Code.*"
+# The Face ID screen's system PIN prompt appears here (no biometric enrolled,
+# but a PIN is now configured on this AVD — see Task 10 setup — so
+# authenticateAsync falls back to it automatically). The system PIN keypad
+# does NOT auto-submit on the 4th digit — it requires an explicit Enter/submit
+# (verified manually via `key_enter` on the keyguard PIN view), so pressKey
+# Enter after inputText is required, not optional polish.
+- inputText: "1234"
+- pressKey: Enter
+
+# QRScannerScreen's useCameraPermissions() hook only *reads* the current OS
+# permission state on mount — it does NOT proactively call requestPermission()
+# itself (see QRScannerScreen.jsx: the `!permission.granted` branch just
+# renders the "negato" screen with a "Concedi permesso" button; nothing in
+# that branch calls requestPermission automatically). With the permission
+# reset to "unset" above, granted=false and canAskAgain=true from the start,
+# so this denial screen — not "Fotocamera attiva" — is what actually appears
+# first. The Android system dialog only appears once we tap "Concedi
+# permesso" below, which is what actually invokes requestPermission().
+- extendedWaitUntil:
+    visible: "Permesso fotocamera negato"
+    timeout: 10000
+- assertVisible: "Concedi permesso"
+- tapOn: "Concedi permesso"
+
+# The Android system camera-permission dialog appears here, on this first
+# real request. Observed live on this AVD (English locale, not Italian, even
+# though the app UI itself is Italian): "Allow Badge System to take pictures
+# and record video?" with three buttons — "While using the app", "Only this
+# time", "Don't allow". The deny button's real text is "Don't allow", NOT
+# "Deny"/"Nega"/"Non consentire" as originally assumed — those never matched
+# and left the regex-based tap silently failing. Keep the Italian variants in
+# the alternation too, in case a future run happens on an AVD with Italian
+# system locale.
+# IMPORTANT: Android's actual string resource renders "Don't" with a
+# typographic Unicode right single quote (U+2019 ’), not a plain ASCII
+# apostrophe ('). A literal "Don't allow" in the regex visually matches the
+# screenshot but silently fails to match the real accessibility text (proven
+# by run 2: the assert failed even though the screenshot showed the dialog
+# correctly). "Don.t allow" uses "." as a one-character wildcard so it
+# matches either apostrophe variant.
+- extendedWaitUntil:
+    visible: "Don.t allow|Nega|Non consentire"
+    timeout: 10000
+- tapOn: "Don.t allow|Nega|Non consentire"
+
+# First denial (canAskAgain still true): back on the same screen, still
+# offering the "Concedi permesso" retry — never "Apri Impostazioni".
+- assertVisible: "Permesso fotocamera negato"
+- assertVisible: "Concedi permesso"
