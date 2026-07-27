@@ -15,6 +15,10 @@
         "simulator": true
       }
     },
+    "development-android": {
+      "extends": "development",
+      "android": {}
+    },
     "preview": {
       "distribution": "internal",
       "ios": {
