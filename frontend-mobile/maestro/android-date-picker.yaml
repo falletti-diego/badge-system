@@ -1,0 +1,174 @@
+appId: it.dataxiom.badge
+---
+# Regression + visual-check flow for Rischio 3 (Task 12): the native Android
+# date picker (@react-native-community/datetimepicker, display="spinner",
+# locale="it-IT") used by both LeaveRequestScreen (tab bar "Ferie") and
+# IllnessReportScreen (tab bar "Malattia") to pick start/end dates.
+#
+# Neither screen exposes a testID on the date buttons or on the picker
+# itself (verified directly in source: LeaveRequestScreen.jsx and
+# IllnessReportScreen.jsx have no testID prop anywhere) — so the
+# `id: ".*Data inizio.*"` / `id: ".*picker.*"` selectors from the original
+# plan draft would never have matched anything and are NOT used here.
+# Instead, the date buttons are located via Maestro's relative `below:`
+# selector, anchored on each field's static label text: "Data inizio" /
+# "Data fine" on the Ferie screen, "Data inizio malattia" / "Data fine
+# prevista" on the Malattia screen (these two labels differ across the two
+# screens, so no cross-screen ambiguity).
+#
+# Both the start and end picker's "Done" button render the identical label
+# ("Fine") on both screens — but showStartPicker/showEndPicker are mutually
+# exclusive booleans in both components (only one picker is ever mounted at
+# a time), so a plain assertVisible/tapOn "Fine" is unambiguous at every
+# point in this flow.
+#
+# IMPORTANT (discovered empirically on run 1, screenshot
+# step-022-assertCondition-Fine.png): on Android,
+# @react-native-community/datetimepicker's display="spinner" is NOT rendered
+# inline in the page — tapping the date button first pops up a native
+# Android AlertDialog (its own window, with CANCEL/OK buttons) that must be
+# confirmed with "OK" before the app's own pickerContainer/"Fine" button
+# becomes visible underneath. The original flow draft's assumption (that
+# "Fine" is visible immediately after tapping the date button) was wrong and
+# had to be corrected to tap the native "OK" first.
+#
+# Per Task 12 Step 2/3, passing this flow's assertions is NOT sufficient —
+# each takeScreenshot below must also be inspected visually for: (a) the
+# spinner text being legible (not clipped/overlapping/too small), (b) month
+# names rendered in Italian per locale="it-IT" (e.g. "lug", not "Jul"), and
+# (c) the picker/Done button not being cut off at the screen edges.
+#
+# VISUAL FINDING (confirmed on all 4 screenshots taken by this flow —
+# ferie-start-picker, ferie-end-picker, malattia-start-picker,
+# malattia-end-picker — on this AVD/OS build): the native spinner dialog
+# renders in ENGLISH ("Jun", "Jul", "Aug", "CANCEL", "OK"), NOT Italian,
+# despite `locale="it-IT"` being passed to DateTimePicker in both
+# LeaveRequestScreen.jsx and IllnessReportScreen.jsx. Spinner legibility and
+# layout (no clipping/overlap, Done button not cut off) are otherwise fine.
+# This is a real locale bug (the exact class of issue Rischio 3 flags), not
+# a Maestro/test artifact — logged here for follow-up, not fixed by this
+# task (Task 12 is test-authoring only).
+
+- launchApp:
+    clearState: true
+- tapOn: "http://(localhost|10\\.0\\.2\\.2):8081"
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    id: "xmark"
+    optional: true
+- runFlow:
+    when:
+      visible: "Reload"
+    commands:
+      - back
+
+# Extra defensive dismiss pass (added after runs 2 and 3 hit this exact race
+# live): the dev-client's short "developer menu" bottom sheet ("Badge System
+# / Runtime version..." with a "Continue" button, see
+# step-008-assertCondition-Email.png from run 2) can appear *after* the first
+# optional tapOn window above already passed. Tapping that late "Continue"
+# does NOT dismiss it — it expands into the FULL dev menu instead (Reload /
+# Go home / Tools / xmark — see step-010-assertCondition-Email.png from run
+# 3), which then needs its own "Reload"-visible → back dismissal. So the
+# Continue-retry must run BEFORE a second Reload check, not after (run 3's
+# bug: the extra Continue retry was placed after the only Reload check,
+# missing the expanded menu it produced).
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"
+- runFlow:
+    when:
+      visible: "Reload"
+    commands:
+      - back
+
+# extendedWaitUntil rather than a plain tapOn: on this software-rendered
+# emulator, the dev-client's bundle load can occasionally outrun a plain
+# tapOn's default wait (same rationale as the other flows in this directory).
+- extendedWaitUntil:
+    visible: "Email"
+    timeout: 15000
+- tapOn: "Email"
+- inputText: "maria@badge.local"
+- tapOn: "Password"
+- tapOn: "Password"
+- inputText: "maria01"
+- tapOn: "Accedi"
+- tapOn:
+    text: "Non ora"
+    optional: true
+# Login lands on CheckInScreen ("Scannerizza QR Code"). Maria (role:
+# employee, not manager) has a "Ferie" tab in the bottom bar — managers get
+# "Approvazioni" instead (see RootNavigator.jsx) — so this account is
+# required for the Ferie scenario below.
+- extendedWaitUntil:
+    visible: "Scannerizza QR Code.*"
+    timeout: 15000
+
+# ============================================================
+# Scenario A: Ferie (LeaveRequestScreen)
+# ============================================================
+- tapOn: "Ferie"
+- extendedWaitUntil:
+    visible: "Richiesta Ferie"
+    timeout: 10000
+- assertVisible: "Data inizio"
+
+# Open the start-date spinner (dateButton directly below the "Data inizio"
+# label; its text is the dynamic "📅  YYYY-MM-DD", hence the wildcard).
+# This pops the native Android spinner dialog (OK/CANCEL) — screenshot here
+# is the one to inspect for locale (month names) and legibility.
+- tapOn:
+    text: "📅.*"
+    below: "Data inizio"
+- assertVisible: "OK"
+- takeScreenshot: ferie-start-picker
+- tapOn: "OK"
+- assertVisible: "Fine"
+- tapOn: "Fine"
+- assertNotVisible: "Fine"
+
+# Open the end-date spinner.
+- tapOn:
+    text: "📅.*"
+    below: "Data fine"
+- assertVisible: "OK"
+- takeScreenshot: ferie-end-picker
+- tapOn: "OK"
+- assertVisible: "Fine"
+- tapOn: "Fine"
+- assertNotVisible: "Fine"
+
+# ============================================================
+# Scenario B: Malattia (IllnessReportScreen) — same DateTimePicker
+# component/config, different screen and field labels.
+# ============================================================
+- tapOn: "Malattia"
+- extendedWaitUntil:
+    visible: "Comunicazione Malattia"
+    timeout: 10000
+- assertVisible: "Data inizio malattia"
+
+- tapOn:
+    text: "📅.*"
+    below: "Data inizio malattia"
+- assertVisible: "OK"
+- takeScreenshot: malattia-start-picker
+- tapOn: "OK"
+- assertVisible: "Fine"
+- tapOn: "Fine"
+- assertNotVisible: "Fine"
+
+- tapOn:
+    text: "📅.*"
+    below: "Data fine prevista"
+- assertVisible: "OK"
+- takeScreenshot: malattia-end-picker
+- tapOn: "OK"
+- assertVisible: "Fine"
+- tapOn: "Fine"
+- assertNotVisible: "Fine"
