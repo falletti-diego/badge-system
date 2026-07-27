@@ -1,0 +1,114 @@
+appId: it.dataxiom.badge
+---
+# Regression guard for Android's hardware back button in two critical spots:
+# (a) at the root of the Main tab navigator — must exit the app, never
+#     silently fall back to Login; (b) during an active camera session in
+#     QRScanner — must not crash, and must return to a sane screen.
+# native-stack v7 handles the hardware back button by default (pops the
+# stack), but this has never been verified empirically on this app's actual
+# screens — that's what this flow checks, not assumed correct in advance.
+
+- launchApp:
+    clearState: true
+- tapOn: "http://(localhost|10\\.0\\.2\\.2):8081"
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    id: "xmark"
+    optional: true
+- runFlow:
+    when:
+      visible: "Reload"
+    commands:
+      - back
+
+- tapOn: "Email"
+- inputText: "maria@badge.local"
+- tapOn: "Password"
+- tapOn: "Password"
+- inputText: "maria01"
+- tapOn: "Accedi"
+- tapOn:
+    text: "Non ora"
+    optional: true
+- extendedWaitUntil:
+    visible: "Scannerizza QR Code.*"
+    timeout: 15000
+
+# Variant (a): back at the root of Main must exit the app, not silently
+# return to Login (which would mean some hidden route in the stack absorbed
+# the back-press instead of the OS handling it as "nothing left, exit").
+- back
+- assertNotVisible: "Accedi"
+
+# Relaunch for variant (b). Note: unlike relaunch-requires-login.yaml's use of
+# clearState:false to prove AsyncStorage isn't wiped, here relaunching after a
+# real app exit (whether via the hardware back button above, like variant (a)
+# just did, or via stopApp) always lands back on Login — this app clears the
+# session on any real process exit by design (verified in
+# relaunch-requires-login.yaml). So, unlike the comment originally assumed,
+# we are NOT still logged in here — log back in below before testing (b).
+- launchApp:
+    clearState: false
+- tapOn:
+    text: "http://(localhost|10\\.0\\.2\\.2):8081"
+    optional: true
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    id: "xmark"
+    optional: true
+- runFlow:
+    when:
+      visible: "Reload"
+    commands:
+      - back
+- tapOn: "Email"
+- inputText: "maria@badge.local"
+- tapOn: "Password"
+- tapOn: "Password"
+- inputText: "maria01"
+- tapOn: "Accedi"
+- tapOn:
+    text: "Non ora"
+    optional: true
+- extendedWaitUntil:
+    visible: "Scannerizza QR Code.*"
+    timeout: 15000
+
+# Variant (b): back during an active QRScanner camera session must not crash.
+# Note: tapping "Scannerizza QR Code" normally first routes through
+# FaceIDScreen (the Face ID gate), which only reaches QRScannerScreen after
+# LocalAuthentication.authenticateAsync() succeeds. On this emulator, no
+# screen lock/PIN is configured, so getEnrolledLevelAsync() returns NONE and
+# FaceIDScreen shows a terminal "device has no screen lock" message with no
+# way to proceed — that path is a dead end here.
+# CheckInScreen.handleCheckIn() has a real, existing bypass for exactly this
+# case: it navigates straight to QRScanner (skipping FaceIDScreen entirely)
+# whenever the user has turned off Face ID in Impostazioni > Preferenze
+# (AsyncStorage key FACE_ID_ENABLED='false') — this is production app
+# behavior, not a test-only shortcut. Use it here so this environment can
+# reach QRScannerScreen at all. The Switch has no accessible text/id
+# (confirmed via uiautomator dump), so it's toggled by its on-screen point.
+- tapOn: "Profilo.*"
+- extendedWaitUntil:
+    visible: "Impostazioni"
+    timeout: 15000
+- tapOn:
+    point: "86%,48%"
+- tapOn: "Badge.*"
+- extendedWaitUntil:
+    visible: "Scannerizza QR Code.*"
+    timeout: 15000
+# "camera-view" is a testID that exists only in QRScannerScreen.test.jsx's
+# mock, not in the real component (frontend-mobile/src/screens/checkin/
+# QRScannerScreen.jsx) — the real screen has no testID on CameraView, so
+# assert on its actual visible text instead ("Fotocamera attiva" status pill).
+- tapOn: "Scannerizza QR Code.*"
+- extendedWaitUntil:
+    visible: "Fotocamera attiva"
+    timeout: 10000
+- back
+- assertVisible: "Scannerizza QR Code.*"
