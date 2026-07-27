@@ -90,7 +90,7 @@ describe('RootNavigator', () => {
     await findByText('LOGIN_SCREEN_STUB');
   });
 
-  test('NetInfo listener calls flushQueue only when isConnected AND isInternetReachable are both true', async () => {
+  test('NetInfo listener calls flushQueue when isConnected is true and isInternetReachable is true or null, but not when isConnected is false or isInternetReachable is explicitly false', async () => {
     await renderNavigator();
 
     await waitFor(() => expect(NetInfo.addEventListener).toHaveBeenCalledTimes(1));
@@ -109,6 +109,14 @@ describe('RootNavigator', () => {
     expect(flushQueue).not.toHaveBeenCalled();
 
     await act(async () => onNetInfoChange({ isConnected: true, isInternetReachable: true }));
+    expect(flushQueue).toHaveBeenCalledTimes(1);
+
+    // Android-specific regression guard: isInternetReachable can legitimately stay
+    // `null` (not yet determined) rather than `true`/`false` more often than on iOS.
+    // A strict `&&` check would silently never flush in that case even though the
+    // device is connected — treat null as "try anyway", not as "not reachable".
+    flushQueue.mockClear();
+    await act(async () => onNetInfoChange({ isConnected: true, isInternetReachable: null }));
     expect(flushQueue).toHaveBeenCalledTimes(1);
   });
 

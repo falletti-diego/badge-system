@@ -178,7 +178,11 @@ export default function RootNavigator() {
     flushQueue();
 
     const unsubscribeNetInfo = NetInfo.addEventListener((state) => {
-      if (state.isConnected && state.isInternetReachable) {
+      // isInternetReachable can be `null` (undetermined) on Android more often than
+      // on iOS — treat null as "try anyway": if actually offline, the request fails
+      // and the item stays queued (offlineQueue already handles that), so this
+      // doesn't introduce a new failure mode when truly offline.
+      if (state.isConnected && state.isInternetReachable !== false) {
         flushQueue();
       }
     });
