@@ -1,0 +1,96 @@
+appId: it.dataxiom.badge
+---
+# Regression guard for Rischio 1 (Task 11): FaceIDScreen's PIN fallback when
+# the emulator has NO virtual fingerprint enrolled (never configured on this
+# AVD) but a device PIN/pattern IS configured. In this state,
+# LocalAuthentication.getEnrolledLevelAsync() returns SecurityLevel.SECRET
+# (not NONE), so FaceIDScreen.runAuthentication() proceeds to
+# authenticateAsync() instead of short-circuiting to the "blocked" state —
+# and expo-local-authentication automatically falls back to the system
+# device-credential (PIN) prompt because disableDeviceFallback defaults to
+# false. This flow proves that fallback actually works end-to-end on the
+# real Android runtime, not just in the mocked component test
+# (FaceIDScreen.test.jsx).
+#
+# Prerequisite (one-time AVD setup, not part of this flow): Pixel_6_API_34
+# must have a PIN configured as its screen lock (Settings > Security >
+# Screen lock > PIN) and no fingerprint enrolled. Verified via
+# `adb shell dumpsys lock_settings` (CredentialType: PIN) and
+# `adb shell dumpsys fingerprint` (count: 0) before this flow was written —
+# already true on this AVD from prior session setup (see
+# android-camera-permission-denial.yaml), no changes needed.
+#
+# The SecurityLevel.NONE ("nessun blocco schermo configurato") scenario is
+# NOT covered here — it requires removing the PIN from the AVD entirely,
+# which cannot be automated cleanly (it would break every other flow in this
+# directory that depends on the PIN fallback, e.g.
+# android-camera-permission-denial.yaml). That scenario is verified manually
+# instead (see Task 11 Step 4).
+
+- launchApp:
+    clearState: true
+- tapOn: "http://(localhost|10\\.0\\.2\\.2):8081"
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    id: "xmark"
+    optional: true
+- runFlow:
+    when:
+      visible: "Reload"
+    commands:
+      - back
+
+# extendedWaitUntil rather than a plain tapOn: on this software-rendered
+# emulator, the dev-client's bundle load can occasionally outrun a plain
+# tapOn's default wait (same rationale as android-camera-permission-denial.yaml).
+- extendedWaitUntil:
+    visible: "Email"
+    timeout: 10000
+- tapOn: "Email"
+- inputText: "maria@badge.local"
+- tapOn: "Password"
+- tapOn: "Password"
+- inputText: "maria01"
+- tapOn: "Accedi"
+- tapOn:
+    text: "Non ora"
+    optional: true
+# Login lands on CheckInScreen (the "Scannerizza QR Code" button), not
+# directly on FaceIDScreen — the Face ID gate only appears after tapping
+# that button (verified empirically, matching the pattern already used in
+# android-back-button.yaml and android-camera-permission-denial.yaml).
+- extendedWaitUntil:
+    visible: "Scannerizza QR Code.*"
+    timeout: 15000
+
+- tapOn: "Scannerizza QR Code.*"
+# No intermediate wait/assert on "Verifica identità" here: verified
+# empirically (via the accessibility hierarchy dump of a failed run) that
+# the system BiometricPrompt window (com.android.systemui, FLAG_SECURE)
+# covers the whole screen almost immediately after this tap — well before
+# an extendedWaitUntil on the app's own FaceIDScreen title can observe it.
+# FLAG_SECURE windows also render as solid black in screenshots, which is
+# why that first attempt's debug screenshot looked blank even though the
+# device was not actually locked. Same pattern already proven in
+# android-camera-permission-denial.yaml: go straight to the PIN input.
+
+# The system PIN prompt appears here (no biometric enrolled, PIN
+# configured — expo-local-authentication falls back to device credential
+# automatically since disableDeviceFallback defaults to false). The system
+# PIN keypad does NOT auto-submit on the 4th digit — an explicit Enter is
+# required (verified in android-camera-permission-denial.yaml).
+- inputText: "1234"
+- pressKey: Enter
+
+# Successful authentication triggers navigation.replace('QRScanner') in
+# FaceIDScreen. QRScannerScreen renders either "Fotocamera attiva" (camera
+# permission granted) or "Permesso fotocamera negato" (denied) depending on
+# this AVD's current OS-level camera permission grant — either one proves
+# we actually left FaceIDScreen via a successful PIN fallback, which is what
+# this flow verifies (camera permission behavior itself is covered
+# separately by android-camera-permission-denial.yaml).
+- extendedWaitUntil:
+    visible: "Fotocamera attiva|Permesso fotocamera negato"
+    timeout: 10000
