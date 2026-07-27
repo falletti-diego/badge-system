@@ -10,9 +10,11 @@ appId: it.dataxiom.badge
 # install). Dev-client shows its own launcher screen (server list) on cold
 # start rather than auto-connecting to Metro — tap the known dev server to
 # load the actual app bundle.
+# The dev server host differs by platform: iOS simulator shows "localhost",
+# the Android emulator shows "10.0.2.2" (its host-loopback alias) — match both.
 - launchApp:
     clearState: true
-- tapOn: "http://localhost:8081"
+- tapOn: "http://(localhost|10\\.0\\.2\\.2):8081"
 # Dev-client opens its developer menu overlay on top of the freshly loaded
 # app (sometimes with an extra one-time "Continue" tooltip first) — dismiss
 # both before interacting with the app underneath.
@@ -22,6 +24,21 @@ appId: it.dataxiom.badge
 - tapOn:
     id: "xmark"
     optional: true
+# On the Android emulator, tapping "Continue" above advances the tooltip into
+# the full native dev menu (Reload/Go home/Tools) instead of dismissing it,
+# and that menu's close (X) button — unlike iOS's, which exposes accessibility
+# id "xmark" — has no accessible id/text at all, so the "xmark" tap above
+# never matches it there. Fall back to the Android back button, which
+# reliably dismisses this menu; guarded by `when: visible` so it's a no-op
+# when the menu isn't showing (an unconditional back-press on the bare login
+# screen would exit the app instead of doing nothing). Also covers the
+# software-rendered emulator's slower JS bundle load sometimes causing the
+# menu to appear only after the taps above already gave up on finding it.
+- runFlow:
+    when:
+      visible: "Reload"
+    commands:
+      - back
 
 # 2. Log in as the demo employee account (maria@badge.local — employee role,
 # so the tab bar shows Ferie/Turni=MyScheduleScreen, not the manager variants

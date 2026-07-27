@@ -9,9 +9,11 @@ appId: it.dataxiom.badge
 # A dev-client build shows its own launcher screen (server list) on cold start
 # rather than auto-connecting to Metro — tap the known dev server to load the
 # actual app bundle.
+# The dev server host differs by platform: iOS simulator shows "localhost",
+# the Android emulator shows "10.0.2.2" (its host-loopback alias) — match both.
 - launchApp:
     clearState: true
-- tapOn: "http://localhost:8081"
+- tapOn: "http://(localhost|10\\.0\\.2\\.2):8081"
 # Dev-client opens its developer menu overlay on top of the freshly loaded app
 # (sometimes with an extra one-time "Continue" tooltip first) — dismiss both
 # before interacting with the app underneath.
@@ -21,6 +23,21 @@ appId: it.dataxiom.badge
 - tapOn:
     id: "xmark"
     optional: true
+# On the Android emulator, tapping "Continue" above advances the tooltip into
+# the full native dev menu (Reload/Go home/Tools) instead of dismissing it,
+# and that menu's close (X) button — unlike iOS's, which exposes accessibility
+# id "xmark" — has no accessible id/text at all, so the "xmark" tap above
+# never matches it there. Fall back to the Android back button, which
+# reliably dismisses this menu; guarded by `when: visible` so it's a no-op
+# when the menu isn't showing (an unconditional back-press on the bare login
+# screen would exit the app instead of doing nothing). Also covers the
+# software-rendered emulator's slower JS bundle load sometimes causing the
+# menu to appear only after the taps above already gave up on finding it.
+- runFlow:
+    when:
+      visible: "Reload"
+    commands:
+      - back
 
 # 2. Log in as the demo employee account.
 - tapOn: "Email"
@@ -60,7 +77,7 @@ appId: it.dataxiom.badge
 - launchApp:
     clearState: false
 - tapOn:
-    text: "http://localhost:8081"
+    text: "http://(localhost|10\\.0\\.2\\.2):8081"
     optional: true
 - tapOn:
     text: "Continue"
@@ -68,6 +85,14 @@ appId: it.dataxiom.badge
 - tapOn:
     id: "xmark"
     optional: true
+# See the identical fallback after the first launch above for why this is
+# needed on Android (full native dev menu, close button has no accessible
+# id, unconditional back-press would be unsafe without the visibility guard).
+- runFlow:
+    when:
+      visible: "Reload"
+    commands:
+      - back
 
 # 6. The real assertion: Login must be shown again, never the Home screen.
 # Extended timeout: relaunch + Metro reconnect + RootNavigator's async
