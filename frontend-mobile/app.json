@@ -19,7 +19,6 @@
         "NSCameraUsageDescription": "Utilizzato per scansionare il QR code della sede",
         "NSFaceIDUsageDescription": "Utilizzato per autenticare il check-in",
         "NSPhotoLibraryUsageDescription": "Non utilizzato",
-        "NSLocationWhenInUseUsageDescription": "La posizione GPS è richiesta per verificare che il check-in avvenga presso la sede di lavoro",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -55,12 +54,6 @@
       ],
       "expo-asset",
       "expo-font",
-      [
-        "expo-location",
-        {
-          "locationAlwaysAndWhenInUsePermission": "Consenti a Badge System di usare la tua posizione per verificare il check-in presso la sede."
-        }
-      ],
       [
         "@sentry/react-native/expo",
         {
