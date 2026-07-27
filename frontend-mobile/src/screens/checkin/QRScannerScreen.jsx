@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Animated, Easing, Vibration } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Animated, Easing, Vibration, Linking } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Crypto from 'expo-crypto';
@@ -205,6 +205,11 @@ export default function QRScannerScreen({ navigation }) {
         {permission.canAskAgain && (
           <TouchableOpacity style={styles.button} onPress={requestPermission}>
             <Text style={styles.buttonText}>Concedi permesso</Text>
+          </TouchableOpacity>
+        )}
+        {!permission.canAskAgain && (
+          <TouchableOpacity style={styles.button} onPress={() => Linking.openSettings()}>
+            <Text style={styles.buttonText}>Apri Impostazioni</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity style={[styles.button, { marginTop: 12, backgroundColor: COLORS.stone }]} onPress={() => navigation.goBack()}>

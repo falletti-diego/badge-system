@@ -1,6 +1,6 @@
 import React from 'react';
-import { Alert } from 'react-native';
-import { render, act, waitFor } from '@testing-library/react-native';
+import { Alert, Linking } from 'react-native';
+import { render, act, waitFor, fireEvent } from '@testing-library/react-native';
 
 // expo-camera: CameraView stub exposes the `onBarcodeScanned` prop it was last
 // rendered with, so tests can invoke it directly (simulating a real scan event).
@@ -67,9 +67,9 @@ function makeResponseError(message) {
   return err;
 }
 
-function renderScreen(navigationOverrides = {}) {
+async function renderScreen(navigationOverrides = {}) {
   const navigation = { replace: jest.fn(), goBack: jest.fn(), navigate: jest.fn(), ...navigationOverrides };
-  const utils = render(<QRScannerScreen navigation={navigation} />);
+  const utils = await render(<QRScannerScreen navigation={navigation} />);
   return { ...utils, navigation };
 }
 
@@ -107,7 +107,7 @@ describe('QRScannerScreen', () => {
     // navigation params to the correct siteId so a regression cannot pass silently.
     apiClient.post.mockRejectedValue(makeNetworkError());
     enqueueCheckin.mockResolvedValue(undefined);
-    const { navigation } = renderScreen();
+    const { navigation } = await renderScreen();
 
     await scan(buildQrString({ siteId: 'site-99', clientId: 'client-1' }));
 
@@ -127,7 +127,7 @@ describe('QRScannerScreen', () => {
   // throttled CI CPU to tip over the default. Bumped only for this test, not file-wide.
 
   test('QR missing site_id/client_id shows a validation error and never enqueues a check-in', async () => {
-    const { navigation } = renderScreen();
+    const { navigation } = await renderScreen();
 
     await scan(buildQrString({ siteId: null, clientId: null }));
 
@@ -145,7 +145,7 @@ describe('QRScannerScreen', () => {
 
   test('authService.getUser() resolving without employee_id shows a validation error and never enqueues a check-in', async () => {
     authService.getUser.mockResolvedValue({ name: 'Maria' }); // no employee_id
-    renderScreen();
+    await renderScreen();
 
     await scan(buildQrString());
 
@@ -162,7 +162,7 @@ describe('QRScannerScreen', () => {
 
   test('a genuine application error (4xx with a server response) shows the server message and never enqueues a check-in', async () => {
     apiClient.post.mockRejectedValue(makeResponseError('Sede non assegnata a questo dipendente'));
-    renderScreen();
+    await renderScreen();
 
     await scan(buildQrString({ siteId: 'site-5', clientId: 'client-1' }));
 
@@ -178,7 +178,7 @@ describe('QRScannerScreen', () => {
 
   test('happy path online: posts the check-in and navigates to Success without pending', async () => {
     apiClient.post.mockResolvedValue({ data: { data: { id: 'checkin-1' } } });
-    const { navigation } = renderScreen();
+    const { navigation } = await renderScreen();
 
     await scan(buildQrString({ siteId: 'site-42', clientId: 'client-1' }));
 
@@ -194,5 +194,17 @@ describe('QRScannerScreen', () => {
       checkIn: { id: 'checkin-1' },
       siteId: 'site-42',
     });
+  });
+
+  test('permission permanently denied (canAskAgain: false) shows an "Apri Impostazioni" button that calls Linking.openSettings', async () => {
+    useCameraPermissions.mockReturnValue([{ granted: false, canAskAgain: false }, jest.fn()]);
+    const openSettingsSpy = jest.spyOn(Linking, 'openSettings').mockImplementation(() => {});
+
+    const { getByText } = await renderScreen();
+
+    const settingsButton = getByText('Apri Impostazioni');
+    fireEvent.press(settingsButton);
+
+    expect(openSettingsSpy).toHaveBeenCalledTimes(1);
   });
 });
