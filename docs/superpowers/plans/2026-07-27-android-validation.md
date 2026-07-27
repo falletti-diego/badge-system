@@ -968,6 +968,44 @@ git add maestro/android-date-picker.yaml
 git commit -m "test(mobile): flow Maestro Android per il date picker in Ferie/Malattia"
 ```
 
+### Task 12ter: Fix del bug locale inglese nel date picker Android (Rischio 3, follow-up)
+
+**Contesto (emerso dall'esecuzione reale del Task 12):** il flow Maestro `android-date-picker.yaml` ha confermato con screenshot reali (`ferie-start-picker.png` e altri 3) che lo spinner nativo Android di `@react-native-community/datetimepicker` (v8.4.4, verificare in `frontend-mobile/package.json`) mostra i mesi in inglese ("Jun", "Jul", "Aug") e i bottoni "CANCEL"/"OK" in inglese, nonostante `locale="it-IT"` sia passato esplicitamente in `LeaveRequestScreen.jsx:150,178` e `IllnessReportScreen.jsx:94,118`. L'AVD `Pixel_6_API_34` ha locale di sistema `en-US` (verificato via `adb shell getprop ro.product.locale`).
+
+**Causa nota (da verificare empiricamente prima di agire, non dare per assunta):** su Android, il widget nativo `DatePickerDialog` sottostante a questa libreria segue **sempre** il locale di sistema del dispositivo — la prop JS `locale` viene onorata solo dal picker nativo iOS (`UIDatePicker`), non da quello Android. Questo è un limite noto della libreria, non un bug introdotto da questo progetto. Poiché tutta l'interfaccia dell'app è in italiano fisso (non selezionabile dall'utente), un dipendente con smartphone impostato in una lingua di sistema diversa dall'italiano vedrebbe un'incoerenza visibile tra l'app (italiano) e il picker (lingua del telefono).
+
+**Files:**
+- Verify: `frontend-mobile/package.json` (versione `@react-native-community/datetimepicker`)
+- Verify: `frontend-mobile/node_modules/@react-native-community/datetimepicker/android` (o CHANGELOG/README del pacchetto) per eventuali novità di supporto locale su Android non note a chi scrive questo piano
+- Possibile Create: `frontend-mobile/plugins/withAndroidLocale.js` (config plugin Expo) — solo se la Step 1 conferma che serve un intervento nativo
+- Possibile Modify: `frontend-mobile/app.json` (registrazione del plugin, se creato)
+- Possibile Modify: `frontend-mobile/src/screens/leave/LeaveRequestScreen.jsx`, `frontend-mobile/src/screens/illness/IllnessReportScreen.jsx` (solo se la Step 1 porta a una soluzione alternativa lato JS, es. sostituzione del picker nativo)
+
+- [ ] **Step 1: confermare la causa reale, non assumerla.** Due verifiche, in ordine:
+  1. Controllare se `@react-native-community/datetimepicker@8.4.4` ha una nota di rilascio o un parametro non usato in questo codebase che supporti il locale su Android (`grep -rn "locale" frontend-mobile/node_modules/@react-native-community/datetimepicker/android/src frontend-mobile/node_modules/@react-native-community/datetimepicker/CHANGELOG.md 2>/dev/null`). Se emerge un meccanismo supportato non ancora usato, usare quello ed evitare gli step successivi (fix più semplice, minor rischio).
+  2. Se nessun meccanismo supportato dalla libreria esiste (ipotesi più probabile, in linea con quanto noto): cambiare temporaneamente il locale di sistema dell'AVD in italiano (`adb shell "setprop persist.sys.locale it-IT; setprop ctl.restart zygote"`, poi attendere il riavvio della UI di sistema) e rieseguire il flow Maestro `android-date-picker.yaml` esistente. Se lo spinner mostra ora "giu/lug/ago", questo conferma in modo definitivo che il widget segue il locale di sistema e ignora la prop JS. Ripristinare poi il locale dell'AVD a `en-US` (`adb shell "setprop persist.sys.locale en-US; setprop ctl.restart zygote"`) prima di procedere, perché tutti gli altri flow Maestro del piano assumono un AVD in inglese.
+
+- [ ] **Step 2: implementare il fix, scegliendo in base a cosa ha confermato lo Step 1.**
+
+  **Opzione A (preferita se disponibile — verificarla per prima): Android per-app language preference.** Da Android 13 (API 33) in poi Google espone una API supportata per forzare la lingua di una singola app indipendentemente dal sistema (`LocaleManager`/`AppCompatDelegate.setApplicationLocales()`), con backport per API più basse tramite AndroidX. Verificare se `expo-localization` o un plugin community già installato/installabile espone questa funzionalità senza dover scrivere codice nativo Kotlin/Java a mano. Se sì, usare quello: è la soluzione più robusta perché risolverebbe la localizzazione anche per qualunque altro widget nativo futuro (non solo il date picker), non un fix puntuale.
+
+  **Opzione B (fallback se la A richiede codice nativo custom troppo esteso per questo task): sostituire il picker nativo con un componente JS proprio per Android.** Creare un piccolo componente wrapper che, solo su Android (`Platform.OS === 'android'`), sostituisce `display="spinner"` con `display="calendar"` **e** un header di intestazione JS proprio sopra il widget che mostra mese/anno in italiano (es. "Luglio 2026"), calcolato con un array di nomi mese hard-coded in italiano — bypassando così la dipendenza dal locale di sistema per la sola informazione realmente illeggibile (il nome del mese), lasciando che il resto del widget nativo (numeri, griglia calendario) resti invariato dato che i soli numeri non sono un problema di localizzazione. Applicare la stessa modifica in entrambi `LeaveRequestScreen.jsx` e `IllnessReportScreen.jsx` (stesso pattern, componenti diversi).
+
+  Non tentare entrambe le opzioni in sequenza per tentativi: valutare la fattibilità della A con una ricerca mirata (senza scrivere codice) prima di scegliere, poi implementare una sola opzione fino in fondo. Se nessuna delle due è applicabile entro un intervento ragionevole (es. richiederebbe di eject dal workflow Expo managed), fermarsi e riportare BLOCKED con l'analisi fatta, invece di forzare una soluzione parziale.
+
+- [ ] **Step 3: verifica (metodo concreto, non solo "sembra corretto").** Il criterio di accettazione è che i mesi appaiano in italiano **anche con l'AVD nel suo stato di default `en-US`** (non solo se si forza manualmente il locale di sistema come nello Step 1.2) — questa è la prova che il fix è indipendente dal locale del dispositivo, coerente col fatto che il resto dell'app è già in italiano fisso indipendentemente dalle impostazioni del telefono:
+  1. Con l'AVD `Pixel_6_API_34` riportato al suo locale di default `en-US` (confermare con `adb shell getprop ro.product.locale`), ricostruire e reinstallare il dev-client (`eas build --profile development-android --platform android --local`, poi `adb install -r <path.apk>`), oppure — se il fix è solo lato JS (Opzione B) e non richiede una nuova build nativa — è sufficiente un reload Metro (Fast Refresh/reload manuale), da verificare quale caso si applica in base alla scelta fatta allo Step 2.
+  2. Rieseguire il flow Maestro già committato `frontend-mobile/maestro/android-date-picker.yaml` (nessuna modifica al flow stesso necessaria).
+  3. Ispezionare visivamente i 4 screenshot generati (`ferie-start-picker`, `ferie-end-picker`, `malattia-start-picker`, `malattia-end-picker`): il nome del mese deve apparire in italiano (es. "lug" o "Luglio", non "Jul"). I bottoni CANCEL/OK del dialog di sistema possono restare in inglese se derivano da risorse di sistema Android non coperte dal fix (non bloccante — annotarlo se persiste, ma il criterio di accettazione riguarda specificamente il nome del mese, l'oggetto del Rischio 3).
+  4. Se la verifica fallisce, non committare un fix parziale spacciandolo per completo: riportare lo stato esatto.
+
+- [ ] **Step 4: commit**
+
+```bash
+git add <file modificati/creati in base alla soluzione scelta>
+git commit -m "fix(mobile): date picker Android mostra i mesi in italiano indipendentemente dal locale di sistema"
+```
+
 ### Task 12bis: Build e smoke test di una build Android non-dev-client
 
 **Contesto (aggiunto dopo un'analisi critica dei Task 1-10):** ogni flow Maestro eseguito finora (Task 8-12) dipende da Metro attivo e passa attraverso il launcher/menu sviluppatore del profilo `development-android` (dev-client). Non è mai stata costruita né avviata una build Android senza dev-client (bundle JS incorporato, nessuna dipendenza da Metro, nessun overlay del menu sviluppatore) — il comportamento reale che un cliente vedrebbe non è mai stato osservato. Questo è il gap più importante rimasto prima di dichiarare Android validato.
