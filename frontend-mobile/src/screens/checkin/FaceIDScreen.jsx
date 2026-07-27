@@ -17,7 +17,7 @@ function getInitials(name) {
 
 export default function FaceIDScreen({ navigation }) {
   const [user, setUser] = useState(null);
-  const [status, setStatus] = useState('authenticating'); // 'authenticating' | 'failed'
+  const [status, setStatus] = useState('authenticating'); // 'authenticating' | 'failed' | 'blocked'
   const pulseAnim = useRef(new Animated.Value(0)).current;
   const arcRotation = useRef(new Animated.Value(0)).current;
 
@@ -48,6 +48,16 @@ export default function FaceIDScreen({ navigation }) {
 
   const runAuthentication = useCallback(async () => {
     setStatus('authenticating');
+
+    const enrolledLevel = await LocalAuthentication.getEnrolledLevelAsync();
+    if (enrolledLevel === LocalAuthentication.SecurityLevel.NONE) {
+      // No biometric AND no device PIN/pattern/password configured — authenticateAsync
+      // would fail every time with no possible fallback. Don't show a "Riprova" that
+      // can never succeed; tell the user what's actually wrong instead.
+      setStatus('blocked');
+      return;
+    }
+
     const result = await LocalAuthentication.authenticateAsync({
       promptMessage: 'Autenticati per il check-in',
       cancelLabel: 'Annulla',
@@ -134,18 +144,25 @@ export default function FaceIDScreen({ navigation }) {
         {status === 'failed' && (
           <Text style={styles.errorText}>Autenticazione non riuscita. Riprova.</Text>
         )}
+        {status === 'blocked' && (
+          <Text style={styles.errorText}>
+            Il tuo dispositivo non ha nessun blocco schermo configurato. Contatta il tuo responsabile.
+          </Text>
+        )}
       </View>
 
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.authButton}
-          onPress={runAuthentication}
-          disabled={status === 'authenticating'}
-        >
-          <Text style={styles.authButtonText}>
-            {status === 'authenticating' ? 'Autenticazione in corso…' : 'Riprova'}
-          </Text>
-        </TouchableOpacity>
+        {status !== 'blocked' && (
+          <TouchableOpacity
+            style={styles.authButton}
+            onPress={runAuthentication}
+            disabled={status === 'authenticating'}
+          >
+            <Text style={styles.authButtonText}>
+              {status === 'authenticating' ? 'Autenticazione in corso…' : 'Riprova'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </SafeAreaView>
   );
