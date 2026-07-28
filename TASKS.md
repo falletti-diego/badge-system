@@ -1251,6 +1251,17 @@ Valutazione richiesta esplicitamente dall'utente dopo l'apertura della PR #3 (`w
 
 ---
 
+### ANDROID.2 — Jank confermato nelle animazioni di FaceIDScreen/QRScannerScreen su hardware a bassa specifica (Test C, Session 84, 2026-07-28)
+
+**Contesto:** profiling via `adb shell dumpsys gfxinfo` sull'AVD `Android_Go_LowSpec` (fascia bassa, Pixel 4a/3GB RAM/rendering software) ha misurato jank severo su entrambe le schermate con animazioni continue: `QRScannerScreen` (scan-line + fotocamera) **100% frame jank, mediana 200ms (~5 fps)** su 30s; `FaceIDScreen` (pulse ring + arc rotation) **99,77% jank, mediana 61ms (~16 fps)**. Baseline di controllo su schermata statica: 0 frame in 30s, 0% jank — conferma che il jank è reale, non un artefatto dell'emulatore. Nessun leak di memoria rilevato (3 misurazioni PSS stabili: 339584 → 335489 → 333838 KB).
+
+- [ ] **ANDROID.2** Ottimizzare le animazioni `Animated.loop` in `frontend-mobile/src/screens/checkin/FaceIDScreen.jsx` (pulse ring + arc rotation) e `frontend-mobile/src/screens/checkin/QRScannerScreen.jsx` (scan-line) per hardware Android di fascia bassa — valutare: ridurre la complessità grafica (es. semplificare i livelli SVG/ombre), verificare che tutte le animazioni usino `useNativeDriver: true` (già presente, verificare se sufficiente data la severità), o ridurre la frequenza/durata dei loop su device rilevati come low-end.
+- [ ] Ri-verificare con lo stesso comando (`adb shell dumpsys gfxinfo it.dataxiom.badge reset` → attesa 30s → `dumpsys gfxinfo it.dataxiom.badge`) dopo il fix, confrontando contro questi numeri di baseline.
+
+**Trigger:** Non blocca l'MVP demo interno (l'app funziona, solo le animazioni sono poco fluide su hardware datato) — da affrontare prima del lancio commerciale se il segmento clienti target include probabilmente dispositivi Android di fascia bassa/aziendale datata.
+
+---
+
 ## 🎯 MVP LAUNCH CHECKLIST (Settembre 2026)
 
 - [x] Backend API deployed + stable

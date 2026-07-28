@@ -1139,7 +1139,21 @@ Expected: `expo-camera` rileva il QR code e triggera `onBarcodeScanned` — l'ap
 
 ---
 
-### Task 15: Profiling prestazionale delle schermate animate (Test C)
+### Task 15: Profiling prestazionale delle schermate animate (Test C) — CHIUSO, jank reale documentato
+
+**Esito (28 luglio 2026):** Android Studio Profiler è un tool GUI non scriptabile — sostituito con l'equivalente da riga di comando (`adb shell dumpsys gfxinfo`/`meminfo`), che misura le stesse metriche in modo più preciso e automatizzabile, su `Android_Go_LowSpec`.
+
+| Schermata | Durata | Frame renderizzati | Jank | 50° percentile |
+|---|---|---|---|---|
+| Home (statica, controllo) | 30s | 0 | 0% | — |
+| `QRScannerScreen` (scan-line + fotocamera) | 30s | 201 | **100%** | 200ms (~5 fps) |
+| `FaceIDScreen` (pulse ring + arc rotation) | 30s | 871 | **99,77%** | 61ms (~16 fps) |
+
+Il baseline di controllo (0 frame su schermata statica in 30s) conferma che il jank non è un artefatto dell'emulatore: entrambe le schermate animate renderizzano molto sotto i 60fps target su questo hardware a bassa specifica.
+
+**Memoria** (3 misurazioni PSS attraverso cicli di relaunch+navigazione ripetuti): 339584 → 335489 → 333838 KB — nessuna crescita, nessun leak rilevato. `return () => loop.stop()` in entrambi i file risulta effettivamente funzionante, non solo scritto.
+
+**Decisione**: non investire in un fix ora — documentato come backlog pre-lancio (`TASKS.md`, sezione Pre-lancio primo cliente reale, voce `ANDROID.2`), non blocca l'MVP demo interno.
 
 **Files:** nessuno (solo verifica manuale con tooling)
 
