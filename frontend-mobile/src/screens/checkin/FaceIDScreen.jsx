@@ -73,6 +73,10 @@ export default function FaceIDScreen({ navigation }) {
       // A native module rejection (rather than a resolved {success:false}) would
       // otherwise leave status stuck on 'authenticating' with the retry button
       // permanently disabled — fall back to 'failed' so the user can retry.
+      // Logged because this path also catches non-biometric errors (native module
+      // crash, unexpected exception) that the generic "failed" message would
+      // otherwise mask with zero diagnostic trace.
+      console.warn('FaceIDScreen authentication error:', error);
       setStatus('failed');
     }
   }, [navigation]);
