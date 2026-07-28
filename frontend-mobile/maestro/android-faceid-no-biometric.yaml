@@ -42,12 +42,39 @@ appId: it.dataxiom.badge
     commands:
       - back
 
+# Extra defensive dismiss pass (Task 13): the dev-client's "developer menu"
+# bottom sheet can appear *after* the dismiss taps above already ran — this
+# intermittently leaves it covering the Email field at assertion time (seen
+# live: step-008-assertCondition-Email.png on Pixel_6_API_34 showed the
+# Login screen already rendered underneath the late-appearing menu). Tapping
+# a late "Continue" expands it into the full native dev menu instead of
+# dismissing it, which then needs its own "Reload"-visible back-press.
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"
+- runFlow:
+    when:
+      visible: "Reload"
+    commands:
+      - back
+
 # extendedWaitUntil rather than a plain tapOn: on this software-rendered
 # emulator, the dev-client's bundle load can occasionally outrun a plain
 # tapOn's default wait (same rationale as android-camera-permission-denial.yaml).
+# Timeout raised to 25000ms (Task 13): on the low-spec Android_Go_LowSpec AVD
+# (software-rendered GLES2, 3GB RAM), cold-start until Login actually renders
+# was measured at ~14-20s, past the original 10000ms.
+# CAVEAT: on Android_Go_LowSpec, Task 13 also found a distinct, unresolved
+# issue where the very first tap on the dev-server row in the launcher does
+# not always register at all (app stays on the launcher indefinitely) — this
+# timeout cannot fix that, it only helps once the app has actually left the
+# launcher. Tracked as a known AVD-specific test-infra limitation, not an app
+# bug (the same flows are stable on Pixel_6_API_34).
 - extendedWaitUntil:
     visible: "Email"
-    timeout: 10000
+    timeout: 25000
 - tapOn: "Email"
 - inputText: "maria@badge.local"
 - tapOn: "Password"
