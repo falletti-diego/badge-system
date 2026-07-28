@@ -1082,9 +1082,17 @@ git commit -m "build(mobile): verifica profilo preview Android non-dev-client"
 
 # FASE 4 — Test aggiuntivi anti-gap "nessun device fisico" (A-E)
 
-### Task 13: Ripetere la suite Maestro sull'AVD di fascia bassa (Test A)
+### Task 13: Ripetere la suite Maestro sull'AVD di fascia bassa (Test A) — CHIUSO
 
-**Files:** nessuno (solo esecuzione, nessun file di repo modificato salvo eventuali fix emersi)
+**Esito (28 luglio 2026):** eseguito, un problema reale emerso e parzialmente mitigato, un problema residuo accettato come limitazione nota.
+
+1. **Build dev-client fresca + installazione su `Android_Go_LowSpec`**: riuscita senza problemi.
+2. **Primo problema trovato**: tutti e 6 i flow fallivano sistematicamente (12/12 esecuzioni su 2 tentativi) su `tapOn`/`assertVisible: "Email"`, subito dopo il dismiss del launcher dev-client. Diagnosi iniziale (cold-start lento, ~14-20s misurati) → mitigata aumentando `extendedWaitUntil` a 25000ms in tutti i 6 flow, commit `2f37135`.
+3. **Causa più profonda trovata durante la verifica del fix**: su `Android_Go_LowSpec`, il primissimo tap sulla riga del dev-server nel launcher **non registra sempre** — l'app resta bloccata sul launcher a tempo indeterminato, confermato via screenshot (schermata "Development Servers" ancora visibile al momento dell'assert fallito). Nessun timeout può risolvere questo, perché l'app non lascia mai il launcher in quei casi. Aggiunto anche un secondo passaggio difensivo di dismiss del menu sviluppatore (già provato in `android-date-picker.yaml`) a tutti gli altri flow, che risolve un problema imparentato ma distinto (menu sviluppatore che appare in ritardo) — verificato causare zero regressioni su `Pixel_6_API_34` in run ripetuti.
+4. **Decisione**: non investire ulteriore sviluppo sul problema del tap del launcher su `Android_Go_LowSpec`. Accettato come **limitazione nota dell'automazione Maestro su questo specifico AVD di test** (hit-testing/timing del tocco su rendering software lento) — non un bug dell'app, dato che gli stessi flow restano stabili su `Pixel_6_API_34`. Documentato nei commenti inline di tutti i 6 flow.
+5. **Osservazione di performance reale** (l'obiettivo originale del Test A): confermato che il cold-start dell'app su hardware a bassa specifica (RAM 3GB, rendering software) è sensibilmente più lento (~14-20s vs pochi secondi su `Pixel_6_API_34`) — un dato utile anche se il gate automatizzato non è stato chiuso al 100% su questo AVD.
+
+**Files:** nessuno di applicativo — solo `frontend-mobile/maestro/*.yaml` (timeout + dismiss difensivo, commit `2f37135`)
 
 - [ ] **Step 1: installare l'APK sull'AVD `Android_Go_LowSpec`**
 
