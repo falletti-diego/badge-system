@@ -1169,7 +1169,11 @@ Il baseline di controllo (0 frame su schermata statica in 30s) conferma che il j
 
 ---
 
-### Task 16: Simulazione backgrounding + Doze mode per la coda offline (Test D)
+### Task 16: Simulazione backgrounding + Doze mode per la coda offline (Test D) — NON ESEGUITO, blocco condiviso con ANDROID.1
+
+**Esito (28 luglio 2026):** la precondizione dello Step 1 (un check-in reale in coda) richiede una scansione QR reale, che incontra lo stesso ostacolo del Task 14 — la visuale di default della Virtual Scene camera non inquadra il QR caricato. Tentati entrambi gli slot disponibili (`wall` in Task 14, `table` qui) senza successo: la vista predefinita mostra sempre libreria/TV/mobiletto, mai un poster con QR. Serve la stessa interazione manuale (ruotare la visuale con mouse/WASD in Extended Controls) già rinviata come `ANDROID.1`.
+
+**Decisione utente**: non eseguire ora il resto del test (backgrounding + Doze mode + verifica sync, tutti scriptabili via `adb` una volta ottenuto il check-in in coda). Rinviato insieme ad `ANDROID.1` in `TASKS.md` — quando quella verifica manuale verrà eseguita, va ripetuta anche la sequenza Steps 2-6 di questo task (background → Doze forzato → rete riattivata → foreground → verifica sync in "Presenze").
 
 **Files:** nessuno (solo verifica manuale)
 
