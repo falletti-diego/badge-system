@@ -1240,6 +1240,17 @@ Valutazione richiesta esplicitamente dall'utente dopo l'apertura della PR #3 (`w
 
 ---
 
+### ANDROID.1 — Verifica manuale scan QR reale via Virtual Scene camera (Test B, rinviato Session 84, 2026-07-28)
+
+**Contesto:** durante la validazione Android (`docs/superpowers/plans/2026-07-27-android-validation.md`, Task 14), il setup automatizzato del test è stato completato (QR reale generato con UUID site/client dal DB, caricato nella Virtual Scene camera dell'AVD `Pixel_6_API_34` via `adb emu virtualscene-image wall <path>`, app navigata via Maestro fino alla schermata fotocamera reale — confermata live, non un placeholder), ma l'ultimo passo — ruotare manualmente la visuale della scena 3D (mouse/WASD in Extended Controls) per inquadrare il QR e confermare che lo scan+check-in reale vada a buon fine — non è scriptabile da CLI ed è stato rinviato su decisione esplicita dell'utente, non eseguito in questa sessione.
+
+- [ ] **ANDROID.1** Aprire Android Studio → AVD `Pixel_6_API_34` in esecuzione → Extended Controls → Camera, oppure trascinare col mouse direttamente sulla finestra del device per ruotare la visuale fino a inquadrare la parete con il QR caricato (contenuto: `badge://checkin?site_id=550e8400-e29b-41d4-a716-446655440012&client_id=550e8400-e29b-41d4-a716-446655440001`, sito "Torino Store"). Confermare che `expo-camera` rilevi il codice e che il check-in reale vada a buon fine (schermata di successo, non solo l'evento di scan).
+- [ ] Verificare anche che l'employee demo `maria@badge.local` resti assegnata al sito Torino (`assigned_sites`) — modificato per questo test in Session 84, potrebbe servire ri-applicare se il DB locale viene ricreato da zero.
+
+**Trigger:** Prima di dichiarare la validazione Android completa/chiusa in vista del primo cliente reale, non blocca la demo interna.
+
+---
+
 ## 🎯 MVP LAUNCH CHECKLIST (Settembre 2026)
 
 - [x] Backend API deployed + stable

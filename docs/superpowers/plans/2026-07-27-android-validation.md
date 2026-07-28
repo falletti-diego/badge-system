@@ -1114,9 +1114,18 @@ Expected: stessi risultati dell'AVD di fascia alta. Annotare qualunque differenz
 
 ---
 
-### Task 14: Fotocamera reale via Virtual Scene (Test B)
+### Task 14: Fotocamera reale via Virtual Scene (Test B) — PARZIALE, ultimo passo rinviato a pre-commercializzazione
 
-**Files:** nessuno (solo verifica manuale)
+**Esito (28 luglio 2026):**
+1. **Prerequisito scoperto e risolto**: l'employee demo `maria@badge.local` (id `239ec99f-3204-45ca-bce2-793f52442ec6`) aveva `assigned_sites = {}` vuoto nel DB locale di sviluppo — un vero check-in sarebbe fallito con `NOT_ASSIGNED_TO_SITE` indipendentemente dalla scansione. Assegnata al sito "Torino Store" (`550e8400-e29b-41d4-a716-446655440012`, coerente con la sua email `maria.rossi@torino.it` e con l'account manager demo Pino già assegnato allo stesso sito) — modifica autorizzata esplicitamente dall'utente, locale, non in produzione.
+2. **QR reale generato**: contenuto `badge://checkin?site_id=550e8400-e29b-41d4-a716-446655440012&client_id=550e8400-e29b-41d4-a716-446655440001` (UUID reali dal DB locale, non inventati), via libreria Python `qrcode` in un virtualenv isolato.
+3. **Virtual Scene camera configurata via CLI**, senza serve Extended Controls per questa parte: `adb emu virtualscene-image wall <path-png>` → `OK`. L'AVD `Pixel_6_API_34` ha già `hw.camera.back=virtualscene` in config.ini.
+4. **App navigata fino alla fotocamera reale via Maestro** (login → PIN Face ID → QRScanner): confermato con screenshot che la fotocamera è **live e reale** (rendering 3D della Virtual Scene — libreria, TV, cane di scena), non un placeholder.
+5. **Bloccato sull'ultimo passo**: la visuale di default della fotocamera virtuale non inquadra la parete su cui è stato caricato il QR (serve ruotare la vista con mouse/WASD in Extended Controls — non scriptabile in modo affidabile da CLI, confermato nessun comando console per pan/rotate della scena 3D, solo `rotate` per l'orientamento fisico del device).
+
+**Decisione utente**: rinviare questo ultimo passo (orientare manualmente la visuale e confermare che lo scan+check-in reale vada a buon fine) a un'attività pre-commercializzazione, da tracciare nei file `.md` di progetto (Task 18 / `TASKS.md`), non da completare ora in questa sessione.
+
+**Files:** nessuno di codice — solo dato locale (`assigned_sites` di Maria nel DB dev) e artefatti temporanei (QR PNG, non nel repo)
 
 - [ ] **Step 1: generare un'immagine PNG con un QR code valido** — usare qualunque generatore QR con il contenuto `badge://checkin?site_id=<uuid-sito-reale>&client_id=<uuid-client-reale>` (usare un sito/cliente demo esistente in ambiente di sviluppo, non un valore inventato — verificare con `SELECT id FROM sites LIMIT 1;` sul database locale se serve un UUID reale).
 
