@@ -1214,7 +1214,20 @@ Expected: la sincronizzazione avviene, confermando che il listener `AppState.add
 
 ---
 
-### Task 17: Benchmark cold-start e dimensione APK (Test E)
+### Task 17: Benchmark cold-start e dimensione APK (Test E) — CHIUSO
+
+**Esito (28 luglio 2026):** build `preview` (non-dev-client, rappresentativa dell'esperienza cliente reale — coerente con l'approccio del Task 12bis) misurata su entrambi gli AVD con `adb shell am force-stop` + `am start -W`, `LaunchState: COLD` confermato su ogni run (non un resume da processo già in memoria).
+
+| AVD | Run | TotalTime | WaitTime |
+|---|---|---|---|
+| `Pixel_6_API_34` (fascia alta) | 1 | 361ms | 367ms |
+| `Pixel_6_API_34` | 2 | 455ms | 456ms |
+| `Pixel_6_API_34` | 3 | 420ms | 423ms |
+| `Android_Go_LowSpec` (fascia bassa) | 1 | 444ms | 455ms |
+
+Dimensione APK (`preview`, release, non-dev-client): **108-109 MB**.
+
+Tutti i valori restano ben sotto il secondo, anche su hardware a bassa specifica — un cold-start sub-500ms è un risultato solido, nessun problema emerso qui (a differenza del jank nelle animazioni, Task 15). Nessun fix necessario.
 
 **Files:** nessuno (solo misurazione)
 
@@ -1239,9 +1252,9 @@ ls -lh frontend-mobile/build-*.apk
 
 - [ ] **Step 4: annotare entrambi i numeri nel report finale** (Task 18) come baseline oggettiva — non un pass/fail, ma un riferimento numerico per confrontare build future e per stimare (in assenza di un device fisico da cronometrare) l'esperienza su hardware economico reale.
 
-### Gate di fine Fase 4
+### Gate di fine Fase 4 — CHIUSO con 2 eccezioni dichiarate
 
-- [ ] **G4:** tutti i 5 test aggiuntivi (A-E) eseguiti almeno una volta, con esito annotato (positivo o negativo) — nessuno lasciato "da fare dopo"
+- [x] **G4:** tutti i 5 test aggiuntivi (A-E) eseguiti almeno una volta, con esito annotato. **Eccezione dichiarata** (non un'omissione silenziosa): Test B (Task 14) e Test D (Task 16) non sono stati portati a completamento — bloccati dalla stessa precondizione (orientamento manuale della Virtual Scene camera, non scriptabile da CLI) — e rinviati su decisione esplicita dell'utente come `ANDROID.1` in `TASKS.md`. Test A (Task 13), C (Task 15) ed E (Task 17) sono chiusi con esito pienamente annotato.
 
 ---
 
