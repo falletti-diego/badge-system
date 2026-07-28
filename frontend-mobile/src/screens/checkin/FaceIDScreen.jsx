@@ -49,23 +49,30 @@ export default function FaceIDScreen({ navigation }) {
   const runAuthentication = useCallback(async () => {
     setStatus('authenticating');
 
-    const enrolledLevel = await LocalAuthentication.getEnrolledLevelAsync();
-    if (enrolledLevel === LocalAuthentication.SecurityLevel.NONE) {
-      // No biometric AND no device PIN/pattern/password configured — authenticateAsync
-      // would fail every time with no possible fallback. Don't show a "Riprova" that
-      // can never succeed; tell the user what's actually wrong instead.
-      setStatus('blocked');
-      return;
-    }
+    try {
+      const enrolledLevel = await LocalAuthentication.getEnrolledLevelAsync();
+      if (enrolledLevel === LocalAuthentication.SecurityLevel.NONE) {
+        // No biometric AND no device PIN/pattern/password configured — authenticateAsync
+        // would fail every time with no possible fallback. Don't show a "Riprova" that
+        // can never succeed; tell the user what's actually wrong instead.
+        setStatus('blocked');
+        return;
+      }
 
-    const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: 'Autenticati per il check-in',
-      cancelLabel: 'Annulla',
-      fallbackLabel: 'Usa passcode',
-    });
-    if (result.success) {
-      navigation.replace('QRScanner');
-    } else {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Autenticati per il check-in',
+        cancelLabel: 'Annulla',
+        fallbackLabel: 'Usa passcode',
+      });
+      if (result.success) {
+        navigation.replace('QRScanner');
+      } else {
+        setStatus('failed');
+      }
+    } catch (error) {
+      // A native module rejection (rather than a resolved {success:false}) would
+      // otherwise leave status stuck on 'authenticating' with the retry button
+      // permanently disabled — fall back to 'failed' so the user can retry.
       setStatus('failed');
     }
   }, [navigation]);

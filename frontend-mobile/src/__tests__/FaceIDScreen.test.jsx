@@ -1,5 +1,7 @@
 import React from 'react';
-import { render, waitFor, act } from '@testing-library/react-native';
+import {
+  render, waitFor, act, fireEvent,
+} from '@testing-library/react-native';
 
 jest.mock('expo-local-authentication', () => ({
   authenticateAsync: jest.fn(),
@@ -54,5 +56,19 @@ describe('FaceIDScreen', () => {
 
     await waitFor(() => expect(LocalAuthentication.authenticateAsync).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith('QRScanner'));
+  });
+
+  test('regression guard: a rejected native call (not a resolved {success:false}) does not leave the retry button permanently disabled', async () => {
+    LocalAuthentication.authenticateAsync.mockRejectedValue(new Error('native module crashed'));
+
+    const { findByText, getByText } = await renderScreen();
+
+    await findByText('Autenticazione non riuscita. Riprova.');
+    const retryButton = getByText('Riprova');
+
+    LocalAuthentication.authenticateAsync.mockResolvedValue({ success: true });
+    await act(async () => { fireEvent.press(retryButton); });
+
+    await waitFor(() => expect(LocalAuthentication.authenticateAsync).toHaveBeenCalledTimes(2));
   });
 });
