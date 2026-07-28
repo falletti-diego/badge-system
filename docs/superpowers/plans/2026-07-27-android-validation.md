@@ -1260,7 +1260,9 @@ ls -lh frontend-mobile/build-*.apk
 
 # FASE 5 — Wrap-up documentazione
 
-### Task 18: Aggiornare `TASKS.md`, `PROJECT_DECISIONS.md`, `HANDOFF.md`
+### Task 18: Aggiornare `TASKS.md`, `PROJECT_DECISIONS.md`, `HANDOFF.md` — CHIUSO
+
+**Esito (28 luglio 2026):** i 3 file aggiornati come da spec. `TASKS.md`: nuova riga Session 83 nel Session Log con i 4 fix di codice (commit citati), l'esito dei 5 test A-E, e i rischi residui (skin OEM, biometria reale, nessun device fisico) dichiarati come non risolti. `PROJECT_DECISIONS.md`: nuova sezione "Session 83" con la decisione di prodotto sul fallback PIN, i 7 rischi e le relative mitigazioni/decisioni, i 2 bug reali emersi durante le due code review (commit `4baee46`, `d7c445b`). `HANDOFF.md`: riscritto per Session 83, con comandi per rilanciare Maestro Android, nomi dei 2 AVD, nota esplicita che Play Store/Internal Testing Android restano fuori perimetro. Commit di questo task incluso nel range finale del piano.
 
 **Files:**
 - Modify: `TASKS.md`
