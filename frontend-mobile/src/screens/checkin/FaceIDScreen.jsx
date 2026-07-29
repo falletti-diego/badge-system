@@ -8,6 +8,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import authService from '../../services/authService';
 import StepIndicator from '../../components/StepIndicator';
 import { COLORS, FONTS, ROLE_LABELS } from '../../config/theme';
+import { isLowEndDevice } from '../../utils/deviceTier';
 
 function getInitials(name) {
   if (!name) return '';
@@ -37,8 +38,12 @@ export default function FaceIDScreen({ navigation }) {
     return () => loop.stop();
   }, [pulseAnim]);
 
-  // Scan arc rotation loop
+  // Scan arc rotation loop — puramente decorativo, disattivato sui device
+  // low-end (soglia RAM, deviceTier.js) per ridurre il costo di compositing
+  // GPU misurato in Sessione 83 (99,77% frame jank su Android_Go_LowSpec).
+  // Il ring-pulse (sopra) resta sempre attivo: ha valore funzionale.
   useEffect(() => {
+    if (isLowEndDevice()) return undefined;
     const loop = Animated.loop(
       Animated.timing(arcRotation, { toValue: 1, duration: 2000, easing: Easing.linear, useNativeDriver: true }),
     );
@@ -101,7 +106,9 @@ export default function FaceIDScreen({ navigation }) {
   };
 
   const pulseScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] });
-  const arcSpin = arcRotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const arcSpin = isLowEndDevice()
+    ? '0deg'
+    : arcRotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
   const roleLabel = ROLE_LABELS[user?.role] ?? '';
 

@@ -13,8 +13,14 @@ jest.mock('../services/authService', () => ({
   getUser: jest.fn(),
 }));
 
+jest.mock('../utils/deviceTier', () => ({
+  isLowEndDevice: jest.fn(() => false),
+}));
+
 const LocalAuthentication = require('expo-local-authentication');
 const authService = require('../services/authService').default || require('../services/authService');
+const { Animated } = require('react-native');
+const { isLowEndDevice } = require('../utils/deviceTier');
 
 const FaceIDScreen = require('../screens/checkin/FaceIDScreen').default;
 
@@ -70,5 +76,35 @@ describe('FaceIDScreen', () => {
     await act(async () => { fireEvent.press(retryButton); });
 
     await waitFor(() => expect(LocalAuthentication.authenticateAsync).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe('FaceIDScreen — low-end device animations', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authService.getUser.mockResolvedValue({ name: 'Maria Rossi', role: 'employee' });
+    LocalAuthentication.getEnrolledLevelAsync.mockResolvedValue(LocalAuthentication.SecurityLevel.BIOMETRIC);
+    LocalAuthentication.authenticateAsync.mockResolvedValue({ success: true });
+  });
+
+  it('starts only the ring-pulse loop on a low-end device, skipping the decorative arc rotation', async () => {
+    isLowEndDevice.mockReturnValue(true);
+    const loopSpy = jest.spyOn(Animated, 'loop');
+    await renderScreen();
+
+    // Oggi il componente avvia sempre 2 loop (ring-pulse + arco). Su low-end
+    // deve avviarne solo 1 (il ring-pulse, funzionale) — l'arco decorativo
+    // non deve mai chiamare Animated.loop.
+    expect(loopSpy).toHaveBeenCalledTimes(1);
+    loopSpy.mockRestore();
+  });
+
+  it('starts both loops (ring-pulse + decorative arc) on a normal device', async () => {
+    isLowEndDevice.mockReturnValue(false);
+    const loopSpy = jest.spyOn(Animated, 'loop');
+    await renderScreen();
+
+    expect(loopSpy).toHaveBeenCalledTimes(2);
+    loopSpy.mockRestore();
   });
 });
