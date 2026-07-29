@@ -35,11 +35,17 @@ jest.mock('../services/offlineQueue', () => ({
   enqueueCheckin: jest.fn(),
 }));
 
+jest.mock('../utils/deviceTier', () => ({
+  isLowEndDevice: jest.fn(() => false),
+}));
+
 const { useCameraPermissions, __getLatestCameraProps, __resetLatestCameraProps } = require('expo-camera');
 const Crypto = require('expo-crypto');
 const apiClient = require('../services/apiClient').default || require('../services/apiClient');
 const authService = require('../services/authService').default || require('../services/authService');
 const { enqueueCheckin } = require('../services/offlineQueue');
+const { Animated } = require('react-native');
+const { isLowEndDevice } = require('../utils/deviceTier');
 
 const QRScannerScreen = require('../screens/checkin/QRScannerScreen').default;
 
@@ -206,5 +212,34 @@ describe('QRScannerScreen', () => {
     fireEvent.press(settingsButton);
 
     expect(openSettingsSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('QRScannerScreen — low-end device animations', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    __resetLatestCameraProps();
+    useCameraPermissions.mockReturnValue([{ granted: true, canAskAgain: true }, jest.fn()]);
+    authService.getUser.mockResolvedValue({ employee_id: 'emp-1' });
+  });
+
+  it('starts only the scan-line loop on a low-end device, skipping the decorative status dot', async () => {
+    isLowEndDevice.mockReturnValue(true);
+    const loopSpy = jest.spyOn(Animated, 'loop');
+    await renderScreen();
+
+    // Oggi il componente avvia sempre 2 loop (scan-line + pallino). Su
+    // low-end deve avviarne solo 1 (lo scan-line, funzionale).
+    expect(loopSpy).toHaveBeenCalledTimes(1);
+    loopSpy.mockRestore();
+  });
+
+  it('starts both loops (scan-line + decorative status dot) on a normal device', async () => {
+    isLowEndDevice.mockReturnValue(false);
+    const loopSpy = jest.spyOn(Animated, 'loop');
+    await renderScreen();
+
+    expect(loopSpy).toHaveBeenCalledTimes(2);
+    loopSpy.mockRestore();
   });
 });

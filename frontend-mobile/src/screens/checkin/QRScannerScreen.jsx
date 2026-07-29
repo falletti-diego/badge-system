@@ -10,6 +10,7 @@ import { ENDPOINTS, OFFLINE_CONFIG } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import StepIndicator from '../../components/StepIndicator';
 import { COLORS, FONTS } from '../../config/theme';
+import { isLowEndDevice } from '../../utils/deviceTier';
 
 const QR_PREFIX = 'badge://checkin';
 const SUCCESS_FLASH_DURATION = 500;
@@ -35,8 +36,12 @@ export default function QRScannerScreen({ navigation }) {
     return () => loop.stop();
   }, [scanLineAnim]);
 
-  // Header status dot pulse
+  // Header status dot pulse — puramente decorativo, disattivato sui device
+  // low-end (soglia RAM, deviceTier.js) per ridurre il costo di compositing
+  // GPU misurato in Sessione 83 (100% frame jank su Android_Go_LowSpec).
+  // Lo scan-line (sopra) resta sempre attivo: ha valore funzionale.
   useEffect(() => {
+    if (isLowEndDevice()) return undefined;
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseDotAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
@@ -182,7 +187,9 @@ export default function QRScannerScreen({ navigation }) {
   // property and unsupported by Animated's native driver.
   const scanLineTranslateY = scanLineAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 240] });
   const scanLineOpacity = scanLineAnim.interpolate({ inputRange: [0, 0.1, 0.9, 1], outputRange: [0, 1, 1, 0] });
-  const dotOpacity = pulseDotAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.4] });
+  const dotOpacity = isLowEndDevice()
+    ? 1
+    : pulseDotAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.4] });
 
   if (!permission) {
     return (
