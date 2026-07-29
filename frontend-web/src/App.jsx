@@ -11,6 +11,7 @@ import LoginPage from './pages/LoginPage';
 import TryDemoPage from './pages/TryDemoPage';
 import DemoExpiredPage from './pages/DemoExpiredPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
+import AcceptInvitePage from './pages/AcceptInvitePage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { PlanningPage } from './features/planning/pages/PlanningPage';
 import { EmployeeShiftsPage } from './features/planning/pages/EmployeeShiftsPage';
@@ -130,6 +131,11 @@ function AppRouter() {
             apiClient.js's interceptor; no valid session exists by then, so
             this must be reachable without ProtectedRoute too */}
         <Route path="/demo-expired" element={<DemoExpiredPage />} />
+
+        {/* Public invite-redemption page — no session exists yet for a
+            brand-new client admin, so this must be reachable without
+            ProtectedRoute too (same principle as /login) */}
+        <Route path="/accetta-invito" element={<AcceptInvitePage />} />
 
           {/* Protected Routes */}
           <Route
