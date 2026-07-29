@@ -133,6 +133,10 @@ describe('POST /api/v1/admin/onboarding/{preview,apply}', () => {
     expect(employees.rows).toHaveLength(0);
     expect(sites.rows).toHaveLength(0);
     expect(mockSend).not.toHaveBeenCalled();
+    // preview fa sempre ROLLBACK: non deve mai restituire le password
+    // temporanee generate durante il dry-run (nessun motivo di esporre
+    // materiale credenziale per un'anteprima non confermata).
+    expect(res.body.data.credentials).toBeUndefined();
   });
 
   it('preview with a missing site reports the error, writes nothing', async () => {

@@ -75,4 +75,29 @@ describe('demoStartLimiter (real middleware, isolated app)', () => {
     expect(fourth.body.error).toBe('RATE_LIMIT_EXCEEDED');
     expect(fourth.headers['retry-after']).toBeDefined();
   });
+
+  // demoStartLimiter and onboardingInviteLimiter are both IP-keyed with a
+  // 3 req/hour window; if they shared a single instance (as they briefly
+  // did — see app.js history), exhausting one endpoint's quota from an IP
+  // would wrongly 429 the other endpoint for the same IP. Each must use its
+  // own store prefix so their counters are independent.
+  it('exhausting demoStartLimiter does not consume onboardingInviteLimiter\'s quota for the same IP', async () => {
+    // eslint-disable-next-line global-require
+    const { demoStartLimiter, onboardingInviteLimiter } = require('../middleware/rateLimiter');
+    const app = express();
+    app.use(express.json());
+    app.post('/demo/start', demoStartLimiter, (req, res) => res.json({ ok: true }));
+    app.post('/onboarding/invite', onboardingInviteLimiter, (req, res) => res.json({ ok: true }));
+
+    for (let i = 0; i < 3; i++) {
+      const res = await request(app).post('/demo/start').send({});
+      expect(res.status).toBe(200);
+    }
+    const fourthDemo = await request(app).post('/demo/start').send({});
+    expect(fourthDemo.status).toBe(429);
+
+    // The onboarding-invite endpoint from the SAME IP must still be fresh.
+    const inviteRes = await request(app).post('/onboarding/invite').send({});
+    expect(inviteRes.status).toBe(200);
+  });
 });

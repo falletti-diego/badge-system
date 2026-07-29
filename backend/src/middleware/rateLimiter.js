@@ -232,9 +232,46 @@ const demoStartLimiter = rateLimit({
   },
 });
 
+/**
+ * Onboarding-invite rate limiter (3 req/hour per IP) — deliberately a
+ * SEPARATE instance from demoStartLimiter, even though it uses the same
+ * window/max. Both are IP-keyed, so sharing one instance would mean hits
+ * on /demo/start also consume the quota for /onboarding/invite (and vice
+ * versa) — a legitimate new admin redeeming their invite from an IP that
+ * just tried the public demo would get wrongly 429'd. Its own store
+ * prefix keeps the two counters independent.
+ */
+const ONBOARDING_INVITE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const onboardingInviteLimiter = rateLimit({
+  windowMs: ONBOARDING_INVITE_WINDOW_MS,
+  max: 3,
+  standardHeaders: false,
+  store: createHybridStore('onboarding-invite', ONBOARDING_INVITE_WINDOW_MS),
+  skip: (req) => process.env.NODE_ENV === 'test',
+  keyGenerator: (req) => req.ip,
+  handler: (req, res) => {
+    const retryAfter = Math.ceil(ONBOARDING_INVITE_WINDOW_MS / 1000);
+
+    logger.warn({
+      action: 'onboarding_invite_rate_limit_exceeded',
+      ip: req.ip,
+      endpoint: req.path,
+    });
+
+    res.set('Retry-After', retryAfter.toString());
+    res.status(429).json({
+      error: 'RATE_LIMIT_EXCEEDED',
+      message: `Too many requests, please retry after ${retryAfter} seconds`,
+      statusCode: 429,
+      retryAfter,
+    });
+  },
+});
+
 module.exports = {
   apiLimiter,
   authLimiter,
   csvLimiter,
   demoStartLimiter,
+  onboardingInviteLimiter,
 };

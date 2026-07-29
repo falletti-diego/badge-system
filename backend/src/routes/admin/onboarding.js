@@ -70,7 +70,12 @@ router.post('/preview', upload.single('file'), async (req, res, next) => {
     if (!clientId) return; // validateClientId ha già chiamato next(err)
 
     const result = await runOnboarding(req.file.buffer, { clientId, commit: false });
-    res.json({ data: result });
+    // Non esporre mai le password temporanee generate durante un dry-run —
+    // preview fa sempre ROLLBACK quindi non verrebbero mai usate, ma non
+    // c'è motivo di far viaggiare del materiale credenziale in chiaro verso
+    // il client per un'anteprima che l'admin non ha ancora confermato.
+    const { credentials, ...previewResult } = result;
+    res.json({ data: previewResult });
   } catch (err) {
     next(err);
   }

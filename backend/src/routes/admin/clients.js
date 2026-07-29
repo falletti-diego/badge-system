@@ -40,9 +40,12 @@ router.post('/', requireSuperadmin, createValidationMiddleware(AdminClientSchema
 
     // Invito admin best-effort — mai bloccare la creazione del client per un
     // problema SES (già risposto al client sopra). Fallimento sempre loggato,
-    // mai silenzioso (CLAUDE.md Pattern 3).
-    const { rawToken, tokenHash, expiresAt } = generateInviteToken();
+    // mai silenzioso (CLAUDE.md Pattern 3). generateInviteToken() è dentro
+    // questo stesso try: chiamarlo fuori farebbe propagare un suo eventuale
+    // errore al catch esterno della route, che chiamerebbe next(err) su una
+    // response già inviata (res.status(201).json sopra).
     try {
+      const { rawToken, tokenHash, expiresAt } = generateInviteToken();
       await pool.query(
         `INSERT INTO invite_tokens (client_id, email, token_hash, expires_at)
          VALUES ($1, $2, $3, $4)`,

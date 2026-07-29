@@ -7,6 +7,7 @@
  */
 
 const { Pool } = require('pg');
+const jwt = require('jsonwebtoken');
 const { generateInviteToken } = require('../utils/inviteTokens');
 
 const dbConfig = {
@@ -107,8 +108,23 @@ describe('POST /api/v1/onboarding/invite/:token/accept', () => {
     expect(employee.rows[0].name).toBe('Mario Admin');
     expect(employee.rows[0].must_change_password).toBe(false);
 
+    // employee_id deve essere presente e coincidere col soggetto del token,
+    // esattamente come POST /auth/login — altrimenti endpoint gated su
+    // req.user.employee_id (smartWorking.js, checkins.js, illnesses.js)
+    // tratterebbero il nuovo admin come privo di profilo dipendente.
+    expect(res.body.data.user.employee_id).toBe(employee.rows[0].id);
+    const decoded = jwt.decode(res.body.data.token);
+    expect(decoded.employee_id).toBe(employee.rows[0].id);
+
     const invite = await pool.query('SELECT used_at FROM invite_tokens WHERE client_id = $1', [clientId]);
     expect(invite.rows[0].used_at).not.toBeNull();
+
+    const audit = await pool.query(
+      "SELECT * FROM audit_log WHERE entity = 'employee' AND entity_id = $1",
+      [employee.rows[0].id]
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(audit.rows[0].action).toBe('onboarding_invite_accepted');
   });
 
   it('rejects an expired token with 404, creates no employee row', async () => {

@@ -41,7 +41,7 @@ const path = require('path');
 const { pool, closePool } = require('./db/pool');
 const { initializeRedis, closeRedis } = require('./db/redis');
 const { ApiError, RateLimitError } = require('./utils/errors');
-const { apiLimiter, authLimiter, csvLimiter, demoStartLimiter } = require('./middleware/rateLimiter');
+const { apiLimiter, authLimiter, csvLimiter, demoStartLimiter, onboardingInviteLimiter } = require('./middleware/rateLimiter');
 const { optionalAuth } = require('./middleware/auth');
 const checkRevoked = require('./middleware/checkRevoked');
 const authRouter = require('./routes/auth');
@@ -94,8 +94,13 @@ app.use('/api/v1/export/csv', csvLimiter);
 app.use('/api/demo/start', demoStartLimiter);
 app.use('/api/v1/demo/start', demoStartLimiter);
 // Endpoint pubblico di redemption invito onboarding — stesso motivo di
-// rate-limit di /demo/start (endpoint pubblico non autenticato, basso volume atteso)
-app.use('/api/v1/onboarding/invite', demoStartLimiter);
+// rate-limit di /demo/start (endpoint pubblico non autenticato, basso volume
+// atteso), ma con la SUA PROPRIA istanza/store: condividere demoStartLimiter
+// (keyGenerator è solo req.ip, senza componente di path) farebbe sì che le
+// richieste su /demo/start consumino la stessa quota di /onboarding/invite —
+// un nuovo admin che accetta il proprio invito dallo stesso IP di qualcuno
+// che ha appena provato la demo pubblica riceverebbe un 429 ingiustificato.
+app.use('/api/v1/onboarding/invite', onboardingInviteLimiter);
 
 // Structured request/response logging (method, path, statusCode, responseTime)
 // Used by CloudWatch metric filters for 5xx rate and slow request alarms
