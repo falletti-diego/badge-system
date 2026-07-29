@@ -63,4 +63,24 @@ function buildAdminInviteEmail({ to, clientName, rawToken }) {
   };
 }
 
-module.exports = { sendEmail, buildAdminInviteEmail };
+/**
+ * Build the welcome email sent to a new employee created by the onboarding
+ * wizard (backend/src/routes/admin/onboarding.js), with their initial
+ * temporary password. The existing forced-password-change flow
+ * (must_change_password=true, already set by apply()) handles the rest —
+ * no new token infrastructure needed here.
+ *
+ * @param {{ to: string, tempPassword: string, clientName: string }} params
+ */
+function buildEmployeeWelcomeEmail({ to, tempPassword, clientName }) {
+  return {
+    to,
+    subject: `Il tuo accesso a Badge System — ${clientName}`,
+    text: `Ciao,\n\nè stato creato il tuo account su Badge System per ${clientName}.\n\n`
+      + `Email: ${to}\nPassword temporanea: ${tempPassword}\n\n`
+      + `Accedi su https://badge.dataxiom.it/login — al primo accesso ti verrà chiesto di impostarne una tua.\n\n`
+      + `Team Badge System`,
+  };
+}
+
+module.exports = { sendEmail, buildAdminInviteEmail, buildEmployeeWelcomeEmail };
