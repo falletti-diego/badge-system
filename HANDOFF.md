@@ -1,10 +1,30 @@
-# Badge System — Session 85 Handoff
+# Badge System — Session 86 Handoff
 
 **Date:** 2026-07-29
-**Session:** 85 — Onboarding cliente self-service implementato (8/8 task) + code review finale + SES ancora bloccato
-**Status:** ✅ **Piano onboarding chiuso lato codice.** Resta solo il Gate finale con SES reale, bloccato dall'approvazione AWS (ancora `DENIED`).
+**Session:** 86 — Bilancio backlog MVP + Task B6 (Offline Mode) chiuso: retest finale su iPhone reale confermato funzionante
+**Status:** ✅ **Offline Mode interamente completa** (Fase A + Fase B + Task B6). Onboarding self-service (Session 85) resta con solo il Gate finale (SES reale) aperto. SES ancora `DENIED`.
 
 ---
+
+## Goal (Session 86)
+
+Su richiesta esplicita dell'utente: rileggere in dettaglio TASKS.md/PROJECT_DECISIONS.md/HANDOFF.md e riportare prossimi step + cosa è stato lasciato indietro, considerando lo stato attuale dell'MVP.
+
+## Esito
+
+Identificati come bloccanti reali: SES sandbox-exit (`DENIED`), Task B6 (Offline Mode — fermo da 4 sessioni, l'unico item non dichiarato esplicitamente come rinviato), ambiente di staging (mai avviato), S.26 (consenso GPS GDPR, HIGH), ANDROID.1/1b/2. L'utente ha ripreso in mano il retest B6 e confermato: **funziona**. Aggiornati i 3 file .md di conseguenza (nessun codice modificato in questa sessione). Vedi la voce "Session 86" in `PROJECT_DECISIONS.md` per il dettaglio completo.
+
+## Backlog invariato per la prossima sessione (in ordine di urgenza)
+
+1. **SES sandbox-exit** — ancora `DENIED`, nessuna risposta AWS. Canali alternativi discussi (nuovo caso, upgrade Business Support, AWS re:Post, AWS Activate) ma nessuno ancora tentato.
+2. **Gate finale piano onboarding** — verifica E2E con SES reale, bloccato dal punto 1.
+3. **STAGING** (`STG.1`-`STG.6`) — dichiarato obbligatorio pre-cliente-reale da Session 45, mai avviato.
+4. **S.26** — consenso GPS esplicito (GDPR Art. 7, HIGH) — il geofencing è già attivabile in produzione senza questo meccanismo.
+5. **ANDROID.1/1b** (scan QR reale + Doze via Virtual Scene, bloccato da limite CLI) e **ANDROID.2** (jank animazioni su hardware low-end) — non bloccanti per demo interna, da chiudere prima di clienti con dipendenti Android.
+
+---
+
+## Handoff precedente (Session 85 — invariato, riportato sotto per contesto)
 
 ## Goal
 
