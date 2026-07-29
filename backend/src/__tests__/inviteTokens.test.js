@@ -12,6 +12,7 @@ describe('inviteTokens', () => {
     const { rawToken, tokenHash } = generateInviteToken();
     expect(rawToken).toHaveLength(43); // 32 byte base64url, no padding
     expect(tokenHash).not.toEqual(rawToken);
+    expect(tokenHash).toMatch(/^[0-9a-f]{64}$/); // SHA-256 hex digest
   });
 
   test('generateInviteToken sets expiresAt 7 days from now', () => {
@@ -21,41 +22,21 @@ describe('inviteTokens', () => {
     expect(diffDays).toBeCloseTo(7, 1);
   });
 
-  test('verifyInviteToken returns the row for a valid, unused, unexpired token', async () => {
+  test('verifyInviteToken looks up by the hash of the raw token, returns the matching row', async () => {
     const { rawToken, tokenHash } = generateInviteToken();
     const row = {
-      id: 'inv-1',
-      client_id: 'client-1',
-      email: 'admin@cliente.it',
-      token_hash: tokenHash,
-      used_at: null,
-      expires_at: new Date(Date.now() + 86400000),
+      id: 'inv-1', client_id: 'client-1', email: 'admin@cliente.it',
+      token_hash: tokenHash, used_at: null, expires_at: new Date(Date.now() + 86400000),
     };
     pool.query.mockResolvedValue({ rows: [row] });
+
     const result = await verifyInviteToken(pool, rawToken);
+
     expect(result).toEqual(row);
+    expect(pool.query).toHaveBeenCalledWith(expect.stringContaining('token_hash = $1'), [tokenHash]);
   });
 
-  test('verifyInviteToken returns null when the token does not match any row', async () => {
-    const { rawToken: unrelatedToken } = generateInviteToken();
-    const { tokenHash } = generateInviteToken();
-    pool.query.mockResolvedValue({
-      rows: [{ id: 'inv-1', token_hash: tokenHash, used_at: null, expires_at: new Date(Date.now() + 86400000) }],
-    });
-    const result = await verifyInviteToken(pool, unrelatedToken);
-    expect(result).toBeNull();
-  });
-
-  test('verifyInviteToken returns null for an expired token (query already filters expires_at > now())', async () => {
-    // La query SQL filtra già "expires_at > now()" — un token scaduto non compare mai
-    // tra le righe candidate restituite dal DB, quindi non c'è nulla con cui confrontare l'hash.
-    pool.query.mockResolvedValue({ rows: [] });
-    const { rawToken } = generateInviteToken();
-    const result = await verifyInviteToken(pool, rawToken);
-    expect(result).toBeNull();
-  });
-
-  test('verifyInviteToken returns null for an already-used token (query already filters used_at IS NULL)', async () => {
+  test('verifyInviteToken returns null when no row matches (query already filters hash/expiry/used_at)', async () => {
     pool.query.mockResolvedValue({ rows: [] });
     const { rawToken } = generateInviteToken();
     const result = await verifyInviteToken(pool, rawToken);
