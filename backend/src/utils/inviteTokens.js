@@ -20,12 +20,18 @@ function generateInviteToken() {
   return { rawToken, tokenHash, expiresAt };
 }
 
-async function verifyInviteToken(db, rawToken) {
+// Reclama atomicamente un token: UPDATE...RETURNING invece di SELECT+UPDATE
+// separati — due richieste concorrenti con lo stesso rawToken non possono mai
+// reclamare entrambe lo stesso invito (la seconda vede 0 righe perché
+// used_at non è più NULL al momento della sua UPDATE).
+async function consumeInviteToken(db, rawToken) {
   const { rows } = await db.query(
-    'SELECT * FROM invite_tokens WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()',
+    `UPDATE invite_tokens SET used_at = now()
+     WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+     RETURNING *`,
     [hashToken(rawToken)]
   );
   return rows[0] || null;
 }
 
-module.exports = { generateInviteToken, verifyInviteToken };
+module.exports = { generateInviteToken, consumeInviteToken };

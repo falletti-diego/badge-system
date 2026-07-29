@@ -46,6 +46,7 @@ const { optionalAuth } = require('./middleware/auth');
 const checkRevoked = require('./middleware/checkRevoked');
 const authRouter = require('./routes/auth');
 const demoRouter = require('./routes/demo');
+const onboardingInviteRouter = require('./routes/onboardingInvite');
 const employeesRouter = require('./routes/employees');
 const checkinsRouter = require('./routes/checkins');
 const shiftsRouter = require('./routes/shifts');
@@ -92,6 +93,9 @@ app.use('/api/export/csv', csvLimiter);
 app.use('/api/v1/export/csv', csvLimiter);
 app.use('/api/demo/start', demoStartLimiter);
 app.use('/api/v1/demo/start', demoStartLimiter);
+// Endpoint pubblico di redemption invito onboarding — stesso motivo di
+// rate-limit di /demo/start (endpoint pubblico non autenticato, basso volume atteso)
+app.use('/api/v1/onboarding/invite', demoStartLimiter);
 
 // Structured request/response logging (method, path, statusCode, responseTime)
 // Used by CloudWatch metric filters for 5xx rate and slow request alarms
@@ -175,6 +179,7 @@ app.use(compositeAuthMiddleware);
 const v1Router = express.Router();
 v1Router.use('/auth', authRouter);
 v1Router.use('/demo', demoRouter);
+v1Router.use('/onboarding', onboardingInviteRouter);
 v1Router.use('/employees', employeesRouter);
 v1Router.use('/checkins', checkinsRouter);
 v1Router.use('/shifts', shiftsRouter);
