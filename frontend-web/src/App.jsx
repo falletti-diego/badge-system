@@ -25,6 +25,7 @@ import { EmployeeIllnessReport } from './features/illness/pages/EmployeeIllnessR
 import { ManagerIllnessReport } from './features/illness/pages/ManagerIllnessReport';
 import { AdminIllnessManagement } from './features/illness/pages/AdminIllnessManagement';
 import SummaryPage from './pages/SummaryPage';
+import { OnboardingWizardPage } from './features/admin/pages/OnboardingWizardPage';
 
 // Create Material-UI theme with design system colors
 const theme = createTheme({
@@ -219,6 +220,16 @@ function AppRouter() {
             element={
               <ProtectedRoute requiredRole="admin">
                 <AdminPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Admin: wizard onboarding self-service (upload Excel sedi/dipendenti/saldi) */}
+          <Route
+            path="/admin/onboarding"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <OnboardingWizardPage />
               </ProtectedRoute>
             }
           />

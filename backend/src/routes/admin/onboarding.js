@@ -91,6 +91,10 @@ router.post('/apply', upload.single('file'), async (req, res, next) => {
     // Email di benvenuto DOPO il commit — mai bloccare/rollbackare l'apply
     // per un problema SES. Solo ai dipendenti NUOVI (result.credentials
     // contiene già solo quelli, mai gli aggiornati — vedi apply.js).
+    // failedEmails include l'id dipendente (non solo l'email) così il wizard
+    // può proporre un'azione di recupero mirata (rigenera credenziali via
+    // POST /admin/employees/:id/reset-password) senza dover ri-eseguire
+    // l'intero import.
     const failedEmails = [];
     for (const cred of result.credentials) {
       try {
@@ -106,7 +110,7 @@ router.post('/apply', upload.single('file'), async (req, res, next) => {
           employee_email: cred.email,
           error: emailErr.message,
         }, 'Welcome email non inviata dopo apply onboarding');
-        failedEmails.push(cred.email);
+        failedEmails.push({ id: cred.id, email: cred.email });
       }
     }
 

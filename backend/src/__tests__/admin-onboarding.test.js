@@ -188,6 +188,12 @@ describe('POST /api/v1/admin/onboarding/{preview,apply}', () => {
 
     const employees = await pool.query('SELECT * FROM employees WHERE client_id = $1', [clientId]);
     expect(employees.rows).toHaveLength(1); // dati comunque commitati
+    // failedEmails include l'id dipendente (non solo l'email), necessario al
+    // frontend per proporre "Rigenera credenziali" senza ri-eseguire l'import.
+    expect(res.body.data.failedEmails[0]).toEqual({
+      id: employees.rows[0].id,
+      email: employees.rows[0].email,
+    });
   });
 
   it('admin gets 403 without ADMIN_REQUIRED role', async () => {

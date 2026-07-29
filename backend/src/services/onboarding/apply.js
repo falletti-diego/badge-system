@@ -64,7 +64,7 @@ async function apply(db, data, { clientId, year }) {
       );
       employeeId = ins.rows[0].id;
       summary.dipendenti_creati += 1;
-      credentials.push({ email: d.email, nome: d.nome_completo, ruolo: d.ruolo, password: tempPassword });
+      credentials.push({ id: employeeId, email: d.email, nome: d.nome_completo, ruolo: d.ruolo, password: tempPassword });
       await logAudit(db, { action: 'onboard_create_employee', entity: 'employee', entityId: employeeId,
         oldValue: null, newValue: { name: d.nome_completo, email: d.email, role }, userId: 'system' });
     } else {
