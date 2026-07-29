@@ -1,4 +1,4 @@
-const { validateAgainstDb } = require('../../scripts/onboarding/validateAgainstDb');
+const { validateAgainstDb } = require('../services/onboarding/validateAgainstDb');
 
 function mockDb(responses) {
   let i = 0;

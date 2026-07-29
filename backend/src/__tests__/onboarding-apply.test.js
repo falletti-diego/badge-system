@@ -1,7 +1,7 @@
 jest.mock('../auth/password', () => ({ hashPassword: jest.fn().mockResolvedValue('HASH') }));
 jest.mock('../middleware/audit', () => ({ logAudit: jest.fn().mockResolvedValue(undefined) }));
 
-const { apply } = require('../../scripts/onboarding/apply');
+const { apply } = require('../services/onboarding/apply');
 const { logAudit } = require('../middleware/audit');
 
 function mockClient(routes) {

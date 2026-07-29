@@ -1,5 +1,5 @@
-const { validate } = require('../../scripts/onboarding/validate');
-const { formatPreview } = require('../../scripts/onboarding/preview');
+const { validate } = require('../services/onboarding/validate');
+const { formatPreview } = require('../services/onboarding/preview');
 
 const base = () => ({
   azienda: { ragione_sociale: 'X SRL', email_referente: 'a@x.it', ore_min_buono_pasto: 5 },

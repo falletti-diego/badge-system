@@ -2,11 +2,11 @@
 
 require('../src/config-loader');
 const { pool } = require('../src/db/pool');
-const { parseWorkbook } = require('./onboarding/parseWorkbook');
-const { validate } = require('./onboarding/validate');
-const { validateAgainstDb } = require('./onboarding/validateAgainstDb');
-const { apply } = require('./onboarding/apply');
-const { formatPreview } = require('./onboarding/preview');
+const { parseWorkbook } = require('../src/services/onboarding/parseWorkbook');
+const { validate } = require('../src/services/onboarding/validate');
+const { validateAgainstDb } = require('../src/services/onboarding/validateAgainstDb');
+const { apply } = require('../src/services/onboarding/apply');
+const { formatPreview } = require('../src/services/onboarding/preview');
 const { writeCredentials } = require('./onboarding/writeCredentials');
 
 function parseArgs(argv) {

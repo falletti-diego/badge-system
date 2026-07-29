@@ -60,9 +60,13 @@ function readSheet(ws) {
   return rows;
 }
 
-async function parseWorkbook(filePath) {
+async function parseWorkbook(fileOrBuffer) {
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.readFile(filePath);
+  if (Buffer.isBuffer(fileOrBuffer)) {
+    await wb.xlsx.load(fileOrBuffer);
+  } else {
+    await wb.xlsx.readFile(fileOrBuffer);
+  }
 
   const aziendaRows = readSheet(wb.getWorksheet('Azienda'));
   const sediRows = readSheet(wb.getWorksheet('Sedi'));

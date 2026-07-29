@@ -1,5 +1,5 @@
 const path = require('path');
-const { parseWorkbook, ROLE_MAP, SALDO_COLUMNS, extractCellValue } = require('../../scripts/onboarding/parseWorkbook');
+const { parseWorkbook, ROLE_MAP, SALDO_COLUMNS, extractCellValue } = require('../services/onboarding/parseWorkbook');
 
 const EXAMPLE = path.join(__dirname, '..', '..', 'scripts', 'seed-data', 'onboarding-template-esempio.xlsx');
 

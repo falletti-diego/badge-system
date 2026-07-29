@@ -1,8 +1,8 @@
 'use strict';
 
 const { randomUUID, randomBytes } = require('crypto');
-const { hashPassword } = require('../../src/auth/password');
-const { logAudit } = require('../../src/middleware/audit');
+const { hashPassword } = require('../../auth/password');
+const { logAudit } = require('../../middleware/audit');
 const { ROLE_MAP, SALDO_COLUMNS } = require('./parseWorkbook');
 
 function generateTempPassword() {
