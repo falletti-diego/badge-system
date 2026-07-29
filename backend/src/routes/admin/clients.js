@@ -8,6 +8,8 @@ const logger = require('../../utils/logger');
 const { logAudit } = require('../../middleware/audit');
 const { AdminClientSchema, createValidationMiddleware } = require('../../middleware/validation');
 const { requireSuperadmin } = require('../../middleware/requireSuperadmin');
+const { generateInviteToken } = require('../../utils/inviteTokens');
+const { sendEmail, buildAdminInviteEmail } = require('../../utils/email');
 
 const router = express.Router();
 
@@ -35,6 +37,25 @@ router.post('/', requireSuperadmin, createValidationMiddleware(AdminClientSchema
     });
 
     res.status(201).json({ success: true, data: client });
+
+    // Invito admin best-effort — mai bloccare la creazione del client per un
+    // problema SES (già risposto al client sopra). Fallimento sempre loggato,
+    // mai silenzioso (CLAUDE.md Pattern 3).
+    const { rawToken, tokenHash, expiresAt } = generateInviteToken();
+    try {
+      await pool.query(
+        `INSERT INTO invite_tokens (client_id, email, token_hash, expires_at)
+         VALUES ($1, $2, $3, $4)`,
+        [client.id, client.email, tokenHash, expiresAt]
+      );
+      await sendEmail(buildAdminInviteEmail({ to: client.email, clientName: client.name, rawToken }));
+    } catch (emailErr) {
+      logger.warn({
+        action: 'admin_invite_send_failed',
+        client_id: client.id,
+        error: emailErr.message,
+      }, 'Invito admin non inviato dopo la creazione del client');
+    }
   } catch (err) {
     if (err.code === '23505') return next(new ValidationError('Email already exists'));
     next(err);

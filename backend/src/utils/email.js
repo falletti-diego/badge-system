@@ -46,4 +46,21 @@ async function sendEmail({ to, subject, text }) {
   return getClient().send(command);
 }
 
-module.exports = { sendEmail };
+/**
+ * Build the welcome email sent to the first admin of a newly-created client,
+ * with a one-time link to set their password (backend/src/utils/inviteTokens.js).
+ *
+ * @param {{ to: string, clientName: string, rawToken: string }} params
+ */
+function buildAdminInviteEmail({ to, clientName, rawToken }) {
+  const link = `https://badge.dataxiom.it/accetta-invito?token=${rawToken}`;
+  return {
+    to,
+    subject: `Benvenuto su Badge System, ${clientName}`,
+    text: `Ciao,\n\nil tuo account amministratore per ${clientName} su Badge System è pronto.\n`
+      + `Imposta la tua password per iniziare: ${link}\n\n`
+      + `Il link scade tra 7 giorni.\n\nTeam Badge System`,
+  };
+}
+
+module.exports = { sendEmail, buildAdminInviteEmail };

@@ -11,6 +11,15 @@
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
 
+// L'invito admin automatico (Task 4, onboarding self-service) invia una vera
+// email SES alla creazione di un client — mockata qui perché questo file usa
+// Postgres reale ma non deve mai tentare una vera chiamata AWS.
+const mockSend = jest.fn().mockResolvedValue({ MessageId: 'test' });
+jest.mock('@aws-sdk/client-ses', () => ({
+  SESClient: jest.fn().mockImplementation(() => ({ send: mockSend })),
+  SendEmailCommand: jest.fn().mockImplementation((input) => ({ input })),
+}));
+
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432', 10),
@@ -64,6 +73,20 @@ describe('RBAC scoping: /api/v1/admin/clients', () => {
     return result.rows[0].id;
   }
 
+  // L'invio dell'invito avviene DOPO che la risposta HTTP è già stata inviata
+  // (mai bloccare la creazione del client per un problema SES) — il client
+  // supertest può ricevere il 201 prima che l'INSERT su invite_tokens sia
+  // completato. Poll breve invece di un'attesa fissa, per restare deterministico.
+  async function waitForInviteToken(email, { timeoutMs = 2000, intervalMs = 20 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const result = await pool.query('SELECT * FROM invite_tokens WHERE email = $1', [email]);
+      if (result.rows.length > 0) return result.rows[0];
+      await new Promise((resolve) => { setTimeout(resolve, intervalMs); });
+    }
+    throw new Error(`invite_tokens row for ${email} never appeared within ${timeoutMs}ms`);
+  }
+
   function tokenFor({ client_id, role }) {
     const privateKey = process.env.JWT_PRIVATE_KEY.replace(/\\n/g, '\n');
     return jwt.sign({ user_id: 'test-user', client_id, role, name: 'Test' }, privateKey, {
@@ -75,6 +98,7 @@ describe('RBAC scoping: /api/v1/admin/clients', () => {
   let clientA, clientB, emailA, emailB;
 
   beforeEach(async () => {
+    mockSend.mockClear();
     if (!dbAvailable) return;
     emailA = uniqueEmail('clients-scoping-a');
     emailB = uniqueEmail('clients-scoping-b');
@@ -125,6 +149,47 @@ describe('RBAC scoping: /api/v1/admin/clients', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'New Co', email: newEmail, plan: 'starter' });
     expect(res.status).toBe(201);
+    await pool.query('DELETE FROM invite_tokens WHERE email = $1', [newEmail]);
+    await pool.query('DELETE FROM clients WHERE email = $1', [newEmail]);
+  });
+
+  it('POST /admin/clients: creation still returns 201 even if the invite email fails to send', async () => {
+    if (!dbAvailable) return;
+    mockSend.mockRejectedValueOnce(new Error('SES throttled'));
+    const token = tokenFor({ client_id: clientA, role: 'superadmin' });
+    const newEmail = uniqueEmail('new-co-email-fails');
+    const res = await request(app)
+      .post('/api/v1/admin/clients')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'New Co Email Fail', email: newEmail, plan: 'starter' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.name).toBe('New Co Email Fail');
+    await pool.query('DELETE FROM invite_tokens WHERE email = $1', [newEmail]);
+    await pool.query('DELETE FROM clients WHERE email = $1', [newEmail]);
+  });
+
+  it('POST /admin/clients: sends an invite email with a working token link', async () => {
+    if (!dbAvailable) return;
+    mockSend.mockResolvedValueOnce({ MessageId: 'ok' });
+    const { SendEmailCommand } = require('@aws-sdk/client-ses');
+    SendEmailCommand.mockClear();
+    const token = tokenFor({ client_id: clientA, role: 'superadmin' });
+    const newEmail = uniqueEmail('new-co-invite-link');
+    await request(app)
+      .post('/api/v1/admin/clients')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'New Co Invite', email: newEmail, plan: 'starter' });
+
+    const inviteRow = await waitForInviteToken(newEmail);
+    expect(inviteRow.used_at).toBeNull();
+
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    const sentEmail = SendEmailCommand.mock.calls[0][0];
+    expect(sentEmail.Destination.ToAddresses).toEqual([newEmail]);
+    expect(sentEmail.Message.Body.Text.Data).toMatch(/accetta-invito\?token=/);
+
+    await pool.query('DELETE FROM invite_tokens WHERE email = $1', [newEmail]);
     await pool.query('DELETE FROM clients WHERE email = $1', [newEmail]);
   });
 
