@@ -120,7 +120,7 @@ describe('POST /api/v1/onboarding/invite/:token/accept', () => {
     expect(invite.rows[0].used_at).not.toBeNull();
 
     const audit = await pool.query(
-      "SELECT * FROM audit_log WHERE entity = 'employee' AND entity_id = $1",
+      'SELECT * FROM audit_log WHERE entity = \'employee\' AND entity_id = $1',
       [employee.rows[0].id]
     );
     expect(audit.rows).toHaveLength(1);

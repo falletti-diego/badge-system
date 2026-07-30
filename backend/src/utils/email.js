@@ -59,7 +59,7 @@ function buildAdminInviteEmail({ to, clientName, rawToken }) {
     subject: `Benvenuto su Badge System, ${clientName}`,
     text: `Ciao,\n\nil tuo account amministratore per ${clientName} su Badge System è pronto.\n`
       + `Imposta la tua password per iniziare: ${link}\n\n`
-      + `Il link scade tra 7 giorni.\n\nTeam Badge System`,
+      + 'Il link scade tra 7 giorni.\n\nTeam Badge System',
   };
 }
 
@@ -78,8 +78,8 @@ function buildEmployeeWelcomeEmail({ to, tempPassword, clientName }) {
     subject: `Il tuo accesso a Badge System — ${clientName}`,
     text: `Ciao,\n\nè stato creato il tuo account su Badge System per ${clientName}.\n\n`
       + `Email: ${to}\nPassword temporanea: ${tempPassword}\n\n`
-      + `Accedi su https://badge.dataxiom.it/login — al primo accesso ti verrà chiesto di impostarne una tua.\n\n`
-      + `Team Badge System`,
+      + 'Accedi su https://badge.dataxiom.it/login — al primo accesso ti verrà chiesto di impostarne una tua.\n\n'
+      + 'Team Badge System',
   };
 }
 
