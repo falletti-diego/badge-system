@@ -1,18 +1,26 @@
-# Badge System — Session 86 Handoff
+# Badge System — Session 88 Handoff
 
-**Date:** 2026-07-29
-**Session:** 86 — Bilancio backlog MVP + Task B6 (Offline Mode) chiuso: retest finale su iPhone reale confermato funzionante
-**Status:** ✅ **Offline Mode interamente completa** (Fase A + Fase B + Task B6). Onboarding self-service (Session 85) resta con solo il Gate finale (SES reale) aperto. SES ancora `DENIED`.
+**Date:** 2026-07-30
+**Session:** 87-88 — ANDROID.2 completato: jank ridotto su Android low-end, blocco d'ambiente diagnosticato e risolto, verifica numerica reale + code review
+**Status:** ✅ **ANDROID.2 chiuso su ogni asse.** Backlog Android residuo: solo `ANDROID.1`/`ANDROID.1b`. SES ancora `DENIED`, invariato.
 
 ---
 
-## Goal (Session 86)
+## Goal (Session 87-88)
 
-Su richiesta esplicita dell'utente: rileggere in dettaglio TASKS.md/PROJECT_DECISIONS.md/HANDOFF.md e riportare prossimi step + cosa è stato lasciato indietro, considerando lo stato attuale dell'MVP.
+Affrontare `ANDROID.2` (jank animazioni Android low-end, rinviato da Session 83) — scelto dall'utente come prossimo item del backlog affrontabile senza spesa né attesa esterna (a differenza di SES/staging).
 
 ## Esito
 
-Identificati come bloccanti reali: SES sandbox-exit (`DENIED`), Task B6 (Offline Mode — fermo da 4 sessioni, l'unico item non dichiarato esplicitamente come rinviato), ambiente di staging (mai avviato), S.26 (consenso GPS GDPR, HIGH), ANDROID.1/1b/2. L'utente ha ripreso in mano il retest B6 e confermato: **funziona**. Aggiornati i 3 file .md di conseguenza (nessun codice modificato in questa sessione). Vedi la voce "Session 86" in `PROJECT_DECISIONS.md` per il dettaglio completo.
+**Session 87**: piano scritto (`/superpowers:brainstorming`+`/grilling`+`/superpowers:writing-plans`) ed eseguito task-per-task. Scoperta chiave: le animazioni usavano già `useNativeDriver: true` ovunque — il jank derivava dal costo di compositing GPU complessivo (specialmente `CameraView` live in `QRScannerScreen`), non dalla complessità delle animazioni. Implementato `deviceTier.js` (`isLowEndDevice()`, soglia RAM ≤3GB) per disattivare solo le animazioni decorative su device low-end. La verifica numerica su device si è però bloccata: `am start` falliva con "Activity class does not exist" su entrambi gli AVD, apparentemente un problema di toolchain `adb`/emulator.
+
+**Session 88**: su richiesta esplicita dell'utente di indagare il blocco invece di accantonarlo, trovata la causa reale — **entrambi gli AVD avevano un PIN di blocco schermo residuo dalla Session 83** (serviva a testare lo scenario "PIN senza biometria" del Rischio 1). Dopo un boot fresco il device restava cifrato (BFU) finché non sbloccato, e Android rifiuta di avviare app di terze parti in quello stato con un errore che non menziona il vero problema. Diagnosticato per esclusione: schermo nero anche su un'app di sistema → `dumpsys power` → `mWakefulness=Asleep` → svegliato → screenshot ha rivelato la lock screen col PIN. Fix: wipe-data solo su `Android_Go_LowSpec` (non su `Pixel_6_API_34`, il cui PIN è intenzionale e serve a flow Maestro documentati).
+
+Ricostruita la build, navigato realmente nell'app con Maestro (più affidabile dei tap "ciechi" via coordinate, che una volta hanno fatto finire un login per errore sulla home screen Android). Risultati `dumpsys gfxinfo`:
+- `FaceIDScreen`: 99,77%→99,33% jank, **mediana dimezzata 61ms→32ms** (miglioramento reale)
+- `QRScannerScreen`: 100%→97,50% jank, mediana invariata 200ms (marginale — `CameraView` resta il collo di bottiglia)
+
+`/test-all` + `/code-review:code-review` (3 agenti paralleli) finali: tutto verde, nessun problema trovato. Dettaglio completo in `PROJECT_DECISIONS.md`, voce "Session 87-88".
 
 ## Backlog invariato per la prossima sessione (in ordine di urgenza)
 
@@ -20,15 +28,30 @@ Identificati come bloccanti reali: SES sandbox-exit (`DENIED`), Task B6 (Offline
 2. **Gate finale piano onboarding** — verifica E2E con SES reale, bloccato dal punto 1.
 3. **STAGING** (`STG.1`-`STG.6`) — dichiarato obbligatorio pre-cliente-reale da Session 45, mai avviato.
 4. **S.26** — consenso GPS esplicito (GDPR Art. 7, HIGH) — il geofencing è già attivabile in produzione senza questo meccanismo.
-5. **ANDROID.1/1b** (scan QR reale + Doze via Virtual Scene, bloccato da limite CLI) e **ANDROID.2** (jank animazioni su hardware low-end) — non bloccanti per demo interna, da chiudere prima di clienti con dipendenti Android.
+5. **ANDROID.1/1b** (scan QR reale + Doze via Virtual Scene, bloccato da un limite di automazione GUI-only) — non bloccante per demo interna, da chiudere prima di clienti con dipendenti Android.
+
+## Note operative (Session 87-88)
+
+- **AVD locali**: `Android_Go_LowSpec` ora senza PIN (wipe-data eseguito) — pronto per riuso immediato. `Pixel_6_API_34` ha ancora il suo PIN (`1234` impostato via `adb shell locksettings set-pin`, poi rimosso da `Android_Go_LowSpec` con `locksettings clear`) — **non wippare** senza prima verificare se i flow Maestro `android-faceid-no-biometric.yaml`/`android-camera-permission-denial.yaml` sono ancora rilevanti.
+- **Se un AVD torna a dare "Activity class does not exist" dopo un riavvio**: prima ipotesi da verificare è il lock screen (BFU), non la toolchain — `adb shell input keyevent KEYCODE_WAKEUP` + screenshot per controllare.
+- Maestro è in `~/.maestro/bin` (va aggiunto al PATH esplicitamente in ogni comando Bash, non risulta sourced di default in questa shell).
+- Commit Session 87-88: `cb9fb93` (spec), `24c225c` (piano), `79495d7`/`7357fc6`/`eb55c70` (Task 1-3), `68a98d2` (Task 4/chiusura codice).
 
 ---
 
-## Handoff precedente (Session 85 — invariato, riportato sotto per contesto)
+## Handoff precedenti (invariati, riportati sotto per contesto)
 
-## Goal
+### Session 86
 
-Eseguire il piano di implementazione onboarding scritto in Session 84 (`docs/superpowers/plans/2026-07-28-onboarding-self-service.md`), mentre si attende la risposta AWS sul sandbox-exit — l'utente ha confermato che i test mockano SES quindi tutto il piano è implementabile ed eseguibile end-to-end senza email reali, tranne la verifica finale.
+**Goal:** su richiesta esplicita dell'utente, rileggere in dettaglio TASKS.md/PROJECT_DECISIONS.md/HANDOFF.md e riportare prossimi step + cosa è stato lasciato indietro, considerando lo stato attuale dell'MVP.
+
+**Esito:** identificati come bloccanti reali: SES sandbox-exit (`DENIED`), Task B6 (Offline Mode — fermo da 4 sessioni, l'unico item non dichiarato esplicitamente come rinviato), ambiente di staging (mai avviato), S.26 (consenso GPS GDPR, HIGH), ANDROID.1/1b/2. L'utente ha ripreso in mano il retest B6 e confermato: **funziona**. Checklist `docs/offline-mode-test-checklist.md` (Sezioni 1-8) dichiarata chiusa — Offline Mode ora interamente completa (Fase A backend + Fase B mobile + Task B6 verifica reale). Nessuna modifica di codice in quella sessione, solo aggiornamento documentazione.
+
+---
+
+### Session 85
+
+**Goal:** Eseguire il piano di implementazione onboarding scritto in Session 84 (`docs/superpowers/plans/2026-07-28-onboarding-self-service.md`), mentre si attende la risposta AWS sul sandbox-exit — l'utente ha confermato che i test mockano SES quindi tutto il piano è implementabile ed eseguibile end-to-end senza email reali, tranne la verifica finale.
 
 ---
 
