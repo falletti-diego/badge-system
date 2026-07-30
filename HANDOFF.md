@@ -1,12 +1,52 @@
-# Badge System — Session 88 Handoff
+# Badge System — Session 89 Handoff
 
 **Date:** 2026-07-30
-**Session:** 87-88 — ANDROID.2 completato: jank ridotto su Android low-end, blocco d'ambiente diagnosticato e risolto, verifica numerica reale + code review
-**Status:** ✅ **ANDROID.2 chiuso su ogni asse.** Backlog Android residuo: solo `ANDROID.1`/`ANDROID.1b`. SES ancora `DENIED`, invariato.
+**Session:** 89 — SES fuori sandbox (Task 7 chiuso) + Gate finale onboarding self-service completato end-to-end in produzione + 2 bug di produzione reali scoperti e fixati
+**Status:** ✅ **Piano onboarding self-service chiuso su ogni asse** (8/8 task + gate finale reale). SES fuori sandbox, quota 50.000/giorno. Backlog: STAGING, S.26, ANDROID.1/1b, e un nuovo bug UX (redirect post-login) scoperto oggi.
 
 ---
 
-## Goal (Session 87-88)
+## Goal (Session 89)
+
+AWS ha approvato il sandbox-exit SES (dopo `DENIED` fermo da Session 84). L'utente ha scelto di eseguire in sequenza: Task 7 del piano SES (config produzione), poi il Gate finale del piano onboarding self-service — l'unica verifica rimasta di quel piano, bloccata dal sandbox SES fino a oggi.
+
+## Esito (Session 89)
+
+**Task 7 SES**: `MAX_ACTIVE_DEMOS=20` impostato in SSM produzione (mai fatto prima), container riavviato, test E2E email reale riuscito (verso indirizzo mai verificato — prova diretta dell'uscita dal sandbox) più un secondo test tramite il flusso pubblico `/demo/start`→`/demo/contact`. Tenant demo di test ripulito dal DB.
+
+**Gate finale onboarding — due bug di produzione reali scoperti durante il tentativo**, non solo verificato il flusso:
+1. **55 commit mai pushati** (Session 83-88) — nessun deploy attivo su produzione da giorni. Scoperto investigando perché `invite_tokens` non esisteva ancora in produzione. Fix: `git push origin main` (su conferma esplicita dell'utente).
+2. **`exceljs` in `devDependencies` invece che `dependencies`** — causava un crash-loop del container appena il codice onboarding (che lo richiede a runtime via `parseWorkbook.js`) veniva eseguito in produzione, dato che l'immagine Docker installa solo dipendenze non-dev. Mai catturato localmente. Fix: spostato in `dependencies`, `package-lock.json` rigenerato, verificato.
+
+Un pushato il fix, anche 4 errori ESLint pre-esistenti (mai catturati perché `npm test` non esegue `lint`) hanno bloccato la CI — fixati con `eslint --fix`, ripushato.
+
+**Gate finale eseguito passo-passo dall'utente stesso** (non in automazione, per verifica diretta e reale): creazione client "Test Gate Finale Onboarding" → email di invito ricevuta → accept-invito (`Diego_Test`/`Diego1975`) → login (bloccato temporaneamente dal rate-limiter `/auth/login`, 5 tentativi/60s per i tentativi ripetuti — non un bug) → `/admin/onboarding` → upload Excel di test (3 sedi, 18 dipendenti, 54 saldi, anteprima corretta senza errori) → conferma import → welcome email dipendente ricevuta.
+
+**Bug UX scoperto** (documentato, non fixato in questa sessione): un admin con onboarding incompleto che si logga finisce su una dashboard/planning vuoti senza modo di tornare al wizard — `LoginPage.jsx:44` naviga sempre a `/dashboard` incondizionatamente. Aggiunto a `TASKS.md` come backlog item.
+
+**Cleanup finale**: client di test (`3a6d875f-...`) eliminato dal DB di produzione su conferma esplicita dell'utente — cascade ha rimosso 19 employees, 3 sites, invite_tokens, leave_saldi. Verificato con query prima/dopo (0 righe residue).
+
+## Backlog per la prossima sessione (in ordine di urgenza)
+
+1. **Bug UX: redirect post-login onboarding incompleto** (nuovo, Session 89) — vedi `TASKS.md`, riga dedicata. Fix a basso rischio, non ancora implementato.
+2. **STAGING** (`STG.1`-`STG.6`) — dichiarato obbligatorio pre-cliente-reale da Session 45, mai avviato.
+3. **S.26** — consenso GPS esplicito (GDPR Art. 7, HIGH) — il geofencing è già attivabile in produzione senza questo meccanismo.
+4. **ANDROID.1/1b** (scan QR reale + Doze via Virtual Scene, bloccato da un limite di automazione GUI-only) — non bloccante per demo interna.
+
+## Note operative (Session 89)
+
+- **`npm test` non esegue `lint`** in questo repo — un push può passare i test locali e comunque fallire in CI (`lint-and-test` job di `ecr-push.yml`). Controllare `npm run lint` prima di push importanti.
+- **Qualunque modulo richiesto a runtime da codice sotto `backend/src/`** (anche se storicamente era solo uno script CLI) deve stare in `dependencies`, mai in `devDependencies` — l'immagine Docker di produzione installa solo le prime.
+- **Prima di ogni sessione che tocca deploy**: verificare `git log origin/main..HEAD --oneline | wc -l` — se >0, niente di quello che si fa localmente sta arrivando in produzione.
+- Script diagnostici ad-hoc su produzione: sempre `require('/app/src/config-loader.js')` prima di `pg`/`db/pool.js` (altrimenti `ECONNREFUSED`, le env DB vivono solo in `/etc/badge/.env`). Scrivere il file, `scp` su EC2, `docker cp` nel container, eseguire con `docker exec -w /app <container> node <script>.js`, poi ripulire da container+host+locale.
+
+---
+
+## Handoff precedenti (invariati, riportati sotto per contesto)
+
+### Session 87-88 — ANDROID.2
+
+**Goal:** Affrontare `ANDROID.2` (jank animazioni Android low-end, rinviato da Session 83) — scelto dall'utente come prossimo item del backlog affrontabile senza spesa né attesa esterna.
 
 Affrontare `ANDROID.2` (jank animazioni Android low-end, rinviato da Session 83) — scelto dall'utente come prossimo item del backlog affrontabile senza spesa né attesa esterna (a differenza di SES/staging).
 
