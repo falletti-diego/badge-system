@@ -111,6 +111,12 @@ router.post('/invite/:token/accept', async (req, res, next) => {
           name: employee.name,
           role: employee.role,
           employee_id: employee.id,
+          // Always false here: invite tokens are only ever issued for a
+          // brand-new client at creation time (see admin/clients.js), so
+          // this admin's client is guaranteed to have zero sites. Tells
+          // LoginPage.jsx to redirect to /admin/onboarding on any later
+          // re-login before the wizard is run (bug found Session 89).
+          has_sites: false,
         },
       },
     });

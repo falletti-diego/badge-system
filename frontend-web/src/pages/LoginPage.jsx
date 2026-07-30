@@ -39,9 +39,17 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await authService.login(email, password);
+      const response = await authService.login(email, password);
       logger.info('LoginPage', 'login successful', { email });
-      navigate('/dashboard');
+      // An admin who accepted an onboarding invite but hasn't run the Excel
+      // wizard yet has has_sites: false — /dashboard would be permanently
+      // empty with no way back to the wizard (bug found Session 89).
+      const { user } = response.data;
+      if (user.role === 'admin' && user.has_sites === false) {
+        navigate('/admin/onboarding');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       const errorMsg = err.response?.data?.message || err.message || 'Login failed. Please try again.';
       logger.error('LoginPage', 'login failed', err);

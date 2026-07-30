@@ -177,6 +177,59 @@ describe('POST /api/auth/login — DB-backed accounts', () => {
 });
 
 // =====================================================
+// POST /api/auth/login — has_sites flag (admin onboarding redirect)
+//
+// An admin who accepted an onboarding invite but hasn't run the Excel
+// wizard yet has zero sites. LoginPage.jsx needs to know this to redirect
+// to /admin/onboarding instead of a permanently-empty /dashboard (bug
+// found Session 89 during the onboarding Gate finale).
+// =====================================================
+
+describe('POST /api/auth/login — has_sites flag (admin onboarding redirect)', () => {
+  test('returns has_sites: false for an admin whose client has no sites yet', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ exists: false }] });
+
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'pippo@badge.local', password: 'pippo123' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.user.has_sites).toBe(false);
+  });
+
+  test('returns has_sites: true for an admin whose client already has sites', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ exists: true }] });
+
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'pippo@badge.local', password: 'pippo123' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.user.has_sites).toBe(true);
+  });
+
+  test('fails open to has_sites: true if the sites check query errors', async () => {
+    pool.query.mockRejectedValueOnce(new Error('connection lost'));
+
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'pippo@badge.local', password: 'pippo123' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.user.has_sites).toBe(true);
+  });
+
+  test('omits has_sites for non-admin roles (manager/employee always belong to an existing site)', async () => {
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'pino@badge.local', password: 'pino01' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.user.has_sites).toBeUndefined();
+  });
+});
+
+// =====================================================
 // POST /api/auth/logout
 // =====================================================
 

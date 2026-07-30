@@ -209,6 +209,29 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
     if (user.client_name) userResponse.client_name = user.client_name;
     if (user.site_name) userResponse.site_name = user.site_name;
 
+    // Only admins can land on an onboarding-incomplete client (manager/employee
+    // rows are always created after the wizard, so they always belong to an
+    // existing site). Tells LoginPage.jsx whether to redirect to /admin/onboarding
+    // instead of a permanently-empty /dashboard (bug found Session 89).
+    // Fail-open to true on a query error: never block an existing admin's
+    // normal login over a transient DB hiccup on this check.
+    if (user.role === 'admin') {
+      try {
+        const sitesCheck = await pool.query(
+          'SELECT EXISTS(SELECT 1 FROM sites WHERE client_id = $1) AS exists',
+          [user.client_id]
+        );
+        userResponse.has_sites = sitesCheck.rows[0].exists;
+      } catch (sitesErr) {
+        logger.warn({
+          action: 'has_sites_check_failed',
+          client_id: user.client_id,
+          error: sitesErr.message,
+        });
+        userResponse.has_sites = true;
+      }
+    }
+
     res.json({
       data: {
         token,

@@ -102,6 +102,11 @@ describe('POST /api/v1/onboarding/invite/:token/accept', () => {
     expect(res.body.data.refresh_token).toBeTruthy();
     expect(res.body.data.user.email).toBe(clientEmail);
     expect(res.body.data.user.role).toBe('admin');
+    // A freshly-accepted invite always belongs to a brand-new client with no
+    // sites yet (invites are only issued at client creation, see
+    // admin/clients.js) — tells LoginPage.jsx to redirect to
+    // /admin/onboarding on any later re-login before the wizard is run.
+    expect(res.body.data.user.has_sites).toBe(false);
 
     const employee = await pool.query('SELECT * FROM employees WHERE client_id = $1', [clientId]);
     expect(employee.rows).toHaveLength(1);
