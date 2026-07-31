@@ -877,6 +877,8 @@ git commit -m "feat(staging): script smoke test E2E golden path"
 
 **Risorse Git:** branch `develop` (esistente ma a 752 commit di distanza da `main` — resettato ora)
 
+**Decimo bug trovato in esecuzione (Session 89), nono fallimento consecutivo:** dopo il reset iniziale di `develop` in questo task, TUTTI i commit successivi con i fix dei bug precedenti (Task 4/5/6/7/9) sono stati pushati solo su `main`, mai su `develop` — ma il workflow `deploy-staging.yml` gira sempre con `--ref develop` (`workflow_dispatch`) o si attiva su push a `develop` (trigger automatico). Risultato: ogni retry successivo al primo ha eseguito silenziosamente la VECCHIA versione dello script/config, non i fix appena committati, producendo un fallimento diverso ogni volta per un motivo apparentemente nuovo ma in realtà già risolto su `main`. **Regola pratica per il resto dell'esecuzione di questo task**: dopo OGNI commit di fix su `main`, ripetere `git push origin main:develop` prima di rilanciare il workflow — non solo una volta all'inizio del Task 10. Se un file modificato non rientra nei path `backend/**`/`deploy-staging.yml` del trigger automatico, il push a `develop` da solo non basta: serve anche `gh workflow run deploy-staging.yml --ref develop` esplicito.
+
 - [ ] **Step 1: Reset del branch `develop` per allinearlo a `main`**
 
 ```bash
