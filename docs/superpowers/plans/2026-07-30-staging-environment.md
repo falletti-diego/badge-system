@@ -460,7 +460,14 @@ rm -rf /tmp/awscliv2.zip /tmp/aws' \
 
 **Nota (trovato in esecuzione, Session 89):** l'AMI `ami-0354b051078d198b4` è Ubuntu 24.04 "noble", non 22.04 come assunto — su questa release il pacchetto apt `awscli` non esiste più (rimosso dai repository Ubuntu), e siccome `apt-get install` con più pacchetti fallisce atomicamente se anche uno solo non è disponibile, l'intero comando (incluso Docker) falliva silenziosamente in background senza bloccare il boot dell'istanza. Il comando corretto sopra installa AWS CLI v2 tramite l'installer ufficiale (zip+installer), indipendente dai pacchetti apt della distribuzione — verificare sempre con `cloud-init status --long` dopo il boot, non assumere che l'installazione sia andata a buon fine solo perché l'istanza è `running`.
 
-**Secondo bug trovato in esecuzione (Session 89):** l'AMI di default ha un volume radice di soli ~6.8GB, insufficiente per un host Docker che tira giù l'immagine backend (~1-2GB) più eventuali immagini temporanee di debug (es. `postgres:14` usato per applicare schema/estensioni all'RDS ai Task 4) — il disco si è riempito al 95% dopo pochi tentativi di deploy, causando `no space left on device` durante il pull dell'immagine. Il comando `--block-device-mappings` sopra alza il volume radice a 16GB. Se si nota di nuovo spazio esaurito su un'istanza già esistente: `docker system prune -af` (rimuove immagini/container non in uso) libera spazio immediatamente, senza bisogno di ricreare l'istanza.
+**Secondo bug trovato in esecuzione (Session 89):** l'AMI di default ha un volume radice di soli ~6.8GB, insufficiente per un host Docker che tira giù l'immagine backend (~1-2GB) più eventuali immagini temporanee di debug (es. `postgres:14` usato per applicare schema/estensioni all'RDS ai Task 4) — il disco si è riempito al 95% dopo pochi tentativi di deploy, causando `no space left on device` durante il pull dell'immagine. Il comando `--block-device-mappings` sopra alza il volume radice a 16GB **se usato al lancio di una NUOVA istanza**. Se si nota di nuovo spazio esaurito su un'istanza già esistente (creata prima di aggiungere questa riga al piano, come è successo in questa sessione): `docker system prune -af` libera spazio immediatamente ma è un palliativo temporaneo (torna a riempirsi ad ogni deploy); la soluzione definitiva senza ricreare l'istanza è ridimensionare il volume EBS live:
+```bash
+VOLUME_ID=$(aws ec2 describe-instances --region eu-west-1 --instance-ids $STAGING_INSTANCE_ID --query 'Reservations[0].Instances[0].BlockDeviceMappings[0].Ebs.VolumeId' --output text)
+aws ec2 modify-volume --region eu-west-1 --volume-id $VOLUME_ID --size 16
+aws ec2 wait volume-in-use --region eu-west-1 --volume-ids $VOLUME_ID
+ssh -i ~/.ssh/badge-system-ec2-v2.pem ubuntu@$STAGING_EC2_IP "sudo growpart /dev/nvme0n1 1 && sudo resize2fs /dev/nvme0n1p1 && df -h /"
+```
+Nessun riavvio dell'istanza richiesto, il ridimensionamento EBS + growpart + resize2fs sono tutti a caldo.
 
 Salva l'output come `$STAGING_INSTANCE_ID`.
 
