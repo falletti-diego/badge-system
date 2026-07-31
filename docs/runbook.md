@@ -426,7 +426,7 @@ Ambiente di verifica pre-produzione, obbligatorio prima dell'onboarding del prim
 4. Smoke test E2E automatico (`scripts/smoke-test-staging.sh <base_url> <maria_password> <pino_password>`) — golden path ferie: Maria (employee) richiede ferie → Pino (manager) approva → Maria verifica la richiesta in "I Miei Turni"
 5. **Nessun gate bloccante**: l'esito dello smoke test è puramente informativo, non blocca `main` né richiede approvazione — decisione presa in fase di design per non introdurre attrito nel flusso attuale (push diretto su `main`, nessun flusso a PR)
 
-Il deploy del frontend di staging su Netlify è **manuale** (`netlify deploy --prod --dir dist --site dbb56d60-3e8e-429a-9d40-74229dbc907c`, come da procedura standard — vedi memoria di progetto `feedback_deployment_procedure.md`). Il collegamento Git per l'auto-deploy su push `develop` **non è ancora stato fatto** — è l'unico step residuo manuale del piano, da completare dall'utente nel pannello Netlify quando comodo.
+Il frontend di staging su Netlify ha ora il **collegamento Git attivo** (completato dall'utente nel pannello Netlify, 2026-07-31): push su `develop` → build automatico (`npm run build`, publish `dist`, base directory `frontend-web`) → deploy live su `https://badge-system-staging.netlify.app`, in parallelo al deploy backend. Nessuno step manuale residuo — il piano di staging (STG.1-STG.6) è ora chiuso su ogni asse, incluso il frontend.
 
 ### Diagnosi problemi
 
