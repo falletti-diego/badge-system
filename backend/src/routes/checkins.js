@@ -273,7 +273,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
         e.email as employee_email,
         s.name as site_name
       FROM checkins c
-      LEFT JOIN employees e ON c.employee_id = e.id
+      LEFT JOIN employees e ON c.employee_id = e.id AND e.active = true
       LEFT JOIN sites s ON c.site_id = s.id
       ${whereClause}
       ORDER BY c.timestamp DESC
