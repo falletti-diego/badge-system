@@ -18,6 +18,7 @@ Questo documento è la guida di riferimento per operazioni di manutenzione, inci
 6. [Onboarding nuovo cliente](#6-onboarding-nuovo-cliente)
 7. [Credenziali e dove trovarle](#7-credenziali-e-dove-trovarle)
 8. [Escalation e SLA informale](#8-escalation-e-sla-informale)
+9. [Ambiente di Staging](#9-ambiente-di-staging)
 
 ---
 
@@ -399,4 +400,64 @@ aws ssm get-parameter \
 
 ---
 
-*Ultima modifica: 2026-06-10*
+## 9. Ambiente di Staging
+
+Ambiente di verifica pre-produzione, obbligatorio prima dell'onboarding del primo cliente reale (vedi `TASKS.md`, sezione STAGING). Infrastruttura separata da produzione: istanza EC2, RDS e sito Netlify dedicati; nessuna risorsa condivisa con produzione a parte il repository ECR (immagini con tag diverso).
+
+### Riferimenti rapidi
+
+| Risorsa | URL / Comando |
+|---------|---------------|
+| **API staging** | https://staging-api.dataxiom.it |
+| **Frontend staging** | https://badge-system-staging.netlify.app |
+| **Health check** | https://staging-api.dataxiom.it/health |
+| **EC2 staging** | `badge-system-api-staging` — IP `34.245.91.43` |
+| **RDS staging** | `badge-system-db-staging.cvs80y0my080.eu-west-1.rds.amazonaws.com` (`db.t3.micro`, non pubblico) |
+| **IAM role EC2 staging** | `badge-system-ec2-staging-role` — scoped a `/badge/staging/*` soltanto (nessun accesso a `/badge/production/*`) |
+| **Netlify site ID** | `dbb56d60-3e8e-429a-9d40-74229dbc907c` |
+| **Workflow CI/CD** | `.github/workflows/deploy-staging.yml` |
+| **Smoke test** | `scripts/smoke-test-staging.sh` |
+
+### Flusso di deploy
+
+1. Push (o merge) su `develop` con modifiche sotto `backend/**` → si attiva `deploy-staging.yml` (oppure trigger manuale: `gh workflow run deploy-staging.yml --ref develop`)
+2. Build immagine Docker + push su ECR con tag `:staging-latest` (stesso repository di produzione, tag diverso)
+3. Deploy via SSH sull'EC2 `badge-system-api-staging` (`docker pull` + restart container)
+4. Smoke test E2E automatico (`scripts/smoke-test-staging.sh <base_url> <maria_password> <pino_password>`) — golden path ferie: Maria (employee) richiede ferie → Pino (manager) approva → Maria verifica la richiesta in "I Miei Turni"
+5. **Nessun gate bloccante**: l'esito dello smoke test è puramente informativo, non blocca `main` né richiede approvazione — decisione presa in fase di design per non introdurre attrito nel flusso attuale (push diretto su `main`, nessun flusso a PR)
+
+Il deploy del frontend di staging su Netlify è **manuale** (`netlify deploy --prod --dir dist --site dbb56d60-3e8e-429a-9d40-74229dbc907c`, come da procedura standard — vedi memoria di progetto `feedback_deployment_procedure.md`). Il collegamento Git per l'auto-deploy su push `develop` **non è ancora stato fatto** — è l'unico step residuo manuale del piano, da completare dall'utente nel pannello Netlify quando comodo.
+
+### Diagnosi problemi
+
+```bash
+# Container e log
+ssh -i ~/.ssh/badge-system-ec2-v2.pem ubuntu@34.245.91.43 "docker logs badge-system-api-staging --tail 50"
+
+# Health check
+curl -s https://staging-api.dataxiom.it/health | python3 -m json.tool
+
+# Parametri SSM di staging (31 parametri, include DATABASE_URL esplicito)
+aws ssm get-parameters-by-path \
+  --path /badge/staging \
+  --recursive \
+  --with-decryption \
+  --region eu-west-1 \
+  --query 'Parameters[*].Name' \
+  --output table
+
+# Smoke test manuale (richiede le password demo staging, vedi SSM sopra)
+./scripts/smoke-test-staging.sh https://staging-api.dataxiom.it "$STAGING_DEMO_MARIA_PASSWORD" "$STAGING_DEMO_PINO_PASSWORD"
+```
+
+### Costo mensile
+
+~€16-24/mese (EC2 `t3.micro` + RDS `db.t3.micro` Single-AZ, verificato Session 89 via AWS Pricing API eu-west-1 — dettaglio completo in `TASKS.md`, sezione STAGING).
+
+### ⚠️ Lezione più importante: tenere `develop` sincronizzato con `main`
+
+> **Dopo OGNI commit di fix su `main`, ripetere subito `git push origin main:develop`.** Il workflow di staging gira sempre contro `develop` (trigger automatico su push, o `--ref develop` in manuale). Durante l'esecuzione del piano di staging, i fix ai bug trovati in corsa venivano pushati solo su `main`: ogni retry successivo eseguiva silenziosamente la VECCHIA versione del codice/config su `develop`, producendo un fallimento apparentemente nuovo — ma in realtà già risolto — a ogni tentativo. Se un file modificato non rientra nei path `backend/**` del trigger automatico, il push a `develop` da solo non riavvia il deploy: serve anche `gh workflow run deploy-staging.yml --ref develop` esplicito.
+
+---
+
+*Ultima modifica: 2026-07-31*
