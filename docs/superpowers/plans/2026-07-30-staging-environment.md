@@ -267,6 +267,26 @@ aws rds describe-db-instances --region eu-west-1 --db-instance-identifier badge-
 ```
 Atteso: `Status: available`, `Class: db.t3.micro`, `Public: False`. Salva l'`Endpoint` come `$STAGING_DB_HOST` — servirà al Task 5.
 
+- [ ] **Step 5: Abilitare l'estensione `uuid-ossp` — le migration del backend usano `uuid_generate_v4()`, la produzione l'aveva abilitata manualmente in passato (mai documentato), un RDS nuovo non ce l'ha di default. Scoperto in esecuzione (Session 89) quando la prima migration falliva con `function uuid_generate_v4() does not exist`. Il DB non è pubblicamente accessibile, quindi va fatto passando dalla EC2 di staging (Task 6, deve essere già lanciata) con un container postgres temporaneo:**
+
+```bash
+cat > /tmp/enable_extension.sql <<'EOF'
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+SELECT extname FROM pg_extension;
+EOF
+
+scp -i ~/.ssh/badge-system-ec2-v2.pem /tmp/enable_extension.sql ubuntu@$STAGING_EC2_IP:/tmp/enable_extension.sql
+
+ssh -i ~/.ssh/badge-system-ec2-v2.pem ubuntu@$STAGING_EC2_IP \
+  "docker run --rm -v /tmp/enable_extension.sql:/tmp/enable_extension.sql postgres:14 psql 'postgresql://postgres:${STAGING_DB_PASSWORD}@${STAGING_DB_HOST}:5432/badge_system' -f /tmp/enable_extension.sql"
+
+ssh -i ~/.ssh/badge-system-ec2-v2.pem ubuntu@$STAGING_EC2_IP "rm -f /tmp/enable_extension.sql"
+rm -f /tmp/enable_extension.sql
+```
+Atteso: `CREATE EXTENSION`, poi una tabella con `plpgsql` e `uuid-ossp` tra le righe.
+
+**Nota d'ordine:** questo step richiede che la EC2 di staging (Task 6) sia già avviata, dato che l'RDS non è raggiungibile da fuori la VPC — se si segue l'ordine dei task così come scritto, il Task 6 arriva dopo; eseguire comunque questo step 5 solo dopo aver completato il Task 6, tornando indietro se necessario.
+
 ---
 
 ## Task 5: Popolare `/badge/staging/*` in SSM Parameter Store
