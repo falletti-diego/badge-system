@@ -149,7 +149,7 @@ router.get('/admin/employee-consents', async (req, res, next) => {
           WHERE employee_id = e.id AND client_id = e.client_id AND consent_type = 'gps'
           ORDER BY accepted_at DESC LIMIT 1) as consent_accepted_at
        FROM employees e
-       WHERE e.client_id = $1 AND e.role = 'employee'
+       WHERE e.client_id = $1 AND e.role = 'employee' AND e.active = true
        ORDER BY e.gps_consent_given DESC, e.name ASC`,
       [client_id]
     );
