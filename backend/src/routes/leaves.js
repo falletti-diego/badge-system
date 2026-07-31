@@ -137,7 +137,7 @@ router.get('/pending', requireAuth, async (req, res, next) => {
         r.approved_at, r.rejection_reason, r.created_at, r.updated_at,
         e.name as employee_name, e.email as employee_email
       FROM leave_requests r
-      JOIN employees e ON r.user_id = e.id
+      JOIN employees e ON r.user_id = e.id AND e.active = true
       WHERE r.status = 'PENDING' AND r.client_id = $1::uuid
     `;
 
@@ -348,7 +348,7 @@ router.get('/approved', requireAuth, async (req, res, next) => {
         r.num_days, r.status, r.approved_by, r.approved_at, r.created_at,
         e.name as employee_name, e.email as employee_email
       FROM leave_requests r
-      JOIN employees e ON r.user_id = e.id
+      JOIN employees e ON r.user_id = e.id AND e.active = true
       WHERE r.status = 'APPROVED' AND r.client_id = $1::uuid
     `;
 
@@ -406,7 +406,7 @@ router.get('/all', requireAuth, async (req, res, next) => {
         r.approved_at, r.rejection_reason, r.created_at, r.updated_at,
         e.name as employee_name, e.email as employee_email, e.id as employee_id
       FROM leave_requests r
-      JOIN employees e ON r.user_id = e.id
+      JOIN employees e ON r.user_id = e.id AND e.active = true
       WHERE r.client_id = $1::uuid
     `;
 
@@ -476,7 +476,7 @@ router.get('/admin/saldi', requireAuth, async (req, res, next) => {
       `SELECT ls.user_id, ls.leave_type, ls.year, ls.total_days, ls.used_days,
               ls.remaining_days, e.name AS employee_name
        FROM leave_saldi ls
-       LEFT JOIN employees e ON e.id = ls.user_id
+       JOIN employees e ON e.id = ls.user_id AND e.active = true
        WHERE ls.client_id = $1::uuid
        ORDER BY ls.user_id, ls.leave_type, ls.year DESC`,
       [clientId]
