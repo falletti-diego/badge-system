@@ -441,6 +441,7 @@ aws ec2 run-instances \
   --subnet-id subnet-04dd717b636888015 \
   --security-group-ids $STAGING_API_SG $STAGING_EC2_RDS_SG \
   --iam-instance-profile Name=badge-system-ec2-staging-role \
+  --block-device-mappings '[{"DeviceName":"/dev/sda1","Ebs":{"VolumeSize":16,"VolumeType":"gp3"}}]' \
   --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=badge-system-api-staging},{Key=Environment,Value=staging}]' \
   --user-data '#!/bin/bash
 apt-get update -y
@@ -456,6 +457,8 @@ rm -rf /tmp/awscliv2.zip /tmp/aws' \
 ```
 
 **Nota (trovato in esecuzione, Session 89):** l'AMI `ami-0354b051078d198b4` è Ubuntu 24.04 "noble", non 22.04 come assunto — su questa release il pacchetto apt `awscli` non esiste più (rimosso dai repository Ubuntu), e siccome `apt-get install` con più pacchetti fallisce atomicamente se anche uno solo non è disponibile, l'intero comando (incluso Docker) falliva silenziosamente in background senza bloccare il boot dell'istanza. Il comando corretto sopra installa AWS CLI v2 tramite l'installer ufficiale (zip+installer), indipendente dai pacchetti apt della distribuzione — verificare sempre con `cloud-init status --long` dopo il boot, non assumere che l'installazione sia andata a buon fine solo perché l'istanza è `running`.
+
+**Secondo bug trovato in esecuzione (Session 89):** l'AMI di default ha un volume radice di soli ~6.8GB, insufficiente per un host Docker che tira giù l'immagine backend (~1-2GB) più eventuali immagini temporanee di debug (es. `postgres:14` usato per applicare schema/estensioni all'RDS ai Task 4) — il disco si è riempito al 95% dopo pochi tentativi di deploy, causando `no space left on device` durante il pull dell'immagine. Il comando `--block-device-mappings` sopra alza il volume radice a 16GB. Se si nota di nuovo spazio esaurito su un'istanza già esistente: `docker system prune -af` (rimuove immagini/container non in uso) libera spazio immediatamente, senza bisogno di ricreare l'istanza.
 
 Salva l'output come `$STAGING_INSTANCE_ID`.
 
