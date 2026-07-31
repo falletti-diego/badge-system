@@ -366,7 +366,11 @@ aws ssm put-parameter --region eu-west-1 --type SecureString --overwrite \
   --name /badge/staging/CORS_CREDENTIALS --value "true"
 aws ssm put-parameter --region eu-west-1 --type SecureString --overwrite \
   --name /badge/staging/MAX_ACTIVE_DEMOS --value "5"
+aws ssm put-parameter --region eu-west-1 --type SecureString --overwrite \
+  --name /badge/staging/DATABASE_URL --value "postgres://postgres:${STAGING_DB_PASSWORD}@${STAGING_DB_HOST}:5432/badge_system"
 ```
+
+**Bug trovato in esecuzione (Session 89), sesto fallimento consecutivo:** `npm run validate-env` (chiamato da `npm start` in `package.json`, prima ancora dell'avvio del server) richiede anche `DATABASE_URL` come stringa di connessione completa, non deducibile dai singoli `DB_HOST`/`DB_USER`/ecc. — la produzione ce l'ha come parametro separato, mai menzionato esplicitamente nell'elenco originale dei 30 parametri di questo piano perché non ovvio dal solo nome. Il comando sopra lo aggiunge esplicitamente (ora sono 31 parametri, non più 30 — vedi verifica aggiornata più sotto).
 
 Nota: `SES_FROM_EMAIL`, `AWS_S3_BUCKET`, `SENTRY_DSN`, `DEMO_CONTACT_NOTIFY_EMAIL`, `JWT_SECRET`, `JWT_REFRESH_SECRET` — replicare questi 6 parametri con lo stesso comando pattern, usando gli stessi valori della produzione (servizi condivisi, non credenziali).
 
@@ -402,7 +406,7 @@ rm -f /tmp/staging_jwt_private.pem /tmp/staging_jwt_public.pem
 ```bash
 aws ssm get-parameters-by-path --region eu-west-1 --path /badge/staging --recursive --query 'length(Parameters)' --output text
 ```
-Atteso: `30` (stesso numero della produzione).
+Atteso: `31` (30 parametri "logici" più `DATABASE_URL`, che nell'elenco originale di produzione è un parametro a sé — usare `aws ssm get-parameters-by-path --path /badge/production --recursive --output json | python3 -c "import json,sys; print(len(json.load(sys.stdin)['Parameters']))"` per confermare che la produzione ne ha altrettanti).
 
 ```bash
 # Conferma che la JWT_PRIVATE_KEY di staging sia DIVERSA da quella di produzione
