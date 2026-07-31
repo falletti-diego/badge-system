@@ -339,7 +339,7 @@ aws ssm put-parameter --region eu-west-1 --type SecureString --overwrite \
 aws ssm put-parameter --region eu-west-1 --type SecureString --overwrite \
   --name /badge/staging/DB_POOL_MAX --value "10"
 aws ssm put-parameter --region eu-west-1 --type SecureString --overwrite \
-  --name /badge/staging/DB_SSL_REJECT_UNAUTHORIZED --value "true"
+  --name /badge/staging/DB_SSL_REJECT_UNAUTHORIZED --value "false"
 aws ssm put-parameter --region eu-west-1 --type SecureString --overwrite \
   --name /badge/staging/JWT_PRIVATE_KEY --value "file:///tmp/staging_jwt_private.pem"
 aws ssm put-parameter --region eu-west-1 --type SecureString --overwrite \
@@ -371,6 +371,8 @@ aws ssm put-parameter --region eu-west-1 --type SecureString --overwrite \
 ```
 
 **Bug trovato in esecuzione (Session 89), sesto fallimento consecutivo:** `npm run validate-env` (chiamato da `npm start` in `package.json`, prima ancora dell'avvio del server) richiede anche `DATABASE_URL` come stringa di connessione completa, non deducibile dai singoli `DB_HOST`/`DB_USER`/ecc. — la produzione ce l'ha come parametro separato, mai menzionato esplicitamente nell'elenco originale dei 30 parametri di questo piano perché non ovvio dal solo nome. Il comando sopra lo aggiunge esplicitamente (ora sono 31 parametri, non più 30 — vedi verifica aggiornata più sotto).
+
+**Settimo bug trovato in esecuzione (Session 89):** `DB_SSL_REJECT_UNAUTHORIZED` va impostato a `"false"`, non `"true"` come nella prima stesura di questo piano. Il commento nel codice (`backend/src/db/pool.js:32-37`) dice che il default in produzione è `true` con `false` come "escape hatch temporaneo" — ma la produzione REALE (verificato con `aws ssm get-parameter --name /badge/production/DB_SSL_REJECT_UNAUTHORIZED`) gira con `false` da sempre, perché il certificato CA di Amazon RDS non è nel trust store Node di default e la validazione fallisce con `self-signed certificate in certificate chain`. Per la parità di comportamento runtime con la produzione voluta dalla decisione #3 del design, staging deve replicare il valore REALE della produzione, non quello suggerito dal commento nel codice — verificare sempre il valore effettivo in SSM prima di fidarsi dei commenti nel codice quando si copia un comportamento "come in produzione".
 
 Nota: `SES_FROM_EMAIL`, `AWS_S3_BUCKET`, `SENTRY_DSN`, `DEMO_CONTACT_NOTIFY_EMAIL`, `JWT_SECRET`, `JWT_REFRESH_SECRET` — replicare questi 6 parametri con lo stesso comando pattern, usando gli stessi valori della produzione (servizi condivisi, non credenziali).
 
