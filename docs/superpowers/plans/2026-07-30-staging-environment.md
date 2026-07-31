@@ -764,6 +764,8 @@ git commit -m "feat(ci): workflow deploy-staging per l'ambiente di staging"
 **Files:**
 - Create: `scripts/smoke-test-staging.sh`
 
+**Nono bug trovato in esecuzione (Session 89), ottavo fallimento consecutivo del deploy:** la primissima stesura di questo task (sotto, ora corretta) inventava gli endpoint invece di verificarli contro `backend/src/routes/leaves.js` — il mount reale è `/api/v1/leave` (singolare, non `/leaves/requests`), il body/enum sono diversi (`leave_type` vuole `FERIE_1`/`FERIE_2`/`FERIE_3`/`MALATTIA`, non `"ferie"`), l'approvazione è `PUT /:id/approve` con `{status: "APPROVED"}` (maiuscolo, non `"approved"`), e non esiste alcun endpoint `/shifts?start_date=...` per la verifica planning — quello corretto è `GET /api/v1/leave/approved?start_date=...&end_date=...`. Verificato ENDPOINT PER ENDPOINT con chiamate `curl` dirette contro lo staging reale prima di correggere lo script, non per ispezione del codice soltanto. Lo script sotto è già la versione corretta.
+
 - [ ] **Step 1: Scrivere lo script**
 
 ```bash
@@ -776,6 +778,14 @@ git commit -m "feat(ci): workflow deploy-staging per l'ambiente di staging"
 # Task 5. Gli utenti demo esistenti sono solo pippo (admin), pino (manager),
 # maria (employee) — vedi backend/src/__fixtures__/demo-users.js, non esiste
 # un utente "diego@badge.local".
+#
+# Endpoint reali (verificati contro l'API live in Session 89 — il mount path
+# e' /api/v1/leave, singolare, non /leaves/requests come in una prima stesura
+# errata di questo script):
+#   POST /api/v1/leave/request        body: {leave_type, start_date, end_date}
+#   PUT  /api/v1/leave/:id/approve    body: {status: APPROVED|REJECTED}
+#   GET  /api/v1/leave/my-requests    -> {data: [...]}
+#   GET  /api/v1/leave/approved       -> {data: [...]} (per verifica planning)
 set -euo pipefail
 
 BASE_URL="${1:?Uso: $0 <base_url> <maria_password> <pino_password>}"
@@ -789,6 +799,9 @@ fail() { echo "  ❌ $1"; FAIL=1; }
 
 json_get() { python3 -c "import json,sys; print(json.load(sys.stdin)$1)"; }
 
+START_DATE="2026-09-01"
+END_DATE="2026-09-02"
+
 step "Login Maria (employee)"
 MARIA_RES=$(curl -sf -X POST "$BASE_URL/api/v1/auth/login" \
   -H "Content-Type: application/json" \
@@ -797,12 +810,12 @@ MARIA_TOKEN=$(echo "$MARIA_RES" | json_get "['data']['token']")
 [ -n "$MARIA_TOKEN" ] && pass "Login Maria OK" || { fail "Login Maria fallito"; exit 1; }
 
 step "Maria richiede ferie"
-LEAVE_RES=$(curl -sf -X POST "$BASE_URL/api/v1/leaves/requests" \
+LEAVE_RES=$(curl -sf -X POST "$BASE_URL/api/v1/leave/request" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $MARIA_TOKEN" \
-  -d '{"leave_type":"ferie","start_date":"2026-09-01","end_date":"2026-09-02","reason":"smoke test"}')
+  -d "{\"leave_type\":\"FERIE_1\",\"start_date\":\"$START_DATE\",\"end_date\":\"$END_DATE\"}")
 LEAVE_ID=$(echo "$LEAVE_RES" | json_get "['data']['id']")
-[ -n "$LEAVE_ID" ] && pass "Richiesta ferie creata (id=$LEAVE_ID)" || { fail "Richiesta ferie fallita"; exit 1; }
+[ -n "$LEAVE_ID" ] && pass "Richiesta ferie creata (id=$LEAVE_ID)" || { fail "Richiesta ferie fallita: $LEAVE_RES"; exit 1; }
 
 step "Login Pino (manager)"
 PINO_RES=$(curl -sf -X POST "$BASE_URL/api/v1/auth/login" \
@@ -812,23 +825,24 @@ PINO_TOKEN=$(echo "$PINO_RES" | json_get "['data']['token']")
 [ -n "$PINO_TOKEN" ] && pass "Login Pino OK" || { fail "Login Pino fallito"; exit 1; }
 
 step "Pino approva la richiesta di Maria"
-APPROVE_RES=$(curl -sf -X PUT "$BASE_URL/api/v1/leaves/requests/$LEAVE_ID" \
+APPROVE_RES=$(curl -sf -X PUT "$BASE_URL/api/v1/leave/$LEAVE_ID/approve" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $PINO_TOKEN" \
-  -d '{"status":"approved"}')
+  -d '{"status":"APPROVED"}')
 APPROVED_STATUS=$(echo "$APPROVE_RES" | json_get "['data']['status']")
-[ "$APPROVED_STATUS" = "approved" ] && pass "Ferie approvate" || fail "Approvazione fallita (status=$APPROVED_STATUS)"
+[ "$APPROVED_STATUS" = "APPROVED" ] && pass "Ferie approvate" || fail "Approvazione fallita (status=$APPROVED_STATUS)"
 
 step "Maria verifica le ferie in 'I Miei Turni'"
-MYSHIFTS_RES=$(curl -sf "$BASE_URL/api/v1/leaves/requests?user_id=self" \
+MYREQUESTS_RES=$(curl -sf "$BASE_URL/api/v1/leave/my-requests" \
   -H "Authorization: Bearer $MARIA_TOKEN")
-FOUND=$(echo "$MYSHIFTS_RES" | python3 -c "import json,sys; d=json.load(sys.stdin); print(any(r['id']=='$LEAVE_ID' and r['status']=='approved' for r in d['data']))")
+FOUND=$(echo "$MYREQUESTS_RES" | python3 -c "import json,sys; d=json.load(sys.stdin); print(any(r['id']=='$LEAVE_ID' and r['status']=='APPROVED' for r in d['data']))")
 [ "$FOUND" = "True" ] && pass "Ferie visibili e approvate per Maria" || fail "Ferie non trovate/non approvate lato Maria"
 
 step "Pino verifica il planning mostra le ferie di Maria"
-PLANNING_RES=$(curl -sf "$BASE_URL/api/v1/shifts?start_date=2026-09-01&end_date=2026-09-02" \
+PLANNING_RES=$(curl -sf "$BASE_URL/api/v1/leave/approved?start_date=$START_DATE&end_date=$END_DATE" \
   -H "Authorization: Bearer $PINO_TOKEN")
-echo "$PLANNING_RES" | grep -q "ferie" && pass "Planning mostra le ferie" || fail "Planning non mostra le ferie"
+PLANNING_FOUND=$(echo "$PLANNING_RES" | python3 -c "import json,sys; d=json.load(sys.stdin); print(any(r['id']=='$LEAVE_ID' for r in d['data']))")
+[ "$PLANNING_FOUND" = "True" ] && pass "Planning mostra le ferie di Maria" || fail "Planning non mostra le ferie"
 
 echo ""
 if [ "$FAIL" -eq 0 ]; then
