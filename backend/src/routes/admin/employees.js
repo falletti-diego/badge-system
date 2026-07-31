@@ -249,11 +249,13 @@ router.get('/', async (req, res, next) => {
         const uuidCheck = z.string().uuid().safeParse(client_id);
         if (!uuidCheck.success) return next(new ValidationError('Invalid client_id format'));
         params.push(client_id);
-        where = 'WHERE e.client_id = $1';
+        where = 'WHERE e.client_id = $1 AND e.active = true';
+      } else {
+        where = 'WHERE e.active = true';
       }
     } else {
       params.push(req.user.client_id);
-      where = 'WHERE e.client_id = $1';
+      where = 'WHERE e.client_id = $1 AND e.active = true';
     }
     const result = await pool.query(
       `SELECT e.id, e.client_id, e.email, e.name, e.role, e.phone,
