@@ -391,12 +391,18 @@ aws ec2 run-instances \
   --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=badge-system-api-staging},{Key=Environment,Value=staging}]' \
   --user-data '#!/bin/bash
 apt-get update -y
-apt-get install -y docker.io nginx certbot python3-certbot-nginx awscli python3
+apt-get install -y docker.io nginx certbot python3-certbot-nginx python3 unzip curl
 systemctl enable docker
 systemctl start docker
-usermod -aG docker ubuntu' \
+usermod -aG docker ubuntu
+curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install
+rm -rf /tmp/awscliv2.zip /tmp/aws' \
   --query 'Instances[0].InstanceId' --output text
 ```
+
+**Nota (trovato in esecuzione, Session 89):** l'AMI `ami-0354b051078d198b4` è Ubuntu 24.04 "noble", non 22.04 come assunto — su questa release il pacchetto apt `awscli` non esiste più (rimosso dai repository Ubuntu), e siccome `apt-get install` con più pacchetti fallisce atomicamente se anche uno solo non è disponibile, l'intero comando (incluso Docker) falliva silenziosamente in background senza bloccare il boot dell'istanza. Il comando corretto sopra installa AWS CLI v2 tramite l'installer ufficiale (zip+installer), indipendente dai pacchetti apt della distribuzione — verificare sempre con `cloud-init status --long` dopo il boot, non assumere che l'installazione sia andata a buon fine solo perché l'istanza è `running`.
 
 Salva l'output come `$STAGING_INSTANCE_ID`.
 
@@ -445,25 +451,13 @@ dig +short staging-api.dataxiom.it
 ```
 Atteso: l'output coincide esattamente con `$STAGING_EC2_IP`. Se vuoto o diverso, attendere 5 minuti e ripetere prima di procedere.
 
-- [ ] **Step 2: Scrivere la config nginx sulla EC2 di staging (via SSH)**
+- [ ] **Step 2: Scrivere SOLO un blocco HTTP (no SSL) sulla EC2 di staging (via SSH) — vedi nota sotto sul perché**
 
 ```bash
 ssh -i ~/.ssh/badge-system-ec2-v2.pem ubuntu@$STAGING_EC2_IP "sudo tee /etc/nginx/sites-available/staging-api > /dev/null" <<'EOF'
 server {
     listen 80;
     server_name staging-api.dataxiom.it;
-    return 301 https://$server_name$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name staging-api.dataxiom.it;
-
-    ssl_certificate /etc/letsencrypt/live/staging-api.dataxiom.it/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/staging-api.dataxiom.it/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    ssl_prefer_server_ciphers on;
 
     location / {
         proxy_pass http://localhost:3000;
@@ -479,20 +473,25 @@ server {
     }
 }
 EOF
-```
 
-- [ ] **Step 3: Ottenere il certificato Let's Encrypt (certbot in modalità standalone, prima di abilitare il site — nginx non ha ancora un backend attivo su :3000, quindi usiamo il plugin nginx di certbot che gestisce il redirect automaticamente)**
-
-```bash
 ssh -i ~/.ssh/badge-system-ec2-v2.pem ubuntu@$STAGING_EC2_IP "
   sudo ln -sf /etc/nginx/sites-available/staging-api /etc/nginx/sites-enabled/staging-api
   sudo rm -f /etc/nginx/sites-enabled/default
   sudo nginx -t && sudo systemctl reload nginx
+"
+```
+
+**Bug trovato in esecuzione (Session 89):** scrivere subito il blocco HTTPS con `ssl_certificate /etc/letsencrypt/live/.../fullchain.pem` **prima** che certbot abbia emesso il certificato crea un problema circolare — `nginx -t` fallisce perché il file non esiste ancora, e `certbot --nginx` a sua volta richiama `nginx -t` per validare la config prima di procedere, quindi fallisce anch'esso a catena. La sequenza corretta è: (1) solo blocco HTTP, nginx si ricarica con successo, poi (2) `certbot --nginx` — il plugin ottiene il certificato E modifica lui stesso la config aggiungendo il blocco 443/SSL e il redirect, non serve scriverlo a mano.
+
+- [ ] **Step 3: Ottenere il certificato Let's Encrypt (il plugin nginx di certbot aggiunge da solo il blocco HTTPS e il redirect alla config esistente)**
+
+```bash
+ssh -i ~/.ssh/badge-system-ec2-v2.pem ubuntu@$STAGING_EC2_IP "
   sudo certbot --nginx -d staging-api.dataxiom.it --non-interactive --agree-tos -m diego.falletti@outlook.it --redirect
 "
 ```
 
-- [ ] **Step 4: Verificare il rinnovo automatico (certbot installa un systemd timer di default su Ubuntu 22.04)**
+- [ ] **Step 4: Verificare il rinnovo automatico (certbot installa un systemd timer di default su Ubuntu 24.04)**
 
 ```bash
 ssh -i ~/.ssh/badge-system-ec2-v2.pem ubuntu@$STAGING_EC2_IP "systemctl is-enabled certbot.timer"
