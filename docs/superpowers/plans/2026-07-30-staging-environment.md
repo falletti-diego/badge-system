@@ -375,7 +375,15 @@ Atteso: `OK: chiavi diverse`.
 
 ## Task 6: Istanza EC2 di staging
 
-**Risorse AWS create:** EC2 `t3.micro` `badge-system-api-staging`
+**Risorse AWS create:** EC2 `t3.micro` `badge-system-api-staging`, CloudWatch Log Group `/badge/api-staging`
+
+- [ ] **Step 0: Creare il CloudWatch Log Group PRIMA del primo deploy — `docker run --log-driver awslogs` fallisce con `ResourceNotFoundException` se il log group non esiste già (la produzione lo aveva creato manualmente in passato, mai documentato in un piano — scoperto in esecuzione, Session 89, quando il primo deploy su staging è fallito con `failed to create Cloudwatch log stream ... ResourceNotFoundException`)**
+
+```bash
+aws logs create-log-group --region eu-west-1 --log-group-name /badge/api-staging
+aws logs describe-log-groups --region eu-west-1 --log-group-name-prefix /badge/api-staging --query 'logGroups[0].logGroupName' --output text
+```
+Atteso: `/badge/api-staging`.
 
 - [ ] **Step 1: Lanciare l'istanza**
 
