@@ -129,7 +129,7 @@ router.get('/:siteId/export', requireAuth, createValidationMiddleware(ExportShif
 
     // 4. Fetch employees for context
     const employeesResult = await pool.query(
-      `SELECT id, name FROM employees WHERE client_id = $1::uuid
+      `SELECT id, name FROM employees WHERE client_id = $1::uuid AND active = true
        ORDER BY name ASC`,
       [clientId]
     );
@@ -219,6 +219,7 @@ router.get('/:siteId', requireAuth, createValidationMiddleware(GetShiftsSchema),
        FROM employees e
        WHERE e.client_id = $1::uuid
        AND $2::uuid = ANY(e.assigned_sites)
+       AND e.active = true
        ORDER BY e.name ASC`,
       [clientId, siteId]
     );
