@@ -287,6 +287,27 @@ Atteso: `CREATE EXTENSION`, poi una tabella con `plpgsql` e `uuid-ossp` tra le r
 
 **Nota d'ordine:** questo step richiede che la EC2 di staging (Task 6) sia già avviata, dato che l'RDS non è raggiungibile da fuori la VPC — se si segue l'ordine dei task così come scritto, il Task 6 arriva dopo; eseguire comunque questo step 5 solo dopo aver completato il Task 6, tornando indietro se necessario.
 
+- [ ] **Step 6: Applicare lo schema di base `backend/src/db/schema.sql` (clients, sites, employees, checkins, audit_log, shifts, leaves, leave_requests, leave_saldi, illnesses) — `run-migrations.js` (eseguito da `entrypoint.sh` ad ogni boot) gestisce SOLO le migration incrementali in `backend/migrations/001+`, mai lo schema di base: la produzione lo aveva ricevuto una tantum, manualmente, mai come parte di un processo automatizzato/documentato. Un RDS nuovo non ha nessuna di queste tabelle, e la prima migration (`001_create_shifts_table.sql`, che referenzia `clients` via FK) fallisce con `relation "clients" does not exist`. Scoperto in esecuzione (Session 89), terzo fallimento di deploy consecutivo.**
+
+```bash
+scp -i ~/.ssh/badge-system-ec2-v2.pem \
+  "backend/src/db/schema.sql" \
+  ubuntu@$STAGING_EC2_IP:/tmp/schema.sql
+
+ssh -i ~/.ssh/badge-system-ec2-v2.pem ubuntu@$STAGING_EC2_IP \
+  "docker run --rm -v /tmp/schema.sql:/tmp/schema.sql postgres:14 psql 'postgresql://postgres:${STAGING_DB_PASSWORD}@${STAGING_DB_HOST}:5432/badge_system' -f /tmp/schema.sql"
+
+ssh -i ~/.ssh/badge-system-ec2-v2.pem ubuntu@$STAGING_EC2_IP "rm -f /tmp/schema.sql"
+```
+
+- [ ] **Verifica: le tabelle di base esistono**
+
+```bash
+ssh -i ~/.ssh/badge-system-ec2-v2.pem ubuntu@$STAGING_EC2_IP \
+  "docker run --rm postgres:14 psql 'postgresql://postgres:${STAGING_DB_PASSWORD}@${STAGING_DB_HOST}:5432/badge_system' -c '\dt'"
+```
+Atteso: almeno `clients`, `sites`, `employees`, `checkins`, `audit_log`, `shifts`, `leaves`, `leave_requests`, `leave_saldi`, `illnesses` nell'elenco.
+
 ---
 
 ## Task 5: Popolare `/badge/staging/*` in SSM Parameter Store
