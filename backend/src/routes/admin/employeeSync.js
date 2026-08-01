@@ -70,7 +70,7 @@ router.get('/template', async (req, res, next) => {
     if (!clientId) return;
 
     const employees = (await pool.query(
-      'SELECT name, email, phone, role, site_id, external_employee_id, hiring_date FROM employees WHERE client_id = $1::uuid AND active = true',
+      'SELECT name, email, phone, role, site_id, assigned_sites, external_employee_id, hiring_date FROM employees WHERE client_id = $1::uuid AND active = true',
       [clientId]
     )).rows;
     const sites = (await pool.query(

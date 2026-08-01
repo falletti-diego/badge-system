@@ -68,7 +68,12 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
     if (!dbRow.active && !fileActive) continue;
 
     const changes = {};
-    if (dbRow.site_id !== siteId) changes.site_id = { from: dbRow.site_id, to: siteId };
+    // site_id è popolato solo per i manager ("sede gestita" in Admin); un employee
+    // ordinario ha invece assigned_sites[] — usa il primo come "sede corrente" per
+    // il confronto, altrimenti ogni employee reale risulterebbe erroneamente
+    // "trasferito" a ogni upload (site_id sempre null vs una sede risolta dal file).
+    const currentSiteId = dbRow.site_id || (dbRow.assigned_sites && dbRow.assigned_sites[0]) || null;
+    if (currentSiteId !== siteId) changes.site_id = { from: currentSiteId, to: siteId };
     for (const [field, differs] of Object.entries(FIELD_COMPARATORS)) {
       if (differs(dbRow, row)) {
         const toValue = field === 'role' ? ROLE_MAP[row.ruolo] : row[FILE_FIELD_BY_DB_FIELD[field]];

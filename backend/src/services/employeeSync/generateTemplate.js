@@ -13,9 +13,14 @@ async function generateTemplate({ employees, sites }) {
   wsDip.addRow(DIP_HEADERS);
   const siteNameById = new Map(sites.map((s) => [s.id, s.name]));
   for (const e of employees) {
+    // site_id è popolato solo per i manager (campo "Sede gestita" in Admin);
+    // un employee ordinario ha invece assigned_sites[] — usa il primo come
+    // "sede corrente" per il template, coerente col fatto che il wizard
+    // gestisce una sola sede per riga (sostituzione, non merge, sui trasferimenti).
+    const primarySiteId = e.site_id || (e.assigned_sites && e.assigned_sites[0]) || null;
     wsDip.addRow([
       e.name, e.email, e.phone || '', ROLE_LABEL[e.role] || 'dipendente',
-      siteNameById.get(e.site_id) || '', e.external_employee_id || '',
+      siteNameById.get(primarySiteId) || '', e.external_employee_id || '',
       'Attivo', e.hiring_date || '', '',
     ]);
   }

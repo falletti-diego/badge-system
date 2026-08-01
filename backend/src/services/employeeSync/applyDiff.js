@@ -49,6 +49,19 @@ async function applyDiff(db, diff, { clientId }) {
     const params = [];
     let i = 1;
     for (const [field, change] of Object.entries(m.changes)) {
+      if (field === 'site_id') {
+        // Un trasferimento di sede è una sostituzione (non merge, a differenza
+        // di ONB.1): assigned_sites — il campo davvero usato dal check-in per
+        // verificare l'assegnazione — va rimpiazzato insieme a site_id,
+        // altrimenti il dipendente resterebbe assegnato alla vecchia sede.
+        sets.push(`site_id = $${i}`);
+        params.push(change.to);
+        i += 1;
+        sets.push(`assigned_sites = $${i}::uuid[]`);
+        params.push(change.to ? [change.to] : []);
+        i += 1;
+        continue;
+      }
       sets.push(`${field} = $${i}`);
       params.push(change.to);
       i += 1;

@@ -5,7 +5,7 @@ const siteIdByName = new Map([['Torino', 'site-torino'], ['Milano', 'site-milano
 function dbEmp(overrides) {
   return {
     id: 'emp-1', email: 'mario@x.it', name: 'Mario Rossi', phone: null, role: 'employee',
-    site_id: 'site-torino', active: true, hiring_date: '2024-01-10', exit_date: null,
+    site_id: 'site-torino', assigned_sites: [], active: true, hiring_date: '2024-01-10', exit_date: null,
     external_employee_id: null,
     ...overrides,
   };
@@ -85,6 +85,19 @@ describe('computeDiff', () => {
     const diff = computeDiff([fileRow({ matricola: 'M2' })], db, siteIdByName);
     expect(diff.modificati).toHaveLength(1);
     expect(diff.modificati[0].changes.external_employee_id).toEqual({ from: 'M1', to: 'M2' });
+  });
+
+  it('does not flag a false site transfer for a typical employee whose site_id column is null (only assigned_sites is set)', () => {
+    const db = [dbEmp({ site_id: null, assigned_sites: ['site-torino'] })];
+    const diff = computeDiff([fileRow({ sede: 'Torino' })], db, siteIdByName);
+    expect(diff.modificati).toHaveLength(0);
+  });
+
+  it('detects a real site transfer for an employee whose current site comes from assigned_sites (site_id null)', () => {
+    const db = [dbEmp({ site_id: null, assigned_sites: ['site-torino'] })];
+    const diff = computeDiff([fileRow({ sede: 'Milano' })], db, siteIdByName);
+    expect(diff.modificati).toHaveLength(1);
+    expect(diff.modificati[0].changes.site_id).toEqual({ from: 'site-torino', to: 'site-milano' });
   });
 
   it('combines a site transfer and a phone change in the same "modificato" entry', () => {

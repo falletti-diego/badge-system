@@ -47,4 +47,24 @@ describe('applyDiff', () => {
     const call = db.query.mock.calls.find((c) => c[0].includes('UPDATE employees') && c[0].includes('phone'));
     expect(call[1]).toContain('222');
   });
+
+  it('replaces assigned_sites (not just the site_id column) when a "modificato" entry includes a site transfer', async () => {
+    const db = mockClient([['UPDATE employees', { rowCount: 1 }]]);
+    const diff = { nuovi: [], riattivati: [], rimossi: [], modificati: [{ id: 'emp-1', email: 'x@x.it', changes: { site_id: { from: 'site-torino', to: 'site-milano' } } }] };
+    await applyDiff(db, diff, { clientId: 'client-1' });
+    const call = db.query.mock.calls.find((c) => c[0].includes('UPDATE employees') && c[0].includes('assigned_sites'));
+    expect(call).toBeDefined();
+    expect(call[0]).toMatch(/site_id\s*=/);
+    expect(call[1]).toContain('site-milano');
+  });
+
+  it('clears assigned_sites when a "modificato" entry transfers the employee to no site (site_id → null)', async () => {
+    const db = mockClient([['UPDATE employees', { rowCount: 1 }]]);
+    const diff = { nuovi: [], riattivati: [], rimossi: [], modificati: [{ id: 'emp-1', email: 'x@x.it', changes: { site_id: { from: 'site-torino', to: null } } }] };
+    await applyDiff(db, diff, { clientId: 'client-1' });
+    const call = db.query.mock.calls.find((c) => c[0].includes('UPDATE employees') && c[0].includes('assigned_sites'));
+    expect(call).toBeDefined();
+    const arrayParam = call[1].find((p) => Array.isArray(p));
+    expect(arrayParam).toEqual([]);
+  });
 });

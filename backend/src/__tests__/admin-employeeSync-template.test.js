@@ -67,12 +67,12 @@ describe('GET /api/v1/admin/employee-sync/template', () => {
     return result.rows[0].id;
   }
 
-  async function makeEmployee(clientId, name, { active = true, siteId = null } = {}) {
+  async function makeEmployee(clientId, name, { active = true, siteId = null, assignedSites = [] } = {}) {
     const result = await pool.query(
       `INSERT INTO employees (client_id, email, name, role, assigned_sites, active, site_id, hiring_date)
-       VALUES ($1, $2, $3, 'employee', '{}', $4, $5, '2024-01-10')
+       VALUES ($1, $2, $3, 'employee', $4::uuid[], $5, $6, '2024-01-10')
        RETURNING id`,
-      [clientId, uniqueEmail('admin-employeesync-template-employee'), name, active, siteId]
+      [clientId, uniqueEmail('admin-employeesync-template-employee'), name, assignedSites, active, siteId]
     );
     return result.rows[0].id;
   }
@@ -148,6 +148,31 @@ describe('GET /api/v1/admin/employee-sync/template', () => {
       sedeNames.push(row.getCell(1).value);
     });
     expect(sedeNames).toContain('Sede Test Attiva');
+  });
+
+  it('fills the sede column from assigned_sites when site_id is null (typical employee row)', async () => {
+    if (!dbAvailable) return;
+
+    const siteId = await makeSite(clientId, 'Sede Solo Assigned');
+    await makeEmployee(clientId, 'Dipendente Solo Assigned Sites', { active: true, siteId: null, assignedSites: [siteId] });
+
+    const token = tokenFor({ client_id: clientId, role: 'admin' });
+    const res = await request(app)
+      .get('/api/v1/admin/employee-sync/template')
+      .set('Authorization', `Bearer ${token}`)
+      .buffer(true)
+      .parse(binaryParser);
+
+    expect(res.status).toBe(200);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(res.body);
+    const wsDip = wb.getWorksheet('Dipendenti');
+    let sedeForRow = null;
+    wsDip.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      if (row.getCell(1).value === 'Dipendente Solo Assigned Sites') sedeForRow = row.getCell(5).value;
+    });
+    expect(sedeForRow).toBe('Sede Solo Assigned');
   });
 
   it('rejects superadmin requests without an explicit client_id', async () => {
