@@ -107,4 +107,21 @@ describe('computeDiff', () => {
     expect(diff.modificati[0].changes.site_id).toBeDefined();
     expect(diff.modificati[0].changes.phone).toBeDefined();
   });
+
+  it('carries field changes (site transfer, phone) alongside a reactivation, instead of silently discarding them', () => {
+    const db = [dbEmp({ active: false, site_id: 'site-torino', phone: '111', hiring_date: '2023-06-01', exit_date: '2026-05-01' })];
+    const diff = computeDiff([fileRow({ stato: 'attivo', sede: 'Milano', telefono: '222' })], db, siteIdByName);
+    expect(diff.riattivati).toHaveLength(1);
+    expect(diff.riattivati[0].hiring_date).toBe('2023-06-01');
+    expect(diff.riattivati[0].exit_date).toBeNull();
+    expect(diff.riattivati[0].changes.site_id).toEqual({ from: 'site-torino', to: 'site-milano' });
+    expect(diff.riattivati[0].changes.phone).toEqual({ from: '111', to: '222' });
+    expect(diff.modificati).toHaveLength(0); // non deve comparire ANCHE come "modificato" separato
+  });
+
+  it('reactivation with no other field changes has an empty changes object, not undefined', () => {
+    const db = [dbEmp({ active: false })];
+    const diff = computeDiff([fileRow({ stato: 'attivo' })], db, siteIdByName);
+    expect(diff.riattivati[0].changes).toEqual({});
+  });
 });

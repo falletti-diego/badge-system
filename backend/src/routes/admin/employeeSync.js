@@ -125,6 +125,13 @@ router.post('/apply', upload.single('file'), async (req, res, next) => {
       await client.query('COMMIT');
     } catch (txErr) {
       await client.query('ROLLBACK').catch(() => {});
+      // Un vincolo UNIQUE (es. matricola già assegnata a un altro dipendente
+      // non presente nel file, quindi non intercettato da validateSyntax) non
+      // deve propagarsi come 500 grezzo — stesso trattamento già usato per
+      // la creazione singola in admin/employees.js.
+      if (txErr.code === '23505') {
+        return next(new ValidationError('Una o più righe del file confliggono con dati già esistenti (email o matricola già in uso da un altro dipendente).'));
+      }
       throw txErr;
     } finally {
       client.release();

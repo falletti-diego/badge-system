@@ -67,4 +67,32 @@ describe('applyDiff', () => {
     const arrayParam = call[1].find((p) => Array.isArray(p));
     expect(arrayParam).toEqual([]);
   });
+
+  it('applies field changes (site transfer, phone) together with the reactivation, not just active/exit_date', async () => {
+    const db = mockClient([['UPDATE employees', { rowCount: 1 }]]);
+    const diff = {
+      nuovi: [], rimossi: [], modificati: [],
+      riattivati: [{
+        id: 'emp-1', email: 'x@x.it', hiring_date: '2023-01-01', exit_date: null,
+        changes: { site_id: { from: 'site-torino', to: 'site-milano' }, phone: { from: '111', to: '222' } },
+      }],
+    };
+    await applyDiff(db, diff, { clientId: 'client-1' });
+    const call = db.query.mock.calls.find((c) => c[0].includes('active = true'));
+    expect(call).toBeDefined();
+    expect(call[0]).toMatch(/site_id\s*=/);
+    expect(call[0]).toMatch(/assigned_sites\s*=/);
+    expect(call[0]).toMatch(/phone\s*=/);
+    expect(call[1]).toContain('site-milano');
+    expect(call[1]).toContain('222');
+  });
+
+  it('reactivation without extra field changes still only sets active/exit_date (no regression)', async () => {
+    const db = mockClient([['UPDATE employees', { rowCount: 1 }]]);
+    const diff = { nuovi: [], rimossi: [], modificati: [], riattivati: [{ id: 'emp-1', email: 'x@x.it', hiring_date: '2023-01-01', exit_date: null, changes: {} }] };
+    await applyDiff(db, diff, { clientId: 'client-1' });
+    const call = db.query.mock.calls.find((c) => c[0].includes('active = true'));
+    expect(call).toBeDefined();
+    expect(call[1]).toEqual(['emp-1']);
+  });
 });

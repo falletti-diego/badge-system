@@ -15,6 +15,24 @@ const FILE_FIELD_BY_DB_FIELD = {
   external_employee_id: 'matricola',
 };
 
+// Calcola i campi cambiati tra lo stato DB e la riga file, inclusa la sede
+// (con fallback a assigned_sites[0] quando site_id è null — vedi Task 13).
+// Riusata sia per "modificato" sia per arricchire una riattivazione, cosicché
+// un dipendente che rientra E cambia sede/telefono nello stesso file non perda
+// silenziosamente la seconda informazione.
+function computeFieldChanges(dbRow, row, siteId) {
+  const changes = {};
+  const currentSiteId = dbRow.site_id || (dbRow.assigned_sites && dbRow.assigned_sites[0]) || null;
+  if (currentSiteId !== siteId) changes.site_id = { from: currentSiteId, to: siteId };
+  for (const [field, differs] of Object.entries(FIELD_COMPARATORS)) {
+    if (differs(dbRow, row)) {
+      const toValue = field === 'role' ? ROLE_MAP[row.ruolo] : row[FILE_FIELD_BY_DB_FIELD[field]];
+      changes[field] = { from: dbRow[field], to: toValue };
+    }
+  }
+  return changes;
+}
+
 function computeDiff(fileRows, dbEmployees, siteIdByName) {
   const nuovi = [];
   const riattivati = [];
@@ -52,6 +70,7 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
         email: row.email,
         hiring_date: dbRow.hiring_date,
         exit_date: null,
+        changes: computeFieldChanges(dbRow, row, siteId),
       });
       continue;
     }
@@ -67,19 +86,7 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
 
     if (!dbRow.active && !fileActive) continue;
 
-    const changes = {};
-    // site_id è popolato solo per i manager ("sede gestita" in Admin); un employee
-    // ordinario ha invece assigned_sites[] — usa il primo come "sede corrente" per
-    // il confronto, altrimenti ogni employee reale risulterebbe erroneamente
-    // "trasferito" a ogni upload (site_id sempre null vs una sede risolta dal file).
-    const currentSiteId = dbRow.site_id || (dbRow.assigned_sites && dbRow.assigned_sites[0]) || null;
-    if (currentSiteId !== siteId) changes.site_id = { from: currentSiteId, to: siteId };
-    for (const [field, differs] of Object.entries(FIELD_COMPARATORS)) {
-      if (differs(dbRow, row)) {
-        const toValue = field === 'role' ? ROLE_MAP[row.ruolo] : row[FILE_FIELD_BY_DB_FIELD[field]];
-        changes[field] = { from: dbRow[field], to: toValue };
-      }
-    }
+    const changes = computeFieldChanges(dbRow, row, siteId);
     if (Object.keys(changes).length > 0) {
       modificati.push({ id: dbRow.id, email: row.email, changes });
     }

@@ -9,6 +9,7 @@ function validateSyntax(data) {
   const errors = [];
   const sedeNames = new Set((data.sedi || []).map((s) => s.nome_sede));
   const seenEmail = new Set();
+  const seenMatricola = new Set();
 
   for (const d of data.dipendenti || []) {
     const at = `Foglio Dipendenti riga ${d._row}`;
@@ -18,6 +19,13 @@ function validateSyntax(data) {
       if (!EMAIL_RE.test(d.email)) errors.push(`${at}: email "${d.email}" non valida.`);
       if (seenEmail.has(d.email)) errors.push(`${at}: email "${d.email}" duplicata nel file.`);
       seenEmail.add(d.email);
+    }
+    // La matricola è opzionale, ma se presente il DB la vincola UNIQUE per
+    // cliente (migration 008): un duplicato nel file andrebbe altrimenti in
+    // crash silenzioso su /apply invece di essere segnalato in preview.
+    if (d.matricola) {
+      if (seenMatricola.has(d.matricola)) errors.push(`${at}: Matricola "${d.matricola}" duplicata nel file.`);
+      seenMatricola.add(d.matricola);
     }
     if (!d.ruolo || !ROLE_MAP[d.ruolo]) errors.push(`${at}: ruolo deve essere "dipendente" o "responsabile" (trovato: ${d.ruolo || 'vuoto'}).`);
     if (!d.sede) errors.push(`${at}: sede obbligatoria.`);

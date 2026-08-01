@@ -75,6 +75,28 @@ describe('validateSyntax', () => {
     expect(errors.some((e) => e.includes('duplicata'))).toBe(true);
   });
 
+  it('rejects a duplicate matricola in the file', () => {
+    const errors = validateSyntax({
+      dipendenti: [
+        { _row: 2, email: 'a@x.it', nome_completo: 'A', ruolo: 'dipendente', sede: 'Torino', stato: 'attivo', matricola: 'M1' },
+        { _row: 3, email: 'b@x.it', nome_completo: 'B', ruolo: 'dipendente', sede: 'Torino', stato: 'attivo', matricola: 'M1' },
+      ],
+      sedi: [{ _row: 2, nome_sede: 'Torino' }],
+    });
+    expect(errors.some((e) => e.includes('Matricola') && e.includes('duplicata'))).toBe(true);
+  });
+
+  it('does not flag two empty matricola cells as duplicates', () => {
+    const errors = validateSyntax({
+      dipendenti: [
+        { _row: 2, email: 'a@x.it', nome_completo: 'A', ruolo: 'dipendente', sede: 'Torino', stato: 'attivo', matricola: null },
+        { _row: 3, email: 'b@x.it', nome_completo: 'B', ruolo: 'dipendente', sede: 'Torino', stato: 'attivo', matricola: null },
+      ],
+      sedi: [{ _row: 2, nome_sede: 'Torino' }],
+    });
+    expect(errors.some((e) => e.includes('Matricola'))).toBe(false);
+  });
+
   it('rejects a sede not present in the Sedi sheet', () => {
     const errors = validateSyntax({
       dipendenti: [{ _row: 2, email: 'x@x.it', nome_completo: 'X', ruolo: 'dipendente', sede: 'Roma', stato: 'attivo' }],

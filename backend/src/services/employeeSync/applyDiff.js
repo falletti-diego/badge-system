@@ -9,6 +9,33 @@ function generateTempPassword() {
   return Array.from(randomBytes(10), (b) => chars[b % chars.length]).join('');
 }
 
+// Traduce un oggetto `changes` (come prodotto da computeDiff) in clausole
+// `SET` parametrizzate, a partire da $<startIndex>. Il caso site_id è
+// speciale: va sempre accompagnato dal reset di assigned_sites (il campo
+// realmente usato dal check-in per verificare l'assegnazione), altrimenti
+// un trasferimento di sede lascerebbe il dipendente ancora assegnato alla
+// sede precedente.
+function buildFieldSetClause(changes, startIndex) {
+  const sets = [];
+  const params = [];
+  let i = startIndex;
+  for (const [field, change] of Object.entries(changes)) {
+    if (field === 'site_id') {
+      sets.push(`site_id = $${i}`);
+      params.push(change.to);
+      i += 1;
+      sets.push(`assigned_sites = $${i}::uuid[]`);
+      params.push(change.to ? [change.to] : []);
+      i += 1;
+      continue;
+    }
+    sets.push(`${field} = $${i}`);
+    params.push(change.to);
+    i += 1;
+  }
+  return { sets, params, nextIndex: i };
+}
+
 async function applyDiff(db, diff, { clientId }) {
   const credentials = [];
 
@@ -27,12 +54,15 @@ async function applyDiff(db, diff, { clientId }) {
   }
 
   for (const r of diff.riattivati) {
-    await db.query(
-      'UPDATE employees SET active = true, exit_date = NULL WHERE id = $1::uuid',
-      [r.id]
-    );
+    // Un dipendente può rientrare E aver cambiato sede/telefono/ruolo nello
+    // stesso file — applica anche quei campi qui, non solo active/exit_date,
+    // altrimenti la riattivazione li scarterebbe silenziosamente.
+    // $1 è riservato all'id (WHERE), i campi dinamici partono da $2.
+    const { sets, params } = buildFieldSetClause(r.changes || {}, 2);
+    const allSets = ['active = true', 'exit_date = NULL', ...sets];
+    await db.query(`UPDATE employees SET ${allSets.join(', ')} WHERE id = $1::uuid`, [r.id, ...params]);
     await logAudit(db, { action: 'employee_sync_reactivate', entity: 'employee', entityId: r.id,
-      oldValue: { active: false }, newValue: { active: true }, userId: 'system' });
+      oldValue: { active: false }, newValue: { active: true, ...r.changes }, userId: 'system' });
   }
 
   for (const rm of diff.rimossi) {
@@ -45,29 +75,9 @@ async function applyDiff(db, diff, { clientId }) {
   }
 
   for (const m of diff.modificati) {
-    const sets = [];
-    const params = [];
-    let i = 1;
-    for (const [field, change] of Object.entries(m.changes)) {
-      if (field === 'site_id') {
-        // Un trasferimento di sede è una sostituzione (non merge, a differenza
-        // di ONB.1): assigned_sites — il campo davvero usato dal check-in per
-        // verificare l'assegnazione — va rimpiazzato insieme a site_id,
-        // altrimenti il dipendente resterebbe assegnato alla vecchia sede.
-        sets.push(`site_id = $${i}`);
-        params.push(change.to);
-        i += 1;
-        sets.push(`assigned_sites = $${i}::uuid[]`);
-        params.push(change.to ? [change.to] : []);
-        i += 1;
-        continue;
-      }
-      sets.push(`${field} = $${i}`);
-      params.push(change.to);
-      i += 1;
-    }
+    const { sets, params, nextIndex } = buildFieldSetClause(m.changes, 1);
     params.push(m.id);
-    await db.query(`UPDATE employees SET ${sets.join(', ')} WHERE id = $${i}::uuid`, params);
+    await db.query(`UPDATE employees SET ${sets.join(', ')} WHERE id = $${nextIndex}::uuid`, params);
     await logAudit(db, { action: 'employee_sync_update', entity: 'employee', entityId: m.id,
       oldValue: null, newValue: m.changes, userId: 'system' });
   }
