@@ -67,12 +67,12 @@ describe('GET /api/v1/admin/employee-sync/template', () => {
     return result.rows[0].id;
   }
 
-  async function makeEmployee(clientId, name, { active = true, siteId = null, assignedSites = [] } = {}) {
+  async function makeEmployee(clientId, name, { active = true, siteId = null, assignedSites = [], role = 'employee' } = {}) {
     const result = await pool.query(
       `INSERT INTO employees (client_id, email, name, role, assigned_sites, active, site_id, hiring_date)
-       VALUES ($1, $2, $3, 'employee', $4::uuid[], $5, $6, '2024-01-10')
+       VALUES ($1, $2, $3, $4, $5::uuid[], $6, $7, '2024-01-10')
        RETURNING id`,
-      [clientId, uniqueEmail('admin-employeesync-template-employee'), name, assignedSites, active, siteId]
+      [clientId, uniqueEmail('admin-employeesync-template-employee'), name, role, assignedSites, active, siteId]
     );
     return result.rows[0].id;
   }
@@ -173,6 +173,31 @@ describe('GET /api/v1/admin/employee-sync/template', () => {
       if (row.getCell(1).value === 'Dipendente Solo Assigned Sites') sedeForRow = row.getCell(5).value;
     });
     expect(sedeForRow).toBe('Sede Solo Assigned');
+  });
+
+  it('excludes admin/viewer accounts, which are not site-based staff and have no site to report', async () => {
+    if (!dbAvailable) return;
+
+    await makeEmployee(clientId, 'Account Admin Cliente', { active: true, role: 'admin' });
+    await makeEmployee(clientId, 'Account Viewer Cliente', { active: true, role: 'viewer' });
+
+    const token = tokenFor({ client_id: clientId, role: 'admin' });
+    const res = await request(app)
+      .get('/api/v1/admin/employee-sync/template')
+      .set('Authorization', `Bearer ${token}`)
+      .buffer(true)
+      .parse(binaryParser);
+
+    expect(res.status).toBe(200);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(res.body);
+    const dipNames = [];
+    wb.getWorksheet('Dipendenti').eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      dipNames.push(row.getCell(1).value);
+    });
+    expect(dipNames).not.toContain('Account Admin Cliente');
+    expect(dipNames).not.toContain('Account Viewer Cliente');
   });
 
   it('rejects superadmin requests without an explicit client_id', async () => {

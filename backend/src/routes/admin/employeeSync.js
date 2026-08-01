@@ -50,8 +50,10 @@ async function runPreviewDiff(buffer, clientId) {
   const errors = validateSyntax(data);
   if (errors.length > 0) return { errors, diff: null };
 
+  // Scope del wizard: solo personale operativo legato a una sede (employee/manager).
+  // Admin e viewer non hanno assegnazione di sede e sono gestiti altrove in Admin.
   const dbEmployees = (await pool.query(
-    'SELECT * FROM employees WHERE client_id = $1::uuid',
+    'SELECT * FROM employees WHERE client_id = $1::uuid AND role IN (\'employee\', \'manager\')',
     [clientId]
   )).rows;
   const sites = (await pool.query(
@@ -70,7 +72,7 @@ router.get('/template', async (req, res, next) => {
     if (!clientId) return;
 
     const employees = (await pool.query(
-      'SELECT name, email, phone, role, site_id, assigned_sites, external_employee_id, hiring_date FROM employees WHERE client_id = $1::uuid AND active = true',
+      'SELECT name, email, phone, role, site_id, assigned_sites, external_employee_id, hiring_date FROM employees WHERE client_id = $1::uuid AND active = true AND role IN (\'employee\', \'manager\')',
       [clientId]
     )).rows;
     const sites = (await pool.query(

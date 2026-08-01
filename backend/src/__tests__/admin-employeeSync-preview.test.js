@@ -147,6 +147,28 @@ describe('POST /api/v1/admin/employee-sync/preview', () => {
     expect(res.body.data.nuovi).toEqual([]);
   });
 
+  it('does not flag an admin/viewer account as an anomalia — they are out of scope for this wizard', async () => {
+    if (!dbAvailable) return;
+
+    await makeSite(clientId, 'Torino');
+    await pool.query(
+      `INSERT INTO employees (client_id, email, name, role, assigned_sites, active)
+       VALUES ($1, $2, 'Account Admin', 'admin', '{}', true)`,
+      [clientId, uniqueEmail('admin-employeesync-preview-adminacct')]
+    );
+
+    const buffer = await buildFile([]); // file vuoto, nessun dipendente operativo dichiarato
+
+    const token = tokenFor({ client_id: clientId, role: 'admin' });
+    const res = await request(app)
+      .post('/api/v1/admin/employee-sync/preview')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', buffer, 'test.xlsx');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.anomalie).toEqual([]);
+  });
+
   it('rejects superadmin requests without an explicit client_id', async () => {
     if (!dbAvailable) return;
 
