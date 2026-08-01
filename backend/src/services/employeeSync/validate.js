@@ -1,0 +1,33 @@
+'use strict';
+
+const { ROLE_MAP } = require('../onboarding/parseWorkbook');
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VALID_STATI = ['attivo', 'inattivo'];
+
+function validateSyntax(data) {
+  const errors = [];
+  const sedeNames = new Set((data.sedi || []).map((s) => s.nome_sede));
+  const seenEmail = new Set();
+
+  for (const d of data.dipendenti || []) {
+    const at = `Foglio Dipendenti riga ${d._row}`;
+    if (!d.nome_completo) errors.push(`${at}: nome_completo obbligatorio.`);
+    if (!d.email) errors.push(`${at}: email obbligatoria.`);
+    else {
+      if (!EMAIL_RE.test(d.email)) errors.push(`${at}: email "${d.email}" non valida.`);
+      if (seenEmail.has(d.email)) errors.push(`${at}: email "${d.email}" duplicata nel file.`);
+      seenEmail.add(d.email);
+    }
+    if (!d.ruolo || !ROLE_MAP[d.ruolo]) errors.push(`${at}: ruolo deve essere "dipendente" o "responsabile" (trovato: ${d.ruolo || 'vuoto'}).`);
+    if (!d.sede) errors.push(`${at}: sede obbligatoria.`);
+    else if (!sedeNames.has(d.sede)) errors.push(`${at}: sede "${d.sede}" non corrisponde a nessun nome_sede del foglio Sedi.`);
+    if (!d.stato || !VALID_STATI.includes(d.stato)) {
+      errors.push(`${at}: stato deve essere "Attivo" o "Inattivo" (trovato: ${d.stato || 'vuoto'}).`);
+    }
+  }
+
+  return errors;
+}
+
+module.exports = { validateSyntax };
