@@ -28,7 +28,7 @@ async function applyDiff(db, diff, { clientId }) {
 
   for (const r of diff.riattivati) {
     await db.query(
-      `UPDATE employees SET active = true, exit_date = NULL WHERE id = $1::uuid`,
+      'UPDATE employees SET active = true, exit_date = NULL WHERE id = $1::uuid',
       [r.id]
     );
     await logAudit(db, { action: 'employee_sync_reactivate', entity: 'employee', entityId: r.id,
@@ -37,7 +37,7 @@ async function applyDiff(db, diff, { clientId }) {
 
   for (const rm of diff.rimossi) {
     await db.query(
-      `UPDATE employees SET active = false, exit_date = $1 WHERE id = $2::uuid`,
+      'UPDATE employees SET active = false, exit_date = $1 WHERE id = $2::uuid',
       [rm.exit_date, rm.id]
     );
     await logAudit(db, { action: 'employee_sync_deactivate', entity: 'employee', entityId: rm.id,

@@ -142,7 +142,7 @@ describe('employee-sync /apply and /export-history', () => {
       // Cast to text in SQL to avoid JS Date/timezone conversion pitfalls
       // when comparing a DATE column value.
       const dbRes = await pool.query(
-        "SELECT active, hiring_date::text AS hiring_date FROM employees WHERE email = $1",
+        'SELECT active, hiring_date::text AS hiring_date FROM employees WHERE email = $1',
         [email]
       );
       expect(dbRes.rows).toHaveLength(1);

@@ -55,7 +55,7 @@ describe('migration 035 — employee lifecycle columns', () => {
   it('backfills hiring_date for existing employees', async () => {
     if (!dbAvailable) return;
     const res = await pool.query(
-      `SELECT COUNT(*) FROM employees WHERE active = true AND hiring_date IS NULL`
+      'SELECT COUNT(*) FROM employees WHERE active = true AND hiring_date IS NULL'
     );
     expect(Number(res.rows[0].count)).toBe(0);
   });
