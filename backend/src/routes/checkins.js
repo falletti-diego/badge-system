@@ -60,12 +60,15 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
     const result = await withTransaction(async (client) => {
       // 1. Verify employee exists and belongs to authenticated client
       const employeeResult = await client.query(
-        'SELECT id, client_id FROM employees WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1',
+        'SELECT id, client_id, active FROM employees WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1',
         [employee_id, clientId]
       );
 
       if (employeeResult.rows.length === 0) {
         throw new NotFoundError('Employee not found or not assigned to your organization', 'EMPLOYEE_NOT_FOUND');
+      }
+      if (employeeResult.rows[0].active === false) {
+        throw new ForbiddenError('This employee is deactivated and cannot check in', 'CHECKIN_EMPLOYEE_INACTIVE');
       }
 
       // 2. Verify site exists and fetch geofence settings (JOIN clients for feature flag)
