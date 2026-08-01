@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   Box, Typography, TextField, Button, Alert, CircularProgress,
   Table, TableBody, TableCell, TableHead, TableRow, TableContainer,
@@ -8,12 +8,13 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LockResetIcon from '@mui/icons-material/LockReset';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
 import apiClient from '../../../services/apiClient';
 import { useFetch } from '../components/useFetch';
 import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
 import { ResetPasswordDialog } from '../components/ResetPasswordDialog';
 import { CopyButton } from '../components/CopyButton';
+import { EmployeeSyncWizardPage } from '../pages/EmployeeSyncWizardPage';
+import { useEmployeeSync } from '../hooks/useEmployeeSync';
 
 export function EmployeesTab() {
   const { data: clients } = useFetch('/api/v1/admin/clients');
@@ -28,10 +29,8 @@ export function EmployeesTab() {
   });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
-  const [csvMsg, setCsvMsg] = useState(null);
-  const [csvClientId, setCsvClientId] = useState('');
-  const [csvLoading, setCsvLoading] = useState(false);
-  const fileRef = useRef(null);
+  const [syncClientId, setSyncClientId] = useState('');
+  const { exportHistory } = useEmployeeSync();
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [resetTarget, setResetTarget] = useState(null);
@@ -80,32 +79,6 @@ export function EmployeesTab() {
       setMsg({ type: 'error', text: err.response?.data?.message || err.message });
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleCsvUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !csvClientId) return;
-    setCsvLoading(true);
-    setCsvMsg(null);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('client_id', csvClientId);
-      const res = await apiClient.post('/api/v1/admin/employees/import', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const { created, skipped, errors } = res.data.data;
-      setCsvMsg({
-        type: errors.length > 0 ? 'warning' : 'success',
-        text: `Importati: ${created} | Duplicati saltati: ${skipped} | Errori: ${errors.length}`,
-        errors,
-      });
-    } catch (err) {
-      setCsvMsg({ type: 'error', text: err.response?.data?.message || err.message });
-    } finally {
-      setCsvLoading(false);
-      if (fileRef.current) fileRef.current.value = '';
     }
   };
 
@@ -194,50 +167,22 @@ export function EmployeesTab() {
         </CardContent>
       </Card>
 
-      {/* CSV bulk import */}
+      {/* Employee sync wizard entry point */}
       <Card variant="outlined">
         <CardContent>
-          <Typography variant="h6" gutterBottom>Importazione CSV</Typography>
-          <Typography variant="body2" color="text.secondary" mb={2}>
-            Formato CSV: <code>name,email,role,site_name,employee_id</code>
-            <br />
-            Obbligatorie: <code>name</code>, <code>email</code>. Max 100 righe.
-            <br />
-            <code>site_name</code>: nome della sede (es. <em>Torino Store</em>) — deve esistere già nel sistema.
-            <br />
-            <code>employee_id</code>: codice interno del cliente (es. <em>EMP001</em>) — opzionale.
-            <br />
-            <code>role</code>: <code>employee</code> (default) oppure <code>manager</code>.
-          </Typography>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
-            <FormControl size="small" required sx={{ minWidth: 200 }}>
-              <InputLabel>Cliente</InputLabel>
-              <Select label="Cliente" value={csvClientId} onChange={(e) => setCsvClientId(e.target.value)}>
-                {clients.map((c) => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <Button
-              variant="outlined" component="label" startIcon={<UploadFileIcon />}
-              disabled={csvLoading || !csvClientId}
-            >
-              {csvLoading ? <CircularProgress size={18} /> : 'Carica CSV'}
-              <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={handleCsvUpload} />
+          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6">Aggiorna Dipendenti</Typography>
+            <Button variant="outlined" onClick={() => exportHistory(syncClientId)} disabled={!syncClientId}>
+              Esporta storico completo
             </Button>
           </Stack>
-          {csvMsg && (
-            <Box mt={2}>
-              <Alert severity={csvMsg.type}>{csvMsg.text}</Alert>
-              {csvMsg.errors?.length > 0 && (
-                <Box mt={1} sx={{ maxHeight: 200, overflow: 'auto' }}>
-                  {csvMsg.errors.map((err, i) => (
-                    <Typography key={i} variant="caption" display="block" color="error">
-                      Riga {err.line}: {err.email} — {err.error}
-                    </Typography>
-                  ))}
-                </Box>
-              )}
-            </Box>
-          )}
+          <FormControl size="small" required sx={{ minWidth: 200, mb: 2 }}>
+            <InputLabel>Cliente</InputLabel>
+            <Select label="Cliente" value={syncClientId} onChange={(e) => setSyncClientId(e.target.value)}>
+              {clients.map((c) => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+            </Select>
+          </FormControl>
+          {syncClientId && <EmployeeSyncWizardPage clientId={syncClientId} />}
         </CardContent>
       </Card>
 
