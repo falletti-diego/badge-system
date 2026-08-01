@@ -1,8 +1,6 @@
 'use strict';
 
 const express = require('express');
-const multer = require('multer');
-const { parse } = require('csv-parse');
 const { z } = require('zod');
 const { randomBytes } = require('crypto');
 const { pool } = require('../../db/pool');
@@ -14,35 +12,11 @@ const { resolveTenantScope } = require('../../utils/tenantScope');
 const { AdminEmployeeSchema, createValidationMiddleware } = require('../../middleware/validation');
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
-
-const CsvRowSchema = z.object({
-  client_id: z.string().uuid(),
-  email: z.string().email().max(100),
-  name: z.string().min(2).max(100),
-  phone: z.string().max(20).optional(),
-  role: z.enum(['employee', 'manager']).default('employee'),
-  site_name: z.string().min(1).max(100).optional().nullable(),
-  external_employee_id: z.string().max(50).optional().nullable(),
-});
 
 function generateTempPassword() {
   const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const bytes = randomBytes(10);
   return Array.from(bytes, (b) => chars[b % chars.length]).join('');
-}
-
-function parseCsv(text) {
-  return new Promise((resolve, reject) => {
-    parse(text, {
-      columns: true,
-      skip_empty_lines: true,
-      trim: true,
-    }, (err, records) => {
-      if (err) reject(err);
-      else resolve(records);
-    });
-  });
 }
 
 router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, res, next) => {
@@ -101,140 +75,6 @@ router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, re
     });
   } catch (err) {
     if (err.code === '23505') return next(new ValidationError('Email already exists for this client'));
-    next(err);
-  }
-});
-
-// Must be registered before /:id to avoid Express matching 'import' as an id param
-router.post('/import', upload.single('file'), async (req, res, next) => {
-  try {
-    if (!req.file) return next(new ValidationError('CSV file is required'));
-
-    if (req.user.role === 'superadmin' && req.body.client_id) {
-      const uuidCheck = z.string().uuid().safeParse(req.body.client_id);
-      if (!uuidCheck.success) return next(new ValidationError('Invalid client_id'));
-    }
-    const clientId = resolveTenantScope(req.user, req.body.client_id);
-
-    const clientCheck = await pool.query('SELECT id FROM clients WHERE id = $1', [clientId]);
-    if (clientCheck.rowCount === 0) return next(new ValidationError('Client not found'));
-
-    const csvText = req.file.buffer.toString('utf-8');
-    const rows = await parseCsv(csvText);
-
-    if (rows.length === 0) return next(new ValidationError('CSV file is empty'));
-    if (rows.length > 500) return next(new ValidationError('Max 500 employees per import'));
-
-    const sitesResult = await pool.query(
-      'SELECT id, name FROM sites WHERE client_id = $1',
-      [clientId]
-    );
-    const siteByName = new Map(sitesResult.rows.map((r) => [r.name.trim().toLowerCase(), r.id]));
-
-    logger.info({
-      action: 'admin_import_sites_debug',
-      client_id: clientId,
-      sites_found: sitesResult.rows.map(r => ({ id: r.id, name: r.name })),
-      sites_map: Array.from(siteByName.entries()),
-    });
-
-    const results = { created: 0, skipped: 0, errors: [], passwords: [] };
-
-    const prepared = [];
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const lineNum = i + 2;
-      try {
-        const parsed = CsvRowSchema.parse({
-          client_id: clientId,
-          email: row.email?.trim(),
-          name: row.name?.trim(),
-          phone: row.phone?.trim() || undefined,
-          role: row.role?.trim() || 'employee',
-          site_name: row.site_name?.trim() || undefined,
-          external_employee_id: row.employee_id?.trim() || undefined,
-        });
-
-        let siteId = null;
-        if (parsed.site_name) {
-          siteId = siteByName.get(parsed.site_name.toLowerCase());
-          if (!siteId) {
-            logger.warn({
-              action: 'admin_import_site_not_found',
-              line: lineNum,
-              email: row.email,
-              site_name: parsed.site_name,
-              available_sites: Array.from(siteByName.keys()),
-            });
-            results.errors.push({ line: lineNum, email: row.email, error: `Sede "${parsed.site_name}" non trovata per questo cliente` });
-            results.skipped++;
-            continue;
-          }
-        }
-
-        prepared.push({ parsed, siteId, lineNum });
-      } catch (rowErr) {
-        results.errors.push({ line: lineNum, email: row.email, error: rowErr.message });
-        results.skipped++;
-      }
-    }
-
-    const HASH_BATCH = 10;
-    for (let i = 0; i < prepared.length; i += HASH_BATCH) {
-      const batch = prepared.slice(i, i + HASH_BATCH);
-      await Promise.all(batch.map(async (item) => {
-        item.tempPassword = generateTempPassword();
-        item.passwordHash = await hashPassword(item.tempPassword);
-      }));
-    }
-
-    const pgClient = await pool.connect();
-    try {
-      await pgClient.query('BEGIN');
-
-      for (const item of prepared) {
-        const { parsed, siteId, passwordHash } = item;
-        const assignedSitesArray = siteId ? [siteId] : [];
-        const insertResult = await pgClient.query(
-          `INSERT INTO employees (client_id, email, name, phone, role, assigned_sites, password_hash, external_employee_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           ON CONFLICT (client_id, email) DO NOTHING
-           RETURNING id, client_id, email, name, role`,
-          [parsed.client_id, parsed.email, parsed.name, parsed.phone || null,
-            parsed.role, assignedSitesArray, passwordHash, parsed.external_employee_id || null]
-        );
-
-        if (insertResult.rowCount > 0) {
-          results.created++;
-          const emp = insertResult.rows[0];
-          results.passwords.push({ email: emp.email, temp_password: item.tempPassword });
-          await logAudit(pgClient, {
-            action: 'admin_import_employee',
-            entity: 'employee',
-            entityId: emp.id,
-            clientId: emp.client_id,
-            oldValue: null,
-            newValue: { name: emp.name, email: emp.email, role: emp.role },
-            userId: req.user.user_id,
-          }).catch((auditErr) => {
-            logger.warn({ action: 'audit_log_failed', employee_id: emp.id, error: auditErr.message });
-          });
-        } else {
-          results.skipped++;
-        }
-      }
-
-      await pgClient.query('COMMIT');
-    } catch (txErr) {
-      await pgClient.query('ROLLBACK');
-      throw txErr;
-    } finally {
-      pgClient.release();
-    }
-
-    logger.info({ action: 'admin_import_employees', client_id: clientId, ...results });
-    res.status(200).json({ success: true, data: results });
-  } catch (err) {
     next(err);
   }
 });

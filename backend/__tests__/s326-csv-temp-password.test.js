@@ -78,23 +78,4 @@ describe('S.32.6 — CSV Temp Password Feature', () => {
       expect(authModule).toContain('e.must_change_password');
     });
   });
-
-  describe('Admin CSV import changes', () => {
-    it('should include passwords array in import results', () => {
-      const employeesPath = path.join(__dirname, '..', 'src', 'routes', 'admin', 'employees.js');
-      const employeesModule = fs.readFileSync(employeesPath, 'utf8');
-
-      expect(employeesModule).toContain('passwords: []');
-      expect(employeesModule).toContain('results.passwords.push');
-      expect(employeesModule).toContain('temp_password');
-    });
-
-    it('should collect temp passwords for each created employee', () => {
-      const employeesPath = path.join(__dirname, '..', 'src', 'routes', 'admin', 'employees.js');
-      const employeesModule = fs.readFileSync(employeesPath, 'utf8');
-
-      expect(employeesModule).toContain('email: emp.email');
-      expect(employeesModule).toContain('temp_password: item.tempPassword');
-    });
-  });
 });
