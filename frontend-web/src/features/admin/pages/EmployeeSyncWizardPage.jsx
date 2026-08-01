@@ -85,8 +85,20 @@ export function EmployeeSyncWizardPage({ clientId }) {
             )}
             {diff.anomalie?.length > 0 && (
               <Alert severity="warning">
-                {diff.anomalie.map((a) => a.email).join(', ')} — {diff.anomalie.length} dipendente/i risultano assenti
-                dal file caricato rispetto al template scaricato. Nessuna azione automatica, verifica se intenzionale.
+                <Typography variant="subtitle2" gutterBottom>
+                  Anomalie <Chip size="small" label={diff.anomalie.length} />
+                </Typography>
+                <Typography variant="body2" gutterBottom>
+                  Assenti dal file caricato rispetto al template scaricato. Nessuna azione automatica, verifica se
+                  intenzionale.
+                </Typography>
+                <List dense sx={{ maxHeight: 240, overflowY: 'auto' }}>
+                  {diff.anomalie.map((a) => (
+                    <ListItem key={a.email}>
+                      <ListItemText primary={a.email} secondary={a.name} />
+                    </ListItem>
+                  ))}
+                </List>
               </Alert>
             )}
             <Box>

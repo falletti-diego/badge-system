@@ -63,6 +63,38 @@ describe('EmployeeSyncWizardPage', () => {
     expect(screen.getByRole('button', { name: /conferma tutte le modifiche/i })).toBeEnabled();
   });
 
+  it('renders many anomalie as a scrollable list with a count, not one long comma-separated line', async () => {
+    const anomalie = Array.from({ length: 12 }, (_, i) => ({
+      email: `dipendente${i}@x.it`,
+      name: `Dipendente ${i}`,
+    }));
+    useEmployeeSync.mockReturnValue({
+      downloadTemplate: vi.fn(),
+      preview: vi.fn().mockResolvedValue({
+        nuovi: [],
+        riattivati: [],
+        rimossi: [],
+        modificati: [],
+        anomalie,
+        errors: [],
+      }),
+      apply: vi.fn(),
+      exportHistory: vi.fn(),
+      loading: false,
+      error: null,
+    });
+    render(<EmployeeSyncWizardPage clientId="client-1" />);
+    const file = new File(['x'], 'test.xlsx');
+    await userEvent.upload(screen.getByLabelText(/carica file/i), file);
+
+    expect(await screen.findByText('dipendente0@x.it')).toBeInTheDocument();
+    // Ogni anomalia è una riga di lista separata, non concatenata in una singola stringa.
+    expect(screen.getAllByRole('listitem')).toHaveLength(12);
+    // Il conteggio è visibile senza dover leggere/contare l'intera lista.
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /conferma tutte le modifiche/i })).toBeEnabled();
+  });
+
   it('disables confirmation when the file has syntax errors', async () => {
     useEmployeeSync.mockReturnValue({
       downloadTemplate: vi.fn(),
