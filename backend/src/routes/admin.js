@@ -15,6 +15,7 @@ const viewersRouter = require('./admin/viewers');
 const settingsRouter = require('./admin/settings');
 const demoTenantsRouter = require('./admin/demo-tenants');
 const onboardingRouter = require('./admin/onboarding');
+const employeeSyncRouter = require('./admin/employeeSync');
 
 const router = express.Router();
 
@@ -141,6 +142,7 @@ router.use('/viewers', viewersRouter);
 router.use('/settings', settingsRouter);
 router.use('/demo-tenants', demoTenantsRouter);
 router.use('/onboarding', onboardingRouter);
+router.use('/employee-sync', employeeSyncRouter);
 
 // =====================================================
 // POST /api/admin/dpa-acknowledgement

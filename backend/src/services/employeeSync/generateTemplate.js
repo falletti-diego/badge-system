@@ -1,0 +1,32 @@
+'use strict';
+
+const ExcelJS = require('exceljs');
+
+const DIP_HEADERS = ['nome_completo', 'email', 'telefono', 'ruolo', 'sede', 'matricola', 'stato', 'data_assunzione', 'data_uscita'];
+const SEDI_HEADERS = ['nome_sede', 'indirizzo', 'latitudine', 'longitudine', 'raggio_geofence_m'];
+const ROLE_LABEL = { employee: 'dipendente', manager: 'responsabile' };
+
+async function generateTemplate({ employees, sites }) {
+  const wb = new ExcelJS.Workbook();
+
+  const wsDip = wb.addWorksheet('Dipendenti');
+  wsDip.addRow(DIP_HEADERS);
+  const siteNameById = new Map(sites.map((s) => [s.id, s.name]));
+  for (const e of employees) {
+    wsDip.addRow([
+      e.name, e.email, e.phone || '', ROLE_LABEL[e.role] || 'dipendente',
+      siteNameById.get(e.site_id) || '', e.external_employee_id || '',
+      'Attivo', e.hiring_date || '', '',
+    ]);
+  }
+
+  const wsSedi = wb.addWorksheet('Sedi');
+  wsSedi.addRow(SEDI_HEADERS);
+  for (const s of sites) {
+    wsSedi.addRow([s.name, s.location || '', s.latitude || '', s.longitude || '', s.geofence_radius_meters || '']);
+  }
+
+  return wb.xlsx.writeBuffer();
+}
+
+module.exports = { generateTemplate };
