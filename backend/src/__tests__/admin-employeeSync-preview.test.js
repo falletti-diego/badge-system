@@ -181,4 +181,17 @@ describe('POST /api/v1/admin/employee-sync/preview', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('handles a file that is not a valid xlsx with a clear error, not a 500 crash', async () => {
+    if (!dbAvailable) return;
+
+    const token = tokenFor({ client_id: clientId, role: 'admin' });
+    const res = await request(app)
+      .post('/api/v1/admin/employee-sync/preview')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', Buffer.from('not,a,real,xlsx,file\n1,2,3,4,5'), 'test.xlsx');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.errors.length).toBeGreaterThan(0);
+  });
 });

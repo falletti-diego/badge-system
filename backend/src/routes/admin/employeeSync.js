@@ -54,7 +54,17 @@ function validateClientIdFromBody(req, next) {
  * reale trovato testando la Sezione 8 della checklist manuale su staging).
  */
 async function runPreviewDiff(buffer, clientId, db = pool, { createSites = false } = {}) {
-  const data = await parseTemplate(buffer);
+  let data;
+  try {
+    data = await parseTemplate(buffer);
+  } catch (parseErr) {
+    // Un file non-xlsx (o un .xlsx corrotto) fa esplodere exceljs con un
+    // errore di parsing grezzo — trattalo come un errore di validazione
+    // mostrato nel wizard (stesso canale degli errori di validateSyntax),
+    // non come un 500 (bug trovato testando la Sezione 12 della checklist
+    // manuale su staging: caricare un file non-xlsx dava INTERNAL_ERROR).
+    return { errors: ['Il file caricato non è un file Excel (.xlsx) valido.'], diff: null, data: null };
+  }
   const errors = validateSyntax(data);
   if (errors.length > 0) return { errors, diff: null, data: null };
 
