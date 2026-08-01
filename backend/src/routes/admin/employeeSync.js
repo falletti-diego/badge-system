@@ -9,6 +9,7 @@ const { parseTemplate } = require('../../services/employeeSync/parseTemplate');
 const { validateSyntax } = require('../../services/employeeSync/validate');
 const { computeDiff } = require('../../services/employeeSync/computeDiff');
 const { applyDiff } = require('../../services/employeeSync/applyDiff');
+const { resolveSiteIdByName } = require('../../services/employeeSync/ensureSites');
 const { resolveTenantScope } = require('../../utils/tenantScope');
 const { ValidationError } = require('../../utils/errors');
 const { sendEmail, buildEmployeeWelcomeEmail } = require('../../utils/email');
@@ -42,28 +43,31 @@ function validateClientIdFromBody(req, next) {
 
 /**
  * Esegue parse → validateSyntax → (se valido) computeDiff, senza mai
- * scrivere sul DB. Riusata anche dall'apply (Task 9) come base del dry-run
- * prima del commit effettivo.
+ * scrivere sul DB. Usata da `/preview` (db = pool, createSites = false).
+ *
+ * `/apply` NON riusa questa funzione per il calcolo finale: le sedi nuove
+ * dichiarate nel foglio Sedi vanno create per davvero dentro la stessa
+ * transazione dell'apply (vedi `resolveSiteIdByName`), quindi ricalcola il
+ * diff con la mappa sedi aggiornata subito dopo averle create — altrimenti
+ * un dipendente assegnato a una sede nuova risulterebbe silenziosamente
+ * disassociato da qualunque sede invece che assegnato a quella nuova (bug
+ * reale trovato testando la Sezione 8 della checklist manuale su staging).
  */
-async function runPreviewDiff(buffer, clientId) {
+async function runPreviewDiff(buffer, clientId, db = pool, { createSites = false } = {}) {
   const data = await parseTemplate(buffer);
   const errors = validateSyntax(data);
-  if (errors.length > 0) return { errors, diff: null };
+  if (errors.length > 0) return { errors, diff: null, data: null };
 
   // Scope del wizard: solo personale operativo legato a una sede (employee/manager).
   // Admin e viewer non hanno assegnazione di sede e sono gestiti altrove in Admin.
-  const dbEmployees = (await pool.query(
+  const dbEmployees = (await db.query(
     'SELECT * FROM employees WHERE client_id = $1::uuid AND role IN (\'employee\', \'manager\')',
     [clientId]
   )).rows;
-  const sites = (await pool.query(
-    'SELECT id, name FROM sites WHERE client_id = $1::uuid',
-    [clientId]
-  )).rows;
-  const siteIdByName = new Map(sites.map((s) => [s.name, s.id]));
+  const siteIdByName = await resolveSiteIdByName(db, data.sedi, clientId, { create: createSites });
 
   const diff = computeDiff(data.dipendenti, dbEmployees, siteIdByName);
-  return { errors: [], diff };
+  return { errors: [], diff, data };
 }
 
 router.get('/template', async (req, res, next) => {
@@ -112,15 +116,23 @@ router.post('/apply', upload.single('file'), async (req, res, next) => {
     const clientId = validateClientIdFromBody(req, next);
     if (!clientId) return; // validateClientIdFromBody ha già chiamato next(err)
 
-    const { errors, diff } = await runPreviewDiff(req.file.buffer, clientId);
-    if (errors.length > 0) {
-      return res.json({ data: { errors, nuovi: [], riattivati: [], rimossi: [], modificati: [], anomalie: [] } });
+    // Prima passata solo per gli errori di sintassi (fail-fast, non serve
+    // ancora una connessione dedicata/transazione per questo controllo).
+    const { errors: syntaxErrors } = await runPreviewDiff(req.file.buffer, clientId);
+    if (syntaxErrors.length > 0) {
+      return res.json({ data: { errors: syntaxErrors, nuovi: [], riattivati: [], rimossi: [], modificati: [], anomalie: [] } });
     }
 
     const client = await pool.connect();
     let result;
+    let diff;
     try {
       await client.query('BEGIN');
+      // Ricalcola il diff DENTRO la transazione: le sedi nuove dichiarate nel
+      // foglio Sedi vengono create per davvero qui (createSites: true), cosa
+      // che /preview non fa mai — il diff usato per l'apply deve riflettere
+      // le sedi reali appena create, non i placeholder del preview.
+      ({ diff } = await runPreviewDiff(req.file.buffer, clientId, client, { createSites: true }));
       result = await applyDiff(client, diff, { clientId });
       await client.query('COMMIT');
     } catch (txErr) {

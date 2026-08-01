@@ -152,6 +152,58 @@ describe('employee-sync /apply and /export-history', () => {
       await pool.query('DELETE FROM employees WHERE email = $1', [email]);
     });
 
+    it('creates a site declared only in the Sedi sheet, and assigns the employee to it (not null)', async () => {
+      if (!dbAvailable) return;
+
+      // Nessuna sede pre-esistente: "Bologna" esiste SOLO nel foglio Sedi del file.
+      const email = uniqueEmail('nuova-sede-apply-test');
+      const buffer = await buildFile(
+        [['Nuovo Assunto', email, '', 'dipendente', 'Bologna', '', 'Attivo', '2026-07-01', '']],
+        [['Bologna', 'Via Test 1', '', '', '']]
+      );
+
+      const token = tokenFor({ client_id: clientId, role: 'admin' });
+      const res = await request(app)
+        .post('/api/v1/admin/employee-sync/apply')
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', buffer, 'test.xlsx');
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.errors).toEqual([]);
+
+      const siteRes = await pool.query('SELECT id FROM sites WHERE client_id = $1 AND name = $2', [clientId, 'Bologna']);
+      expect(siteRes.rows).toHaveLength(1);
+
+      const empRes = await pool.query('SELECT site_id, assigned_sites FROM employees WHERE email = $1', [email]);
+      expect(empRes.rows[0].site_id).toBe(siteRes.rows[0].id);
+      expect(empRes.rows[0].assigned_sites).toEqual([siteRes.rows[0].id]);
+
+      await pool.query('DELETE FROM employees WHERE email = $1', [email]);
+    });
+
+    it('preview never creates a site, even when the file declares one not yet in the DB', async () => {
+      if (!dbAvailable) return;
+
+      const email = uniqueEmail('nuova-sede-preview-test');
+      const buffer = await buildFile(
+        [['Nuovo Assunto', email, '', 'dipendente', 'Bologna', '', 'Attivo', '2026-07-01', '']],
+        [['Bologna', 'Via Test 1', '', '', '']]
+      );
+
+      const token = tokenFor({ client_id: clientId, role: 'admin' });
+      const res = await request(app)
+        .post('/api/v1/admin/employee-sync/preview')
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', buffer, 'test.xlsx');
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.errors).toEqual([]);
+      expect(res.body.data.nuovi).toHaveLength(1);
+
+      const siteRes = await pool.query('SELECT id FROM sites WHERE client_id = $1 AND name = $2', [clientId, 'Bologna']);
+      expect(siteRes.rows).toHaveLength(0); // preview non deve MAI scrivere
+    });
+
     it('rejects apply for a client the admin does not own (RBAC)', async () => {
       if (!dbAvailable) return;
 
