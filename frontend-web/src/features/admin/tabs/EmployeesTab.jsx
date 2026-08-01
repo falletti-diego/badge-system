@@ -288,7 +288,7 @@ export function EmployeesTab() {
                             <LockResetIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Elimina dipendente">
+                        <Tooltip title="Disattiva dipendente">
                           <IconButton size="small" color="error" onClick={() => setDeleteTarget(e)}>
                             <DeleteIcon fontSize="small" />
                           </IconButton>
@@ -308,8 +308,8 @@ export function EmployeesTab() {
 
       <ConfirmDeleteDialog
         open={!!deleteTarget}
-        title={`Elimina dipendente "${deleteTarget?.name}"?`}
-        description="Questa azione eliminerà anche tutti i check-in registrati da questo dipendente. L'operazione è irreversibile."
+        title={`Disattiva dipendente "${deleteTarget?.name}"?`}
+        description="Il dipendente non potrà più effettuare check-in e non comparirà nelle liste attive. Lo storico dei check-in resta intatto e il dipendente può essere riattivato in futuro caricando di nuovo il suo nominativo con Stato=Attivo nel wizard Aggiorna Dipendenti."
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
         loading={deleting}

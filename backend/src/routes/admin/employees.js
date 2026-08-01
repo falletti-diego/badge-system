@@ -282,24 +282,26 @@ router.delete('/:id', async (req, res, next) => {
     if (!uuidCheck.success) return next(new ValidationError('Invalid employee id'));
 
     const result = await pool.query(
-      'DELETE FROM employees WHERE id = $1 AND client_id = $2::uuid RETURNING id, name, email, client_id',
+      `UPDATE employees SET active = false, exit_date = CURRENT_DATE
+       WHERE id = $1 AND client_id = $2::uuid AND active = true
+       RETURNING id, name, email, client_id`,
       [id, req.user.client_id]
     );
     if (result.rowCount === 0) return next(new NotFoundError('Employee not found', 'EMPLOYEE_NOT_FOUND'));
 
     const emp = result.rows[0];
     await logAudit(pool, {
-      action: 'admin_delete_employee',
+      action: 'admin_deactivate_employee',
       entity: 'employee',
       entityId: emp.id,
       clientId: emp.client_id,
-      oldValue: { name: emp.name, email: emp.email },
-      newValue: null,
+      oldValue: { active: true },
+      newValue: { active: false, exit_date: new Date().toISOString().slice(0, 10) },
       userId: req.user.user_id,
     }).catch(() => {});
 
-    logger.info({ action: 'admin_delete_employee', employee_id: emp.id, email: emp.email });
-    res.json({ success: true, message: `Dipendente "${emp.name}" eliminato.` });
+    logger.info({ action: 'admin_deactivate_employee', employee_id: emp.id, email: emp.email });
+    res.json({ success: true, message: `Dipendente "${emp.name}" disattivato.` });
   } catch (err) {
     next(err);
   }
