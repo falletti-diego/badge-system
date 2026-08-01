@@ -15,7 +15,7 @@ const viewersRouter = require('./admin/viewers');
 const settingsRouter = require('./admin/settings');
 const demoTenantsRouter = require('./admin/demo-tenants');
 const onboardingRouter = require('./admin/onboarding');
-const employeeSyncRouter = require('./admin/employeeSync');
+const { router: employeeSyncRouter } = require('./admin/employeeSync');
 
 const router = express.Router();
 
