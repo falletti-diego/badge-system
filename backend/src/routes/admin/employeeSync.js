@@ -12,7 +12,7 @@ const { applyDiff } = require('../../services/employeeSync/applyDiff');
 const { resolveSiteIdByName } = require('../../services/employeeSync/ensureSites');
 const { resolveTenantScope } = require('../../utils/tenantScope');
 const { ValidationError } = require('../../utils/errors');
-const { sendEmail, buildEmployeeWelcomeEmail } = require('../../utils/email');
+const { sendEmail, buildEmployeeWelcomeEmail, buildEmployeeReactivatedEmail } = require('../../utils/email');
 const logger = require('../../utils/logger');
 
 const router = express.Router();
@@ -161,14 +161,15 @@ router.post('/apply', upload.single('file'), async (req, res, next) => {
 
     const failedEmails = [];
     for (const cred of result.credentials) {
+      const buildEmail = cred.reactivated ? buildEmployeeReactivatedEmail : buildEmployeeWelcomeEmail;
       try {
-        await sendEmail(buildEmployeeWelcomeEmail({
+        await sendEmail(buildEmail({
           to: cred.email,
           tempPassword: cred.password,
           clientName: req.user.name || 'il tuo datore di lavoro',
         }));
       } catch (emailErr) {
-        logger.warn({ action: 'employee_sync_welcome_email_failed', client_id: clientId, employee_email: cred.email, error: emailErr.message });
+        logger.warn({ action: 'employee_sync_welcome_email_failed', client_id: clientId, employee_email: cred.email, reactivated: !!cred.reactivated, error: emailErr.message });
         failedEmails.push({ id: cred.id, email: cred.email });
       }
     }

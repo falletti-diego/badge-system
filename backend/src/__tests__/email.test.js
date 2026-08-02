@@ -20,7 +20,7 @@ jest.mock('@aws-sdk/client-ses', () => {
   };
 });
 
-const { sendEmail } = require('../utils/email');
+const { sendEmail, buildEmployeeReactivatedEmail } = require('../utils/email');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 
 describe('utils/email.sendEmail', () => {
@@ -53,5 +53,20 @@ describe('utils/email.sendEmail', () => {
     await expect(
       sendEmail({ to: 'notify@dataxiom.it', subject: 'x', text: 'y' })
     ).rejects.toThrow('SES throttled');
+  });
+});
+
+describe('utils/email.buildEmployeeReactivatedEmail', () => {
+  it('builds a "bentornato" email with the new temp password, distinct from a first-time welcome', () => {
+    const email = buildEmployeeReactivatedEmail({
+      to: 'rientrato@x.it',
+      tempPassword: 'TEMP123',
+      clientName: 'Dataxiom MVP',
+    });
+    expect(email.to).toBe('rientrato@x.it');
+    // Non deve dire "è stato creato" — l'account esisteva già, solo riattivato.
+    expect(email.text).not.toMatch(/creato/i);
+    expect(email.text).toMatch(/riattivat/i);
+    expect(email.text).toContain('TEMP123');
   });
 });

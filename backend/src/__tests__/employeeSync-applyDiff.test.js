@@ -87,12 +87,24 @@ describe('applyDiff', () => {
     expect(call[1]).toContain('222');
   });
 
-  it('reactivation without extra field changes still only sets active/exit_date (no regression)', async () => {
+  it('reactivation without extra field changes still resets active/exit_date/password (no other regression)', async () => {
     const db = mockClient([['UPDATE employees', { rowCount: 1 }]]);
     const diff = { nuovi: [], rimossi: [], modificati: [], riattivati: [{ id: 'emp-1', email: 'x@x.it', hiring_date: '2023-01-01', exit_date: null, changes: {} }] };
     await applyDiff(db, diff, { clientId: 'client-1' });
     const call = db.query.mock.calls.find((c) => c[0].includes('active = true'));
     expect(call).toBeDefined();
-    expect(call[1]).toEqual(['emp-1']);
+    expect(call[0]).toMatch(/password_hash\s*=/);
+    expect(call[0]).toMatch(/must_change_password\s*=/);
+    expect(call[1]).toEqual(['emp-1', 'HASH']);
+  });
+
+  it('resets the password on reactivation and returns credentials for a "bentornato" email', async () => {
+    const db = mockClient([['UPDATE employees', { rowCount: 1 }]]);
+    const diff = { nuovi: [], rimossi: [], modificati: [], riattivati: [{ id: 'emp-1', email: 'rientrato@x.it', hiring_date: '2023-01-01', exit_date: null, changes: {} }] };
+    const res = await applyDiff(db, diff, { clientId: 'client-1' });
+    expect(res.credentials).toHaveLength(1);
+    expect(res.credentials[0]).toMatchObject({ id: 'emp-1', email: 'rientrato@x.it', reactivated: true });
+    expect(typeof res.credentials[0].password).toBe('string');
+    expect(res.credentials[0].password.length).toBeGreaterThan(0);
   });
 });

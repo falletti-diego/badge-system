@@ -83,4 +83,15 @@ function buildEmployeeWelcomeEmail({ to, tempPassword, clientName }) {
   };
 }
 
-module.exports = { sendEmail, buildAdminInviteEmail, buildEmployeeWelcomeEmail };
+function buildEmployeeReactivatedEmail({ to, tempPassword, clientName }) {
+  return {
+    to,
+    subject: `Il tuo accesso a Badge System è stato riattivato — ${clientName}`,
+    text: `Ciao,\n\nil tuo account su Badge System per ${clientName} è stato riattivato.\n\n`
+      + `Email: ${to}\nNuova password temporanea: ${tempPassword}\n\n`
+      + 'Accedi su https://badge.dataxiom.it/login — al primo accesso ti verrà chiesto di impostarne una tua.\n\n'
+      + 'Team Badge System',
+  };
+}
+
+module.exports = { sendEmail, buildAdminInviteEmail, buildEmployeeWelcomeEmail, buildEmployeeReactivatedEmail };

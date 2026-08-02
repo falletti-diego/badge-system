@@ -57,10 +57,17 @@ async function applyDiff(db, diff, { clientId }) {
     // Un dipendente può rientrare E aver cambiato sede/telefono/ruolo nello
     // stesso file — applica anche quei campi qui, non solo active/exit_date,
     // altrimenti la riattivazione li scarterebbe silenziosamente.
-    // $1 è riservato all'id (WHERE), i campi dinamici partono da $2.
-    const { sets, params } = buildFieldSetClause(r.changes || {}, 2);
-    const allSets = ['active = true', 'exit_date = NULL', ...sets];
-    await db.query(`UPDATE employees SET ${allSets.join(', ')} WHERE id = $1::uuid`, [r.id, ...params]);
+    // Reimposta sempre anche la password: la vecchia risale a prima della
+    // disattivazione, potenzialmente mesi fa, e il dipendente l'ha quasi
+    // certamente dimenticata — stessa logica già usata per i nuovi assunti.
+    // $1 è riservato all'id (WHERE), $2 alla password_hash, i campi
+    // dinamici del file partono da $3.
+    const tempPassword = generateTempPassword();
+    const passwordHash = await hashPassword(tempPassword);
+    const { sets, params } = buildFieldSetClause(r.changes || {}, 3);
+    const allSets = ['active = true', 'exit_date = NULL', 'password_hash = $2', 'must_change_password = true', ...sets];
+    await db.query(`UPDATE employees SET ${allSets.join(', ')} WHERE id = $1::uuid`, [r.id, passwordHash, ...params]);
+    credentials.push({ id: r.id, email: r.email, password: tempPassword, reactivated: true });
     await logAudit(db, { action: 'employee_sync_reactivate', entity: 'employee', entityId: r.id,
       oldValue: { active: false }, newValue: { active: true, ...r.changes }, userId: 'system' });
   }
