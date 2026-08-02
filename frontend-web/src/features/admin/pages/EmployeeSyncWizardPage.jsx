@@ -58,6 +58,17 @@ export function EmployeeSyncWizardPage({ clientId }) {
     if (fileRef.current) fileRef.current.value = '';
   };
 
+  // Fino alla conferma non è stato scritto nulla sul DB (preview è di sola
+  // lettura) — annullare è quindi un semplice reset dello stato locale,
+  // nessuna chiamata API necessaria. Prima di questo, l'unico modo per
+  // uscire da una preview era ricaricare la pagina (osservazione utente,
+  // Sezione 12 della checklist).
+  const handleCancel = () => {
+    setDiff(null);
+    setFile(null);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
   const hasBlockingErrors = diff?.errors?.length > 0;
 
   return (
@@ -127,11 +138,14 @@ export function EmployeeSyncWizardPage({ clientId }) {
                 </List>
               </Alert>
             )}
-            <Box>
+            <Stack direction="row" spacing={2}>
               <Button variant="contained" onClick={handleConfirm} disabled={loading || hasBlockingErrors}>
                 Conferma tutte le modifiche
               </Button>
-            </Box>
+              <Button variant="text" onClick={handleCancel} disabled={loading}>
+                Annulla
+              </Button>
+            </Stack>
           </Stack>
         )}
       </CardContent>

@@ -125,6 +125,35 @@ describe('EmployeeSyncWizardPage', () => {
     expect(screen.getByRole('button', { name: /conferma tutte le modifiche/i })).toBeEnabled();
   });
 
+  it('lets the admin cancel a preview without calling apply, clearing the diff from view', async () => {
+    const mockApply = vi.fn();
+    useEmployeeSync.mockReturnValue({
+      downloadTemplate: vi.fn(),
+      preview: vi.fn().mockResolvedValue({
+        nuovi: [{ email: 'nuovo@x.it', name: 'Nuovo' }],
+        riattivati: [],
+        rimossi: [],
+        modificati: [],
+        anomalie: [],
+        errors: [],
+      }),
+      apply: mockApply,
+      exportHistory: vi.fn(),
+      loading: false,
+      error: null,
+    });
+    render(<EmployeeSyncWizardPage clientId="client-1" />);
+    const file = new File(['x'], 'test.xlsx');
+    await userEvent.upload(screen.getByLabelText(/carica file/i), file);
+    expect(await screen.findByText(/nuovo@x.it/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /annulla/i }));
+
+    expect(screen.queryByText(/nuovo@x.it/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /conferma tutte le modifiche/i })).not.toBeInTheDocument();
+    expect(mockApply).not.toHaveBeenCalled();
+  });
+
   it('disables confirmation when the file has syntax errors', async () => {
     useEmployeeSync.mockReturnValue({
       downloadTemplate: vi.fn(),
