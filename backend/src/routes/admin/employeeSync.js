@@ -42,16 +42,22 @@ function validateClientIdFromBody(req, next) {
 }
 
 /**
- * Esegue parse → validateSyntax → (se valido) computeDiff, senza mai
- * scrivere sul DB. Usata da `/preview` (db = pool, createSites = false).
+ * Esegue parse → validateSyntax → (se valido) computeDiff.
  *
- * `/apply` NON riusa questa funzione per il calcolo finale: le sedi nuove
- * dichiarate nel foglio Sedi vanno create per davvero dentro la stessa
- * transazione dell'apply (vedi `resolveSiteIdByName`), quindi ricalcola il
- * diff con la mappa sedi aggiornata subito dopo averle create — altrimenti
- * un dipendente assegnato a una sede nuova risulterebbe silenziosamente
- * disassociato da qualunque sede invece che assegnato a quella nuova (bug
- * reale trovato testando la Sezione 8 della checklist manuale su staging).
+ * Scrive sul DB solo se chiamata con `createSites: true` (crea le sedi
+ * nuove dichiarate nel foglio Sedi, vedi `resolveSiteIdByName`) — MAI
+ * altrimenti. `/preview` la chiama sempre con `createSites: false`
+ * (default), quindi resta di sola lettura.
+ *
+ * `/apply` la richiama DUE VOLTE: una prima volta con i default (solo per
+ * un controllo di sintassi fail-fast, il diff calcolato viene scartato),
+ * poi una seconda volta dentro la propria transazione con
+ * `createSites: true` — questa seconda chiamata crea per davvero le sedi
+ * nuove e ricalcola il diff con la mappa sedi aggiornata subito dopo
+ * averle create, altrimenti un dipendente assegnato a una sede nuova
+ * risulterebbe silenziosamente disassociato da qualunque sede invece che
+ * assegnato a quella nuova (bug reale trovato testando la Sezione 8 della
+ * checklist manuale su staging).
  */
 async function runPreviewDiff(buffer, clientId, db = pool, { createSites = false } = {}) {
   let data;
