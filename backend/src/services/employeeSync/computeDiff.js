@@ -20,10 +20,21 @@ const FILE_FIELD_BY_DB_FIELD = {
 // Riusata sia per "modificato" sia per arricchire una riattivazione, cosicché
 // un dipendente che rientra E cambia sede/telefono nello stesso file non perda
 // silenziosamente la seconda informazione.
-function computeFieldChanges(dbRow, row, siteId) {
+// `siteNameById` risolve gli UUID di sede in nomi leggibili (fromName/toName)
+// per la UI del wizard — senza, l'admin vedeva solo l'email della riga
+// modificata, senza alcuna indicazione di COSA fosse cambiato (bug segnalato
+// testando la Sezione 6 della checklist manuale su staging).
+function computeFieldChanges(dbRow, row, siteId, siteNameById) {
   const changes = {};
   const currentSiteId = dbRow.site_id || (dbRow.assigned_sites && dbRow.assigned_sites[0]) || null;
-  if (currentSiteId !== siteId) changes.site_id = { from: currentSiteId, to: siteId };
+  if (currentSiteId !== siteId) {
+    changes.site_id = {
+      from: currentSiteId,
+      to: siteId,
+      fromName: currentSiteId ? siteNameById.get(currentSiteId) || null : null,
+      toName: siteId ? siteNameById.get(siteId) || null : null,
+    };
+  }
   for (const [field, differs] of Object.entries(FIELD_COMPARATORS)) {
     if (differs(dbRow, row)) {
       const toValue = field === 'role' ? ROLE_MAP[row.ruolo] : row[FILE_FIELD_BY_DB_FIELD[field]];
@@ -39,6 +50,12 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
   const rimossi = [];
   const modificati = [];
   const anomalie = [];
+
+  // Inversione di siteIdByName (name->id, già costruita da resolveSiteIdByName
+  // su TUTTE le sedi esistenti del cliente, non solo quelle nel foglio Sedi
+  // del file) — copre sempre anche la sede attuale del dipendente, non solo
+  // quelle menzionate nel file caricato.
+  const siteNameById = new Map([...siteIdByName].map(([name, id]) => [id, name]));
 
   const dbByEmail = new Map(dbEmployees.map((e) => [e.email, e]));
   const seenEmails = new Set();
@@ -70,7 +87,7 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
         email: row.email,
         hiring_date: dbRow.hiring_date,
         exit_date: null,
-        changes: computeFieldChanges(dbRow, row, siteId),
+        changes: computeFieldChanges(dbRow, row, siteId, siteNameById),
       });
       continue;
     }
@@ -86,7 +103,7 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
 
     if (!dbRow.active && !fileActive) continue;
 
-    const changes = computeFieldChanges(dbRow, row, siteId);
+    const changes = computeFieldChanges(dbRow, row, siteId, siteNameById);
     if (Object.keys(changes).length > 0) {
       modificati.push({ id: dbRow.id, email: row.email, changes });
     }

@@ -11,6 +11,29 @@ const SECTION_LABELS = {
   modificati: 'Modificati',
 };
 
+const FIELD_LABELS = {
+  site_id: 'Sede',
+  phone: 'Telefono',
+  role: 'Ruolo',
+  external_employee_id: 'Matricola',
+  name: 'Nome',
+};
+
+// "Modificati"/"Riattivati" arrivano con un oggetto `changes` (non `name`
+// come "Nuovi") — senza questo, l'admin vedeva solo l'email della riga e
+// nessuna indicazione di COSA fosse effettivamente cambiato prima di
+// confermare in blocco (osservazione utente, Sezione 6 della checklist).
+function formatChanges(changes) {
+  return Object.entries(changes || {})
+    .map(([field, change]) => {
+      const label = FIELD_LABELS[field] || field;
+      const from = field === 'site_id' ? change.fromName || change.from || '—' : change.from || '—';
+      const to = field === 'site_id' ? change.toName || change.to || '—' : change.to || '—';
+      return `${label}: ${from} → ${to}`;
+    })
+    .join(' · ');
+}
+
 export function EmployeeSyncWizardPage({ clientId }) {
   const { downloadTemplate, preview, apply, loading, error } = useEmployeeSync();
   const [file, setFile] = useState(null);
@@ -76,7 +99,10 @@ export function EmployeeSyncWizardPage({ clientId }) {
                     <List dense>
                       {diff[key].map((r) => (
                         <ListItem key={r.email}>
-                          <ListItemText primary={r.email} secondary={r.name} />
+                          <ListItemText
+                            primary={r.email}
+                            secondary={key === 'modificati' || key === 'riattivati' ? formatChanges(r.changes) : r.name}
+                          />
                         </ListItem>
                       ))}
                     </List>

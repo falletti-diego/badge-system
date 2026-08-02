@@ -44,7 +44,7 @@ describe('computeDiff', () => {
     const db = [dbEmp({ site_id: 'site-torino' })];
     const diff = computeDiff([fileRow({ sede: 'Milano' })], db, siteIdByName);
     expect(diff.modificati).toHaveLength(1);
-    expect(diff.modificati[0].changes.site_id).toEqual({ from: 'site-torino', to: 'site-milano' });
+    expect(diff.modificati[0].changes.site_id).toEqual({ from: 'site-torino', to: 'site-milano', fromName: 'Torino', toName: 'Milano' });
   });
 
   it('detects a non-site field change as "modificato"', () => {
@@ -97,7 +97,7 @@ describe('computeDiff', () => {
     const db = [dbEmp({ site_id: null, assigned_sites: ['site-torino'] })];
     const diff = computeDiff([fileRow({ sede: 'Milano' })], db, siteIdByName);
     expect(diff.modificati).toHaveLength(1);
-    expect(diff.modificati[0].changes.site_id).toEqual({ from: 'site-torino', to: 'site-milano' });
+    expect(diff.modificati[0].changes.site_id).toEqual({ from: 'site-torino', to: 'site-milano', fromName: 'Torino', toName: 'Milano' });
   });
 
   it('combines a site transfer and a phone change in the same "modificato" entry', () => {
@@ -114,7 +114,7 @@ describe('computeDiff', () => {
     expect(diff.riattivati).toHaveLength(1);
     expect(diff.riattivati[0].hiring_date).toBe('2023-06-01');
     expect(diff.riattivati[0].exit_date).toBeNull();
-    expect(diff.riattivati[0].changes.site_id).toEqual({ from: 'site-torino', to: 'site-milano' });
+    expect(diff.riattivati[0].changes.site_id).toEqual({ from: 'site-torino', to: 'site-milano', fromName: 'Torino', toName: 'Milano' });
     expect(diff.riattivati[0].changes.phone).toEqual({ from: '111', to: '222' });
     expect(diff.modificati).toHaveLength(0); // non deve comparire ANCHE come "modificato" separato
   });

@@ -40,6 +40,36 @@ describe('EmployeeSyncWizardPage', () => {
     await waitFor(() => expect(mockApply).toHaveBeenCalled());
   });
 
+  it('shows what actually changed for a "modificato" row — a site transfer with readable site names — not just the email', async () => {
+    useEmployeeSync.mockReturnValue({
+      downloadTemplate: vi.fn(),
+      preview: vi.fn().mockResolvedValue({
+        nuovi: [],
+        riattivati: [],
+        rimossi: [],
+        modificati: [
+          {
+            email: 'trasferito@x.it',
+            changes: { site_id: { from: 'site-torino', to: 'site-milano', fromName: 'Torino Store', toName: 'Milano Store' } },
+          },
+        ],
+        anomalie: [],
+        errors: [],
+      }),
+      apply: vi.fn(),
+      exportHistory: vi.fn(),
+      loading: false,
+      error: null,
+    });
+    render(<EmployeeSyncWizardPage clientId="client-1" />);
+    const file = new File(['x'], 'test.xlsx');
+    await userEvent.upload(screen.getByLabelText(/carica file/i), file);
+
+    expect(await screen.findByText(/trasferito@x.it/)).toBeInTheDocument();
+    expect(screen.getByText(/Torino Store/)).toBeInTheDocument();
+    expect(screen.getByText(/Milano Store/)).toBeInTheDocument();
+  });
+
   it('shows a warning for anomalie without blocking confirmation', async () => {
     useEmployeeSync.mockReturnValue({
       downloadTemplate: vi.fn(),
