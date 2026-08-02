@@ -709,6 +709,8 @@ Sostituito l'import CSV grezzo in Admin (tab Dipendenti) con un wizard Excel che
 - **Matricola non riutilizzabile da un dipendente disattivato**: il vincolo `UNIQUE(client_id, external_employee_id)` (migration 008, pre-esistente a questa feature) non esclude i dipendenti `active=false` — un badge/matricola assegnato a un dipendente poi disattivato non può essere riassegnato a un nuovo assunto senza prima svuotare manualmente il campo sul vecchio record. Comportamento pre-esistente, solo reso visibile ora che esiste un vero ciclo di vita attivo/inattivo. Da valutare se cambiare l'indice parziale in `WHERE external_employee_id IS NOT NULL AND active = true` (permetterebbe il riutilizzo) — decisione di prodotto, non presa unilateralmente in questa sessione.
 - **Email di riattivazione finita in spam** (non un bug, deliverability): testata dall'utente sulla Sezione 11 — l'email arriva (SES conferma invio, zero bounce/reject) ma un provider come Google Workspace può marcarla come sospetta quando `no-reply@dataxiom.it` scrive a un indirizzo dello stesso dominio (`@dataxiom.it`) senza passare dal vero server di posta aziendale (allineamento SPF/DKIM parziale). Da rivalutare se diventa un problema ricorrente per i clienti reali (es. record DMARC/DKIM dedicati per il dominio di invio SES).
 
+**Checklist manuale `docs/employee-sync-wizard-test-checklist.md` — tutte le 12 sezioni chiuse dall'utente** (2026-08-01/02), con 2 miglioramenti UX aggiuntivi proposti dall'utente e implementati durante la verifica: email di bentornato con reset password alla riattivazione (Sezione 5), bottone "Annulla" nella preview del wizard per uscire senza ricaricare la pagina (Sezione 12).
+
 ---
 
 ## ✅ COMPLETED
