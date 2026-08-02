@@ -91,4 +91,18 @@ describe('ManagerLeaveRequest Page', () => {
     expect(screen.getByText('Ferie 2: 0 gg disponibili')).toBeInTheDocument();
     expect(screen.getByText('Ferie 3: 0 gg disponibili')).toBeInTheDocument();
   });
+
+  it('should render a negative leave balance in red, not the default neutral color', async () => {
+    mockGetMyBalance.mockResolvedValueOnce([
+      { leave_type: 'FERIE_1', year: 2026, total_days: 5, used_days: 8, remaining_days: -3 },
+      { leave_type: 'FERIE_2', year: 2026, total_days: 10, used_days: 10, remaining_days: 0 },
+    ]);
+    renderWithRouter(<ManagerLeaveRequest />);
+
+    const negativeChip = await screen.findByText('Ferie 1: -3 gg disponibili');
+    expect(negativeChip.closest('.MuiChip-root')).toHaveClass('MuiChip-colorError');
+
+    const zeroChip = screen.getByText('Ferie 2: 0 gg disponibili');
+    expect(zeroChip.closest('.MuiChip-root')).not.toHaveClass('MuiChip-colorError');
+  });
 });

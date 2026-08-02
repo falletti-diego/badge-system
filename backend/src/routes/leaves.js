@@ -48,7 +48,11 @@ router.post('/request', requireAuth, createValidationMiddleware(PostLeaveRequest
         throw new NotFoundError('User not found or not assigned to your organization', 'USER_NOT_FOUND');
       }
 
-      // 2. Check saldo if vacation (not MALATTIA)
+      // 2. Verify a saldo is configured for vacation (not MALATTIA) — but do
+      // NOT block the request when it would exceed it: l'azienda permette
+      // esplicitamente al dipendente di andare in negativo (decisione
+      // esplicita, non un default) — il saldo negativo è mostrato in rosso
+      // lato dipendente invece di essere impedito qui.
       if (leave_type !== 'MALATTIA') {
         const year = startDate.getFullYear();
         const saldoResult = await client.query(
@@ -58,16 +62,10 @@ router.post('/request', requireAuth, createValidationMiddleware(PostLeaveRequest
           [userId, leave_type, year]
         );
 
-        if (saldoResult.rows.length === 0 || saldoResult.rows[0].remaining_days < numDays) {
-          const availableDays = saldoResult.rows.length > 0 ? saldoResult.rows[0].remaining_days : 0;
+        if (saldoResult.rows.length === 0) {
           throw new ValidationError(
-            `Insufficient ${leave_type} balance. Requested: ${numDays} days, Available: ${availableDays} days`,
-            {
-              field: 'leave_type',
-              code: 'INSUFFICIENT_SALDO',
-              requested_days: numDays,
-              available_days: availableDays,
-            }
+            `No ${leave_type} balance configured for ${year}`,
+            { field: 'leave_type', code: 'NO_SALDO_CONFIGURED' }
           );
         }
       }
