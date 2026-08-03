@@ -40,4 +40,10 @@ describe('PresencesTable — badge Offline', () => {
     render(<PresencesTable data={data} />);
     expect(screen.queryByText('No Face ID')).not.toBeInTheDocument();
   });
+
+  it('mostra un messaggio esplicito (non un semplice trattino) quando il pairing IN/OUT fallisce per limite di pagina (finding #11)', () => {
+    const data = { rows: [{ id: 'c1', employee_id: 'e1', type: 'OUT', timestamp: '2026-08-02T18:00:00Z' }], total: 1 };
+    render(<PresencesTable data={data} />);
+    expect(screen.getByText(/verifica pagina precedente/i)).toBeInTheDocument();
+  });
 });

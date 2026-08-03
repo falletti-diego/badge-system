@@ -194,7 +194,7 @@ const PresencesTable = ({ data = { rows: [], total: 0 }, loading = false, curren
                   </Box>
                 </TableCell>
                 <TableCell sx={{ color: '#6B625A', fontSize: '0.85rem' }}>
-                  {row.type === 'OUT' ? (oreMap.get(row.id) || '—') : '—'}
+                  {row.type === 'OUT' ? (oreMap.get(row.id) ?? 'N/D (verifica pagina precedente)') : '—'}
                 </TableCell>
                 <TableCell sx={{ color: '#999999', display: { xs: 'none', md: 'table-cell' } }}>
                   {row.modified_at ? new Date(row.modified_at).toLocaleString() : '—'}
