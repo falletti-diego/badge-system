@@ -25,12 +25,20 @@ describe('Admin route guard — finding #8', () => {
     app = require('../app');
   });
 
+  // Real UUID from DEMO_USERS fixture (Pino, manager role) — per CLAUDE.md
+  // Pattern 1, hardcoded non-UUID strings in UUID columns must never be used.
+  const TEST_USER_ID = '550e8400-e29b-41d4-a716-446655440011';
+
   function tokenFor({ client_id, role }) {
     const privateKey = process.env.JWT_PRIVATE_KEY.replace(/\\n/g, '\n');
-    return jwt.sign({ user_id: 'test-user', client_id, role, name: 'Test' }, privateKey, {
-      algorithm: 'RS256',
-      expiresIn: '1h',
-    });
+    return jwt.sign(
+      { user_id: TEST_USER_ID, client_id, role, name: 'Test' },
+      privateKey,
+      {
+        algorithm: 'RS256',
+        expiresIn: '1h',
+      }
+    );
   }
 
   const fakeClientId = '00000000-0000-0000-0000-000000000001';
