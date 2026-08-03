@@ -73,9 +73,9 @@ function makeResponseError(message) {
   return err;
 }
 
-async function renderScreen(navigationOverrides = {}) {
+async function renderScreen(navigationOverrides = {}, route = undefined) {
   const navigation = { replace: jest.fn(), goBack: jest.fn(), navigate: jest.fn(), ...navigationOverrides };
-  const utils = await render(<QRScannerScreen navigation={navigation} />);
+  const utils = await render(<QRScannerScreen navigation={navigation} route={route} />);
   return { ...utils, navigation };
 }
 
@@ -200,6 +200,28 @@ describe('QRScannerScreen', () => {
       checkIn: { id: 'checkin-1' },
       siteId: 'site-42',
     });
+  });
+
+  test('when routed from FaceIDScreen with faceidVerified: true, the check-in payload includes faceid_verified: true', async () => {
+    apiClient.post.mockResolvedValue({ data: { data: { id: 'checkin-1' } } });
+    await renderScreen({}, { params: { faceidVerified: true } });
+
+    await scan(buildQrString({ siteId: 'site-42', clientId: 'client-1' }));
+
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalled());
+    const [, postedPayload] = apiClient.post.mock.calls[0];
+    expect(postedPayload.faceid_verified).toBe(true);
+  });
+
+  test('when routed without faceidVerified param (Face ID skipped), the check-in payload includes faceid_verified: false', async () => {
+    apiClient.post.mockResolvedValue({ data: { data: { id: 'checkin-1' } } });
+    await renderScreen({}, { params: { faceidVerified: false } });
+
+    await scan(buildQrString({ siteId: 'site-42', clientId: 'client-1' }));
+
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalled());
+    const [, postedPayload] = apiClient.post.mock.calls[0];
+    expect(postedPayload.faceid_verified).toBe(false);
   });
 
   test('permission permanently denied (canAskAgain: false) shows an "Apri Impostazioni" button that calls Linking.openSettings', async () => {

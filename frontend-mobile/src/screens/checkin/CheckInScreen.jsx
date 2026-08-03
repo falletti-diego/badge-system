@@ -54,7 +54,11 @@ export default function CheckInScreen({ navigation }) {
     // ownership is enforced server-side via employee_id in the JWT regardless.
     const faceIdPref = await AsyncStorage.getItem(STORAGE_KEYS.FACE_ID_ENABLED);
     const faceIdWanted = faceIdAvailable && faceIdPref !== 'false';
-    navigation.navigate(faceIdWanted ? 'FaceID' : 'QRScanner');
+    if (faceIdWanted) {
+      navigation.navigate('FaceID');
+    } else {
+      navigation.navigate('QRScanner', { faceidVerified: false });
+    }
   };
 
   const timeStr = time.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
