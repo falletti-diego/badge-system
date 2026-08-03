@@ -15,8 +15,8 @@
 ## File Structure (riepilogo di cosa viene toccato)
 
 **Backend:**
-- `backend/migrations/035_add_faceid_verified_to_checkins.sql` (nuovo) — finding #4
-- `backend/migrations/036_add_client_id_to_audit_log.sql` (nuovo) — finding #6
+- `backend/migrations/036_add_faceid_verified_to_checkins.sql` (nuovo) — finding #4
+- `backend/migrations/037_add_client_id_to_audit_log.sql` (nuovo) — finding #6
 - `backend/src/middleware/validation.js` — aggiunge `faceid_verified` allo schema Zod di POST /checkins (#4)
 - `backend/src/routes/checkins.js` — INSERT/SELECT `faceid_verified` (#4), scoping client_id sulla query di assegnazione sede (#10)
 - `backend/src/middleware/audit.js` — popola `client_id` nell'INSERT (#6)
@@ -42,12 +42,12 @@
 ## Task 1: Migration — colonna `faceid_verified` su `checkins`
 
 **Files:**
-- Create: `backend/migrations/035_add_faceid_verified_to_checkins.sql`
+- Create: `backend/migrations/036_add_faceid_verified_to_checkins.sql`
 
 - [ ] **Step 1: Scrivere la migration**
 
 ```sql
--- 035_add_faceid_verified_to_checkins.sql
+-- 036_add_faceid_verified_to_checkins.sql
 -- Finding #4 (2026-08-02): rende visibile quando un check-in NON ha avuto
 -- attestazione biometrica (hardware assente o utente ha disabilitato il
 -- toggle in Impostazioni). Non è un controllo di sicurezza enforced
@@ -65,7 +65,7 @@ Expected: la migration 035 applicata senza errori; `\d checkins` in psql mostra 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add backend/migrations/035_add_faceid_verified_to_checkins.sql
+git add backend/migrations/036_add_faceid_verified_to_checkins.sql
 git commit -m "feat(db): add faceid_verified column to checkins (finding #4)"
 ```
 
@@ -381,12 +381,12 @@ Questo chiude interamente il finding #4 (Soluzione A concordata).
 ## Task 5: Migration — colonna `client_id` su `audit_log`
 
 **Files:**
-- Create: `backend/migrations/036_add_client_id_to_audit_log.sql`
+- Create: `backend/migrations/037_add_client_id_to_audit_log.sql`
 
 - [ ] **Step 1: Scrivere la migration**
 
 ```sql
--- 036_add_client_id_to_audit_log.sql
+-- 037_add_client_id_to_audit_log.sql
 -- Finding #6 (2026-08-02): audit_log non aveva colonna tenant — un futuro
 -- endpoint di audit-log admin (scope MVP, CLAUDE.md) rischierebbe un leak
 -- cross-tenant silenzioso con una query naive. Nessun backfill delle righe
@@ -404,7 +404,7 @@ Expected: applicata senza errori, `\d audit_log` mostra la colonna e l'indice.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add backend/migrations/036_add_client_id_to_audit_log.sql
+git add backend/migrations/037_add_client_id_to_audit_log.sql
 git commit -m "feat(db): add client_id column to audit_log (finding #6)"
 ```
 
