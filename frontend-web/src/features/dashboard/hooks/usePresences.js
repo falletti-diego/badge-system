@@ -79,6 +79,7 @@ export const usePresences = (filters = {}) => {
         const response = await apiClient.get('/api/v1/checkins/stats', { params: filtersRef.current });
         setStats(response.data.data || {});
       } catch (err) {
+        setError(err.response?.data?.error || err.message || 'Failed to poll stats');
         console.error('Error polling stats:', err);
       }
     };
