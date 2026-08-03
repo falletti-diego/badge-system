@@ -102,10 +102,12 @@ function mockClientQuery(targetEmployeeId) {
 }
 
 function mockHappyPath(targetEmployeeId) {
+  const queryMock = mockClientQuery(targetEmployeeId);
   pool.connect.mockResolvedValue({
-    query: mockClientQuery(targetEmployeeId),
+    query: queryMock,
     release: jest.fn(),
   });
+  return queryMock;
 }
 
 function postCheckin(token, employeeId) {
@@ -180,11 +182,19 @@ describe('POST /api/checkins — ownership (S.32.1)', () => {
     warnSpy.mockRestore();
   });
 
-  it('la query di verifica assegnazione sede include client_id nel WHERE (finding #10, difesa in profondità)', () => {
-    const fs = require('fs');
-    const source = fs.readFileSync(require.resolve('../routes/checkins.js'), 'utf8');
-    const assignmentQueryMatch = source.match(/SELECT 1 FROM employees\s+WHERE id = \$1::uuid AND \$2::uuid = ANY\(assigned_sites\)/);
-    // Questo match deve FALLIRE dopo il fix: la query non deve più avere questa forma a 2 soli parametri
-    expect(assignmentQueryMatch).toBeNull();
+  it('la query di verifica assegnazione sede passa client_id come parametro bindato (finding #10, difesa in profondità)', async () => {
+    const queryMock = mockHappyPath(EMP_A_ID);
+    const res = await postCheckin(EMP_A_TOKEN, EMP_A_ID);
+    expect(res.status).toBe(201);
+
+    const assignmentCall = queryMock.mock.calls.find(
+      ([sql]) => sql.toUpperCase().includes('ANY(ASSIGNED_SITES)')
+    );
+    expect(assignmentCall).toBeDefined();
+
+    const [, params] = assignmentCall;
+    // client_id deve essere effettivamente bindato, nella posizione corretta,
+    // non semplicemente assente da un pattern di stringa nel sorgente.
+    expect(params).toEqual([EMP_A_ID, CLIENT_ID, SITE_ID]);
   });
 });
