@@ -42,4 +42,26 @@ describe('usePresences — pollStats error visibility (finding #9)', () => {
     await waitFor(() => expect(result.current.error).toBeTruthy());
     expect(result.current.error).toBe('Network Error');
   });
+
+  it('auto-guarisce: un poll riuscito dopo un poll fallito ripulisce error', async () => {
+    apiClient.get.mockResolvedValueOnce({ data: { data: [], pagination: { total: 0 } } }); // fetchPresences iniziale
+    apiClient.get.mockResolvedValueOnce({ data: { data: {} } }); // fetchStats iniziale
+    apiClient.get.mockRejectedValueOnce(new Error('Network Error')); // pollStats #1 (30s) fallisce
+    apiClient.get.mockResolvedValueOnce({ data: { data: {} } }); // pollStats #2 (60s) riesce
+
+    const stableFilters = {};
+    const { result } = renderHook(() => usePresences(stableFilters));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      vi.advanceTimersByTime(30000);
+    });
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    act(() => {
+      vi.advanceTimersByTime(30000);
+    });
+
+    await waitFor(() => expect(result.current.error).toBeFalsy());
+  });
 });
