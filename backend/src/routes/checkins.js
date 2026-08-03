@@ -33,7 +33,7 @@ const router = express.Router();
 const OFFLINE_SYNC_THRESHOLD_MS = 60 * 1000;
 
 router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), async (req, res, next) => {
-  const { employee_id, site_id, type, occurred_at, client_uuid } = req.validated.body;
+  const { employee_id, site_id, type, occurred_at, client_uuid, faceid_verified } = req.validated.body;
   const clientId = req.user.client_id;
   const is_offline = occurred_at != null &&
     Math.abs(Date.now() - new Date(occurred_at).getTime()) > OFFLINE_SYNC_THRESHOLD_MS;
@@ -131,16 +131,17 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
       const checkinResult = await client.query(
         `INSERT INTO checkins (
           employee_id, site_id, client_id, type, timestamp, created_by, created_at,
-          checkin_latitude, checkin_longitude, client_uuid, is_offline
-        ) VALUES ($1, $2, $3, $4, COALESCE($8::timestamptz, NOW()), $5, NOW(), $6, $7, $9, $10)
+          checkin_latitude, checkin_longitude, client_uuid, is_offline, faceid_verified
+        ) VALUES ($1, $2, $3, $4, COALESCE($8::timestamptz, NOW()), $5, NOW(), $6, $7, $9, $10, $11)
         ON CONFLICT (client_id, client_uuid) WHERE client_uuid IS NOT NULL DO NOTHING
-        RETURNING id, employee_id, site_id, type, timestamp, created_at, is_offline`,
+        RETURNING id, employee_id, site_id, type, timestamp, created_at, is_offline, faceid_verified`,
         [employee_id, site_id, clientId, type, employee_id,
           checkinLat != null ? checkinLat : null,
           checkinLng != null ? checkinLng : null,
           occurred_at || null,
           client_uuid || null,
-          is_offline === true]
+          is_offline === true,
+          faceid_verified === true]
       );
 
       let checkin;
@@ -155,7 +156,7 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
         // across employees), not something to silently paper over by returning their data.
         deduplicated = true;
         const dup = await client.query(
-          'SELECT id, employee_id, site_id, type, timestamp, created_at, is_offline FROM checkins WHERE client_id = $1::uuid AND client_uuid = $2::uuid AND employee_id = $3::uuid',
+          'SELECT id, employee_id, site_id, type, timestamp, created_at, is_offline, faceid_verified FROM checkins WHERE client_id = $1::uuid AND client_uuid = $2::uuid AND employee_id = $3::uuid',
           [clientId, client_uuid, employee_id]
         );
         if (dup.rows.length === 0) {
@@ -272,6 +273,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetCheckinsSchema), asyn
         c.modified_by_name,
         c.correction_note,
         c.is_offline,
+        c.faceid_verified,
         e.name as employee_name,
         e.email as employee_email,
         s.name as site_name

@@ -95,6 +95,12 @@ const PostCheckinSchema = z.object({
     // is_offline is intentionally NOT accepted here: the server derives it from
     // occurred_at (see routes/checkins.js) rather than trusting client input —
     // it's not a client fact, it drives an audit trail and a dashboard badge.
+    // faceid_verified (finding #4, 2026-08-02): dichiarato dal client (FaceIDScreen ha
+    // eseguito con successo prima del check-in). NON è un controllo di sicurezza — a
+    // differenza di is_offline non è derivabile server-side — è visibilità/audit: rende
+    // esplicito nel dashboard/audit log quando un check-in non ha avuto attestazione
+    // biometrica, invece di nasconderlo silenziosamente.
+    faceid_verified: z.boolean().optional().default(false),
   }),
   query: z.object({
     client_id: z.string().uuid('Invalid client_id: must be valid UUID').optional(),
