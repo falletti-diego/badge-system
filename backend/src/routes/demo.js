@@ -85,6 +85,7 @@ async function issueDemoSession(admin, clientId) {
     role: admin.role,
     client_id: clientId,
     employee_id: admin.id,
+    jti: uuid(),
   };
   if (admin.site_id) tokenPayload.site_id = admin.site_id;
 
