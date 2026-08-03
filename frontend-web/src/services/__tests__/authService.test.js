@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import authService from '../authService';
 import apiClient from '../apiClient';
 
@@ -268,6 +268,47 @@ describe('authService', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+  });
+
+  describe('refreshAccessToken — fallback lock when Web Locks API is unavailable (finding #7, code review)', () => {
+    // The `navigator.locks?.request` check in authService means this whole
+    // describe block above only ever exercises the Web Locks branch. This
+    // block forces `navigator.locks` to be absent (as in old browsers /
+    // some WebViews) so the pre-existing timestamp-lock fallback actually
+    // runs at least once in CI, instead of sitting unverified.
+    let originalLocks;
+
+    beforeEach(() => {
+      originalLocks = Object.getOwnPropertyDescriptor(global.navigator, 'locks');
+      Object.defineProperty(global.navigator, 'locks', {
+        value: undefined,
+        configurable: true,
+      });
+    });
+
+    afterEach(() => {
+      if (originalLocks) {
+        Object.defineProperty(global.navigator, 'locks', originalLocks);
+      } else {
+        delete global.navigator.locks;
+      }
+    });
+
+    it('reaches the network and returns the new token via the fallback branch (single call, no contention)', async () => {
+      localStorage.setItem('badge_refresh_token', 'rt-fallback');
+      apiClient.post.mockResolvedValue({
+        data: { data: { token: 'fallback-token', refresh_token: 'rt-fallback-2' } },
+      });
+
+      const token = await authService.refreshAccessToken();
+
+      expect(apiClient.post).toHaveBeenCalledTimes(1);
+      expect(apiClient.post).toHaveBeenCalledWith('/api/v1/auth/refresh', { refresh_token: 'rt-fallback' });
+      expect(token).toBe('fallback-token');
+      expect(localStorage.getItem('badge_auth_token')).toBe('fallback-token');
+      // The fallback lock key must be released after a successful refresh.
+      expect(localStorage.getItem('badge_refreshing')).toBeNull();
     });
   });
 });
