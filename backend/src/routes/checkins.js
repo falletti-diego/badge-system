@@ -181,6 +181,7 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
             type,
             timestamp: checkin.timestamp,
             is_offline: checkin.is_offline === true,
+            faceid_verified: checkin.faceid_verified === true,
           },
           userId: req.user.user_id,
         });
