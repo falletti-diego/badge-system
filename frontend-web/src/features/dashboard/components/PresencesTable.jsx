@@ -171,7 +171,9 @@ const PresencesTable = ({ data = { rows: [], total: 0 }, loading = false, curren
                     </Tooltip>
                   )}
                   {row.faceid_verified === false && (
-                    <Chip label="No Face ID" size="small" color="warning" sx={{ ml: 1, height: '20px', fontSize: '0.7rem' }} />
+                    <Tooltip title="Timbratura registrata senza verifica Face ID">
+                      <Chip label="No Face ID" size="small" color="warning" sx={{ ml: 1, height: '20px', fontSize: '0.7rem' }} />
+                    </Tooltip>
                   )}
                 </TableCell>
                 <TableCell>
