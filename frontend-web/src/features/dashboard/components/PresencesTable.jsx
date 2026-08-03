@@ -170,6 +170,9 @@ const PresencesTable = ({ data = { rows: [], total: 0 }, loading = false, curren
                       <Chip label="Offline" size="small" color="warning" sx={{ ml: 1, height: '20px', fontSize: '0.7rem' }} />
                     </Tooltip>
                   )}
+                  {row.faceid_verified === false && (
+                    <Chip label="No Face ID" size="small" color="warning" sx={{ ml: 1, height: '20px', fontSize: '0.7rem' }} />
+                  )}
                 </TableCell>
                 <TableCell>
                   <Box
