@@ -185,15 +185,44 @@ const authService = {
    * Use the refresh token to get a new access token (called by apiClient interceptor).
    * Returns the new access token string, or throws if refresh fails.
    *
-   * Cross-tab safety: if another browser tab already refreshed while this call
-   * was in-flight, the refresh_token in localStorage will have changed. In that
-   * case we skip the network call and return the token the other tab stored.
+   * Cross-tab safety (finding #7): the previous implementation used a
+   * 'badge_refreshing' timestamp in localStorage as a lock, but checking and
+   * writing that flag were two separate localStorage operations — a genuine
+   * TOCTOU race, since two tabs can both read the lock as absent/expired
+   * before either writes it (and if the refresh happens to take longer than
+   * the fixed fallback wait below, a waiting tab times out and fires its own
+   * duplicate network call). The Web Locks API (`navigator.locks.request`)
+   * gives true cross-tab mutual exclusion — the browser itself queues
+   * concurrent requests for the same lock name, with no arbitrary timeout —
+   * so we prefer it wherever it's available (Chrome/Edge/Firefox/Safari
+   * 16.4+). Very old browsers without it fall back to the previous
+   * timestamp-based mechanism, which is not atomic but better than nothing.
    */
   async refreshAccessToken() {
     const refresh_token = this.getRefreshToken();
     if (!refresh_token) throw new Error('No refresh token');
 
-    // Cross-tab lock: a tab writing 'badge_refreshing' blocks other tabs for 4s
+    const doRefresh = async () => {
+      // Another tab may have already completed the refresh while we were
+      // waiting for the lock — skip the network call in that case.
+      if (this.getRefreshToken() !== refresh_token) {
+        const raced = this.getToken();
+        if (raced) return raced;
+      }
+
+      const response = await apiClient.post('/api/v1/auth/refresh', { refresh_token });
+      const { token, refresh_token: new_refresh } = response.data.data;
+      localStorage.setItem(TOKEN_KEY, token);
+      if (new_refresh) localStorage.setItem(REFRESH_TOKEN_KEY, new_refresh);
+      return token;
+    };
+
+    if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+      return navigator.locks.request('badge_refresh_lock', doRefresh);
+    }
+
+    // Fallback for browsers without the Web Locks API: previous (non-atomic)
+    // timestamp-based lock.
     const LOCK_KEY = 'badge_refreshing';
     const LOCK_TTL_MS = 4000;
     const existing = localStorage.getItem(LOCK_KEY);
@@ -206,17 +235,7 @@ const authService = {
 
     localStorage.setItem(LOCK_KEY, String(Date.now()));
     try {
-      // If the refresh_token changed while we waited, another tab already refreshed
-      if (localStorage.getItem(REFRESH_TOKEN_KEY) !== refresh_token) {
-        const raced = localStorage.getItem(TOKEN_KEY);
-        if (raced) return raced;
-      }
-
-      const response = await apiClient.post('/api/v1/auth/refresh', { refresh_token });
-      const { token, refresh_token: new_refresh } = response.data.data;
-      localStorage.setItem(TOKEN_KEY, token);
-      if (new_refresh) localStorage.setItem(REFRESH_TOKEN_KEY, new_refresh);
-      return token;
+      return await doRefresh();
     } finally {
       localStorage.removeItem(LOCK_KEY);
     }

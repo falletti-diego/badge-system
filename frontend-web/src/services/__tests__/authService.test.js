@@ -211,4 +211,63 @@ describe('authService', () => {
       expect(localStorage.getItem('badge_auth_token')).toBeNull();
     });
   });
+
+  describe('refreshAccessToken — cross-tab lock (finding #7)', () => {
+    // A mock that ACTUALLY serializes concurrent lock requests, the way a
+    // real browser's Web Locks API does: the callback for a later request
+    // only runs once the previous request's callback promise has settled.
+    // This matters because a naive mock like `request: (name, cb) => cb()`
+    // just invokes the callback immediately for every caller — it does not
+    // enforce mutual exclusion, so it would let a genuinely broken
+    // (non-serializing) implementation pass the test for the wrong reason.
+    // A queueing mock is required to prove real mutual exclusion: it fails
+    // against the old TOCTOU-racy fallback lock, and it would also fail
+    // against a fixed implementation that forgot to route the network call
+    // through the lock's callback.
+    function createSerializingLocksMock() {
+      let tail = Promise.resolve();
+      return {
+        request: (name, cb) => {
+          const result = tail.then(() => cb());
+          tail = result.catch(() => {});
+          return result;
+        },
+      };
+    }
+
+    beforeEach(() => {
+      // jsdom's `navigator.locks` (when present) is a getter-only property,
+      // so it must be redefined rather than assigned.
+      Object.defineProperty(global.navigator, 'locks', {
+        value: createSerializingLocksMock(),
+        configurable: true,
+      });
+    });
+
+    it('due refresh concorrenti non causano una doppia chiamata di rete quando il refresh impiega più del vecchio timeout di fallback (finding #7)', async () => {
+      vi.useFakeTimers();
+      try {
+        localStorage.setItem('badge_refresh_token', 'rt-123');
+        // Delay (700ms) deliberately exceeds the old fallback lock's fixed
+        // 600ms wait — this is what exposes the TOCTOU race in the
+        // pre-fix implementation: a waiting tab would time out before the
+        // in-flight refresh completes and fire its own duplicate request.
+        apiClient.post.mockImplementation(() => new Promise((resolve) =>
+          setTimeout(() => resolve({ data: { data: { token: 'new-token', refresh_token: 'rt-456' } } }), 700)
+        ));
+
+        const p1 = authService.refreshAccessToken();
+        const p2 = authService.refreshAccessToken();
+
+        await vi.advanceTimersByTimeAsync(2000);
+        const [a, b] = await Promise.all([p1, p2]);
+
+        expect(apiClient.post).toHaveBeenCalledTimes(1); // solo UNA delle due chiamate arriva davvero alla rete
+        expect(a).toBe('new-token');
+        expect(b).toBe('new-token');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });
