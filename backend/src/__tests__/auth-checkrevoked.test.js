@@ -9,6 +9,7 @@ jest.unmock('../middleware/checkRevoked');
 
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const app = require('../app');
 const { pool } = require('../db/pool');
 
@@ -182,6 +183,43 @@ describe('checkRevoked Middleware (S.32.7 Task 4)', () => {
 
     // Should still return 401 SESSION_REVOKED (revocation is not best-effort)
     expect(res.status).toBe(401);
+  });
+
+  // ===== FINDING #12: jti_hash POPULATED IN AUDIT TRAIL =====
+
+  test('jti_hash è popolato (non null) in un audit REVOKED_TOKEN_ATTEMPT (finding #12)', async () => {
+    // Access token carrying a jti claim (as issued by routes/auth.js after
+    // the finding #12 fix) — simulates a revoked user retrying with the
+    // last access token they had before being revoked.
+    const jti = 'a1b2c3d4-0000-4000-8000-000000000099';
+    const revokedUserTokenWithJti = jwt.sign(
+      { ...revokedUser, jti },
+      JWT_PRIVATE_KEY,
+      { algorithm: 'RS256', expiresIn: '15m' }
+    );
+
+    pool.query.mockResolvedValueOnce({
+      rows: [{ reason: 'ADMIN_REVOKE' }],
+    }); // revoked_tokens SELECT finds an active revocation
+    pool.query.mockResolvedValueOnce({ rows: [] }); // INSERT audit_log
+
+    await request(app)
+      .get('/api/v1/employees')
+      .set('Authorization', `Bearer ${revokedUserTokenWithJti}`);
+
+    const auditLogCall = pool.query.mock.calls.find((call) =>
+      call[0].includes('INSERT INTO audit_log')
+    );
+
+    expect(auditLogCall).toBeDefined();
+    expect(auditLogCall[0]).toContain('jti_hash');
+
+    // Params order in checkRevoked.js: ['user', user_id, jti_hash]
+    const jti_hash_param = auditLogCall[1][2];
+    const expectedHash = crypto.createHash('sha256').update(jti).digest('hex');
+
+    expect(jti_hash_param).not.toBeNull();
+    expect(jti_hash_param).toBe(expectedHash);
   });
 
   // ===== REVOCATION REASONS =====
