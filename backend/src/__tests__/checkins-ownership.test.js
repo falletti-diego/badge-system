@@ -179,4 +179,12 @@ describe('POST /api/checkins — ownership (S.32.1)', () => {
     );
     warnSpy.mockRestore();
   });
+
+  it('la query di verifica assegnazione sede include client_id nel WHERE (finding #10, difesa in profondità)', () => {
+    const fs = require('fs');
+    const source = fs.readFileSync(require.resolve('../routes/checkins.js'), 'utf8');
+    const assignmentQueryMatch = source.match(/SELECT 1 FROM employees\s+WHERE id = \$1::uuid AND \$2::uuid = ANY\(assigned_sites\)/);
+    // Questo match deve FALLIRE dopo il fix: la query non deve più avere questa forma a 2 soli parametri
+    expect(assignmentQueryMatch).toBeNull();
+  });
 });

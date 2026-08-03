@@ -88,8 +88,8 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
       // 3. Verify employee is assigned to site
       const assignmentResult = await client.query(
         `SELECT 1 FROM employees
-         WHERE id = $1::uuid AND $2::uuid = ANY(assigned_sites)`,
-        [employee_id, site_id]
+         WHERE id = $1::uuid AND client_id = $2::uuid AND $3::uuid = ANY(assigned_sites)`,
+        [employee_id, clientId, site_id]
       );
 
       if (assignmentResult.rows.length === 0) {
