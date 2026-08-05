@@ -54,6 +54,10 @@ const ExportButton = ({ filters = {} }) => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+
+      if (response.headers?.['x-truncated'] === 'true') {
+        setError('Export troncato a 50.000 righe — restringi il periodo per un export completo.');
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Errore durante l\'esportazione');
       console.error('Error exporting CSV:', err);
