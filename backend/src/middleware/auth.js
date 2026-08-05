@@ -5,6 +5,7 @@
 
 const jwt = require('jsonwebtoken');
 const pino = require('pino');
+const crypto = require('crypto');
 const Sentry = require('@sentry/node');
 const { getDefaultAdminUser } = require('../__fixtures__/demo-users');
 
@@ -97,6 +98,10 @@ function requireAuth(req, res, next) {
       role: decoded.role,
       iat: decoded.iat,
       exp: decoded.exp,
+      // finding #12: derive jti_hash from the access token's own jti so
+      // checkRevoked.js can log a non-null jti_hash on REVOKED_TOKEN_ATTEMPT
+      // audit rows (mirrors the refresh-token jti hashing in routes/auth.js).
+      jti_hash: decoded.jti ? crypto.createHash('sha256').update(decoded.jti).digest('hex') : null,
     };
 
     // Include employee_id if present (for employee role users)
@@ -147,6 +152,9 @@ function optionalAuth(req, res, next) {
           auth0_sub: decoded.auth0_sub,
           client_id: decoded.client_id,
           role: decoded.role,
+          // finding #12: same jti_hash derivation as requireAuth() — this is
+          // the path actually chained with checkRevoked in app.js.
+          jti_hash: decoded.jti ? crypto.createHash('sha256').update(decoded.jti).digest('hex') : null,
         };
 
         // Include employee_id if present

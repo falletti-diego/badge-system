@@ -85,6 +85,7 @@ async function issueDemoSession(admin, clientId) {
     role: admin.role,
     client_id: clientId,
     employee_id: admin.id,
+    jti: uuid(),
   };
   if (admin.site_id) tokenPayload.site_id = admin.site_id;
 
@@ -393,8 +394,11 @@ router.post('/start', createValidationMiddleware(DemoStartSchema), async (req, r
  * legitimately created (not just the stale one), causing a false
  * REPLAY_ATTACK_DETECTED and a 5-minute lockout on a session that never
  * replayed anything. Scoping the delete correctly would require this
- * route to know the caller's specific old jti, which isn't available from
- * an access token (only refresh tokens carry a jti). Since the plan
+ * route to know the caller's specific old jti, but access tokens (as of
+ * finding #12) only expose jti_hash on req.user — middleware/auth.js
+ * derives that one-way SHA-256 hash from the token's jti for revocation
+ * logging, it doesn't surface the raw jti itself, so there's still no
+ * value here to scope the DELETE by. Since the plan
  * itself frames this cleanup as hygiene, not a security requirement (see
  * plan §4: "non un rischio di sicurezza, ma un accumulo di sessioni
  * fantasma da evitare"), the previous role's refresh token is now simply

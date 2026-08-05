@@ -142,6 +142,7 @@ router.post('/login', createValidationMiddleware(LoginSchema), async (req, res, 
       email: user.email,
       role: user.role,
       client_id: user.client_id,
+      jti: uuid(),
     };
     if (user.employee_id) tokenPayload.employee_id = user.employee_id;
     if (user.site_id) tokenPayload.site_id = user.site_id;
@@ -468,6 +469,11 @@ router.post('/refresh', async (req, res) => {
       // Generate new jti (Fix #1: prevent replay by using new unique jti)
       const jti_new = uuid();
 
+      // finding #12: also stamp the rotated jti onto the access token payload
+      // (previously only the refresh token carried a jti) so checkRevoked.js
+      // can log a non-null jti_hash on a REVOKED_TOKEN_ATTEMPT audit row.
+      tokenPayload.jti = jti_new;
+
       // Generate new access token (15m) and refresh token (7d) with new jti
       const token = jwt.sign(tokenPayload, JWT_PRIVATE_KEY, {
         algorithm: JWT_ALGORITHM,
@@ -733,6 +739,7 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
       client_id: req.user.client_id,
       employee_id: employee_id,
       must_change_password: false,
+      jti: uuid(),
     };
     if (req.user.site_id) tokenPayload.site_id = req.user.site_id;
 

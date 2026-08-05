@@ -84,6 +84,7 @@ router.post('/invite/:token/accept', async (req, res, next) => {
       role: employee.role,
       client_id: employee.client_id,
       employee_id: employee.id,
+      jti: uuid(),
     };
     const token = jwt.sign(tokenPayload, JWT_PRIVATE_KEY, {
       algorithm: JWT_ALGORITHM,

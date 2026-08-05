@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from 'react';
-import { Button, CircularProgress, FormControl, Select, MenuItem, InputLabel, Box } from '@mui/material';
+import { Button, CircularProgress, FormControl, Select, MenuItem, InputLabel, Box, Alert } from '@mui/material';
 import apiClient from '../../../services/apiClient';
 import authService from '../../../services/authService';
 
@@ -18,6 +18,7 @@ const FORMAT_OPTIONS = [
 const ExportButton = ({ filters = {} }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [errorSeverity, setErrorSeverity] = useState('error');
   const userRole = authService.getUserRole();
 
   // Viewer sees only payroll formats; others default to generic
@@ -32,6 +33,7 @@ const ExportButton = ({ filters = {} }) => {
     try {
       setLoading(true);
       setError('');
+      setErrorSeverity('error');
 
       const { limit, offset, ...exportFilters } = filters;
 
@@ -54,7 +56,13 @@ const ExportButton = ({ filters = {} }) => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+
+      if (response.headers?.['x-truncated'] === 'true') {
+        setErrorSeverity('warning');
+        setError('Export troncato a 50.000 righe — restringi il periodo per un export completo.');
+      }
     } catch (err) {
+      setErrorSeverity('error');
       setError(err.response?.data?.error || 'Errore durante l\'esportazione');
       console.error('Error exporting CSV:', err);
     } finally {
@@ -98,7 +106,11 @@ const ExportButton = ({ filters = {} }) => {
         )}
       </Button>
 
-      {error && <Box component="span" sx={{ color: 'error.main', fontSize: '0.8rem' }}>{error}</Box>}
+      {error && (
+        <Alert severity={errorSeverity} sx={{ py: 0 }}>
+          {error}
+        </Alert>
+      )}
     </Box>
   );
 };
