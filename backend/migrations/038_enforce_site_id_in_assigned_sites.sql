@@ -18,17 +18,23 @@
 --    dipendente multi-sede resta multi-sede).
 
 -- Parte 1: backfill
+-- NOTA (code review): assigned_sites non ha vincolo NOT NULL nello schema
+-- (default ARRAY[]::UUID[], ma righe legacy possono comunque avere NULL).
+-- Sotto three-valued logic di Postgres, `x = ANY(NULL)` valuta a NULL, e
+-- `NOT NULL` è a sua volta NULL (falsy) — quindi senza COALESCE le righe
+-- con assigned_sites IS NULL verrebbero silenziosamente saltate sia dal
+-- backfill che dal trigger sottostante, restando rotte per sempre.
 UPDATE employees
-SET assigned_sites = array_append(assigned_sites, site_id)
+SET assigned_sites = array_append(COALESCE(assigned_sites, ARRAY[]::UUID[]), site_id)
 WHERE site_id IS NOT NULL
-  AND NOT (site_id = ANY(assigned_sites));
+  AND NOT (site_id = ANY(COALESCE(assigned_sites, ARRAY[]::UUID[])));
 
 -- Parte 2: trigger
 CREATE OR REPLACE FUNCTION ensure_site_id_in_assigned_sites()
 RETURNS TRIGGER AS $$
 BEGIN
-  IF NEW.site_id IS NOT NULL AND NOT (NEW.site_id = ANY(NEW.assigned_sites)) THEN
-    NEW.assigned_sites := array_append(NEW.assigned_sites, NEW.site_id);
+  IF NEW.site_id IS NOT NULL AND NOT (NEW.site_id = ANY(COALESCE(NEW.assigned_sites, ARRAY[]::UUID[]))) THEN
+    NEW.assigned_sites := array_append(COALESCE(NEW.assigned_sites, ARRAY[]::UUID[]), NEW.site_id);
   END IF;
   RETURN NEW;
 END;
