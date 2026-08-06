@@ -56,6 +56,8 @@ describe('applyDiff', () => {
     expect(call).toBeDefined();
     expect(call[0]).toMatch(/site_id\s*=/);
     expect(call[1]).toContain('site-milano');
+    const arrayParam = call[1].find((p) => Array.isArray(p));
+    expect(arrayParam).toEqual(['site-milano']); // exactly the new site once, no duplicate of old+new
   });
 
   it('clears assigned_sites when a "modificato" entry transfers the employee to no site (site_id → null)', async () => {
