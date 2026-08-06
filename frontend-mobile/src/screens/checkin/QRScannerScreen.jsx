@@ -15,11 +15,12 @@ import { isLowEndDevice } from '../../utils/deviceTier';
 const QR_PREFIX = 'badge://checkin';
 const SUCCESS_FLASH_DURATION = 500;
 
-export default function QRScannerScreen({ navigation }) {
+export default function QRScannerScreen({ navigation, route }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checkType, setCheckType] = useState('IN');
+  const faceidVerified = route?.params?.faceidVerified === true;
   // Guard: prevents duplicate submissions from rapid onBarcodeScanned events
   const processingRef = useRef(false);
 
@@ -112,6 +113,7 @@ export default function QRScannerScreen({ navigation }) {
         timestamp: occurredAt,   // legacy field, harmless to keep sending
         occurred_at: occurredAt, // the field the backend actually reads
         client_uuid: clientUuid, // idempotency key
+        faceid_verified: faceidVerified,
       };
 
       const response = await apiClient.post(ENDPOINTS.CHECKINS_POST, payload, {

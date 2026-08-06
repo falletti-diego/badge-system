@@ -2,7 +2,9 @@
  * Audit Log Helper
  * Records check-in modifications to audit_log table
  *
- * NOTE: audit_log schema has no client_id column and user_id is UUID referencing employees.
+ * NOTE: audit_log.client_id is nullable (Task 5, finding #6) and populated
+ * from the caller-supplied clientId when available, for future tenant-scoped
+ * audit queries. user_id is UUID referencing employees.
  * logAudit is best-effort: errors are logged but do NOT abort the calling transaction.
  * user_id is only stored when it is a valid UUID (i.e. employee users); managers use NULL.
  */
@@ -15,7 +17,7 @@ async function logAudit(client, {
   action,
   entity,
   entityId,
-  _clientId, // kept in signature for call-site compatibility, not used in INSERT
+  clientId,
   oldValue,
   newValue,
   userId = 'system',
@@ -27,6 +29,8 @@ async function logAudit(client, {
 
   // user_id is UUID referencing employees — only store when caller passes a valid UUID
   const auditUserId = UUID_REGEX.test(userId) ? userId : null;
+  // client_id is UUID — only store when caller passes a valid UUID (finding #6)
+  const auditClientId = UUID_REGEX.test(clientId) ? clientId : null;
 
   // PoolClient objects (from pool.connect() / withTransaction) have a release() method;
   // the Pool object itself does not. SAVEPOINT is only valid inside a transaction block,
@@ -40,9 +44,9 @@ async function logAudit(client, {
     try {
       await client.query('SAVEPOINT audit_log_sp');
       await client.query(
-        `INSERT INTO audit_log (action, entity, entity_id, old_value, new_value, user_id, timestamp)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-        [action, entity, entityId, oldValue ? JSON.stringify(oldValue) : null, JSON.stringify(newValue), auditUserId]
+        `INSERT INTO audit_log (action, entity, entity_id, old_value, new_value, user_id, client_id, timestamp)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+        [action, entity, entityId, oldValue ? JSON.stringify(oldValue) : null, JSON.stringify(newValue), auditUserId, auditClientId]
       );
       await client.query('RELEASE SAVEPOINT audit_log_sp');
       logger.debug({ action: 'audit_log_created', auditAction: action, entityId, userId: auditUserId });
@@ -54,9 +58,9 @@ async function logAudit(client, {
     // Outside a transaction (pool passed directly): simple best-effort INSERT.
     try {
       await client.query(
-        `INSERT INTO audit_log (action, entity, entity_id, old_value, new_value, user_id, timestamp)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-        [action, entity, entityId, oldValue ? JSON.stringify(oldValue) : null, JSON.stringify(newValue), auditUserId]
+        `INSERT INTO audit_log (action, entity, entity_id, old_value, new_value, user_id, client_id, timestamp)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+        [action, entity, entityId, oldValue ? JSON.stringify(oldValue) : null, JSON.stringify(newValue), auditUserId, auditClientId]
       );
       logger.debug({ action: 'audit_log_created', auditAction: action, entityId, userId: auditUserId });
     } catch (err) {

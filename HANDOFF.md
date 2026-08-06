@@ -1,12 +1,58 @@
-# Badge System — Session 89 Handoff
+# Badge System — Session 92 Handoff
 
-**Date:** 2026-07-30
-**Session:** 89 — SES fuori sandbox (Task 7 chiuso) + Gate finale onboarding self-service completato end-to-end in produzione + 2 bug di produzione reali scoperti e fixati
-**Status:** ✅ **Piano onboarding self-service chiuso su ogni asse** (8/8 task + gate finale reale). SES fuori sandbox, quota 50.000/giorno. Backlog: STAGING, S.26, ANDROID.1/1b, e un nuovo bug UX (redirect post-login) scoperto oggi.
+**Date:** 2026-08-02
+**Session:** 92 — Verifica manuale completa del wizard "Aggiorna Dipendenti" (12/12 sezioni checklist) + saldo ferie negativo consentito su richiesta esplicita dell'utente
+**Status:** ✅ Wizard Excel "Aggiorna Dipendenti" verificato su tutta la checklist manuale (9 bug reali totali trovati/fixati sul suo intero ciclo di vita, 3 miglioramenti UX aggiuntivi). ✅ Saldo ferie può ora scendere sotto zero (dipendente+manager), mostrato in rosso. Tutto ancora su `develop` — **nessun merge su `main`**, per istruzione esplicita dell'utente ("Lascialo su staging per ora"). `/code-review:code-review` + `/test-all` finali eseguiti, nessun problema bloccante.
 
 ---
 
-## Goal (Session 89)
+## Goal (Session 92)
+
+Continuazione diretta di Session 91 (wizard "Aggiorna Dipendenti" appena implementato, mai testato manualmente da un umano reale). L'utente ha eseguito personalmente, sezione per sezione, `docs/employee-sync-wizard-test-checklist.md` (12 sezioni) contro staging, chiedendo ad ogni segnalazione una verifica indipendente mia (non fidarsi del solo "dovrebbe funzionare"). A fine checklist, richiesta aggiuntiva fuori scope wizard: rimuovere il blocco sul saldo ferie negativo. Chiusura sessione con `/code-review:code-review` + `/test-all` + aggiornamento documentazione.
+
+## Esito (Session 92)
+
+**Verifica checklist — 12/12 sezioni chiuse.** Ogni segnalazione dell'utente è stata riprodotta e verificata indipendentemente prima di essere dichiarata risolta (chiamate API dirette contro staging, browser headless Puppeteer per il rendering reale, log/metriche CloudWatch per email/permessi). **5 bug reali aggiuntivi trovati** durante questa fase (si sommano ai 4 già trovati in Session 91, totale **9 bug reali** sull'intero ciclo di vita del wizard — dettaglio completo in `TASKS.md` sezione ONB.3):
+
+1. **IAM SES mai concesso su staging** (Sezione 3) — il ruolo `badge-system-ec2-staging-role` non aveva mai avuto `ses:SendEmail`, a differenza del ruolo di produzione. Ogni email di benvenuto falliva silenziosamente (l'endpoint rispondeva comunque 200). Fix: policy `BadgeSESSendEmail` replicata dal ruolo di produzione, verificato con metrica CloudWatch `AWS/SES Send`.
+2. **Dettaglio del cambiamento assente per "Modificati"/"Riattivati"** (Sezione 6) — la preview mostrava solo l'email della riga cambiata, nessuna indicazione di COSA fosse cambiato (in particolare i trasferimenti di sede, mostrati come UUID grezzi quando mostrati). Fix: `computeDiff.js` risolve gli UUID di sede in nomi leggibili (`fromName`/`toName`), il wizard mostra un riepilogo per riga.
+3-5. Tre bug minori già trovati e fixati nella verifica automatica indipendente prima dell'inizio del test manuale dell'utente (vedi Session 91/TASKS.md).
+
+**3 miglioramenti UX implementati su proposta dell'utente** (non bug, richieste esplicite durante l'uso reale):
+- Lista scorrevole con Chip conteggio per "Anomalie" invece di una riga comma-separated (diventava illeggibile con molti dipendenti).
+- Email "bentornato" con **reset password automatico** alla riattivazione — prima il dipendente rientrato non riceveva alcuna notifica e manteneva la vecchia password (potenzialmente dimenticata dopo mesi).
+- Bottone "Annulla" nella preview del wizard — prima l'unico modo per abbandonare un file caricato per errore era ricaricare l'intera pagina.
+
+**Fuori scope wizard — saldo ferie negativo**: rimosso il blocco `INSUFFICIENT_SALDO` da `POST /api/v1/leave/request` (`backend/src/routes/leaves.js`). L'azienda permette esplicitamente a dipendenti e manager di richiedere ferie oltre il saldo residuo — decisione di business confermata dall'utente, non un default. Resta il controllo che un saldo sia comunque configurato (`400 NO_SALDO_CONFIGURED` se manca del tutto — nulla da cui "andare in negativo"). Il saldo negativo è mostrato in rosso (MUI `color="error"`) nelle pagine self-service `EmployeeLeaveRequest.jsx`/`ManagerLeaveRequest.jsx` (non nella vista aggregata admin, fuori scope esplicito). **Verificato dal vivo su staging, non solo con test mockati**: il saldo di Maria è naturalmente sceso a **-2 giorni** dopo il deploy (conseguenza dello smoke test CI che ha continuato a richiedere ferie oltre il limite), e una richiesta esplicita con saldo già negativo continua a restituire `201`.
+
+**`/code-review:code-review`** (5 agenti paralleli sul commit range `21a6d14..HEAD`, l'intera sessione di verifica+fix) ha prodotto 4 potenziali problemi, tutti scorati per confidenza da agenti Haiku dedicati (rubrica 0-100): **25, 75, 50, 75 — nessuno raggiunge la soglia ≥80**, quindi nessun blocco formale. Sistemati comunque, per buona pratica, i due più vicini alla soglia: un docstring in `employeeSync.js` reso impreciso da un fix precedente (diceva "mai scrive sul DB" ma con `createSites: true` lo fa), e la mancanza di verifica live per il cambio saldo ferie (risolta con la verifica su staging sopra).
+
+**`/test-all` finale**: backend 706/706, frontend-web 264/264. Due fallimenti isolati durante l'esecuzione (uno nel conteggio demo-tenant, uno di connessione DB), entrambi riverificati in isolamento e confermati come flakiness da contesa tra suite di test parallele condividendo lo stesso DB locale — non regressioni introdotte in questa sessione.
+
+**Pulizia dati di test**: tutti i dipendenti/sedi/richieste di test creati durante questa sessione di verifica sono stati disattivati/eliminati da staging al termine di ciascun controllo, non lasciati residui (eccetto alcuni `test-*` già noti da sessioni precedenti, documentati nel backlog di `TASKS.md`).
+
+## Backlog per la prossima sessione (in ordine di urgenza)
+
+1. **Decisione utente**: quando promuovere `develop`→`main` per il wizard "Aggiorna Dipendenti" — oggi resta intenzionalmente solo su staging.
+2. **2 sotto-punti della checklist wizard non verificabili** (Sezioni 6.4/6.5): richiedono che un dipendente creato via wizard possa scansionare il QR code e timbrare da app mobile — ma l'app TestFlight punta sempre a produzione (`https://api.dataxiom.it`, nessun profilo EAS con `EXPO_PUBLIC_API_URL` alternativo), quindi un dipendente creato solo su staging non può autenticarsi da lì. Servirebbe una build mobile dedicata puntata su staging, non ancora costruita.
+3. **STAGING → produzione**: valutare se/quando iniziare a promuovere le feature verificate su `develop` verso `main` in modo più sistematico ora che l'ambiente è maturo.
+4. Backlog invariato da Session 89: bug UX redirect post-login (`LoginPage.jsx:44`, basso rischio), S.26 (consenso GPS GDPR, HIGH), ANDROID.1/1b.
+
+## Note operative (Session 92)
+
+- **Verifica manuale + verifica automatica indipendente insieme trovano più bug di ciascuna da sola**: il pattern usato in questa sessione (utente testa manualmente → io riproduco/verifico indipendentemente con API dirette/browser headless prima di dichiarare risolto) ha trovato bug che la sola automazione (già estesa, 12 sezioni testate programmaticamente in Session 91) non aveva colto — in particolare il gap IAM SES su staging, invisibile a qualunque test che non tenti davvero un invio email reale.
+- **"L'endpoint ha risposto 200" ≠ "l'email è arrivata"**: due volte in questa sessione un successo API ha mascherato un problema di consegna reale (permesso IAM mancante, poi spam) — solo l'ispezione diretta di log/metriche AWS (CloudWatch SES Send/Bounce/Reject) ha distinto i due casi.
+- **Credenziali staging usate in questa sessione**: `pippo@badge.local` / `NQQG65D7Zawy57ur` (admin, cliente "Dataxiom MVP"), password Maria/Pino recuperate da SSM `/badge/staging/DEMO_MARIA_PASSWORD`/`DEMO_PINO_PASSWORD`.
+- **Puppeteer-core + Chrome locale** (`/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`) usato per verifiche di rendering reale in browser headless quando serviva vedere l'output visivo effettivo, non solo la risposta API — pattern riusabile per future sessioni di verifica UI.
+- Worktree di questa sessione: `.claude/worktrees/employee-sync-wizard`, branch `develop` — non rimosso, resta attivo per continuare il lavoro sul wizard.
+
+---
+
+## Handoff precedenti (invariati, riportati sotto per contesto)
+
+### Session 89 — SES fuori sandbox + Gate finale onboarding self-service
+
+**Goal:** AWS ha approvato il sandbox-exit SES (dopo `DENIED` fermo da Session 84). L'utente ha scelto di eseguire in sequenza: Task 7 del piano SES (config produzione), poi il Gate finale del piano onboarding self-service — l'unica verifica rimasta di quel piano, bloccata dal sandbox SES fino a oggi.
 
 AWS ha approvato il sandbox-exit SES (dopo `DENIED` fermo da Session 84). L'utente ha scelto di eseguire in sequenza: Task 7 del piano SES (config produzione), poi il Gate finale del piano onboarding self-service — l'unica verifica rimasta di quel piano, bloccata dal sandbox SES fino a oggi.
 

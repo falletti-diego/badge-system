@@ -70,7 +70,7 @@ export default function FaceIDScreen({ navigation }) {
         fallbackLabel: 'Usa passcode',
       });
       if (result.success) {
-        navigation.replace('QRScanner');
+        navigation.replace('QRScanner', { faceidVerified: true });
       } else {
         setStatus('failed');
       }

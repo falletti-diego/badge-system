@@ -80,7 +80,7 @@ router.get('/', async (req, res, next) => {
               COUNT(DISTINCT e.id) AS employee_count
        FROM clients c
        LEFT JOIN sites s ON s.client_id = c.id
-       LEFT JOIN employees e ON e.client_id = c.id
+       LEFT JOIN employees e ON e.client_id = c.id AND e.active = true
        ${where}
        GROUP BY c.id
        ORDER BY c.created_at DESC

@@ -67,6 +67,9 @@ CREATE TABLE employees (
   assigned_sites UUID[] DEFAULT ARRAY[]::UUID[],
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  active BOOLEAN NOT NULL DEFAULT true,
+  hiring_date DATE,
+  exit_date DATE,
   UNIQUE(client_id, email)
 );
 

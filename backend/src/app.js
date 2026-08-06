@@ -79,6 +79,11 @@ app.use(helmet());
 app.use(cors({
   origin: process.env.CORS_ORIGIN?.split(',').map(s => s.trim()).filter(Boolean) || ['https://badge.dataxiom.it', 'https://dataxiom-badge.netlify.app'],
   credentials: true,
+  // Custom response headers are NOT readable by browser JS on cross-origin
+  // responses unless explicitly exposed here (Fetch/CORS spec: only the
+  // safelisted headers are readable by default). X-Truncated is read by
+  // frontend-web/src/features/dashboard/components/ExportButton.jsx.
+  exposedHeaders: ['X-Truncated'],
 }));
 
 // Body parser middleware

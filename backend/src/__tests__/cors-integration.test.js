@@ -78,4 +78,22 @@ describe('CORS middleware integration', () => {
 
     expect(res.headers['access-control-allow-credentials']).toBe('true');
   });
+
+  // Regression test for finding #13 gap: the backend sets a custom
+  // X-Truncated response header (see routes/export.js) that
+  // ExportButton.jsx reads client-side to warn about truncated CSV
+  // exports. Per the Fetch/CORS spec, custom response headers are
+  // invisible to browser JS on cross-origin responses unless the server
+  // lists them in Access-Control-Expose-Headers. Without this, the
+  // truncation warning silently never fires in production (Netlify
+  // dashboard <-> EC2 API is cross-origin), even though supertest-only
+  // tests (no real browser CORS enforcement) and mocked frontend tests
+  // (never go through a real fetch/XHR) can't catch it.
+  it('exposes X-Truncated so browser JS can read it on cross-origin responses', async () => {
+    const res = await request(app)
+      .get('/api/v1/health')
+      .set('Origin', 'https://test-origin.com');
+
+    expect(res.headers['access-control-expose-headers']).toContain('X-Truncated');
+  });
 });

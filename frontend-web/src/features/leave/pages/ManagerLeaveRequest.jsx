@@ -251,12 +251,14 @@ export const ManagerLeaveRequest = () => {
                   {BALANCE_TYPES.map((type) => {
                     const row = balance.find((b) => b.leave_type === type.value);
                     const remaining = row ? row.remaining_days : 0;
+                    const isNegative = remaining < 0;
                     return (
                       <Chip
                         key={type.value}
                         label={`${type.label}: ${remaining} gg disponibili`}
                         variant="outlined"
-                        sx={{ borderColor: '#374151', color: '#374151', fontWeight: 500 }}
+                        color={isNegative ? 'error' : 'default'}
+                        sx={isNegative ? { fontWeight: 600 } : { borderColor: '#374151', color: '#374151', fontWeight: 500 }}
                       />
                     );
                   })}

@@ -45,6 +45,7 @@ export const usePresences = (filters = {}) => {
     try {
       const response = await apiClient.get('/api/v1/checkins/stats', { params: filters });
       setStats(response.data.data || {});
+      setError(null);
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to fetch stats');
       console.error('Error fetching stats:', err);
@@ -78,7 +79,9 @@ export const usePresences = (filters = {}) => {
       try {
         const response = await apiClient.get('/api/v1/checkins/stats', { params: filtersRef.current });
         setStats(response.data.data || {});
+        setError(null);
       } catch (err) {
+        setError(err.response?.data?.error || err.message || 'Failed to poll stats');
         console.error('Error polling stats:', err);
       }
     };

@@ -55,7 +55,7 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
               e.name AS employee_name, e.external_employee_id AS matricola,
               e.id AS emp_id
        FROM checkins ci
-       JOIN employees e ON e.id = ci.employee_id
+       JOIN employees e ON e.id = ci.employee_id AND e.active = true
        WHERE ci.client_id = $1::uuid
          AND ci.timestamp >= $2
          AND ci.timestamp < $3
@@ -84,7 +84,7 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
     if (role === 'manager' && checkinsResult.rows.length === 0) {
       const empResult = await pool.query(
         `SELECT id, name, external_employee_id AS matricola FROM employees
-         WHERE client_id = $1::uuid AND $2::uuid = ANY(assigned_sites) AND role = 'employee'
+         WHERE client_id = $1::uuid AND $2::uuid = ANY(assigned_sites) AND role = 'employee' AND active = true
          ORDER BY name`,
         [client_id, managerSiteId]
       );
@@ -104,7 +104,7 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
       // Get all employees for the client
       const allEmps = await pool.query(
         `SELECT id, name, external_employee_id AS matricola FROM employees
-         WHERE client_id = $1::uuid AND role != 'viewer' AND role != 'admin' AND role != 'manager'
+         WHERE client_id = $1::uuid AND role != 'viewer' AND role != 'admin' AND role != 'manager' AND active = true
          ORDER BY name`,
         [client_id]
       );
@@ -207,8 +207,8 @@ router.get('/trend', requireAuth, createValidationMiddleware(GetPresencesTrendSc
 
     // Dipendenti attivi nello scope (solo ruolo 'employee', mai manager/admin/viewer)
     const employeesQuery = resolvedSiteId
-      ? 'SELECT id FROM employees WHERE client_id = $1::uuid AND role = \'employee\' AND $2::uuid = ANY(assigned_sites)'
-      : 'SELECT id FROM employees WHERE client_id = $1::uuid AND role = \'employee\'';
+      ? 'SELECT id FROM employees WHERE client_id = $1::uuid AND role = \'employee\' AND active = true AND $2::uuid = ANY(assigned_sites)'
+      : 'SELECT id FROM employees WHERE client_id = $1::uuid AND role = \'employee\' AND active = true';
     const employeesParams = resolvedSiteId ? [client_id, resolvedSiteId] : [client_id];
     const employeesResult = await pool.query(employeesQuery, employeesParams);
     const activeEmployeeIds = employeesResult.rows.map((r) => r.id);

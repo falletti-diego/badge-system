@@ -143,6 +143,52 @@ describe('Leave Request API Endpoints — Validation', () => {
   });
 });
 
+describe('Leave Request API Endpoints — Saldo negativo consentito', () => {
+  // L'azienda permette esplicitamente ai dipendenti di andare in negativo
+  // con le ferie — la richiesta non deve mai essere bloccata per saldo
+  // insufficiente, solo per assenza totale di configurazione del saldo.
+  const originalDisableAuth = process.env.DISABLE_AUTH;
+  beforeAll(() => { process.env.DISABLE_AUTH = 'false'; });
+  afterAll(() => { process.env.DISABLE_AUTH = originalDisableAuth; });
+
+  it('creates the request even when it would push remaining_days below zero', async () => {
+    const employeeToken = makeToken({ user_id: TEST_EMPLOYEE_ID, role: 'employee' });
+
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] }) // employee lookup
+      .mockResolvedValueOnce({ rows: [{ remaining_days: 1 }] }) // solo 1 giorno disponibile
+      .mockResolvedValueOnce({ rows: [{ id: TEST_LEAVE_ID, num_days: 3, status: 'PENDING' }] }); // insert
+
+    const res = await request(app)
+      .post('/api/v1/leave/request')
+      .set('Authorization', `Bearer ${employeeToken}`)
+      .send({
+        leave_type: 'FERIE_1',
+        start_date: '2026-06-15',
+        end_date: '2026-06-17', // 3 giorni richiesti, saldo disponibile 1 -> andrebbe a -2
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.id).toBe(TEST_LEAVE_ID);
+  });
+
+  it('still rejects when no saldo row exists at all for that leave_type/year (nothing to go negative from)', async () => {
+    const employeeToken = makeToken({ user_id: TEST_EMPLOYEE_ID, role: 'employee' });
+
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] })
+      .mockResolvedValueOnce({ rows: [] }); // nessun saldo configurato per questo leave_type/anno
+
+    const res = await request(app)
+      .post('/api/v1/leave/request')
+      .set('Authorization', `Bearer ${employeeToken}`)
+      .send({ leave_type: 'FERIE_1', start_date: '2026-06-15', end_date: '2026-06-17' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.details.code).toBe('NO_SALDO_CONFIGURED');
+  });
+});
+
 describe('Leave Request API Endpoints — Response Structure', () => {
   describe('GET /api/v1/leave/pending', () => {
     it('should return 200 with array for pending requests', async () => {

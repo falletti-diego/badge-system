@@ -182,7 +182,7 @@ router.get('/by-date-range', requireAuth, async (req, res, next) => {
         i.reason, i.certificate_url, i.created_at,
         e.name as employee_name, e.email as employee_email, e.site_id
        FROM illnesses i
-       JOIN employees e ON i.employee_id = e.id
+       JOIN employees e ON i.employee_id = e.id AND e.active = true
        WHERE i.client_id = $1::uuid
        AND i.cancelled_at IS NULL
        AND i.start_date <= $3::date
@@ -252,7 +252,7 @@ router.get('/admin', requireAuth, async (req, res, next) => {
         i.cancelled_at, i.cancelled_by, i.cancellation_reason,
         e.name as employee_name, e.email as employee_email
       FROM illnesses i
-      JOIN employees e ON i.employee_id = e.id
+      JOIN employees e ON i.employee_id = e.id AND e.active = true
       WHERE i.client_id = $1::uuid
     `;
 
@@ -311,7 +311,7 @@ router.get('/manager', requireAuth, async (req, res, next) => {
         i.created_at,
         e.name as employee_name, e.email as employee_email
        FROM illnesses i
-       JOIN employees e ON i.employee_id = e.id
+       JOIN employees e ON i.employee_id = e.id AND e.active = true
        WHERE i.client_id = $1::uuid
        AND e.site_id = $2::uuid
        AND i.cancelled_at IS NULL

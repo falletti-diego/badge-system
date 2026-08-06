@@ -62,7 +62,7 @@ router.get('/', async (req, res, next) => {
   try {
     const { client_id } = req.query;
     const params = [];
-    let where = 'WHERE e.role = \'viewer\'';
+    let where = 'WHERE e.role = \'viewer\' AND e.active = true';
     if (client_id) {
       const uuidCheck = z.string().uuid().safeParse(client_id);
       if (!uuidCheck.success) return next(new ValidationError('Invalid client_id format'));

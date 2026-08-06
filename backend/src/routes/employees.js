@@ -42,7 +42,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetEmployeesSchema), asy
         created_at,
         updated_at
       FROM employees
-      WHERE client_id = $1::uuid
+      WHERE client_id = $1::uuid AND active = true
       ORDER BY created_at DESC
       LIMIT $2 OFFSET $3
     `;
@@ -52,7 +52,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetEmployeesSchema), asy
     // Get total count for pagination
     const countQuery = `
       SELECT COUNT(*) as total FROM employees
-      WHERE client_id = $1::uuid
+      WHERE client_id = $1::uuid AND active = true
     `;
     const countResult = await pool.query(countQuery, [clientId]);
     const total = parseInt(countResult.rows[0].total, 10);
@@ -107,7 +107,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
         created_at,
         updated_at
       FROM employees
-      WHERE id = $1::uuid AND client_id = $2::uuid
+      WHERE id = $1::uuid AND client_id = $2::uuid AND active = true
     `;
 
     const result = await pool.query(query, [id, clientId]);

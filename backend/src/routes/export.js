@@ -167,7 +167,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
         c.modified_at,
         c.modified_by
       FROM checkins c
-      LEFT JOIN employees e ON c.employee_id = e.id
+      LEFT JOIN employees e ON c.employee_id = e.id AND e.active = true
       LEFT JOIN sites s ON c.site_id = s.id
       ${whereClause}
       ORDER BY c.timestamp ASC

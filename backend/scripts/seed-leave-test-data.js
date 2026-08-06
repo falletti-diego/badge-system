@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Seed script: Import leave test data via API
+ * Seed script: Import leave test data via the "Aggiorna Dipendenti" wizard API
  *
  * Usage:
  *   node scripts/seed-leave-test-data.js
@@ -10,45 +10,91 @@
  *   - Backend running on http://localhost:3000
  *   - DISABLE_AUTH=true
  *   - Database initialized with client 550e8400-e29b-41d4-a716-446655440001
- *   - Sites Milano and Torino created
+ *   - Sites "Milano Store" and "Torino Store" created
  *
  * What it does:
- *   1. Imports 8 employees (4 Milano, 4 Torino) with managers and employees
- *   2. Assigns shifts: 10 days per employee in June 2026
- *   3. Creates leave requests:
+ *   1. Reads scripts/seed-data/leave-test-data.csv and builds an in-memory
+ *      xlsx workbook (Dipendenti + Sedi sheets) matching the format expected
+ *      by POST /api/v1/admin/employee-sync/apply, then submits it. The
+ *      legacy CSV-only /admin/employees/import endpoint was removed in favor
+ *      of the Aggiorna Dipendenti wizard (Task 12, employee-sync-wizard).
+ *   2. Creates leave requests:
  *      - Maria: FERIE_1 (6-13 giugno) + MALATTIA (20-21 giugno)
  *      - Francesca: FERIE_1 (9-15 giugno, APPROVED)
  *      - Lucia: MALATTIA (24-26 giugno, APPROVED)
- *   4. Prints all UUIDs and credentials for manual testing
+ *   3. Prints a summary of the sync result for manual testing
+ *
+ * Note: temp passwords for newly created employees are no longer returned in
+ * the API response (they are sent via welcome email instead), so this script
+ * can no longer print them. See importEmployees() below.
  */
 
 const fs = require('fs');
 const path = require('path');
+const { parse } = require('csv-parse/sync');
+const ExcelJS = require('exceljs');
 const FormData = require('form-data');
 const fetch = require('node-fetch');
 
 const API_BASE = process.env.API_BASE || 'http://localhost:3000';
 const CLIENT_ID = '550e8400-e29b-41d4-a716-446655440001';
-const MILANO_SITE_NAME = 'Milano';
-const TORINO_SITE_NAME = 'Torino';
 
 const CSV_PATH = path.join(__dirname, 'seed-data', 'leave-test-data.csv');
 
+function roleToWizardRole(role) {
+  return role === 'manager' ? 'responsabile' : 'dipendente';
+}
+
+async function buildWorkbookBuffer(csvRows) {
+  const wb = new ExcelJS.Workbook();
+
+  const dipSheet = wb.addWorksheet('Dipendenti');
+  dipSheet.addRow([
+    'nome_completo', 'email', 'telefono', 'ruolo', 'sede',
+    'matricola', 'stato', 'data_assunzione', 'data_uscita',
+  ]);
+  for (const row of csvRows) {
+    dipSheet.addRow([
+      row.name,
+      row.email,
+      row.phone,
+      roleToWizardRole(row.role),
+      row.site_name,
+      row.employee_id,
+      'Attivo',
+      '',
+      '',
+    ]);
+  }
+
+  const sediSheet = wb.addWorksheet('Sedi');
+  sediSheet.addRow(['nome_sede', 'indirizzo', 'latitudine', 'longitudine', 'raggio_geofence_m']);
+  const siteNames = [...new Set(csvRows.map((r) => r.site_name))];
+  for (const siteName of siteNames) {
+    sediSheet.addRow([siteName, '', '', '', '']);
+  }
+
+  return wb.xlsx.writeBuffer();
+}
+
 async function importEmployees() {
-  console.log('📋 Importing employees from CSV...\n');
+  console.log('📋 Syncing employees via Aggiorna Dipendenti wizard...\n');
 
   if (!fs.existsSync(CSV_PATH)) {
     console.error(`❌ CSV file not found: ${CSV_PATH}`);
     process.exit(1);
   }
 
-  const csvBuffer = fs.readFileSync(CSV_PATH);
+  const csvText = fs.readFileSync(CSV_PATH, 'utf-8');
+  const csvRows = parse(csvText, { columns: true, skip_empty_lines: true, trim: true });
+
+  const xlsxBuffer = await buildWorkbookBuffer(csvRows);
   const formData = new FormData();
-  formData.append('file', csvBuffer, 'leave-test-data.csv');
+  formData.append('file', xlsxBuffer, 'seed.xlsx');
   formData.append('client_id', CLIENT_ID);
 
   try {
-    const response = await fetch(`${API_BASE}/api/v1/admin/employees/import`, {
+    const response = await fetch(`${API_BASE}/api/v1/admin/employee-sync/apply`, {
       method: 'POST',
       body: formData,
       // Note: curl doesn't send Authorization header when DISABLE_AUTH=true
@@ -56,28 +102,35 @@ async function importEmployees() {
 
     if (!response.ok) {
       const error = await response.json();
-      console.error(`❌ Import failed: ${response.status}`);
+      console.error(`❌ Sync failed: ${response.status}`);
       console.error(JSON.stringify(error, null, 2));
       process.exit(1);
     }
 
     const result = await response.json();
-    console.log('✅ Import succeeded!\n');
-    console.log(`   Created: ${result.data.created}`);
-    console.log(`   Skipped: ${result.data.skipped}`);
-    if (result.data.errors.length > 0) {
-      console.log(`\n⚠️  Errors:`);
-      result.data.errors.forEach((err) => {
-        console.log(`   Line ${err.line}: ${err.error}`);
-      });
+    const { errors, nuovi, riattivati, rimossi, modificati, anomalie, failedEmails } = result.data;
+
+    if (errors.length > 0) {
+      console.error(`❌ Sync validation failed:`);
+      errors.forEach((err) => console.error(`   ${err}`));
+      process.exit(1);
     }
 
-    console.log('\n📋 Temp Passwords (save these for login):\n');
-    result.data.passwords.forEach((pwd) => {
-      console.log(`   ${pwd.email.padEnd(30)} → ${pwd.temp_password}`);
-    });
+    console.log('✅ Sync succeeded!\n');
+    console.log(`   Nuovi: ${nuovi.length}`);
+    console.log(`   Riattivati: ${riattivati.length}`);
+    console.log(`   Rimossi: ${rimossi.length}`);
+    console.log(`   Modificati: ${modificati.length}`);
+    console.log(`   Anomalie: ${anomalie.length}`);
+    if (failedEmails && failedEmails.length > 0) {
+      console.log(`\n⚠️  Welcome email failed for:`);
+      failedEmails.forEach((f) => console.log(`   ${f.email}`));
+    }
 
-    return result.data.passwords;
+    console.log('\n📋 Password temporanee inviate via email ai nuovi dipendenti (non esposte in questa risposta).\n');
+    console.log('   Employees: ' + nuovi.map((n) => n.email).join(', '));
+
+    return nuovi.map((n) => ({ email: n.email }));
   } catch (err) {
     console.error(`❌ Network error: ${err.message}`);
     process.exit(1);
@@ -128,8 +181,8 @@ async function createLeaveRequests(passwords) {
 
   for (const leave of leaves) {
     const pwd = passwords.find((p) => p.email === leave.email);
-    if (!pwd) {
-      console.warn(`⚠️  No password found for ${leave.email}, skipping leave creation`);
+    if (!pwd || !pwd.temp_password) {
+      console.warn(`⚠️  No password available for ${leave.email} (not newly created, or temp password was sent by email only — not returned by the API), skipping leave creation`);
       continue;
     }
 
@@ -185,7 +238,7 @@ async function main() {
   await createLeaveRequests(passwords);
 
   console.log('\n\n📝 Next Steps for Manual Testing:\n');
-  console.log('1. Login with one of the temp passwords above');
+  console.log('1. Retrieve a temp password from the welcome email sent to a new employee (or from maria@badge.local via DEMO_MARIA_PASSWORD)');
   console.log('2. You will be redirected to /change-password');
   console.log('3. Set a new password (e.g., "NewPassword123")');
   console.log('4. Login again with the new password\n');

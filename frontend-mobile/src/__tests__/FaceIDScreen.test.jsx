@@ -54,14 +54,22 @@ describe('FaceIDScreen', () => {
     const { navigation } = await renderScreen();
 
     await waitFor(() => expect(LocalAuthentication.authenticateAsync).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith('QRScanner'));
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith('QRScanner', { faceidVerified: true }));
   });
 
   test('device with SecurityLevel.BIOMETRIC still calls authenticateAsync as today', async () => {
     const { navigation } = await renderScreen();
 
     await waitFor(() => expect(LocalAuthentication.authenticateAsync).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith('QRScanner'));
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith('QRScanner', { faceidVerified: true }));
+  });
+
+  test('successful biometric authentication navigates with faceidVerified: true so the check-in payload can declare Face ID attestation', async () => {
+    LocalAuthentication.authenticateAsync.mockResolvedValue({ success: true });
+
+    const { navigation } = await renderScreen();
+
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith('QRScanner', { faceidVerified: true }));
   });
 
   test('regression guard: a rejected native call (not a resolved {success:false}) does not leave the retry button permanently disabled', async () => {
