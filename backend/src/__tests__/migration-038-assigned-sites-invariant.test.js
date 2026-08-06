@@ -87,8 +87,8 @@ describe('migration 038 — invariante site_id ⊆ assigned_sites', () => {
       );
 
       expect(empRow.rows[0].assigned_sites).toEqual([siteId]);
-      await client.query('ROLLBACK');
     } finally {
+      await client.query('ROLLBACK').catch(() => {});
       client.release();
     }
   });
@@ -140,8 +140,8 @@ describe('migration 038 — invariante site_id ⊆ assigned_sites', () => {
       expect(finalSites).toContain(milano);
       expect(finalSites).toContain(torino);
       expect(finalSites.length).toBe(3);
-      await client.query('ROLLBACK');
     } finally {
+      await client.query('ROLLBACK').catch(() => {});
       client.release();
     }
   });
@@ -168,8 +168,8 @@ describe('migration 038 — invariante site_id ⊆ assigned_sites', () => {
 
       expect(empRow.rows[0].site_id).toBeNull();
       expect(empRow.rows[0].assigned_sites).toEqual([]);
-      await client.query('ROLLBACK');
     } finally {
+      await client.query('ROLLBACK').catch(() => {});
       client.release();
     }
   });
@@ -206,8 +206,8 @@ describe('migration 038 — invariante site_id ⊆ assigned_sites', () => {
       );
 
       expect(empRow.rows[0].assigned_sites).toEqual([siteId]);
-      await client.query('ROLLBACK');
     } finally {
+      await client.query('ROLLBACK').catch(() => {});
       client.release();
     }
   });
