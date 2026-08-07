@@ -2,6 +2,7 @@ import React from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Sentry from '@sentry/react-native';
+import { scrubBreadcrumb, scrubEvent } from './src/utils/sentryScrub';
 import { useFonts, Cormorant_300Light, Cormorant_400Regular, Cormorant_500Medium, Cormorant_400Regular_Italic } from '@expo-google-fonts/cormorant';
 import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold } from '@expo-google-fonts/dm-sans';
 import RootNavigator from './src/navigation/RootNavigator';
@@ -15,6 +16,11 @@ if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
     tracesSampleRate: 0.2,
     // Automatically capture JS exceptions + native crashes
     enableNativeCrashHandling: true,
+    // Defense in depth (finding #1, Fase B): mirrors the backend's Sentry
+    // scrubbing (app.js, finding S.25) so token/PII never leaves the device
+    // via a breadcrumb or crash report either.
+    beforeBreadcrumb: scrubBreadcrumb,
+    beforeSend: scrubEvent,
   });
 }
 
