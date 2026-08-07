@@ -1,84 +1,82 @@
-# Badge System — Session 93 Handoff
+# Badge System — Session 94 Handoff
 
 **Date:** 2026-08-07
-**Session:** 93 — Fase A findings 2 Agosto (8 fix sicurezza/correttezza) + bug strutturale `assigned_sites` scoperto e chiuso con trigger DB + wizard "Aggiorna Dipendenti" promosso in produzione + fix idempotenza migration 035
-**Status:** ✅ Tutti e 3 i fix live in produzione e verificati dal vivo (health check + chiamate API reali contro `api.dataxiom.it`, non solo deploy "riuscito"). ✅ Wizard "Aggiorna Dipendenti" ora anche su `main`. Deploy complicato da un major outage GitHub Actions (~11 ore) — risolto senza bypass, solo leve legittime dei workflow.
+**Session:** 94 — Fase B findings 2 Agosto (finding #1, secure storage mobile) implementata e mergeata in `main`
+**Status:** ✅ Mergeato e pushato su `origin/main`. ⚠️ Non ancora in mano a nessun utente reale — richiede una nuova build nativa (bump `buildNumber` + Codemagic + submit), non distribuibile via OTA.
 
 ---
 
-## Goal (Session 93)
+## Goal (Session 94)
 
-Chiudere gli 8 findings isolati a basso rischio di `findings2agosto2016.md` (analisi di sicurezza/correttezza di 4 giorni prima), verificarli su staging, e promuoverli in produzione. Durante la verifica manuale è emerso un secondo problema, non pianificato, che ha finito per occupare gran parte della sessione: un bug strutturale sull'assegnazione sede dei dipendenti.
+Continuazione diretta di Session 93 nella stessa giornata: indirizzare il Finding #1 (Fase B) di `findings2agosto2016.md` — token mobile (access token, refresh token, oggetto utente) salvati in chiaro via `AsyncStorage` invece che in `expo-secure-store` cifrato.
 
-## Esito (Session 93)
+## Esito (Session 94)
 
-### 1. Fase A — 8 findings chiusi (`fix/findings-2026-08-02-fase-a`, poi mergeato)
+### Design — `/superpowers:brainstorming`
 
-Deciso con l'utente via `/superpowers:brainstorming`+`/grilling`: solo i findings isolati (#4,6,7,9,10,11,12,13) + verifica-chiusura del #8 (RBAC lato client — confermato già mitigato server-side, non un bug). Rimandati esplicitamente: #1 (secure storage mobile, Fase B), #2+#5 (geofencing/QR rotation reali, Fase C). Lasciato invariato: #3 (token web localStorage, decisione già presa in `TASKS.md` C.5.3).
+Analizzati i 4 consumer diretti delle 3 chiavi sensibili (`authService.js`, `apiClient.js`, `RootNavigator.jsx`, `ChangePasswordScreen.jsx`). Decisioni esplicite via `AskUserQuestion`: nuovo modulo `secureAuthStorage.js` come unico punto di accesso; **nessuna migrazione dati** (forza re-login una tantum — motivato dal fatto che la base utenti reale oggi è solo test interno, e il cold-start esistente in `RootNavigator` già ripulisce automaticamente i residui in chiaro della vecchia build).
 
-Eseguito via `/superpowers:subagent-driven-development`, 14 task, ognuno con doppia review (spec compliance + code quality). Diversi round di fix-and-re-review hanno trovato problemi reali non catturati al primo giro: audit log mancante per `faceid_verified`, tooltip mancante sul chip "No Face ID", test basato su regex fragile sostituito con un'asserzione comportamentale, stato d'errore "sticky" mai ripulito su un poll riuscito, coverage mancante sul ramo fallback del lock cross-tab, `user_id` non-UUID hardcoded in un nuovo test (pattern esplicitamente vietato da CLAUDE.md "Pattern 1").
+Su domanda diretta dell'utente ("è corretto dal punto di vista di sicurezza/GDPR?"), confermato: `expo-secure-store` chiude realmente il vettore "estrazione da backup" del finding (Keychain non incluso nei backup non cifrati), Art. 32 GDPR nomina la cifratura come misura appropriata. Da un'analisi esplicitamente richiesta ("che cosa altro potresti aggiungere allo scope?") sono emerse 2 aggiunte concrete, verificate nel codice e approvate una per una: **scrubbing Sentry mobile** (mai esistito prima, a parità col backend, finding storico S.25) e **gestione esplicita errori SecureStore** (nuova classe di fallimento assente con `AsyncStorage`).
 
-**La code review finale olistica sull'intero branch** (dopo tutti i 14 task, non task-per-task) ha trovato il problema più importante della sessione: l'header `X-Truncated` non era esposto in `Access-Control-Expose-Headers`. Su un'architettura cross-origin (dashboard Netlify ↔ API EC2) il warning di export CSV troncato — uno degli 8 findings appena fixati — non sarebbe mai arrivato a un browser reale, vanificando silenziosamente il fix. Corretto con `exposedHeaders` in `app.js` + test CORS dedicato.
+Spec: `docs/superpowers/specs/2026-08-07-mobile-secure-token-storage-design.md`.
 
-Verifica manuale su staging fatta insieme all'utente, passo-passo, con correzioni mie quando la procedura di test proposta non esercitava davvero il path giusto — es. il lock cross-tab (finding #7) va testato **corrompendo** il token senza ricaricare la pagina, non cancellandolo e ricaricando: quest'ultimo attiva solo `ProtectedRoute.jsx` (redirect sincrono al login), mai il meccanismo di refresh/lock che si voleva verificare.
+### Piano ed esecuzione — `/superpowers:writing-plans` + `/superpowers:subagent-driven-development`
 
-### 2. Bug strutturale `assigned_sites` (`fix/assigned-sites-invariant-2026-08-06`, poi mergeato)
+Piano 9 task TDD (`docs/superpowers/plans/2026-08-07-mobile-secure-token-storage-plan.md`), eseguito in worktree isolato (`.claude/worktrees/mobile-secure-token-storage`, tool nativo `EnterWorktree`).
 
-Durante la verifica manuale, `maria@badge.local` non riusciva a timbrare su staging. Investigato a fondo invece di patchare il sintomo: `POST /checkins` autorizza solo tramite `assigned_sites` (array), mai tramite `site_id` (colonna singola) — e le migration storiche 018/019a (che creano gli account demo) valorizzano solo `site_id`. **Stessa causa già colpita in produzione una volta** (Pino, Session 81), sistemata allora con una migration mirata a quella singola riga (033), mai generalizzata.
+**Problema scoperto subito dopo la creazione del worktree**: branchato da un punto precedente ai commit di spec+piano appena scritti su `main` locale (mai pushati) — il file del piano non esisteva nel worktree. Risolto con `git rebase --onto` per innestare i commit mancanti sotto ai primi due task già fatti, branch riallineato con `git branch -f` dopo che il rebase l'aveva lasciato in detached HEAD.
 
-Verifica quantitativa **prima** di scrivere codice (script diagnostico via SSH su EC2/RDS, sola lettura, ripulito dopo): 1 riga rotta in produzione (dal 19 Giugno, mai scoperta), 2 su staging. Nessun cliente reale coinvolto.
+**9 task, ognuno con implementer + spec-reviewer + code-quality-reviewer indipendenti:**
+- Dipendenza `expo-secure-store` (auto-registra il config plugin in `app.json`, verificato legittimo).
+- Modulo `secureAuthStorage.js` (9 test TDD).
+- `authService.js` — nessun test esisteva prima, colmato (6 test nuovi).
+- `apiClient.js` — **bug ambientale reale scoperto dal test stesso**: `await import('./authService')` (codice preesistente, mai testato prima) non funziona sotto la config Jest del progetto (`babel-preset-expo` senza `--experimental-vm-modules`). Fix in commit separato: `require()` lazy equivalente, verificato semanticamente identico anche in produzione (Metro compila comunque a CommonJS).
+- `RootNavigator.jsx` — **code review ha trovato un problema reale**: `Promise.all` del cold-start senza `.catch` (prima `AsyncStorage.multiRemove` non falliva quasi mai, ora `secureAuthStorage.clearSession()` può lanciare per davvero). Fix con `.catch`+`console.warn`, sia lì sia sulla lettura ruolo in `MainTabs`.
+- `ChangePasswordScreen.jsx` / `LoginScreen.jsx` — messaggio dedicato quando il salvataggio sicuro fallisce DOPO che l'operazione è già riuscita lato server.
+- Scrubbing Sentry (`sentryScrub.js`).
+- Gate finale — 108 test (107 pass, 1 flake pre-esistente non correlato in `MyScheduleScreen.test.jsx`, verificato con **diff vuoto** contro il commit base), grep zero residui `AsyncStorage` sulle chiavi sensibili.
 
-Su decisione esplicita dell'utente (`/superpowers:brainstorming` dedicato), scelto un fix strutturale: migration `038` con backfill generale + **trigger Postgres `BEFORE INSERT OR UPDATE`** che mantiene per sempre l'invariante `site_id ⊆ assigned_sites` — additivo (mai rimuove siti da un dipendente multi-sede), NULL-safe (`COALESCE`, aggiunto in un round di code review dopo che il primo passaggio non gestiva `assigned_sites IS NULL`). L'utente ha chiesto esplicitamente test che verificassero anche **l'interazione con il codice esistente**, non solo il fix isolato — soddisfatto con test a 3 livelli: trigger/backfill isolati (Postgres reale, 6 scenari), non-regressione dei path applicativi esistenti (in particolare `employeeSync/applyDiff.js`, che gestisce `assigned_sites` per conto suo — verificato che il trigger sia un no-op corretto lì), end-to-end attraverso l'handler reale di `POST /checkins`.
+**Review finale olistica** sull'intero diff (20 file): approvata, un solo problema minore (commento obsoleto in `endpoints.js`) corretto direttamente. Punto verificato esplicitamente: un fallimento di `secureAuthStorage.getToken()` nell'interceptor di richiesta di `apiClient.js` (gira ad OGNI chiamata API) non causa mai un crash non gestito — rientra nella catena axios, ogni chiamante ha già un catch generico per errori di rete.
 
-Un fix di code review in più durante l'esecuzione: `ROLLBACK` spostato da `try` a `finally` nei test transazionali (un'asserzione fallita avrebbe altrimenti lasciato una transazione aperta nel pool condiviso, con rischio di inquinare test successivi).
+### Merge e push
 
-### 3. Deploy complicato da un major outage GitHub Actions
+Fast-forward pulito su `main` (nessun conflitto). 107/108 verdi post-merge (richiesto `npm install` sulla checkout principale, `node_modules` separato dal worktree). Worktree e branch temporaneo puliti via `finishing-a-development-branch`. **Push su `origin/main` su richiesta esplicita** — 13 commit portati remoti (incluso backlog di commit locali mai pushati da Session 93).
 
-Dalle 15:22 UTC del 6 Agosto alle ~02:00 UTC del 7 (causa dichiarata da GitHub: pod Runner Controller bloccati in stato idle), i webhook erano deliberatamente rallentati per favorire il recupero — push su `develop`/`main` smettevano di attivare qualunque run, e una run già partita è rimasta orfana (`queued` per 8+ ore, `rerun`/`cancel` in stato contraddittorio anche a outage risolto). Risolto senza bypass di sicurezza, solo leve già esposte dai workflow: `gh workflow run <file>.yml --ref <branch>` (trigger manuale `workflow_dispatch`) dove disponibile, un commit vuoto per forzare un nuovo run pulito dove necessario.
+## Cosa NON è stato fatto
 
-**Decisione di scope segnalata esplicitamente prima di agire**: il merge `develop`→`main` per Fase A ha portato con sé anche l'intero wizard "Aggiorna Dipendenti" (rimasto intenzionalmente solo su `develop` da Session 92, per istruzione esplicita dell'utente in quella sessione — "lascialo su staging per ora"). Segnalato all'utente prima del push ("il merge include molto più di Fase A") invece di procedere silenziosamente; l'utente ha confermato di voler comunque procedere con tutto insieme.
-
-### 4. Fix aggiuntivo — CI rotta ricorrente (segnalato dall'utente)
-
-Il job CI "Backend - Lint & Test" falliva la migration 035 ("column active already exists") ad ogni singolo push da quando il wizard è stato scritto — `schema.sql` era stato aggiornato per riflettere le colonne della 035 (fonte di verità per un'installazione da zero), ma CI fa bootstrap-da-schema.sql e POI rigioca tutte le migration storiche nello stesso passo. Mai un problema per staging/produzione (storico incrementale via `run-migrations.js`, mai bootstrap+replay insieme). Fix: `IF NOT EXISTS` su ogni `ADD COLUMN`/`CREATE INDEX` (stesso pattern già usato in 036/037/038), **verificato replicando lo scenario CI esatto su un DB Postgres locale usa-e-getta** prima di committare, non solo per lettura del codice.
-
-### 5. Bonus — pulizia skill personali
-
-Su richiesta dell'utente, eseguita `/skill-doctor`: trovati e rimossi (dopo conferma) 2 duplicati — `grill-me` (quasi identica a `grilling`, tenuta) ed `engineering-skills` (catalogo ridondante di 23 skill già installate singolarmente, con path di quick-start non più corrispondenti).
-
-## Verifiche finali (dal vivo, non solo "deploy riuscito")
-
-- `GET /health` su `api.dataxiom.it` → `status: ok`, DB connesso
-- `GET /admin/employee-sync/template` (wizard) → `200` reale su produzione
-- `maria@badge.local` su produzione e staging → `assigned_sites` corretto (verificato via `/admin/debug/employee-assignment/:id`)
-- CORS `Access-Control-Expose-Headers: X-Truncated` presente su richiesta cross-origin reale
-- CI "Backend - Lint & Test" verde su `develop`/`main` dopo il fix migration 035 (restano solo i 2 fallimenti pre-esistenti sotto)
+Nessuna build nativa lanciata. `expo-secure-store` è un modulo nativo, non distribuibile via OTA (`expo-updates`) — il fix è mergeato ma non raggiunge alcun utente reale finché non si fa un bump `buildNumber` + Codemagic + submit TestFlight/Play Store, stesso processo della Build 34 (Session 93).
 
 ## Backlog per la prossima sessione (in ordine di urgenza)
 
-1. **Rinnovo build TestFlight** — scade **2026-09-08**, promemoria segnato per **2026-08-25**. Hard deadline, non negoziabile.
-2. **S.26** — consenso GPS esplicito (GDPR Art. 7, HIGH) — ancora aperto, dormiente finché nessun cliente reale chiede il geofencing.
-3. **Fase B** (secure storage mobile, finding #1 — token in AsyncStorage non cifrato) — non iniziata.
-4. **Fase C** (geofencing/QR rotation reali, finding #2+#5 — il geofencing esiste nel codice ma il mobile non invia mai le coordinate GPS) — non iniziata. Va di pari passo con S.26 se un cliente lo richiede.
-5. **ANDROID.1/1b** — verifica manuale scan QR reale su device fisico/Virtual Scene, bloccato da un limite di automazione GUI-only.
-6. Backlog invariato da Session 89: bug UX redirect post-login (`LoginPage.jsx:44`, basso rischio).
-7. **2 sotto-punti checklist wizard non verificabili** (Sezioni 6.4/6.5, da Session 92) — richiedono una build mobile puntata su staging, mai costruita.
-8. **Fallimenti CI pre-esistenti, non bloccanti**: `Mobile - Test` (flakiness nota `MyScheduleScreen.test.jsx`), `Security Check`/`npm audit` (vulnerabilità documentate da Session 79).
+1. **Fase C** (geofencing/QR rotation reali, finding #2+#5 — il geofencing esiste nel codice ma il mobile non invia mai le coordinate GPS) — non iniziata. Resta l'unico finding HIGH ancora aperto di `findings2agosto2016.md`.
+2. **Nuova build nativa** per distribuire il fix Fase B (bump `buildNumber`, Codemagic, submit) — quando si decide di rilasciarlo.
+3. **S.26** — consenso GPS esplicito (GDPR Art. 7, HIGH) — dormiente finché nessun cliente reale chiede il geofencing, va di pari passo con Fase C.
+4. **ANDROID.1/1b** — verifica manuale scan QR reale su device fisico/Virtual Scene, bloccato da un limite di automazione GUI-only.
+5. Backlog invariato da Session 89: bug UX redirect post-login (`LoginPage.jsx:44`, basso rischio).
+6. **2 sotto-punti checklist wizard non verificabili** (Sezioni 6.4/6.5, da Session 92) — richiedono una build mobile puntata su staging, mai costruita.
+7. **Fallimenti CI pre-esistenti, non bloccanti**: `Mobile - Test` (flakiness nota `MyScheduleScreen.test.jsx`), `Security Check`/`npm audit` (vulnerabilità documentate da Session 79).
 
-## Note operative (Session 93)
+## Note operative (Session 94)
 
-- **Verifica manuale col cliente/utente**: se dai una procedura di test e il risultato non torna, non assumere che sia un bug — verifica prima se la procedura esercita davvero il path che si vuole testare (vedi il caso del lock cross-tab sopra).
-- **Prima di decidere l'ampiezza di un fix su dati di produzione**: una query di sola lettura per misurare il blast radius reale costa poco e cambia la decisione — qui ha dato fiducia per un trigger DB invece di una patch mirata.
-- **Durante un outage GitHub Actions**: controllare `githubstatus.com` prima di continuare a ritentare a raffica; se un workflow supporta `workflow_dispatch`, usarlo per bypassare un webhook rallentato; per workflow senza `workflow_dispatch`, un commit vuoto genera un run pulito quando uno vecchio resta orfano.
-- **Prima di un merge `developX`→`main`**: controllare sempre `git log main..origin/develop` per sapere ESATTAMENTE cosa si sta per portare in produzione — può includere più di quanto pianificato nella sessione corrente (successo qui col wizard).
-- **Migration idempotenti**: ogni nuova migration in questo repo dovrebbe usare `IF NOT EXISTS`/`ON CONFLICT` per default (035, 036, 037, 038 lo fanno tutte ora) — evita sia il problema del bootstrap CI sia futuri re-run accidentali.
-- Script diagnostici ad-hoc su produzione: sempre `require('/app/src/config-loader.js')` prima di `pg`/`db/pool.js`. Scrivere il file, `scp` su EC2, `docker cp` nel container, eseguire con `docker exec -w /app <container> node <script>.js`, poi ripulire da container+host+locale — pattern riconfermato in questa sessione.
-- Worktree `.claude/worktrees/employee-sync-wizard` (branch `develop`) e `.claude/worktrees/code-review-fixes`/`demo-self-service`/`hotfix-refresh-replay-detection` non toccati in questa sessione, restano come da sessioni precedenti.
-- Branch di questa sessione (`fix/findings-2026-08-02-fase-a`, `fix/assigned-sites-invariant-2026-08-06`, `fix/migration-035-idempotent-ci-2026-08-07`) ormai tutti mergeati in `main` — da eliminare quando comodo, non urgente.
+- **`EnterWorktree`/native worktree tool + commit locali non pushati**: se si scrivono commit su `main` locale (es. spec+piano) e SUBITO DOPO si crea un worktree per eseguirli, verificare che il worktree sia stato branchato da un punto che include quei commit — il tool può branchare da `origin/<default>` per default (`fresh`), che non li vede se non sono mai stati pushati. Sintomo: file attesi mancanti nel worktree. Fix: `git rebase --onto <commit-con-i-file> <vecchio-base> HEAD`.
+- **Codice "preesistente" copiato in un piano non è automaticamente testato**: il piano riportava `await import(...)` perché era già nel file — nessuno aveva mai verificato che funzionasse sotto Jest finché un nuovo test non l'ha esercitato per la prima volta. Non assumere che codice esistente sia jest-compatibile solo perché non ha mai fallito (poteva semplicemente non essere mai stato testato).
+- **`Promise.all` che prima non falliva mai può iniziare a fallire dopo una migrazione di storage**: `AsyncStorage` quasi non lancia mai; API più severe come `SecureStore` sì. Ogni `Promise.all`/`.finally()` esistente che le include va rivisto per un `.catch` esplicito.
+- **Worktree e main checkout hanno `node_modules` separati**: dopo un merge locale, va rieseguito `npm install` sulla checkout principale se il branch mergeato aggiungeva una dipendenza — altrimenti i test relativi falliscono per moduli mancanti, non per un vero problema di codice.
+- Branch di questa sessione (`worktree-mobile-secure-token-storage`) già mergeato ed eliminato.
 
 ---
 
 ## Handoff precedenti (invariati, riportati sotto per contesto)
+
+### Session 93 — Fase A findings 2 Agosto + bug strutturale `assigned_sites` + wizard "Aggiorna Dipendenti" in produzione + fix migration 035 + rinnovo TestFlight
+
+**Goal:** Chiudere gli 8 findings isolati a basso rischio di `findings2agosto2016.md`, verificarli su staging, promuoverli in produzione.
+
+**Esito:** **(1) Fase A** — 8 findings (#4,6,7,9,10,11,12,13) chiusi via `/superpowers:subagent-driven-development` (14 task, doppia review ciascuno). Review finale olistica ha trovato il problema più importante: header `X-Truncated` non esposto in `Access-Control-Expose-Headers`, vanificava silenziosamente il fix del finding #13 su un'architettura cross-origin — corretto. **(2) Bug strutturale `assigned_sites`** scoperto durante la verifica manuale (`maria@badge.local` non timbrava su staging): le migration storiche 018/019a valorizzano solo `site_id`, mai `assigned_sites` (stessa causa già colpita in produzione una volta, Session 81, patch one-off mai generalizzata). Verifica quantitativa su produzione: 1 riga rotta dal 19 Giugno. Fix strutturale: migration 038 con backfill + trigger Postgres `BEFORE INSERT OR UPDATE` che mantiene per sempre l'invariante, testato a 3 livelli su richiesta esplicita dell'utente. **(3)** Deploy complicato da un major outage GitHub Actions (~11 ore) — risolto senza bypass, solo `workflow_dispatch`/commit vuoto. Il merge `develop`→`main` ha portato con sé anche il wizard "Aggiorna Dipendenti" (segnalato esplicitamente prima di procedere). **(4)** Fix CI ricorrente: migration 035 resa idempotente (`IF NOT EXISTS`), verificato replicando lo scenario CI esatto in locale. **Bonus**: `/skill-doctor`, rimosse 2 skill duplicate. **Rinnovo TestFlight** eseguito a fine sessione: Build 34, scadenza reale calcolata **5 Novembre 2026** (promemoria 21 Ottobre) — la nota precedente ("Build 14, 2026-09-08") era rimasta non aggiornata per 3 build consecutive.
+
+**Credenziali/dettagli completi**: vedi `PROJECT_DECISIONS.md` sezioni Session 93 (se presenti) e `TASKS.md` riga Session 93 nel Session Log per il resoconto integrale.
+
+---
 
 ### Session 92 — Verifica manuale wizard (12/12 sezioni) + saldo ferie negativo
 
