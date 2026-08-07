@@ -1,72 +1,65 @@
-# Badge System — Session 94 Handoff
+# Badge System — Session 95 Handoff
 
 **Date:** 2026-08-07
-**Session:** 94 — Fase B findings 2 Agosto (finding #1, secure storage mobile) implementata e mergeata in `main`
-**Status:** ✅ Mergeato e pushato su `origin/main`. ⚠️ Non ancora in mano a nessun utente reale — richiede una nuova build nativa (bump `buildNumber` + Codemagic + submit), non distribuibile via OTA.
+**Session:** 95 — Build nativa iOS #35 rilasciata su TestFlight, distribuisce il fix Fase B (finding #1) a utenti reali
+**Status:** ✅ Build 35 completata con successo (confermato dall'utente). Il fix mergeato in Session 94 (secure token storage, `expo-secure-store`) è ora effettivamente in distribuzione, non più solo "in `main`".
 
 ---
 
-## Goal (Session 94)
+## Goal (Session 95)
 
-Continuazione diretta di Session 93 nella stessa giornata: indirizzare il Finding #1 (Fase B) di `findings2agosto2016.md` — token mobile (access token, refresh token, oggetto utente) salvati in chiaro via `AsyncStorage` invece che in `expo-secure-store` cifrato.
+Continuazione diretta di Session 94, stessa giornata. Chiudere il gap "mergeato ma non distribuito": la Fase B è in `main` da Session 94 ma `expo-secure-store` è un modulo nativo, non raggiungibile via OTA — serve una build nativa nuova per arrivare a un dispositivo reale.
 
-## Esito (Session 94)
+## Esito (Session 95)
 
-### Design — `/superpowers:brainstorming`
+### Backlog MVP prioritizzato + correzione di una voce stale
+Su richiesta dell'utente, prodotta una lista prioritizzata del lavoro MVP rimanente (`findings2agosto2016.md` + `TASKS.md` §MVP Hardening + questo file). Nel farlo, verificato sul codice — non fidandosi della documentazione — che il "bug UX redirect post-login" ancora segnalato aperto in questo file era **già fixato** in Session 89 (`frontend-web/src/pages/LoginPage.jsx:44-49`, `user.has_sites`). Rimosso dal backlog attivo, corretto qui e in `PROJECT_DECISIONS.md`.
 
-Analizzati i 4 consumer diretti delle 3 chiavi sensibili (`authService.js`, `apiClient.js`, `RootNavigator.jsx`, `ChangePasswordScreen.jsx`). Decisioni esplicite via `AskUserQuestion`: nuovo modulo `secureAuthStorage.js` come unico punto di accesso; **nessuna migrazione dati** (forza re-login una tantum — motivato dal fatto che la base utenti reale oggi è solo test interno, e il cold-start esistente in `RootNavigator` già ripulisce automaticamente i residui in chiaro della vecchia build).
+### Preflight + bump buildNumber
+Verificati `frontend-mobile/app.json` (`ios.buildNumber: "34"`) e `codemagic.yaml` (workflow `badge-ios-testflight`: prebuild → CocoaPods → build IPA → submit automatico a TestFlight). Nessun auto-increment nello script — bump manuale `34`→`35`, commit `6a7761b`, pushato su `origin/main`.
 
-Su domanda diretta dell'utente ("è corretto dal punto di vista di sicurezza/GDPR?"), confermato: `expo-secure-store` chiude realmente il vettore "estrazione da backup" del finding (Keychain non incluso nei backup non cifrati), Art. 32 GDPR nomina la cifratura come misura appropriata. Da un'analisi esplicitamente richiesta ("che cosa altro potresti aggiungere allo scope?") sono emerse 2 aggiunte concrete, verificate nel codice e approvate una per una: **scrubbing Sentry mobile** (mai esistito prima, a parità col backend, finding storico S.25) e **gestione esplicita errori SecureStore** (nuova classe di fallimento assente con `AsyncStorage`).
+### Disallineamento scoperto: skill `/build-mobile` vs pipeline reale
+Lo skill `/build-mobile` (`disable-model-invocation` — solo l'utente può lanciarlo) di default userebbe `npx eas build --platform ios --profile preview`, un percorso EAS Build diretto che **non sottomette a TestFlight**. La pipeline reale del progetto (usata per tutte le build precedenti, es. Build 34) è Codemagic. Segnalato esplicitamente invece di eseguire lo skill alla lettera; chiesto all'utente quale pipeline usare (`AskUserQuestion`) — confermato Codemagic.
 
-Spec: `docs/superpowers/specs/2026-08-07-mobile-secure-token-storage-design.md`.
+### Trigger manuale, nessun accesso programmatico
+`codemagic.yaml` non ha trigger automatico configurato (nessuna sezione webhook/branch) e non ci sono credenziali API Codemagic in questo ambiente. L'utente ha avviato la build direttamente dal dashboard Codemagic (workflow "Badge System iOS — TestFlight", branch `main`).
 
-### Piano ed esecuzione — `/superpowers:writing-plans` + `/superpowers:subagent-driven-development`
+### Risultato
+**Build 35 completata con successo**, confermato dall'utente. Fix Fase B ora attivo su utenti reali (test interno).
 
-Piano 9 task TDD (`docs/superpowers/plans/2026-08-07-mobile-secure-token-storage-plan.md`), eseguito in worktree isolato (`.claude/worktrees/mobile-secure-token-storage`, tool nativo `EnterWorktree`).
+## Cosa NON è stato fatto (Session 95)
 
-**Problema scoperto subito dopo la creazione del worktree**: branchato da un punto precedente ai commit di spec+piano appena scritti su `main` locale (mai pushati) — il file del piano non esisteva nel worktree. Risolto con `git rebase --onto` per innestare i commit mancanti sotto ai primi due task già fatti, branch riallineato con `git branch -f` dopo che il rebase l'aveva lasciato in detached HEAD.
-
-**9 task, ognuno con implementer + spec-reviewer + code-quality-reviewer indipendenti:**
-- Dipendenza `expo-secure-store` (auto-registra il config plugin in `app.json`, verificato legittimo).
-- Modulo `secureAuthStorage.js` (9 test TDD).
-- `authService.js` — nessun test esisteva prima, colmato (6 test nuovi).
-- `apiClient.js` — **bug ambientale reale scoperto dal test stesso**: `await import('./authService')` (codice preesistente, mai testato prima) non funziona sotto la config Jest del progetto (`babel-preset-expo` senza `--experimental-vm-modules`). Fix in commit separato: `require()` lazy equivalente, verificato semanticamente identico anche in produzione (Metro compila comunque a CommonJS).
-- `RootNavigator.jsx` — **code review ha trovato un problema reale**: `Promise.all` del cold-start senza `.catch` (prima `AsyncStorage.multiRemove` non falliva quasi mai, ora `secureAuthStorage.clearSession()` può lanciare per davvero). Fix con `.catch`+`console.warn`, sia lì sia sulla lettura ruolo in `MainTabs`.
-- `ChangePasswordScreen.jsx` / `LoginScreen.jsx` — messaggio dedicato quando il salvataggio sicuro fallisce DOPO che l'operazione è già riuscita lato server.
-- Scrubbing Sentry (`sentryScrub.js`).
-- Gate finale — 108 test (107 pass, 1 flake pre-esistente non correlato in `MyScheduleScreen.test.jsx`, verificato con **diff vuoto** contro il commit base), grep zero residui `AsyncStorage` sulle chiavi sensibili.
-
-**Review finale olistica** sull'intero diff (20 file): approvata, un solo problema minore (commento obsoleto in `endpoints.js`) corretto direttamente. Punto verificato esplicitamente: un fallimento di `secureAuthStorage.getToken()` nell'interceptor di richiesta di `apiClient.js` (gira ad OGNI chiamata API) non causa mai un crash non gestito — rientra nella catena axios, ogni chiamante ha già un catch generico per errori di rete.
-
-### Merge e push
-
-Fast-forward pulito su `main` (nessun conflitto). 107/108 verdi post-merge (richiesto `npm install` sulla checkout principale, `node_modules` separato dal worktree). Worktree e branch temporaneo puliti via `finishing-a-development-branch`. **Push su `origin/main` su richiesta esplicita** — 13 commit portati remoti (incluso backlog di commit locali mai pushati da Session 93).
-
-## Cosa NON è stato fatto
-
-Nessuna build nativa lanciata. `expo-secure-store` è un modulo nativo, non distribuibile via OTA (`expo-updates`) — il fix è mergeato ma non raggiunge alcun utente reale finché non si fa un bump `buildNumber` + Codemagic + submit TestFlight/Play Store, stesso processo della Build 34 (Session 93).
+Nessuna verifica manuale post-installazione della build 35 (login → secure storage effettivamente cifrato su device reale) — non richiesta in questa sessione. Nessuna verifica della data di scadenza TestFlight esatta della build 35 su App Store Connect (la stima ~5 Novembre 2026 riportata nel footer di `PROJECT_DECISIONS.md` è ereditata dalla Build 34 e va confermata).
 
 ## Backlog per la prossima sessione (in ordine di urgenza)
 
-1. **Fase C** (geofencing/QR rotation reali, finding #2+#5 — il geofencing esiste nel codice ma il mobile non invia mai le coordinate GPS) — non iniziata. Resta l'unico finding HIGH ancora aperto di `findings2agosto2016.md`.
-2. **Nuova build nativa** per distribuire il fix Fase B (bump `buildNumber`, Codemagic, submit) — quando si decide di rilasciarlo.
-3. **S.26** — consenso GPS esplicito (GDPR Art. 7, HIGH) — dormiente finché nessun cliente reale chiede il geofencing, va di pari passo con Fase C.
-4. **ANDROID.1/1b** — verifica manuale scan QR reale su device fisico/Virtual Scene, bloccato da un limite di automazione GUI-only.
-5. Backlog invariato da Session 89: bug UX redirect post-login (`LoginPage.jsx:44`, basso rischio).
-6. **2 sotto-punti checklist wizard non verificabili** (Sezioni 6.4/6.5, da Session 92) — richiedono una build mobile puntata su staging, mai costruita.
-7. **Fallimenti CI pre-esistenti, non bloccanti**: `Mobile - Test` (flakiness nota `MyScheduleScreen.test.jsx`), `Security Check`/`npm audit` (vulnerabilità documentate da Session 79).
+1. **Fase C** (geofencing/QR rotation reali, finding #2+#5) — non iniziata. Resta l'unico finding HIGH ancora aperto di `findings2agosto2016.md`.
+2. **S.26** — consenso GPS esplicito (GDPR Art. 7, HIGH) — dormiente finché nessun cliente reale chiede il geofencing, va di pari passo con Fase C.
+3. **ANDROID.1/1b** — verifica manuale scan QR reale su device fisico/Virtual Scene, bloccato da un limite di automazione GUI-only.
+4. **2 sotto-punti checklist wizard non verificabili** (Sezioni 6.4/6.5, da Session 92) — richiedono una build mobile puntata su staging, mai costruita.
+5. **Fallimenti CI pre-esistenti, non bloccanti**: `Mobile - Test` (flakiness nota `MyScheduleScreen.test.jsx`), `Security Check`/`npm audit` (vulnerabilità documentate da Session 79).
+6. (Opzionale) Verifica manuale della build 35 su un dispositivo reale — login, secure storage, TestFlight expiry esatta su App Store Connect.
 
-## Note operative (Session 94)
+## Note operative (Session 95)
 
-- **`EnterWorktree`/native worktree tool + commit locali non pushati**: se si scrivono commit su `main` locale (es. spec+piano) e SUBITO DOPO si crea un worktree per eseguirli, verificare che il worktree sia stato branchato da un punto che include quei commit — il tool può branchare da `origin/<default>` per default (`fresh`), che non li vede se non sono mai stati pushati. Sintomo: file attesi mancanti nel worktree. Fix: `git rebase --onto <commit-con-i-file> <vecchio-base> HEAD`.
-- **Codice "preesistente" copiato in un piano non è automaticamente testato**: il piano riportava `await import(...)` perché era già nel file — nessuno aveva mai verificato che funzionasse sotto Jest finché un nuovo test non l'ha esercitato per la prima volta. Non assumere che codice esistente sia jest-compatibile solo perché non ha mai fallito (poteva semplicemente non essere mai stato testato).
-- **`Promise.all` che prima non falliva mai può iniziare a fallire dopo una migrazione di storage**: `AsyncStorage` quasi non lancia mai; API più severe come `SecureStore` sì. Ogni `Promise.all`/`.finally()` esistente che le include va rivisto per un `.catch` esplicito.
-- **Worktree e main checkout hanno `node_modules` separati**: dopo un merge locale, va rieseguito `npm install` sulla checkout principale se il branch mergeato aggiungeva una dipendenza — altrimenti i test relativi falliscono per moduli mancanti, non per un vero problema di codice.
-- Branch di questa sessione (`worktree-mobile-secure-token-storage`) già mergeato ed eliminato.
+- **Skill con `disable-model-invocation` possono comunque essere lette/preparate**: il contenuto dello skill `/build-mobile` è arrivato in chat quando l'utente lo ha invocato — utile per fare un preflight (versioni, `node_modules`, `app.json`) e per accorgersi di un disallineamento (EAS Build vs Codemagic) prima che l'utente lanciasse qualcosa di sbagliato, pur non potendo eseguire lo skill io stesso.
+- **Non assumere che uno skill generico rispecchi la pipeline reale del progetto**: `/build-mobile` è scritto per un flusso EAS Build generico; questo progetto usa Codemagic per TestFlight da diverse sessioni (Build 33, 34, ora 35). Verificare sempre `codemagic.yaml`/`eas.json` contro quello che lo skill sta per eseguire.
+- **Codemagic non ha trigger automatico** — confermato di nuovo in questa sessione (già annotato in Session 93). Ogni build va avviata manualmente dal dashboard.
+- **Non fidarsi ciecamente di un backlog scritto in sessioni precedenti**: la voce "bug redirect post-login" era rimasta erroneamente aperta in questo file per 6 sessioni dopo essere stata effettivamente fixata — un controllo diretto sul codice (`grep`/`Read`) l'ha smentita in pochi secondi.
 
 ---
 
 ## Handoff precedenti (invariati, riportati sotto per contesto)
+
+### Session 94 — Fase B findings 2 Agosto (finding #1, secure storage mobile) implementata e mergeata in `main`
+
+**Goal:** Continuazione diretta di Session 93 nella stessa giornata: indirizzare il Finding #1 (Fase B) di `findings2agosto2016.md` — token mobile (access token, refresh token, oggetto utente) salvati in chiaro via `AsyncStorage` invece che in `expo-secure-store` cifrato.
+
+**Esito:** Design via `/superpowers:brainstorming` (nuovo modulo `secureAuthStorage.js`, nessuna migrazione dati — forza re-login, + scrubbing Sentry mobile + gestione esplicita errori SecureStore aggiunti allo scope). Piano 9 task TDD via `/superpowers:writing-plans`, eseguito con `/superpowers:subagent-driven-development` in worktree isolato. Problema di provenance del worktree (branchato prima dei commit di spec+piano) risolto con `git rebase --onto`. 2 bug reali trovati durante l'esecuzione: `await import()` incompatibile con Jest in `apiClient.js` (fixato con `require()` lazy), `Promise.all` del cold-start senza `.catch` in `RootNavigator.jsx` dopo la migrazione a `SecureStore` (che può fallire davvero, a differenza di `AsyncStorage`). Merge fast-forward pulito su `main`, push su `origin/main` (13 commit, incluso backlog Session 93 mai pushato). **Non fatto**: nessuna build nativa lanciata — chiuso in Session 95 (vedi sopra).
+
+**Credenziali/dettagli completi**: vedi `PROJECT_DECISIONS.md` sezione Session 94.
+
+---
 
 ### Session 93 — Fase A findings 2 Agosto + bug strutturale `assigned_sites` + wizard "Aggiorna Dipendenti" in produzione + fix migration 035 + rinnovo TestFlight
 
