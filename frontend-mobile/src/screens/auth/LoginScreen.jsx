@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import authService from '../../services/authService';
+import { SecureStorageError } from '../../services/secureAuthStorage';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { DEMO_ACCOUNTS } from '../../config/endpoints';
 import { flushQueue } from '../../services/offlineQueue';
@@ -36,8 +37,12 @@ export default function LoginScreen({ navigation }) {
         setLoading(false);
       }
     } catch (err) {
-      const msg = err.response?.data?.message || 'Email o password non corretti';
-      Alert.alert('Accesso negato', msg);
+      if (err instanceof SecureStorageError) {
+        Alert.alert('Errore', 'Accesso riuscito, ma non è stato possibile salvare la sessione in modo sicuro. Riprova.');
+      } else {
+        const msg = err.response?.data?.message || 'Email o password non corretti';
+        Alert.alert('Accesso negato', msg);
+      }
       setLoading(false);
     }
   };

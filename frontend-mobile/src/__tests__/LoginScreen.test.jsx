@@ -10,8 +10,14 @@ jest.mock('../services/offlineQueue', () => ({
   flushQueue: jest.fn(),
 }));
 
+jest.mock('../services/secureAuthStorage', () => {
+  class SecureStorageError extends Error {}
+  return { SecureStorageError };
+});
+
 const authService = require('../services/authService').default || require('../services/authService');
 const { flushQueue } = require('../services/offlineQueue');
+const { SecureStorageError } = require('../services/secureAuthStorage');
 
 const LoginScreen = require('../screens/auth/LoginScreen').default;
 
@@ -97,6 +103,22 @@ describe('LoginScreen', () => {
     expect(Alert.alert).toHaveBeenCalledWith('Accesso negato', 'Email o password non corretti');
 
     // loading reset to false: button label ("Accedi") is back instead of the spinner.
+    expect(getByText('Accedi')).toBeTruthy();
+  });
+
+  test('login che fallisce con SecureStorageError mostra un messaggio dedicato, non "Accesso negato"', async () => {
+    const err = new SecureStorageError('Impossibile salvare "badge_auth_token" in modo sicuro.');
+    authService.login.mockRejectedValue(err);
+    const { getByPlaceholderText, getByText } = await renderScreen();
+
+    await type(getByPlaceholderText('Email'), 'user@example.com');
+    await type(getByPlaceholderText('Password'), 'secret123');
+    await press(getByText('Accedi'));
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Errore',
+      'Accesso riuscito, ma non è stato possibile salvare la sessione in modo sicuro. Riprova.'
+    );
     expect(getByText('Accedi')).toBeTruthy();
   });
 });
