@@ -57,8 +57,20 @@ describe('MyScheduleScreen', () => {
   });
 
   test('fetch riuscito: renderizza i turni e scrive su AsyncStorage', async () => {
+    // Date derivate dal mese/anno correnti (non hardcoded): il componente
+    // renderizza sempre la griglia giorni per `new Date()` reale
+    // (MyScheduleScreen.jsx:24-26), quindi date fisse di un mese passato
+    // smettono di matchare le celle non appena l'orologio avanza di mese
+    // (regression reale osservata: '2026-07-01' funzionava a Luglio, falliva
+    // deterministicamente da Agosto in poi).
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const day1 = `${y}-${m}-01`;
+    const day2 = `${y}-${m}-02`;
+
     apiClient.get.mockResolvedValue({
-      data: { data: { shifts_data: { '2026-07-01': 'm', '2026-07-02': 'R' } } },
+      data: { data: { shifts_data: { [day1]: 'm', [day2]: 'R' } } },
     });
 
     const { getAllByText } = await renderInNavigator();
@@ -72,7 +84,7 @@ describe('MyScheduleScreen', () => {
     );
     const [, savedRaw] = AsyncStorage.setItem.mock.calls[0];
     const saved = JSON.parse(savedRaw);
-    expect(saved.shiftsData['2026-07-01']).toBe('m');
+    expect(saved.shiftsData[day1]).toBe('m');
   });
 
   test('errore di rete con cache dello stesso month/year: mostra banner offline', async () => {
