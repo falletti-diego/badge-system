@@ -76,7 +76,10 @@ function MainTabs() {
   useEffect(() => {
     secureAuthStorage.getUser()
       .then(user => setRole((user && user.role) || 'employee'))
-      .catch(() => setRole('employee'));
+      .catch((err) => {
+        console.warn('Failed to read user role from secure storage, defaulting to employee:', err);
+        setRole('employee');
+      });
   }, []);
 
   // Fetch initial badge count when manager logs in.
@@ -160,7 +163,9 @@ export default function RootNavigator() {
     Promise.all([
       secureAuthStorage.clearSession(),
       AsyncStorage.multiRemove([STORAGE_KEYS.CACHE_SHIFTS, STORAGE_KEYS.CACHE_PRESENCES]),
-    ]).finally(() => setInitialRoute('Login'));
+    ])
+      .catch((err) => console.warn('Cold-start session clear failed (non-fatal, still forcing Login):', err))
+      .finally(() => setInitialRoute('Login'));
   }, []);
 
   // Auto-sync the offline check-in queue at app startup, on network reconnect,
