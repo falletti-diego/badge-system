@@ -102,7 +102,9 @@ export const TIMING = {
   SUCCESS_AUTO_RETURN: 5000,
 };
 
-// Storage keys for AsyncStorage persistence
+// Storage keys. AUTH_TOKEN/REFRESH_TOKEN/USER_DATA are sensitive — they go through
+// secureAuthStorage.js (expo-secure-store, encrypted), never AsyncStorage directly
+// (finding #1, Fase B). The rest are non-sensitive prefs/caches and stay in AsyncStorage.
 export const STORAGE_KEYS = {
   AUTH_TOKEN: 'badge_auth_token',
   REFRESH_TOKEN: 'badge_refresh_token',
