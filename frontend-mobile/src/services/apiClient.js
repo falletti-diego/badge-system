@@ -1,7 +1,7 @@
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE, ENDPOINTS, TIMING, STORAGE_KEYS } from '../config/endpoints';
+import { API_BASE, ENDPOINTS, TIMING } from '../config/endpoints';
 import { navigateTo } from '../utils/navigationRef';
+import secureAuthStorage from './secureAuthStorage';
 
 const apiClient = axios.create({
   baseURL: API_BASE,
@@ -10,7 +10,7 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use(async (config) => {
-  const token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+  const token = await secureAuthStorage.getToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -18,7 +18,7 @@ apiClient.interceptors.request.use(async (config) => {
 });
 
 // Queue-based 401 interceptor: refresh access token once, retry original request.
-// If refresh fails, clear storage and redirect to Login.
+// If refresh fails, clear the secure session and redirect to Login.
 let isRefreshing = false;
 let failedQueue = [];
 
@@ -59,7 +59,7 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError);
-        await AsyncStorage.multiRemove([STORAGE_KEYS.AUTH_TOKEN, STORAGE_KEYS.REFRESH_TOKEN, STORAGE_KEYS.USER_DATA]);
+        await secureAuthStorage.clearSession();
         navigateTo('Login');
         return Promise.reject(refreshError);
       } finally {
