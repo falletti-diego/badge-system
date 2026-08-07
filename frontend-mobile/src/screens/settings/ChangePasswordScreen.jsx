@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/apiClient';
-import { ENDPOINTS, STORAGE_KEYS } from '../../config/endpoints';
+import { ENDPOINTS } from '../../config/endpoints';
 import { COLORS, FONTS } from '../../config/theme';
+import secureAuthStorage, { SecureStorageError } from '../../services/secureAuthStorage';
 
 export default function ChangePasswordScreen({ navigation }) {
   const [oldPassword, setOldPassword] = useState('');
@@ -43,15 +43,20 @@ export default function ChangePasswordScreen({ navigation }) {
       // Backend issues a fresh token pair — persist it so the session continues
       // without forcing a re-login.
       const { token, refresh_token } = response.data.data;
-      const pairs = [[STORAGE_KEYS.AUTH_TOKEN, token]];
-      if (refresh_token) pairs.push([STORAGE_KEYS.REFRESH_TOKEN, refresh_token]);
-      await AsyncStorage.multiSet(pairs);
+      await secureAuthStorage.setTokenPair({ token, refreshToken: refresh_token });
 
       Alert.alert('Password aggiornata', 'La tua password è stata cambiata con successo.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (err) {
-      setError(err.response?.data?.message || 'Impossibile cambiare la password. Riprova.');
+      if (err instanceof SecureStorageError) {
+        // The password WAS changed server-side by this point — the failure is
+        // purely local storage. Say so explicitly instead of implying the
+        // password change itself failed.
+        setError('Password cambiata, ma non è stato possibile salvare la nuova sessione. Effettua di nuovo il login.');
+      } else {
+        setError(err.response?.data?.message || 'Impossibile cambiare la password. Riprova.');
+      }
     } finally {
       setSubmitting(false);
     }
