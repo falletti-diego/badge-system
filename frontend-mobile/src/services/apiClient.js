@@ -51,8 +51,14 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // Lazy import to avoid circular dependency at module load time
-        const authService = (await import('./authService')).default;
+        // Lazy require (not a top-level import) to avoid a circular dependency
+        // at module load time — authService.js imports apiClient too. Using
+        // require() instead of dynamic import() here also keeps this Jest-testable:
+        // babel-preset-expo's Jest transform doesn't support native dynamic import
+        // (throws "invoked without --experimental-vm-modules"), while require()
+        // is plain CommonJS and works identically in Metro (production) and Jest.
+        const authServiceModule = require('./authService');
+        const authService = authServiceModule.default || authServiceModule;
         const newToken = await authService.refreshAccessToken();
         processQueue(null, newToken);
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
