@@ -29,7 +29,11 @@ jest.mock('../screens/settings/ChangePasswordScreen', () => () => null);
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   multiRemove: jest.fn(),
-  getItem: jest.fn(),
+}));
+
+jest.mock('../services/secureAuthStorage', () => ({
+  clearSession: jest.fn(),
+  getUser: jest.fn(),
 }));
 
 jest.mock('@react-native-community/netinfo', () => ({
@@ -46,6 +50,7 @@ jest.mock('../services/offlineQueue', () => ({
 // *actual* module here would drag in native TurboModules that don't exist
 // under Jest).
 const AsyncStorage = require('@react-native-async-storage/async-storage');
+const secureAuthStorage = interopDefault(require('../services/secureAuthStorage'));
 const NetInfo = require('@react-native-community/netinfo');
 const { AppState } = require('react-native');
 const { flushQueue } = interopDefault(require('../services/offlineQueue'));
@@ -63,30 +68,32 @@ describe('RootNavigator', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     AsyncStorage.multiRemove.mockResolvedValue(undefined);
-    // Simulate a still-valid stored token: the regression this guards against
+    secureAuthStorage.clearSession.mockResolvedValue(undefined);
+    // Simulate a still-valid stored session: the regression this guards against
     // is a code path that peeks at this and skips the force-Login behavior.
-    AsyncStorage.getItem.mockResolvedValue('some-still-valid-token');
+    secureAuthStorage.getUser.mockResolvedValue({ role: 'employee' });
     NetInfo.addEventListener.mockReturnValue(jest.fn());
     AppState.addEventListener.mockReturnValue({ remove: jest.fn() });
   });
 
-  test('regression guard: multiRemove is called with exactly the 5 session/cache keys (never OFFLINE_QUEUE), and Login is always forced, even when a token already exists', async () => {
+  test('regression guard: cold start clears the secure session and the 2 cache keys (never OFFLINE_QUEUE or auth keys via AsyncStorage), and Login is always forced, even when a session already exists', async () => {
     const { findByText } = await renderNavigator();
 
+    await waitFor(() => expect(secureAuthStorage.clearSession).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(AsyncStorage.multiRemove).toHaveBeenCalledTimes(1));
 
     expect(AsyncStorage.multiRemove).toHaveBeenCalledWith([
-      STORAGE_KEYS.AUTH_TOKEN,
-      STORAGE_KEYS.REFRESH_TOKEN,
-      STORAGE_KEYS.USER_DATA,
       STORAGE_KEYS.CACHE_SHIFTS,
       STORAGE_KEYS.CACHE_PRESENCES,
     ]);
 
     const clearedKeys = AsyncStorage.multiRemove.mock.calls[0][0];
     expect(clearedKeys).not.toContain(STORAGE_KEYS.OFFLINE_QUEUE);
+    expect(clearedKeys).not.toContain(STORAGE_KEYS.AUTH_TOKEN);
+    expect(clearedKeys).not.toContain(STORAGE_KEYS.REFRESH_TOKEN);
+    expect(clearedKeys).not.toContain(STORAGE_KEYS.USER_DATA);
 
-    // Direct proof the app landed on Login despite a resolvable existing token.
+    // Direct proof the app landed on Login despite a resolvable existing session.
     await findByText('LOGIN_SCREEN_STUB');
   });
 

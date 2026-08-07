@@ -10,6 +10,7 @@ import { STORAGE_KEYS, ENDPOINTS } from '../config/endpoints';
 import { navigationRef } from '../utils/navigationRef';
 import apiClient from '../services/apiClient';
 import { flushQueue } from '../services/offlineQueue';
+import secureAuthStorage from '../services/secureAuthStorage';
 
 // Single source of truth for manager pending-leave badge count.
 // ManagerLeaveApprovalScreen updates this via context after every load.
@@ -73,14 +74,9 @@ function MainTabs() {
   const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEYS.USER_DATA).then(userData => {
-      try {
-        const user = JSON.parse(userData || '{}');
-        setRole(user.role || 'employee');
-      } catch {
-        setRole('employee');
-      }
-    });
+    secureAuthStorage.getUser()
+      .then(user => setRole((user && user.role) || 'employee'))
+      .catch(() => setRole('employee'));
   }, []);
 
   // Fetch initial badge count when manager logs in.
@@ -156,13 +152,14 @@ export default function RootNavigator() {
   // stays mounted for those — see the listener-registration effect below). The
   // pending offline check-in queue is NOT touched: those check-ins survive a kill
   // by design (Task B6, Section 4) and sync once their owner logs back in.
+  //
+  // Also doubles as opportunistic cleanup of any plaintext session leftover in
+  // AsyncStorage from a pre-secureAuthStorage build (finding #1, Fase B) — this
+  // effect runs on every kill+reopen, which every app-store update triggers.
   useEffect(() => {
-    AsyncStorage.multiRemove([
-      STORAGE_KEYS.AUTH_TOKEN,
-      STORAGE_KEYS.REFRESH_TOKEN,
-      STORAGE_KEYS.USER_DATA,
-      STORAGE_KEYS.CACHE_SHIFTS,
-      STORAGE_KEYS.CACHE_PRESENCES,
+    Promise.all([
+      secureAuthStorage.clearSession(),
+      AsyncStorage.multiRemove([STORAGE_KEYS.CACHE_SHIFTS, STORAGE_KEYS.CACHE_PRESENCES]),
     ]).finally(() => setInitialRoute('Login'));
   }, []);
 
