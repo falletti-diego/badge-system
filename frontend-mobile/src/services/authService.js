@@ -1,8 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from './apiClient';
 import { ENDPOINTS, STORAGE_KEYS } from '../config/endpoints';
-
-const { AUTH_TOKEN: TOKEN_KEY, REFRESH_TOKEN: REFRESH_KEY, USER_DATA: USER_KEY } = STORAGE_KEYS;
+import secureAuthStorage from './secureAuthStorage';
 
 const authService = {
   async login(email, password, clientId = null) {
@@ -12,9 +11,7 @@ const authService = {
     if (clientId) body.client_id = clientId;
     const response = await apiClient.post(ENDPOINTS.AUTH_LOGIN, body);
     const { token, refresh_token, user } = response.data.data;
-    const pairs = [[TOKEN_KEY, token], [USER_KEY, JSON.stringify(user)]];
-    if (refresh_token) pairs.push([REFRESH_KEY, refresh_token]);
-    await AsyncStorage.multiSet(pairs);
+    await secureAuthStorage.setSession({ token, refreshToken: refresh_token, user });
     return { token, user };
   },
 
@@ -29,15 +26,18 @@ const authService = {
     // whoever logs in next (offline mode, Task B5). The pending check-in queue is
     // deliberately NOT cleared here: those check-ins belong to the employee who created
     // them and must still sync even after they've logged out on this device.
-    await AsyncStorage.multiRemove([TOKEN_KEY, REFRESH_KEY, USER_KEY, STORAGE_KEYS.CACHE_SHIFTS, STORAGE_KEYS.CACHE_PRESENCES]);
+    await Promise.all([
+      secureAuthStorage.clearSession(),
+      AsyncStorage.multiRemove([STORAGE_KEYS.CACHE_SHIFTS, STORAGE_KEYS.CACHE_PRESENCES]),
+    ]);
   },
 
   async getToken() {
-    return AsyncStorage.getItem(TOKEN_KEY);
+    return secureAuthStorage.getToken();
   },
 
   async getRefreshToken() {
-    return AsyncStorage.getItem(REFRESH_KEY);
+    return secureAuthStorage.getRefreshToken();
   },
 
   async refreshAccessToken() {
@@ -45,23 +45,16 @@ const authService = {
     if (!refresh_token) throw new Error('No refresh token');
     const response = await apiClient.post(ENDPOINTS.AUTH_REFRESH, { refresh_token });
     const { token } = response.data.data;
-    await AsyncStorage.setItem(TOKEN_KEY, token);
+    await secureAuthStorage.setTokenPair({ token });
     return token;
   },
 
   async getUser() {
-    try {
-      const raw = await AsyncStorage.getItem(USER_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch (err) {
-      console.warn('Failed to parse user data from AsyncStorage:', err);
-      await AsyncStorage.removeItem(USER_KEY);
-      return null;
-    }
+    return secureAuthStorage.getUser();
   },
 
   async isAuthenticated() {
-    const token = await AsyncStorage.getItem(TOKEN_KEY);
+    const token = await secureAuthStorage.getToken();
     return !!token;
   },
 };
