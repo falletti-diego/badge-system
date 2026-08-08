@@ -8,12 +8,13 @@ import { useNavigate } from 'react-router-dom';
 import {
   Container, Box, Button, Typography,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Paper, CircularProgress, Alert, Chip, IconButton, Tooltip,
+  Paper, CircularProgress, Alert, Chip, IconButton, Tooltip, GlobalStyles,
 } from '@mui/material';
 import { NavBar } from '../components/NavBar';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import DownloadIcon from '@mui/icons-material/Download';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import apiClient from '../services/apiClient';
 import authService from '../services/authService';
 
@@ -99,6 +100,22 @@ const SummaryPage = () => {
 
   return (
     <div className="min-h-screen bg-linen">
+      <GlobalStyles styles={`
+        @media print {
+          .no-print { display: none !important; }
+          @page { size: A4 landscape; margin: 10mm; }
+          .MuiAppBar-root { display: none !important; }
+          .MuiTableCell-root { padding: 2px 4px !important; font-size: 9px !important; border: 1px solid #ccc !important; }
+          .MuiPaper-root { box-shadow: none !important; }
+          .print-title { display: block !important; font-size: 14px; font-weight: bold; margin-bottom: 8px; }
+        }
+        .print-title { display: none; }
+      `} />
+
+      <div className="print-title">
+        📊 Riepilogo Ore — {MONTH_NAMES[month - 1]} {year}
+      </div>
+
       {/* Navbar */}
       <NavBar title="Badge System">
         <Button color="inherit" onClick={() => navigate('/dashboard')} sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}>
@@ -123,7 +140,7 @@ const SummaryPage = () => {
 
       <Container maxWidth="xl" sx={{ py: 3 }}>
         {/* Header row */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }} className="no-print">
           <Typography variant="h5" sx={{ fontWeight: 700, color: '#1E3A5F' }}>
             📊 Riepilogo Mensile
           </Typography>
@@ -145,6 +162,20 @@ const SummaryPage = () => {
                   sx={{ ml: 2, borderColor: '#1E3A5F', color: '#1E3A5F', textTransform: 'none' }}
                 >
                   CSV
+                </Button>
+              </span>
+            </Tooltip>
+
+            <Tooltip title="Esporta PDF">
+              <span>
+                <Button
+                  variant="outlined"
+                  startIcon={<PictureAsPdfIcon />}
+                  disabled={!data || data.employees.length === 0}
+                  onClick={() => window.print()}
+                  sx={{ ml: 1, borderColor: '#1E3A5F', color: '#1E3A5F', textTransform: 'none' }}
+                >
+                  PDF
                 </Button>
               </span>
             </Tooltip>
