@@ -96,8 +96,12 @@ Questo è il test più importante: se fallisce (es. appaiono errori "sede obblig
 | 6.1 | Scarica un template fresco. Cambia la colonna "sede" di un dipendente attivo da una sede a un'altra esistente | — | ☐ |
 | 6.2 | Carica il file | Anteprima mostra **1 riga in "Modificati"** con il cambio di sede evidenziato (da → a) | ☐ |
 | 6.3 | Conferma | Il dipendente risulta ora assegnato **solo** alla nuova sede in Admin, non a entrambe | ☐ |
-| 6.4 | Se possibile, verifica lato check-in/mobile: il dipendente può timbrare nella nuova sede | Check-in accettato sulla nuova sede | ☐ |
-| 6.5 | Verifica che il dipendente **non possa più** timbrare nella sede vecchia (se testabile) | Check-in rifiutato/non assegnato sulla sede precedente | ☐ |
+| 6.4 | Se possibile, verifica lato check-in/mobile: il dipendente può timbrare nella nuova sede | Check-in accettato sulla nuova sede | ☑ |
+| 6.5 | Verifica che il dipendente **non possa più** timbrare nella sede vecchia (se testabile) | Check-in rifiutato/non assegnato sulla sede precedente | ☑ |
+
+**Nota (2026-08-08):** verificato via chiamate dirette all'API di staging (`POST /api/v1/checkins`) invece che tramite l'app mobile — l'autorizzazione del check-in è interamente lato server (`checkins.js`, verifica su `assigned_sites`), il client mobile non applica alcuna logica propria, quindi il path di codice esercitato è identico. Dipendente di test: `giulia.bianchi@employee.it` (password temporanea via `POST /admin/employees/:id/reset-password`), trasferita Milano→Roma via wizard reale (`/employee-sync/preview` + `/apply`, non un bypass diretto sul DB). Risultato: check-in su Roma `201 Created` (6.4), check-in su Milano `400 NOT_ASSIGNED_TO_SITE` (6.5). Stato di staging ripristinato a fine test (Giulia rimessa a Milano Store).
+
+**Scoperta collaterale (non un bug):** il primo tentativo ha usato `maria@badge.local`, ma quell'email è un account **DEMO_USERS hardcoded** (`auth.js`, dominio `@badge.local`, mai una riga reale nella tabella `employees`) — il suo `employee_id` nel JWT punta in realtà alla riga DB di "Maria Rossi" (`maria.rossi@torino.it`), non alla riga `employees` con email `maria@badge.local` (un duplicato "decorativo" mai collegato a un login, probabile residuo di un vecchio import). Trasferire quella riga via wizard non ha alcun effetto sul login reale — comportamento corretto per design (commento esplicito nel codice), ma una trappola facile per un tester futuro che assuma "stessa email = stessa identità". Per test futuri lato check-in mobile, usare sempre un dipendente `@employee.it` (creato da import/wizard), mai un account `@badge.local`.
 
 ---
 
