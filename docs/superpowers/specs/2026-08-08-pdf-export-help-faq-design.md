@@ -152,25 +152,45 @@ export const FAQ_ITEMS = [
 
 `audience` può essere `'employee'` (visibile solo a `role === 'employee'`), `'staff'` (visibile a `manager`/`admin`/`viewer`), o `'all'` (visibile a chiunque, su entrambe le piattaforme).
 
+**Filtro fail-closed, allowlist esplicita (non denylist):**
+
+```javascript
+const STAFF_ROLES = ['manager', 'admin', 'viewer'];
+
+function isVisible(item, role) {
+  if (item.audience === 'all') return true;
+  if (item.audience === 'employee') return role === 'employee';
+  if (item.audience === 'staff') return STAFF_ROLES.includes(role);
+  return false; // audience sconosciuto/malformato → nascosto, non mostrato per default
+}
+```
+
+Questa funzione (non una condizione inline ripetuta) va definita una volta in ciascun `faq.js` ed esportata insieme a `FAQ_ITEMS`, cosicché web e mobile la importino identica invece di duplicare la logica di filtro oltre ai dati. **Deliberatamente un'allowlist**: se `role` è `undefined`/`null` (es. componente montato prima che `secureAuthStorage.getUser()` o l'equivalente web abbiano risolto), nessuna delle tre condizioni matcha e l'item resta nascosto — non il contrario. Una versione a denylist (`role !== 'employee'` per mostrare i contenuti `staff`) esporrebbe contenuti riservati a manager/admin a un utente il cui ruolo non è ancora noto: scartata esplicitamente per questo motivo.
+
 ### Web — nuova pagina `/help`
 - Nuovo file `frontend-web/src/pages/HelpPage.jsx`, route protetta in `App.jsx` con `<ProtectedRoute requiredRoles={['admin', 'manager', 'employee', 'viewer']}>` (tutti i ruoli — il filtro è sul contenuto, non sull'accesso alla pagina).
-- Filtra `FAQ_ITEMS` per `audience === 'all' || (audience === 'employee' && role === 'employee') || (audience === 'staff' && role !== 'employee')`.
+- Filtra `FAQ_ITEMS` con `isVisible(item, role)` (vedi sopra), `role` letto dal contesto auth già esistente (stesso hook/contesto usato dalle altre pagine per `ProtectedRoute`).
 - Rendering con MUI `Accordion`/`AccordionSummary`/`AccordionDetails`, una entry per FAQ, chiuse di default.
 - Nuova voce "Guida" nel menu utente di `frontend-web/src/components/NavBar.jsx` (righe 93-186, il `Popover` sull'avatar), aggiunta come `MenuItem` prima di "Cambia password", che naviga a `/help`.
 
 ### Mobile — nuova `HelpScreen.jsx`
 - Nuovo file `frontend-mobile/src/screens/settings/HelpScreen.jsx`, registrata nello stack di navigazione delle Impostazioni (stesso stack di `ChangePasswordScreen`).
-- Stesso filtro per `audience`/`role` (letto da `secureAuthStorage.getUser()`, coerente con il resto dell'app post-Fase B).
+- Stesso filtro `isVisible(item, role)`, `role` letto da `secureAuthStorage.getUser()`. **`getUser()` può rigettare** (stessa classe di fallimento introdotta in Fase B per `SecureStorageError`) — gestito con lo stesso pattern già usato in `RootNavigator.jsx`/`MainTabs`: `.catch()` che logga con `console.warn` e imposta `role` a `null` (non un default ottimistico come `'employee'`), cosicché il filtro fail-closed nasconda tutto tranne le voci `audience: 'all'` finché il ruolo non è determinabile — invece di indovinare un ruolo e rischiare di esporre contenuti sbagliati.
 - Reso con componenti nativi collassabili: un `TouchableOpacity` per domanda (toggle `expanded` in state locale) + `Text` per la risposta, mostrato/nascosto — nessuna nuova dipendenza nativa richiesta (RN base è sufficiente per un accordion semplice).
 - Nuova voce "Guida" in `frontend-mobile/src/screens/settings/SettingsScreen.jsx`, che naviga a `HelpScreen`.
 
 ### Rollout — nessuna nuova build nativa richiesta
 A differenza della Fase B (finding #1, `expo-secure-store`), `HelpScreen.jsx` è puro JS/React Native — **nessun modulo nativo nuovo**. È quindi distribuibile via OTA (`expo-updates`, già configurato in `app.json`) alla prossima pubblicazione di update, senza bisogno di bump `buildNumber`/Codemagic/submit TestFlight.
 
+### Rischio di disallineamento contenuto tra i due `faq.js` — mitigazione
+I due file dati sono mantenuti manualmente in sync (nessun package condiviso, per scelta esplicita — vedi sopra). Questo è un rischio reale di drift silenzioso (qualcuno aggiorna una FAQ solo lato web, mobile resta indietro). Mitigazione: **script di verifica** `scripts/check-faq-sync.js` alla radice del repo — Node puro, nessuna dipendenza da framework (non serve `jest`/React), confronta gli insiemi di `id` e il testo `question`+`answer` dei due `faq.js`, fallisce con exit code ≠0 se divergono. `.github/workflows/ci.yml` oggi ha 3 job (`backend`, `mobile`, `security-check`), nessuno dei quali è il posto naturale per un controllo che non appartiene né al backend né al mobile — va aggiunto come step extra al job `backend` (che ha già Node 20 configurato, il setup più leggero disponibile) piuttosto che creare un quarto job solo per questo. Così un PR che tocca un solo `faq.js` senza l'altro fallisce la CI invece di scoprirsi in produzione.
+
 ### Testing
-- **Web**: `HelpPage.test.jsx` — verifica che il filtro per ruolo mostri/nasconda le FAQ corrette (es. un utente `employee` non vede le FAQ `staff`-only); test di espansione/collasso di una entry. `NavBar.test.jsx` — estensione per la nuova voce "Guida" (presenza + navigazione).
-- **Mobile**: `HelpScreen.test.jsx` — stesso filtro per ruolo, comportamentale (non regex sul sorgente, lezione già imparata in Fase A finding #10). `SettingsScreen.test.jsx` — estensione per la nuova voce "Guida".
-- **PDF export**: `SummaryPage.test.jsx` — estensione: click su "Esporta PDF" chiama `window.print` (mock), comportamentale.
+- **Web**: `HelpPage.test.jsx` — matrice esplicita per tutti e 4 i ruoli (`admin`, `manager`, `employee`, `viewer`): verifica che ciascuno veda esattamente l'insieme atteso di FAQ (non solo il caso `employee`); caso `role` non definito → solo le FAQ `audience: 'all'` visibili (fail-closed, il test che avrebbe fatto fallire la logica a denylist originaria); test di espansione/collasso di una entry. `NavBar.test.jsx` — estensione per la nuova voce "Guida" (presenza + navigazione).
+- **Mobile**: `HelpScreen.test.jsx` — stessa matrice di ruoli (`employee`, `manager`, più il caso `viewer` per coerenza anche se atteso raro su mobile) comportamentale (non regex sul sorgente, lezione già imparata in Fase A finding #10); **test dedicato per `secureAuthStorage.getUser()` che rigetta** — verifica che lo schermo non crashi e mostri solo le FAQ `audience: 'all'`, coerente con il pattern già testato in `RootNavigator.test.jsx` per lo stesso tipo di fallimento. `SettingsScreen.test.jsx` — estensione per la nuova voce "Guida".
+- **PDF export**: `SummaryPage.test.jsx` — estensione: click su "Esporta PDF" chiama `window.print` (mock); **assert aggiuntivo** su contenuto/presenza degli elementi `.print-title` (testo `Riepilogo Ore — {mese} {anno}` corretto per il periodo filtrato corrente) e sulla classe `.no-print` applicata ai controlli di navigazione — non solo che la funzione sia stata invocata, ma che il markup di stampa sia effettivamente quello atteso.
+- **Non-regressione**: suite completa `SummaryPage.test.jsx`/`NavBar.test.jsx` (web) e `SettingsScreen.test.jsx` (mobile) già esistenti devono restare verdi — nessuna delle modifiche tocca comportamento esistente, solo aggiunte.
+- **`check-faq-sync.js`**: verificato manualmente rosso→verde durante l'implementazione (introdurre di proposito un `id` disallineato tra i due file, confermare che lo script lo rileva, poi correggere).
 
 ---
 
@@ -181,6 +201,7 @@ A differenza della Fase B (finding #1, `expo-secure-store`), `HelpScreen.jsx` è
 - `frontend-web/src/data/faq.js`
 - `frontend-mobile/src/screens/settings/HelpScreen.jsx`
 - `frontend-mobile/src/data/faq.js`
+- `scripts/check-faq-sync.js` (verifica CI di allineamento contenuto tra i due `faq.js`)
 
 **Modificati:**
 - `frontend-web/src/pages/SummaryPage.jsx` (bottone + CSS export PDF)
