@@ -7,7 +7,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import apiClient from '../../services/apiClient';
 import authService from '../../services/authService';
-import secureAuthStorage from '../../services/secureAuthStorage';
 import { enqueueCheckin } from '../../services/offlineQueue';
 import { ENDPOINTS, OFFLINE_CONFIG, STORAGE_KEYS } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
