@@ -161,4 +161,50 @@ router.put('/:id', createValidationMiddleware(UpdateSiteGeofenceSchema), async (
   }
 });
 
+router.post('/:id/regenerate-qr', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const uuidCheck = z.string().uuid().safeParse(id);
+    if (!uuidCheck.success) return next(new ValidationError('Invalid site id'));
+
+    const isSuperadmin = req.user.role === 'superadmin';
+    const params = isSuperadmin ? [id] : [id, req.user.client_id];
+    const scopeClause = isSuperadmin ? '' : 'AND client_id = $2::uuid';
+
+    // Leggiamo prima la sede per costruire il nuovo qr_code_content con lo stesso
+    // client_id già presente (evita di doverlo passare separatamente).
+    const siteResult = await pool.query(
+      `SELECT id, name, client_id, qr_code_content FROM sites WHERE id = $1::uuid ${scopeClause}`,
+      params
+    );
+    if (siteResult.rows.length === 0) return next(new NotFoundError('Site not found', 'SITE_NOT_FOUND'));
+
+    const site = siteResult.rows[0];
+    const oldQrContent = site.qr_code_content;
+    // crypto.randomUUID() come nonce (finding #5): imprevedibile, non un contatore
+    // incrementale indovinabile — stessa utility già in uso in questo file (riga 27).
+    const newQrContent = `badge://checkin?site_id=${site.id}&client_id=${site.client_id}&v=${randomUUID()}`;
+
+    const updateResult = await pool.query(
+      `UPDATE sites SET qr_code_content = $1, updated_at = NOW() WHERE id = $2::uuid RETURNING id, name, client_id, qr_code_content`,
+      [newQrContent, site.id]
+    );
+
+    await logAudit(pool, {
+      action: 'admin_regenerate_site_qr',
+      entity: 'site',
+      entityId: site.id,
+      clientId: site.client_id,
+      oldValue: { qr_code_content: oldQrContent },
+      newValue: { qr_code_content: newQrContent },
+      userId: req.user.user_id,
+    }).catch((err) => logger.warn({ action: 'audit_log_failed', error: err.message }));
+
+    logger.info({ action: 'admin_regenerate_site_qr', site_id: site.id });
+    res.json({ success: true, data: updateResult.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
