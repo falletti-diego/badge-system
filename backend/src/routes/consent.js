@@ -70,16 +70,16 @@ router.post('/gps-acceptance', async (req, res, next) => {
     await logAudit(pool, {
       action: 'gps_consent_recorded',
       entity: 'employee_consent_log',
-      entity_id: logResult.rows[0].id,
-      old_value: null,
-      new_value: JSON.stringify({
+      entityId: logResult.rows[0].id,
+      oldValue: null,
+      newValue: {
         employee_id,
         consent_type: 'gps',
         consent_given: consentValue,
         privacy_policy_version: ppVersion,
-      }),
-      user_id: employee_id,
-      client_id,
+      },
+      userId: employee_id,
+      clientId: client_id,
     }).catch((err) => logger.warn('Audit log GPS consent failed:', err));
 
     res.status(201).json({
@@ -90,6 +90,55 @@ router.post('/gps-acceptance', async (req, res, next) => {
         gps_consent_given: consentValue,
         gps_consent_given_at: updateResult.rows[0].gps_consent_given_at,
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =====================================================
+// POST /api/consent/gps-revoke
+// Employee revokes previously given GPS consent (GDPR Art. 7(3) —
+// revocation must be as easy as giving consent). Symmetric to /gps-acceptance.
+// =====================================================
+router.post('/gps-revoke', async (req, res, next) => {
+  try {
+    const { client_id, employee_id } = req.user;
+
+    const updateResult = await pool.query(
+      `UPDATE employees
+       SET gps_consent_given = false
+       WHERE id = $1 AND client_id = $2
+       RETURNING id, email, gps_consent_given`,
+      [employee_id, client_id]
+    );
+
+    if (updateResult.rows.length === 0) {
+      return next(new ValidationError('Employee not found or permission denied'));
+    }
+
+    const logResult = await pool.query(
+      `INSERT INTO employee_consent_log
+       (employee_id, client_id, consent_type, consent_given, privacy_policy_version, user_agent, ip_address, accepted_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+       RETURNING id, accepted_at`,
+      [employee_id, client_id, 'gps', false, '2.0', req.get('user-agent') || 'unknown', req.ip || '0.0.0.0']
+    );
+
+    await logAudit(pool, {
+      action: 'gps_consent_revoked',
+      entity: 'employee_consent_log',
+      entityId: logResult.rows[0].id,
+      oldValue: null,
+      newValue: { employee_id, consent_type: 'gps', consent_given: false },
+      userId: employee_id,
+      clientId: client_id,
+    }).catch((err) => logger.warn('Audit log GPS consent revoke failed:', err));
+
+    res.json({
+      success: true,
+      message: 'GPS consent revoked',
+      data: { employee_id, gps_consent_given: false },
     });
   } catch (err) {
     next(err);

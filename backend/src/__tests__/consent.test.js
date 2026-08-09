@@ -79,7 +79,8 @@ describe('Consent API — GDPR Art. 7 GPS consent tracking', () => {
 
       pool.query
         .mockResolvedValueOnce(updateResult) // UPDATE employees
-        .mockResolvedValueOnce(logResult); // INSERT employee_consent_log
+        .mockResolvedValueOnce(logResult) // INSERT employee_consent_log
+        .mockResolvedValueOnce({ rows: [] }); // INSERT audit_log
 
       const res = await request(app)
         .post('/api/v1/consent/gps-acceptance')
@@ -93,7 +94,7 @@ describe('Consent API — GDPR Art. 7 GPS consent tracking', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.data.gps_consent_given).toBe(true);
       expect(res.body.data.gps_consent_given_at).toBe('2026-06-11T10:30:00.000Z');
-      expect(pool.query).toHaveBeenCalledTimes(2);
+      expect(pool.query).toHaveBeenCalledTimes(3);
     });
 
     test('should reject GPS consent (consent_given: false)', async () => {
@@ -119,7 +120,8 @@ describe('Consent API — GDPR Art. 7 GPS consent tracking', () => {
 
       pool.query
         .mockResolvedValueOnce(updateResult)
-        .mockResolvedValueOnce(logResult);
+        .mockResolvedValueOnce(logResult)
+        .mockResolvedValueOnce({ rows: [] }); // INSERT audit_log
 
       const res = await request(app)
         .post('/api/v1/consent/gps-acceptance')
@@ -171,7 +173,8 @@ describe('Consent API — GDPR Art. 7 GPS consent tracking', () => {
 
       pool.query
         .mockResolvedValueOnce(updateResult)
-        .mockResolvedValueOnce(logResult);
+        .mockResolvedValueOnce(logResult)
+        .mockResolvedValueOnce({ rows: [] }); // INSERT audit_log
 
       const res = await request(app)
         .post('/api/v1/consent/gps-acceptance')
@@ -182,7 +185,7 @@ describe('Consent API — GDPR Art. 7 GPS consent tracking', () => {
         });
 
       expect(res.status).toBe(201);
-      expect(pool.query).toHaveBeenCalledTimes(2);
+      expect(pool.query).toHaveBeenCalledTimes(3);
       // Verify default version was used (call arguments include '2.0')
       const insertCall = pool.query.mock.calls[1];
       expect(insertCall[1]).toContain('2.0');
@@ -202,7 +205,7 @@ describe('Consent API — GDPR Art. 7 GPS consent tracking', () => {
       expect(res.body.error || res.body.message).toBeTruthy();
     });
 
-    test('should create audit log entry (best-effort, non-fatal)', async () => {
+    test('should create a real audit_log entry with correct params (regression: logAudit call used wrong snake_case param names and silently no-op\'d)', async () => {
       const updateResult = {
         rows: [
           {
@@ -223,9 +226,12 @@ describe('Consent API — GDPR Art. 7 GPS consent tracking', () => {
         ],
       };
 
+      const auditResult = { rows: [] };
+
       pool.query
-        .mockResolvedValueOnce(updateResult)
-        .mockResolvedValueOnce(logResult);
+        .mockResolvedValueOnce(updateResult)   // UPDATE employees
+        .mockResolvedValueOnce(logResult)      // INSERT employee_consent_log
+        .mockResolvedValueOnce(auditResult);   // INSERT audit_log (logAudit)
 
       const res = await request(app)
         .post('/api/v1/consent/gps-acceptance')
@@ -236,7 +242,52 @@ describe('Consent API — GDPR Art. 7 GPS consent tracking', () => {
         });
 
       expect(res.status).toBe(201);
-      // Audit logging is best-effort; request succeeds even if audit fails
+      expect(pool.query).toHaveBeenCalledTimes(3);
+      const auditCall = pool.query.mock.calls[2];
+      expect(auditCall[0]).toMatch(/INSERT INTO audit_log/i);
+      // entity_id (4th placeholder positional) must be the real id of the consent log row just created
+      expect(auditCall[1]).toContain(logResult.rows[0].id);
+    });
+  });
+
+  // =====================================================
+  // POST /api/v1/consent/gps-revoke
+  // =====================================================
+
+  describe('POST /api/v1/consent/gps-revoke', () => {
+    test('revokes GPS consent: gps_consent_given becomes false, writes audit log', async () => {
+      const updateResult = {
+        rows: [{ id: employeeId, email: 'alice@test.com', gps_consent_given: false, gps_consent_given_at: '2026-06-11T10:30:00.000Z' }],
+      };
+      const logResult = {
+        rows: [{ id: '550e8400-e29b-41d4-a716-446655440201', accepted_at: '2026-08-09T12:00:00.000Z' }],
+      };
+
+      pool.query
+        .mockResolvedValueOnce(updateResult)
+        .mockResolvedValueOnce(logResult)
+        .mockResolvedValueOnce({ rows: [] }); // audit log
+
+      const res = await request(app)
+        .post('/api/v1/consent/gps-revoke')
+        .set('Authorization', `Bearer ${validToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.gps_consent_given).toBe(false);
+      // Second query (employee_consent_log) must record consent_given: false
+      const logInsertCall = pool.query.mock.calls[1];
+      expect(logInsertCall[1]).toContain(false);
+    });
+
+    test('returns 400 if employee not found', async () => {
+      pool.query.mockResolvedValueOnce({ rows: [] });
+
+      const res = await request(app)
+        .post('/api/v1/consent/gps-revoke')
+        .set('Authorization', `Bearer ${validToken}`);
+
+      expect(res.status).toBe(400);
     });
   });
 
