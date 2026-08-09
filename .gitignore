@@ -152,3 +152,6 @@ backend/scripts/onboarding-output/
 # Claude worktrees and nested repos (local artifacts, not part of build)
 .claude/worktrees/
 badge-system/
+
+# Superpowers brainstorming companion (local, ephemeral)
+.superpowers/
