@@ -101,6 +101,11 @@ const PostCheckinSchema = z.object({
     // esplicito nel dashboard/audit log quando un check-in non ha avuto attestazione
     // biometrica, invece di nasconderlo silenziosamente.
     faceid_verified: z.boolean().optional().default(false),
+    // qr_content (finding #5, Fase C 2026-08-09): stringa raw scansionata dal QR fisico.
+    // Confrontata byte-per-byte contro sites.qr_code_content — permette a un admin di
+    // invalidare un QR rubato/fotografato rigenerandolo. Opzionale in questa fase
+    // (retrocompatibilità con app non ancora aggiornate, vedi spec "Rollout campo qr_content").
+    qr_content: z.string().max(500, 'qr_content must be at most 500 characters').optional(),
   }),
   query: z.object({
     client_id: z.string().uuid('Invalid client_id: must be valid UUID').optional(),

@@ -77,7 +77,7 @@ const OUTSIDE_LNG = SITE_LNG;
 //
 // Uses SQL-based dispatch so call order (BEGIN/COMMIT/ROLLBACK) doesn't matter.
 
-function makeClientQuery({ geofenceEnabled = true, geofencingFeatureEnabled = true, assignmentHits = true, checkinRow }) {
+function makeClientQuery({ geofenceEnabled = true, geofencingFeatureEnabled = true, assignmentHits = true, checkinRow, qrCodeContent = null }) {
   const siteRow = {
     id: SITE_ID,
     geofence_enabled: geofenceEnabled,
@@ -85,6 +85,7 @@ function makeClientQuery({ geofenceEnabled = true, geofencingFeatureEnabled = tr
     latitude: geofenceEnabled ? SITE_LAT : null,
     longitude: geofenceEnabled ? SITE_LNG : null,
     geofence_radius_meters: SITE_RADIUS,
+    qr_code_content: qrCodeContent,
   };
 
   return jest.fn().mockImplementation((sql) => {
@@ -139,6 +140,74 @@ describe('POST /api/checkins — geofence disabled', () => {
       .send({ employee_id: EMP_ID, site_id: SITE_ID, type: 'OUT', latitude: INSIDE_LAT, longitude: INSIDE_LNG });
 
     expect(res.status).toBe(201);
+  });
+});
+
+// ─── POST /api/checkins — qr_content validation (finding #5) ─────────────────
+
+describe('POST /api/checkins — qr_content validation', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const QR_CONTENT = `badge://checkin?site_id=${SITE_ID}&client_id=${CLIENT_ID}&v=1`;
+
+  it('qr_content beyond 500 characters → 400 (schema Zod)', async () => {
+    const res = await request(app)
+      .post('/api/v1/checkins')
+      .set('Authorization', `Bearer ${EMP_TOKEN}`)
+      .send({ employee_id: EMP_ID, site_id: SITE_ID, type: 'IN', qr_content: 'x'.repeat(501) });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('qr_content missing → backward compatibility (old app versions)', async () => {
+    const checkinRow = { id: 'ci-qr-1', employee_id: EMP_ID, site_id: SITE_ID, type: 'IN', timestamp: new Date(), created_at: new Date() };
+    pool.connect.mockResolvedValue({ query: makeClientQuery({ geofenceEnabled: false, checkinRow }), release: jest.fn() });
+
+    const res = await request(app)
+      .post('/api/v1/checkins')
+      .set('Authorization', `Bearer ${EMP_TOKEN}`)
+      .send({ employee_id: EMP_ID, site_id: SITE_ID, type: 'IN' });
+
+    expect(res.status).toBe(201);
+  });
+
+  it('qr_content matches sites.qr_code_content → 201', async () => {
+    const checkinRow = { id: 'ci-qr-2', employee_id: EMP_ID, site_id: SITE_ID, type: 'IN', timestamp: new Date(), created_at: new Date() };
+    pool.connect.mockResolvedValue({
+      query: makeClientQuery({ geofenceEnabled: false, checkinRow, qrCodeContent: QR_CONTENT }),
+      release: jest.fn(),
+    });
+
+    const res = await request(app)
+      .post('/api/v1/checkins')
+      .set('Authorization', `Bearer ${EMP_TOKEN}`)
+      .send({ employee_id: EMP_ID, site_id: SITE_ID, type: 'IN', qr_content: QR_CONTENT });
+
+    expect(res.status).toBe(201);
+  });
+
+  it('qr_content does not match sites.qr_code_content → 403 QR_CODE_INVALID', async () => {
+    pool.connect.mockResolvedValue({
+      query: makeClientQuery({ geofenceEnabled: false, qrCodeContent: QR_CONTENT }),
+      release: jest.fn(),
+    });
+
+    const res = await request(app)
+      .post('/api/v1/checkins')
+      .set('Authorization', `Bearer ${EMP_TOKEN}`)
+      .send({ employee_id: EMP_ID, site_id: SITE_ID, type: 'IN', qr_content: 'badge://checkin?site_id=stale&client_id=stale&v=1' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('QR_CODE_INVALID');
+  });
+
+  it('the qr_content comparison query is parametrized, not concatenated (regression test)', () => {
+    const fs = require('fs');
+    const source = fs.readFileSync(require.resolve('../routes/checkins.js'), 'utf8');
+    // No direct concatenation of qr_content in SQL query — must always
+    // pass as a parameter $N, never interpolated with template string inside SQL.
+    const dangerousPattern = /qr_code_content\s*=\s*\$\{|`.*qr_content.*\$\{/;
+    expect(dangerousPattern.test(source)).toBe(false);
   });
 });
 

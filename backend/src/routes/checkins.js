@@ -33,7 +33,7 @@ const router = express.Router();
 const OFFLINE_SYNC_THRESHOLD_MS = 60 * 1000;
 
 router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), async (req, res, next) => {
-  const { employee_id, site_id, type, occurred_at, client_uuid, faceid_verified } = req.validated.body;
+  const { employee_id, site_id, type, occurred_at, client_uuid, faceid_verified, qr_content } = req.validated.body;
   const clientId = req.user.client_id;
   const is_offline = occurred_at != null &&
     Math.abs(Date.now() - new Date(occurred_at).getTime()) > OFFLINE_SYNC_THRESHOLD_MS;
@@ -74,7 +74,7 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
       // 2. Verify site exists and fetch geofence settings (JOIN clients for feature flag)
       const siteResult = await client.query(
         `SELECT s.id, s.name, s.geofence_enabled, s.latitude, s.longitude, s.geofence_radius_meters,
-                c.geofencing_feature_enabled
+                s.qr_code_content, c.geofencing_feature_enabled
          FROM sites s
          JOIN clients c ON c.id = s.client_id
          WHERE s.id = $1::uuid AND s.client_id = $2::uuid LIMIT 1`,
@@ -99,10 +99,20 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
         });
       }
 
+      const site = siteResult.rows[0];
+
+      // 3.4 QR content validation (finding #5, Fase C) — se il client invia qr_content
+      // (retrocompatibile: opzionale), deve combaciare esattamente con il valore corrente
+      // in DB. Confronto in JS (non in SQL) — è già in memoria dalla query precedente,
+      // nessuna query aggiuntiva necessaria, zero rischio di concatenazione SQL.
+      if (qr_content != null && qr_content !== site.qr_code_content) {
+        logger.warn({ action: 'qr_code_invalid_attempt', site_id, employee_id });
+        throw new ForbiddenError('QR code does not match this site', 'QR_CODE_INVALID');
+      }
+
       // 3.5 Geofence check (Fase C, 2026-08-09) — controllato interamente dai toggle
       // admin già esistenti: geofencing_feature_enabled (per cliente) e geofence_enabled
       // (per sede). Nessun env var globale: l'admin del cliente decide da solo.
-      const site = siteResult.rows[0];
       const { latitude: checkinLat, longitude: checkinLng } = req.validated.body;
       if ((site.geofencing_feature_enabled !== false) && site.geofence_enabled) {
         if (checkinLat == null || checkinLng == null || isNaN(checkinLat) || isNaN(checkinLng)) {
