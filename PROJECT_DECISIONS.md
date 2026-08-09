@@ -6,6 +6,34 @@
 
 ---
 
+## Session 98 — Gruppo 1 backlog post-Fase-C: PDF export Riepilogo Ore + Help/FAQ in-app (web+mobile) (9 Agosto 2026)
+
+### Contesto
+Con Fase C (geofencing/QR rotation reali) tenuta deliberatamente da parte su richiesta dell'utente, `/superpowers:brainstorming` ha prodotto un backlog di 9 item MVP-post-lancio (PDF export, notifiche push, alert frodi, firma digitale, trust signal, help/FAQ, branding, pricing, shift swap), raggruppati in batch coerenti su richiesta esplicita dell'utente ("preferisco che raggruppi i task affini"). L'utente ha scelto **Gruppo 1 — Quick wins frontend-web**: PDF export sul Riepilogo Ore + Help/FAQ in-app.
+
+### Decisioni di design (via `AskUserQuestion`)
+Help/FAQ: audience sia mobile sia web; solo FAQ statica per v1 (tour guidato rimandato); contenuto adattato da `docs/guida-utente.html` esistente. PDF: `window.print()` lato client (stesso pattern già usato in `PlanningPage.jsx`), non un endpoint server-side dedicato.
+
+### Due passate critiche esplicite sulla spec (richieste dall'utente, non spontanee)
+**Prima passata** ("conferma che hai introdotto un livello adeguato di verifica"): trovato un bug reale nel filtro di visibilità per ruolo prima ancora di scrivere codice — la bozza era una **denylist fail-open** (`role !== 'employee'` → mostra contenuto staff-only anche con `role` `undefined`/in caricamento). Sostituita con un'**allowlist fail-closed** (`isVisible()`, `return false` di default per audience sconosciuto/malformato).
+
+**Seconda passata** ("analisi critica... più solida dal punto di vista operativo", verificata contro il codice reale non solo contro il design astratto): trovato che `check-faq-sync.js` (lo script di sync-check web/mobile) come concepito avrebbe richiesto di `require()`/`import()` i due file `faq.js` come moduli reali — impossibile perché `frontend-web` è ESM puro (`"type": "module"`) mentre `frontend-mobile` non ha `metro.config.js` per la risoluzione cross-directory. Ridisegnato come estrazione testuale pura (regex sul blocco `FAQ_ITEMS = [...]`), mai esecuzione dei file.
+
+### Piano (self-review durante la scrittura, prima di consegnarlo)
+`check-faq-sync.test.js` era stato abbozzato in sintassi Jest — non avrebbe mai girato, perché `scripts/` non è coperto da nessun progetto Jest del repo (né backend né mobile) e non esiste un `package.json` di root. Riscritto con `node:test`/`node:assert/strict`. Lo script stesso aveva `fs.readFileSync` senza try/catch — verificato con un dry-run reale in `/tmp` (file mancante, marker non trovato, contenuto vuoto) e aggiunto error handling pulito prima della consegna.
+
+### Esecuzione — worktree isolato, poi switch a esecuzione diretta
+Piano eseguito in worktree (`EnterWorktree`, dopo aver pushato spec+piano su `origin/main` per evitare il bug di provenance già incontrato in Session 94). Iniziato con `subagent-driven-development`, poi l'utente ha esplicitamente richiesto lo switch a `/superpowers:executing-plans` (esecuzione diretta in sessione) a metà dispatch di un subagent spec-reviewer. **2 scoperte implementative non previste dal piano**, entrambe diagnosticate e fixate correttamente: (1) MUI `Accordion` tiene montato nel DOM il contenuto di `AccordionDetails` anche da collassato (solo nascosto via CSS) — un test che verificava `.not.toBeInTheDocument()` prima del click falliva; fix `TransitionProps={{ unmountOnExit: true }}`. (2) `SettingsScreen.jsx` (mobile) usa `useFocusEffect` internamente, che richiede un vero `NavigationContainer` ancestor — un `navigation` prop mockato (pattern più semplice usato altrove, es. `ChangePasswordScreen.test.jsx`) non bastava; riscritto il test con `NavigationContainer`+`createNativeStackNavigator` reali, stesso pattern già stabilito in `MyScheduleScreen.test.jsx`.
+
+### Risultato
+10/10 task, TDD rigoroso su ognuno. Nessuna modifica backend — entrambe le feature sono puro frontend. Help/FAQ mobile distribuibile via OTA (nessun modulo nativo nuovo), a differenza della Fase B (secure storage) che aveva richiesto una build nativa. `finishing-a-development-branch`: test verdi, l'utente ha scelto merge locale (non PR) su raccomandazione esplicita, poi push su `origin/main` su richiesta separata. Worktree/branch temporaneo puliti manualmente dopo un errore di provenance su `ExitWorktree` (sessione rientrata via `path` non è owner — risolto con `git worktree remove` manuale + `git branch -d`).
+
+**File nuovi**: `frontend-web/src/data/faq.js`, `frontend-web/src/pages/HelpPage.jsx`, `frontend-mobile/src/data/faq.js`, `frontend-mobile/src/screens/settings/HelpScreen.jsx`, `scripts/check-faq-sync.js` (+ test relativi). **Modificati**: `SummaryPage.jsx` (bottone PDF), `App.jsx`/`NavBar.jsx` (web), `RootNavigator.jsx`/`SettingsScreen.jsx` (mobile), `.github/workflows/ci.yml` (step di sync check nel job `backend`).
+
+**Stato:** Gruppo 1 chiuso e in produzione (`origin/main`). Restano da affrontare, se richiesti: Gruppo 2+ del backlog post-Fase-C (notifiche push, alert frodi, firma digitale, trust signal, branding, pricing, shift swap), Fase C (geofencing/QR rotation, P0), S.26 (consenso GPS GDPR).
+
+---
+
 ## Session 97 — P2.5: checklist wizard 6.4/6.5 verificate via API diretta, senza build mobile (8 Agosto 2026)
 
 ### Contesto
