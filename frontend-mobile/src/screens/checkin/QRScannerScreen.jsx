@@ -3,17 +3,51 @@ import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Ani
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Crypto from 'expo-crypto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 import apiClient from '../../services/apiClient';
 import authService from '../../services/authService';
+import secureAuthStorage from '../../services/secureAuthStorage';
 import { enqueueCheckin } from '../../services/offlineQueue';
-import { ENDPOINTS, OFFLINE_CONFIG } from '../../config/endpoints';
+import { ENDPOINTS, OFFLINE_CONFIG, STORAGE_KEYS } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import StepIndicator from '../../components/StepIndicator';
+import GPSConsentDialog from '../../components/GPSConsentDialog';
 import { COLORS, FONTS } from '../../config/theme';
 import { isLowEndDevice } from '../../utils/deviceTier';
 
 const QR_PREFIX = 'badge://checkin';
 const SUCCESS_FLASH_DURATION = 500;
+
+// Cache locale stato geofencing per sede (Fase C) — stesso pattern di
+// MyScheduleScreen/MyPresencesScreen (AsyncStorage, chiave centralizzata in
+// config/endpoints.js). Aggiornata ad ogni determinazione certa dello stato:
+// check-in online riuscito SENZA GPS (sede non geofenced) o GEOFENCE_COORDINATES_REQUIRED
+// (sede geofenced). Usata solo per decidere se bloccare l'accodamento offline —
+// stessa finestra di staleness già accettata altrove nell'app per i dati offline.
+async function readGeofencingCache() {
+  const raw = await AsyncStorage.getItem(STORAGE_KEYS.CACHE_GEOFENCING_STATUS);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+async function writeGeofencingStatus(siteId, geofenced) {
+  const cache = await readGeofencingCache();
+  cache[siteId] = { geofenced };
+  await AsyncStorage.setItem(STORAGE_KEYS.CACHE_GEOFENCING_STATUS, JSON.stringify(cache));
+}
+
+// true SOLO se la sede è nota in cache come NON geofenced. Sede sconosciuta o nota
+// come geofenced → false (fail-safe, blocca l'accodamento offline).
+async function isSiteKnownNotGeofenced(siteId) {
+  const cache = await readGeofencingCache();
+  return cache[siteId]?.geofenced === false;
+}
 
 export default function QRScannerScreen({ navigation, route }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -23,6 +57,11 @@ export default function QRScannerScreen({ navigation, route }) {
   const faceidVerified = route?.params?.faceidVerified === true;
   // Guard: prevents duplicate submissions from rapid onBarcodeScanned events
   const processingRef = useRef(false);
+
+  const [showConsentDialog, setShowConsentDialog] = useState(false);
+  // Conserva payload/siteId tra il primo tentativo (fallito) e il retry con GPS —
+  // stesso client_uuid riusato (idempotenza, ON CONFLICT DO NOTHING lato backend).
+  const pendingRetryRef = useRef(null);
 
   const scanLineAnim = useRef(new Animated.Value(0)).current;
   const successAnim = useRef(new Animated.Value(0)).current;
@@ -114,11 +153,15 @@ export default function QRScannerScreen({ navigation, route }) {
         occurred_at: occurredAt, // the field the backend actually reads
         client_uuid: clientUuid, // idempotency key
         faceid_verified: faceidVerified,
+        qr_content: data,        // stringa raw scansionata (finding #5) — sempre inclusa,
+                                  // indipendentemente dal geofencing, protegge anche le sedi senza GPS
       };
 
       const response = await apiClient.post(ENDPOINTS.CHECKINS_POST, payload, {
         timeout: OFFLINE_CONFIG.POST_TIMEOUT_OFFLINE_MS,
       });
+
+      await writeGeofencingStatus(siteId, false); // check-in riuscito senza GPS → sede non geofenced
 
       // Success feedback: vibration + corner brackets flash green before navigating to Conferma
       Vibration.vibrate(500);
@@ -130,18 +173,49 @@ export default function QRScannerScreen({ navigation, route }) {
         });
       }, SUCCESS_FLASH_DURATION);
     } catch (err) {
+      const geofenceCode = err.response?.data?.details?.code;
+
+      if (geofenceCode === 'GEOFENCE_COORDINATES_REQUIRED') {
+        pendingRetryRef.current = payload;
+        await writeGeofencingStatus(siteId, true);
+        const user = await authService.getUser().catch(() => null);
+        if (user?.gps_consent_given) {
+          await acquireLocationAndRetry();
+        } else {
+          setShowConsentDialog(true);
+        }
+        return;
+      }
+
       // `err.isAxiosError && !err.response` — a request that was actually sent but never got
       // a response (offline or POST_TIMEOUT_OFFLINE_MS hit). This must NOT match the manually
       // thrown validation errors above (QR incompleto, employee_id mancante): those have no
       // `.response` either, but they're genuine application errors caught before any request
       // was made, so they must never be queued (and `payload` may still be null at that point).
       if (payload && err.isAxiosError && !err.response) {
-        // Network/timeout error — never reached the server. Queue it for later sync instead
-        // of failing the user's check-in outright. Reuse the same payload object (same
-        // client_uuid/occurred_at) so that if the original request actually reached the
-        // server despite the client-side timeout, the backend recognizes the retry as a
-        // duplicate.
-        //
+        // Network/timeout error — never reached the server. Se sappiamo (da cache locale) che
+        // questa sede è geofenced — o non lo sappiamo affatto — non accodiamo: un check-in
+        // offline non può mai ricevere l'errore GEOFENCE_COORDINATES_REQUIRED che innesca la
+        // richiesta GPS, quindi accodarlo comunque produrrebbe un fallimento silenzioso solo al
+        // momento del flush (Fase C, blocco fail-safe).
+        const geofencingKnown = await isSiteKnownNotGeofenced(siteId);
+        if (!geofencingKnown) {
+          Alert.alert(
+            'Connessione richiesta',
+            'Questa sede richiede una connessione per verificare la posizione al momento del check-in.',
+            [
+              { text: 'Riprova', onPress: () => {
+                processingRef.current = false;
+                setScanned(false);
+                setLoading(false);
+              }},
+              { text: 'Annulla', onPress: () => navigation.goBack() },
+            ]
+          );
+          setLoading(false);
+          return;
+        }
+
         // Everything below (enqueue + navigate) is wrapped in one try/catch: this exact
         // catch block already crashed the app twice on an unhandled ReferenceError from a
         // variable declared in the try block above but read here (first `payload`, then
@@ -169,7 +243,8 @@ export default function QRScannerScreen({ navigation, route }) {
       }
 
       // Application error — a real 4xx/5xx from the server (e.g. wrong site assignment,
-      // ownership violation, validation error). Genuinely invalid, don't enqueue.
+      // ownership violation, validation error, OUTSIDE_GEOFENCE, QR_CODE_INVALID). Genuinely
+      // invalid, don't enqueue, don't retry automatically.
       const msg = err.response?.data?.message || err.message || 'Check-in fallito';
 
       Alert.alert('Errore check-in', msg, [
@@ -182,6 +257,63 @@ export default function QRScannerScreen({ navigation, route }) {
       ]);
       setLoading(false);
     }
+  };
+
+  // Acquisisce la posizione one-shot e ripete la POST con lo stesso client_uuid del
+  // tentativo originale (idempotenza). Su timeout/permesso negato mostra un messaggio
+  // dedicato con "Riprova" che ritenta SOLO l'acquisizione posizione — il QR resta valido.
+  const acquireLocationAndRetry = async () => {
+    try {
+      const location = await Location.getCurrentPositionAsync({ timeout: 10000 });
+      const retryPayload = {
+        ...pendingRetryRef.current,
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+      const response = await apiClient.post(ENDPOINTS.CHECKINS_POST, retryPayload, {
+        timeout: OFFLINE_CONFIG.POST_TIMEOUT_OFFLINE_MS,
+      });
+      Vibration.vibrate(500);
+      Animated.timing(successAnim, { toValue: 1, duration: 150, useNativeDriver: false }).start();
+      setTimeout(() => {
+        navigation.replace('Success', { checkIn: response.data.data, siteId: pendingRetryRef.current?.site_id });
+      }, SUCCESS_FLASH_DURATION);
+    } catch (locErr) {
+      if (locErr?.isAxiosError) {
+        // Il retry stesso ha ricevuto una risposta applicativa (es. OUTSIDE_GEOFENCE) —
+        // errore finale, nessun ulteriore tentativo automatico.
+        const msg = locErr.response?.data?.message || locErr.message || 'Check-in fallito';
+        Alert.alert('Errore check-in', msg, [
+          { text: 'Riprova', onPress: () => {
+            processingRef.current = false;
+            setScanned(false);
+            setLoading(false);
+          }},
+          { text: 'Annulla', onPress: () => navigation.goBack() },
+        ]);
+      } else {
+        // Timeout/permesso negato sull'acquisizione GPS stessa.
+        Alert.alert('Posizione non disponibile', 'Attiva la posizione per timbrare qui.', [
+          { text: 'Riprova', onPress: () => acquireLocationAndRetry() },
+          { text: 'Annulla', onPress: () => navigation.goBack() },
+        ]);
+      }
+      setLoading(false);
+    }
+  };
+
+  const handleConsentAccepted = async () => {
+    setShowConsentDialog(false);
+    await acquireLocationAndRetry();
+  };
+
+  const handleConsentDeclined = () => {
+    setShowConsentDialog(false);
+    Alert.alert('Check-in bloccato', 'Il consenso alla posizione è necessario per timbrare in questa sede.', [
+      { text: 'Riprova', onPress: () => setShowConsentDialog(true) },
+      { text: 'Annulla', onPress: () => navigation.goBack() },
+    ]);
+    setLoading(false);
   };
 
   const bracketColor = successAnim.interpolate({ inputRange: [0, 1], outputRange: [COLORS.scanBlue, COLORS.success] });
@@ -299,6 +431,12 @@ export default function QRScannerScreen({ navigation, route }) {
 
         <StepIndicator activeStep={2} />
       </SafeAreaView>
+
+      <GPSConsentDialog
+        visible={showConsentDialog}
+        onConsent={handleConsentAccepted}
+        onDecline={handleConsentDeclined}
+      />
     </View>
   );
 }
