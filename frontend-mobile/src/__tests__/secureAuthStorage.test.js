@@ -96,4 +96,20 @@ describe('secureAuthStorage', () => {
 
     await expect(secureAuthStorage.clearSession()).rejects.toBeInstanceOf(SecureStorageError);
   });
+
+  it('setUser fa merge del patch con l\'utente esistente, non lo sovrascrive interamente', async () => {
+    await secureAuthStorage.setSession({ token: 'a', user: { name: 'Maria', employee_id: 'emp-1', gps_consent_given: false } });
+
+    const merged = await secureAuthStorage.setUser({ gps_consent_given: true });
+
+    expect(merged).toEqual({ name: 'Maria', employee_id: 'emp-1', gps_consent_given: true });
+    await expect(secureAuthStorage.getUser()).resolves.toEqual(merged);
+  });
+
+  it('setUser funziona anche quando non c\'è ancora nessun utente salvato', async () => {
+    const merged = await secureAuthStorage.setUser({ gps_consent_given: true });
+
+    expect(merged).toEqual({ gps_consent_given: true });
+    await expect(secureAuthStorage.getUser()).resolves.toEqual({ gps_consent_given: true });
+  });
 });

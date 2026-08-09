@@ -56,6 +56,13 @@ const secureAuthStorage = {
     }
   },
 
+  async setUser(patch) {
+    const current = await this.getUser();
+    const merged = { ...(current || {}), ...patch };
+    await setItem(USER_DATA, JSON.stringify(merged));
+    return merged;
+  },
+
   async setSession({ token, refreshToken, user }) {
     const writes = [setItem(AUTH_TOKEN, token), setItem(USER_DATA, JSON.stringify(user))];
     if (refreshToken) writes.push(setItem(REFRESH_TOKEN, refreshToken));
