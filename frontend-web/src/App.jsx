@@ -25,6 +25,7 @@ import { EmployeeIllnessReport } from './features/illness/pages/EmployeeIllnessR
 import { ManagerIllnessReport } from './features/illness/pages/ManagerIllnessReport';
 import { AdminIllnessManagement } from './features/illness/pages/AdminIllnessManagement';
 import SummaryPage from './pages/SummaryPage';
+import HelpPage from './pages/HelpPage';
 import { OnboardingWizardPage } from './features/admin/pages/OnboardingWizardPage';
 
 // Create Material-UI theme with design system colors
@@ -280,6 +281,16 @@ function AppRouter() {
             element={
               <ProtectedRoute requiredRoles={['admin', 'manager', 'viewer']}>
                 <SummaryPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Help/FAQ: tutti i ruoli, il filtro è sul contenuto */}
+          <Route
+            path="/help"
+            element={
+              <ProtectedRoute requiredRoles={['admin', 'manager', 'employee', 'viewer']}>
+                <HelpPage />
               </ProtectedRoute>
             }
           />
