@@ -14,11 +14,12 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "it.dataxiom.badge",
-      "buildNumber": "35",
+      "buildNumber": "36",
       "infoPlist": {
         "NSCameraUsageDescription": "Utilizzato per scansionare il QR code della sede",
         "NSFaceIDUsageDescription": "Utilizzato per autenticare il check-in",
         "NSPhotoLibraryUsageDescription": "Non utilizzato",
+        "NSLocationWhenInUseUsageDescription": "Usiamo la tua posizione solo al momento del check-in per verificare che tu sia in sede",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -50,6 +51,12 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "Autorizza Badge System a usare Face ID per il check-in"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Usiamo la tua posizione solo al momento del check-in per verificare che tu sia in sede"
         }
       ],
       "expo-asset",
