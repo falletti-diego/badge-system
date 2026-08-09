@@ -1,16 +1,27 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  AlertDialog,
-  Button,
+  Modal,
   View,
   Text,
+  TouchableOpacity,
   Linking,
   StyleSheet,
 } from 'react-native';
+import apiClient from '../services/apiClient';
+import secureAuthStorage from '../services/secureAuthStorage';
+import { ENDPOINTS } from '../config/endpoints';
 
 const styles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: 24,
+  },
   container: {
-    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
   },
   title: {
     fontSize: 18,
@@ -35,28 +46,53 @@ const styles = StyleSheet.create({
   },
   button: {
     minWidth: 100,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
   },
+  declineButton: { backgroundColor: '#FBEAEA' },
+  declineText: { color: '#B91C1C', fontWeight: '600' },
+  acceptButton: { backgroundColor: '#2D7049' },
+  acceptText: { color: '#fff', fontWeight: '600' },
 });
 
 /**
  * GPSConsentDialog — GDPR Art. 7 explicit consent for geofencing
- * Shown once per employee before first GPS check-in
- * Non-dismissable (user must choose Accetto or Rifiuto)
+ * Shown before il primo check-in su una sede con geofencing attivo, e ad ogni
+ * scan successivo finché il dipendente non accetta (nessun cooldown — il
+ * check-in resta bloccato su quella sede fino al consenso, Fase C).
  */
 export default function GPSConsentDialog({ visible, onConsent, onDecline }) {
+  const [submitting, setSubmitting] = useState(false);
+
   if (!visible) return null;
 
   const handlePrivacyLink = () => {
     Linking.openURL('https://badge.dataxiom.it/privacy-policy-it');
   };
 
+  const handleAccept = async () => {
+    setSubmitting(true);
+    try {
+      await apiClient.post(ENDPOINTS.CONSENT_GPS_ACCEPTANCE, {
+        consent_given: true,
+        privacy_policy_version: '2.0',
+      });
+      await secureAuthStorage.setUser({ gps_consent_given: true });
+      onConsent();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <AlertDialog.Root isOpen={visible}>
-      <AlertDialog.Content>
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={styles.backdrop}>
         <View style={styles.container}>
           <Text style={styles.title}>📍 Verifica di Sede</Text>
           <Text style={styles.message}>
-            Il datore di lavoro ha abilitato la verifica di sede (GPS). Badge System registra la tua posizione solo al momento del check-in per verificare sei fisicamente in sede.{'\n\n'}
+            Il datore di lavoro ha abilitato la verifica di sede (GPS). Badge System registra la tua posizione solo al momento del check-in per verificare che tu sia fisicamente in sede.{'\n\n'}
             <Text style={{ fontWeight: '600' }}>Dati raccolti:</Text>
             {'\n'}• Latitudine e longitudine al momento del check-in{'\n'}
             {'\n'}
@@ -65,35 +101,25 @@ export default function GPSConsentDialog({ visible, onConsent, onDecline }) {
             {'\n'}
             <Text style={{ fontWeight: '600' }}>Diritti:</Text>
             {'\n'}• Puoi rivedere le coordinate via app{'\n'}
-            • Puoi richiedere cancellazione anticipata{'\n'}
-            • Puoi rifiutare (check-in senza GPS, se disponibile){'\n\n'}
+            • Puoi revocare il consenso in qualsiasi momento da Impostazioni{'\n\n'}
             <Text>
               Per dettagli vedi la{' '}
-              <Text
-                style={styles.link}
-                onPress={handlePrivacyLink}
-              >
+              <Text style={styles.link} onPress={handlePrivacyLink}>
                 Privacy Policy
               </Text>
             </Text>
           </Text>
 
           <View style={styles.buttonContainer}>
-            <Button
-              onPress={onDecline}
-              title="Rifiuto"
-              color="#B91C1C"
-              style={styles.button}
-            />
-            <Button
-              onPress={onConsent}
-              title="Accetto"
-              color="#2D7049"
-              style={styles.button}
-            />
+            <TouchableOpacity style={[styles.button, styles.declineButton]} onPress={onDecline} disabled={submitting}>
+              <Text style={styles.declineText}>Rifiuto</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.button, styles.acceptButton]} onPress={handleAccept} disabled={submitting}>
+              <Text style={styles.acceptText}>Accetto</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </AlertDialog.Content>
-    </AlertDialog.Root>
+      </View>
+    </Modal>
   );
 }

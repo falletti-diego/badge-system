@@ -22,6 +22,7 @@ export const ENDPOINTS = {
 
   // Consent (GDPR Art. 7)
   CONSENT_GPS_ACCEPTANCE: '/api/v1/consent/gps-acceptance',
+  CONSENT_GPS_REVOKE: '/api/v1/consent/gps-revoke',
 
   // Shifts
   SHIFTS_MY_SCHEDULE: '/api/v1/shifts/my-schedule',
