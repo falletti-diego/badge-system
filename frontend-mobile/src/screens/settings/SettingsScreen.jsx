@@ -4,7 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import authService from '../../services/authService';
-import { STORAGE_KEYS } from '../../config/endpoints';
+import apiClient from '../../services/apiClient';
+import secureAuthStorage from '../../services/secureAuthStorage';
+import { STORAGE_KEYS, ENDPOINTS } from '../../config/endpoints';
 import { COLORS, FONTS, ROLE_LABELS } from '../../config/theme';
 
 function getInitials(name) {
@@ -28,6 +30,24 @@ export default function SettingsScreen({ navigation }) {
   const toggleFaceId = async (value) => {
     setFaceIdEnabled(value);
     await AsyncStorage.setItem(STORAGE_KEYS.FACE_ID_ENABLED, value ? 'true' : 'false');
+  };
+
+  const handleRevokeGpsConsent = () => {
+    Alert.alert('Revoca consenso posizione', 'Non potrai più timbrare su sedi con verifica GPS attiva finché non ridai il consenso. Continuare?', [
+      { text: 'Annulla', style: 'cancel' },
+      {
+        text: 'Revoca', style: 'destructive',
+        onPress: async () => {
+          try {
+            await apiClient.post(ENDPOINTS.CONSENT_GPS_REVOKE);
+            await secureAuthStorage.setUser({ gps_consent_given: false });
+            setUser((prev) => ({ ...prev, gps_consent_given: false }));
+          } catch (err) {
+            Alert.alert('Errore', 'Non è stato possibile revocare il consenso. Verifica la connessione e riprova.');
+          }
+        },
+      },
+    ]);
   };
 
   const handleLogout = () => {
@@ -98,6 +118,12 @@ export default function SettingsScreen({ navigation }) {
             trackColor={{ false: COLORS.bone, true: COLORS.navy500 }}
           />
         </View>
+        {user?.gps_consent_given === true && (
+          <TouchableOpacity style={styles.row} onPress={handleRevokeGpsConsent}>
+            <Text style={styles.rowLabel}>Revoca consenso posizione</Text>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {(user?.client_name || user?.site_name) && (
