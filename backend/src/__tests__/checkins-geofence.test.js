@@ -34,21 +34,14 @@ jest.mock('../middleware/rateLimiter', () => ({
 const { pool } = require('../db/pool');
 
 // Disable global DISABLE_AUTH bypass so JWT role checks work.
-// Enable GEOFENCING_ENABLED for these tests (feature is on hold by default in MVP).
-// Save/restore GEOFENCING_ENABLED so CI env state is not corrupted for subsequent test files.
-let _savedGeofencingEnabled;
+// Geofencing è ora controllato solo da geofencing_feature_enabled (client) +
+// geofence_enabled (sede), entrambi già simulati via makeClientQuery() — nessun
+// env var globale da manipolare (Fase C, 2026-08-09).
 beforeAll(() => {
   process.env.DISABLE_AUTH = 'false';
-  _savedGeofencingEnabled = process.env.GEOFENCING_ENABLED;
-  process.env.GEOFENCING_ENABLED = 'true';
 });
 afterAll(() => {
   process.env.DISABLE_AUTH = 'true';
-  if (_savedGeofencingEnabled === undefined) {
-    delete process.env.GEOFENCING_ENABLED;
-  } else {
-    process.env.GEOFENCING_ENABLED = _savedGeofencingEnabled;
-  }
 });
 
 // ─── Token helpers ────────────────────────────────────────────────────────────

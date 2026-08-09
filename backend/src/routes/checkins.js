@@ -99,12 +99,12 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
         });
       }
 
-      // 3.5 Geofence check — ON HOLD (MVP): re-enable by setting GEOFENCING_ENABLED=true
-      // Code is preserved for Phase 2 implementation.
+      // 3.5 Geofence check (Fase C, 2026-08-09) — controllato interamente dai toggle
+      // admin già esistenti: geofencing_feature_enabled (per cliente) e geofence_enabled
+      // (per sede). Nessun env var globale: l'admin del cliente decide da solo.
       const site = siteResult.rows[0];
       const { latitude: checkinLat, longitude: checkinLng } = req.validated.body;
-      const geofencingEnabled = process.env.GEOFENCING_ENABLED === 'true';
-      if (geofencingEnabled && (site.geofencing_feature_enabled !== false) && site.geofence_enabled) {
+      if ((site.geofencing_feature_enabled !== false) && site.geofence_enabled) {
         if (checkinLat == null || checkinLng == null || isNaN(checkinLat) || isNaN(checkinLng)) {
           throw new ValidationError('GPS coordinates required for check-in at this site', {
             code: 'GEOFENCE_COORDINATES_REQUIRED',
