@@ -33,6 +33,11 @@ export const NavBar = ({ title, children }) => {
     navigate('/change-password', { state: { voluntary: true } });
   };
 
+  const handleHelp = () => {
+    handleClose();
+    navigate('/help');
+  };
+
   const handleLogout = async () => {
     handleClose();
     try {
@@ -163,6 +168,15 @@ export const NavBar = ({ title, children }) => {
               {user?.role || ''}
             </Typography>
           </Box>
+
+          <Divider />
+
+          <MenuItem
+            onClick={handleHelp}
+            sx={{ py: 1.5, fontSize: '14px', color: '#1E3A5F', fontWeight: 500 }}
+          >
+            ❓&nbsp;&nbsp;Guida
+          </MenuItem>
 
           <Divider />
 

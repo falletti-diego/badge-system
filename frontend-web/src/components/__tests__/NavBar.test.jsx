@@ -74,6 +74,13 @@ describe('NavBar', () => {
     });
   });
 
+  it('navigates to /help on "Guida"', async () => {
+    renderNavBar();
+    fireEvent.click(screen.getByText('MR'));
+    fireEvent.click(screen.getByText(/Guida/i));
+    expect(mockNavigate).toHaveBeenCalledWith('/help');
+  });
+
   it('calls logout and navigates to /login on "Esci"', async () => {
     const authService = (await import('../../services/authService')).default;
     renderNavBar();
