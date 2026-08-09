@@ -82,6 +82,10 @@ export default function SettingsScreen({ navigation }) {
           <Text style={styles.rowLabel}>Password e sicurezza</Text>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('Help')}>
+          <Text style={styles.rowLabel}>Guida</Text>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
