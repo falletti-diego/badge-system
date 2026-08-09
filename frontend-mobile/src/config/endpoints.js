@@ -114,6 +114,10 @@ export const STORAGE_KEYS = {
   OFFLINE_QUEUE: 'badge_offline_queue',
   CACHE_SHIFTS: 'badge_cache_shifts',
   CACHE_PRESENCES: 'badge_cache_presences',
+  // Fase C: stato geofencing per sede, popolato ad ogni check-in (successo o
+  // GEOFENCE_COORDINATES_REQUIRED) — usato per decidere se bloccare l'accodamento
+  // offline di un check-in su una sede nota (o sconosciuta) come geofenced.
+  CACHE_GEOFENCING_STATUS: 'badge_cache_geofencing_status',
 };
 
 // Offline mode (docs/superpowers/plans/2026-07-19-offline-mode.md, Phase B)
