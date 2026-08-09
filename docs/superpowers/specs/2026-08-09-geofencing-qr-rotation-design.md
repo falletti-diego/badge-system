@@ -44,6 +44,8 @@ Il posizionamento commerciale del prodotto è esplicitamente "zero hardware" (CL
 | Offline + sede geofenced nota | Accodamento bloccato, messaggio esplicito | Un check-in offline accodato non può mai ricevere l'errore che innesca la richiesta GPS — accodarlo comunque produrrebbe un fallimento silenzioso solo al momento del flush |
 | Offline + sede mai vista in cache | Bloccato per default (fail-safe) | Stato sconosciuto trattato come "potenzialmente geofenced" — coerente col blocco rigido applicato ovunque in questo design |
 | Retry dopo timeout GPS | Ritenta solo l'acquisizione posizione, non richiede una nuova scansione QR | Il QR già scansionato resta valido |
+| Retention coordinate GPS | Script dedicato, cancellazione dopo 90 giorni | `GPSConsentDialog` promette esplicitamente questa retention (Art. 5(1)(e) GDPR) — finché il dialog era codice morto la promessa non aveva conseguenze; ora che diventa operativo deve essere vera |
+| Revoca consenso GPS | Endpoint + voce Impostazioni mobile | Il consenso diventa per la prima volta realmente bloccante per il check-in — l'Art. 7(3) GDPR richiede che la revoca sia agevole quanto la concessione |
 
 ---
 
@@ -70,6 +72,10 @@ La logica haversine interna resta invariata. `checkins-geofence.test.js` va risc
 
 **Nuovo endpoint di rigenerazione QR.** `POST /api/admin/sites/:id/regenerate-qr` in `backend/src/routes/admin/sites.js`, stessa catena di middleware RBAC/tenant-scoping già usata dagli altri endpoint admin su `sites`. Genera un nuovo `qr_code_content` sostituendo `v=1` con `v=<crypto.randomUUID()>` (stessa utility già in uso nel resto del backend dalla Session 21, nessuna nuova dipendenza) — un valore imprevedibile, non un semplice contatore incrementale che un attaccante potrebbe indovinare. UPDATE su `sites.qr_code_content`, scrittura in `audit_log` (con `client_id` popolato, pattern già stabilito in Fase A finding #6) con old/new value. **Deve avere un test RBAC esplicito e dedicato** che verifica che un admin del Cliente A non possa rigenerare il QR di una sede del Cliente B — dato lo storico di leak cross-tenant reali in questo progetto (Session 71), questo non è un "probabilmente coperto dal middleware generico", è un requisito esplicito.
 
+**Retention coordinate GPS.** Nuovo script `backend/scripts/checkin-gps-retention.js`, stesso pattern di `audit-log-retention.js` (`RETENTION_DAYS` da env, default 90, flag `--dry-run`, log del conteggio). A differenza dell'audit log (righe intere cancellate), qui l'operazione è un `UPDATE checkins SET checkin_latitude = NULL, checkin_longitude = NULL WHERE timestamp < NOW() - INTERVAL '90 days' AND checkin_latitude IS NOT NULL` — la riga di check-in resta (serve per lo storico presenze/ore), solo le coordinate vengono nullificate. Schedulato via cron come `audit-log-retention.js` (stesso meccanismo esistente, nessuna nuova infrastruttura).
+
+**Revoca consenso GPS.** Nuovo `POST /api/consent/gps-revoke` in `consent.js`, simmetrico a `/gps-acceptance`: imposta `employees.gps_consent_given = false`, scrive una riga di audit in `employee_consent_log` (`consent_given: false`). Un dipendente con consenso revocato torna allo stato "mai dato consenso" — al prossimo check-in su una sede geofenced rivede `GPSConsentDialog`.
+
 ### Mobile
 
 **`GPSConsentDialog.jsx` — riscrittura completa.** Il file attuale importa `AlertDialog` da `react-native` (API inesistente, componente mai eseguibile). Riscritto con `Modal` nativo + `View`/`Text`/`TouchableOpacity`, stesso contenuto testuale **tranne** la frase "puoi rifiutare (check-in senza GPS, se disponibile)" — rimossa, perché contraddice il blocco rigido di questo design. Su "Accetto": chiama `POST /api/consent/gps-acceptance` (endpoint già esistente e testato) e, in caso di successo, aggiorna **immediatamente** la copia locale dell'utente via `secureAuthStorage.setUser()` (merge di `gps_consent_given: true`) — senza questo aggiornamento locale, il prossimo check-in nella stessa sessione rileggerebbe la cache stale e ripresenterebbe il dialog inutilmente. Su "Rifiuto": il check-in resta bloccato, nessun cooldown — ridomanda ad ogni scansione finché non accetta.
@@ -82,7 +88,9 @@ La logica haversine interna resta invariata. `checkins-geofence.test.js` va risc
 5. Posizione ottenuta → ripete la POST **con lo stesso `client_uuid`** del primo tentativo (sfrutta la dedup esistente `ON CONFLICT (client_id, client_uuid) ... DO NOTHING`, sicuro anche in caso di doppio tap) più `latitude`/`longitude`.
 6. Un secondo rifiuto (`403 OUTSIDE_GEOFENCE`) è un errore finale, **non** viene ritentato automaticamente — mostrato così com'è all'utente.
 
-Nuova dipendenza: `expo-location` (era stata rimossa in Session 83 come inutilizzata — reintrodotta ora con uso reale). Richiede una nuova build nativa (non è OTA-deployabile), a differenza del Gruppo 1 (PDF/FAQ).
+Nuova dipendenza: `expo-location` (era stata rimossa in Session 83 come inutilizzata — reintrodotta ora con uso reale). Richiede una nuova build nativa (non è OTA-deployabile), a differenza del Gruppo 1 (PDF/FAQ). Richiede anche `NSLocationWhenInUseUsageDescription` in `app.json` (plugin `expo-location` la inietta in Info.plist) con una stringa che spiega il motivo all'utente e alla review Apple (es. "Usiamo la tua posizione solo al momento del check-in per verificare che tu sia in sede") — senza questa stringa la build viene rifiutata in App Store review, stesso tipo di requisito già incontrato per altri permessi nativi in passato.
+
+**Revoca consenso GPS — Impostazioni.** Nuova voce in `SettingsScreen.jsx` ("Revoca consenso posizione", visibile solo se `gps_consent_given` è vero), che chiama `POST /api/consent/gps-revoke` e aggiorna la cache locale utente (stesso meccanismo di `secureAuthStorage.setUser()` usato per la concessione).
 
 **Cache locale per lo stato geofencing (per l'offline).** Stesso pattern di cache già usato da `MyScheduleScreen.jsx`/`MyPresencesScreen.jsx`: dopo ogni check-in online riuscito (o tentativo che rivela lo stato via `GEOFENCE_COORDINATES_REQUIRED`), l'app salva localmente se quella sede è geofenced. Quando l'app rileva assenza di rete (pattern già esistente, `isInternetReachable`, Session 83 Rischio 2) prima di accodare un check-in:
 - sede nota in cache come geofenced → accodamento **bloccato**, messaggio esplicito ("Connessione richiesta per timbrare in questa sede").
@@ -115,9 +123,12 @@ Stessa finestra di staleness già accettata altrove nell'app per i dati offline 
 - Nuovo test: `qr_content` oltre 500 caratteri → rifiutato dallo schema Zod.
 - Nuovo test: retry con lo stesso `client_uuid` (primo tentativo 403, secondo 201) → una sola riga in `checkins`, nessun duplicato.
 - Nuovo `admin-sites-regenerate-qr.test.js`: RBAC (employee/manager → 403), tenant-scoping esplicito (admin Cliente A non può rigenerare QR di una sede Cliente B), audit log popolato con `client_id`, vecchio `qr_code_content` smette di validare dopo la rigenerazione.
+- Nuovo `checkin-gps-retention.test.js`: check-in con `checkin_latitude`/`checkin_longitude` più vecchio di 90 giorni → coordinate nullificate, riga preservata; check-in più recente → invariato; `--dry-run` non modifica nulla.
+- Nuovo test su `consent.js`: `POST /gps-revoke` imposta `gps_consent_given=false`, scrive audit log con `consent_given: false`; un check-in successivo su sede geofenced richiede di nuovo il dialog.
 
 **Mobile:**
 - `GPSConsentDialog.test.jsx` nuovo: visibilità, accetta (chiama l'endpoint + aggiorna cache locale), rifiuta (nessuna chiamata, check-in resta bloccato).
+- Nuovo test in `SettingsScreen.test.jsx`: voce "Revoca consenso posizione" visibile solo se consenso dato, chiama l'endpoint, aggiorna cache locale.
 - `QRScannerScreen.test.jsx` esteso: scenario `GEOFENCE_COORDINATES_REQUIRED` → consenso → retry con lat/lng e stesso `client_uuid`; timeout GPS → messaggio + retry solo-posizione; secondo rifiuto (`OUTSIDE_GEOFENCE`) → nessun retry automatico.
 - Nuovo test cache offline-geofencing: sede nota geofenced → accodamento bloccato; sede nota non-geofenced → invariato; sede mai vista → bloccato per default.
 
@@ -131,3 +142,4 @@ Stessa finestra di staleness già accettata altrove nell'app per i dati offline 
 - Il campo `qr_content` resta opzionale in questa fase — la protezione anti-QR-rubato non è attiva finché un client non aggiorna l'app. Un piano successivo lo renderà obbligatorio dopo aver verificato che tutti gli utenti reali sono su una build aggiornata.
 - La cache locale dello stato geofencing può essere stale (stessa finestra già accettata altrove nell'app per i dati offline).
 - Nessun override manager per check-in fuori raggio o senza consenso in questa fase — un dipendente realmente fuori sede non ha alcuna via di eccezione, deve avvicinarsi fisicamente.
+- Un admin che attiva il geofencing su una sede già in uso da mesi lo fa con effetto immediato per tutti i dipendenti di quella sede, senza un periodo di preavviso automatico nell'app — è una scelta operativa del cliente, non gestita da questo design (nessun meccanismo di "attivazione programmata" o notifica preventiva ai dipendenti).
