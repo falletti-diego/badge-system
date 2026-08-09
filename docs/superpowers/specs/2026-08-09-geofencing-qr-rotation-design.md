@@ -76,6 +76,8 @@ La logica haversine interna resta invariata. `checkins-geofence.test.js` va risc
 
 **Revoca consenso GPS.** Nuovo `POST /api/consent/gps-revoke` in `consent.js`, simmetrico a `/gps-acceptance`: imposta `employees.gps_consent_given = false`, scrive una riga di audit in `employee_consent_log` (`consent_given: false`). Un dipendente con consenso revocato torna allo stato "mai dato consenso" — al prossimo check-in su una sede geofenced rivede `GPSConsentDialog`.
 
+**Fix collaterale, stesso file.** La chiamata `logAudit` esistente per `/gps-acceptance` usa nomi di parametri sbagliati (snake_case: `entity_id`, `old_value`, `new_value`, `user_id` invece di camelCase) — `logAudit` scarta silenziosamente la chiamata (il suo guard interno richiede `entityId`/`newValue`), quindi non ha mai scritto una riga di audit dalla sua introduzione. Corretto insieme al nuovo endpoint di revoca, che userà i nomi giusti fin da subito — lasciare il codice sbagliato accanto al codice nuovo corretto nello stesso file sarebbe incoerente e continuerebbe a produrre un audit trail incompleto su un dato GDPR-rilevante.
+
 ### Mobile
 
 **`GPSConsentDialog.jsx` — riscrittura completa.** Il file attuale importa `AlertDialog` da `react-native` (API inesistente, componente mai eseguibile). Riscritto con `Modal` nativo + `View`/`Text`/`TouchableOpacity`, stesso contenuto testuale **tranne** la frase "puoi rifiutare (check-in senza GPS, se disponibile)" — rimossa, perché contraddice il blocco rigido di questo design. Su "Accetto": chiama `POST /api/consent/gps-acceptance` (endpoint già esistente e testato) e, in caso di successo, aggiorna **immediatamente** la copia locale dell'utente via `secureAuthStorage.setUser()` (merge di `gps_consent_given: true`) — senza questo aggiornamento locale, il prossimo check-in nella stessa sessione rileggerebbe la cache stale e ripresenterebbe il dialog inutilmente. Su "Rifiuto": il check-in resta bloccato, nessun cooldown — ridomanda ad ogni scansione finché non accetta.
@@ -101,7 +103,7 @@ Stessa finestra di staleness già accettata altrove nell'app per i dati offline 
 
 ### Admin Web
 
-**`SitesPage.jsx` — bottone "Rigenera QR".** Accanto al download PNG esistente, apre un dialog di conferma (pattern `ConfirmDeleteDialog` già usato altrove) con testo esplicito: il poster stampato smette immediatamente di funzionare. Su conferma: `POST /api/admin/sites/:id/regenerate-qr`, poi il nuovo PNG viene mostrato/scaricabile subito (riusa `downloadQRPng` esistente).
+**`SitesTab.jsx` — bottone "Rigenera QR".** Questa tab mostra oggi `qr_code_content` come testo in tabella con un `CopyButton` (nessun download PNG qui — quello vive in `SitesPage.jsx`, pagina separata non toccata da questo piano). Nuovo bottone "Rigenera QR" per riga, apre un dialog di conferma riusando `ConfirmDeleteDialog` (esteso con una label/colore configurabili, dato che oggi è specifico per "Elimina") con testo esplicito: il poster stampato smette immediatamente di funzionare. Su conferma: `POST /api/admin/sites/:id/regenerate-qr`, la tabella si aggiorna col nuovo `qr_code_content`.
 
 ---
 
@@ -110,7 +112,7 @@ Stessa finestra di staleness già accettata altrove nell'app per i dati offline 
 | Codice | HTTP | Quando |
 |---|---|---|
 | `QR_CODE_INVALID` | 403 | `qr_content` presente nel payload ma non corrisponde a `sites.qr_code_content` corrente |
-| `GEOFENCE_COORDINATES_REQUIRED` | 403 | già esistente, invariato |
+| `GEOFENCE_COORDINATES_REQUIRED` | 400 | già esistente (via `ValidationError`), invariato — nessun client mobile lo gestisce oggi (il flag è sempre stato spento), quindi non c'è comportamento in produzione da rompere cambiandolo; lasciato 400 per non toccare codice già testato per un beneficio puramente estetico |
 | `OUTSIDE_GEOFENCE` | 403 | già esistente, invariato |
 
 ---
@@ -133,7 +135,7 @@ Stessa finestra di staleness già accettata altrove nell'app per i dati offline 
 - Nuovo test cache offline-geofencing: sede nota geofenced → accodamento bloccato; sede nota non-geofenced → invariato; sede mai vista → bloccato per default.
 
 **Web:**
-- `SitesPage.test.jsx` esteso: flusso "Rigenera QR" (conferma, chiamata API, nuovo PNG mostrato).
+- Nuovo `SitesTab.test.jsx` (non esiste ancora nessun test per questo componente): flusso "Rigenera QR" (conferma, chiamata API, tabella aggiornata con nuovo `qr_code_content`).
 
 ---
 
