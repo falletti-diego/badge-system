@@ -30,6 +30,7 @@ import ManagerLeaveApprovalScreen from '../screens/leave/ManagerLeaveApprovalScr
 import IllnessReportScreen from '../screens/illness/IllnessReportScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import ChangePasswordScreen from '../screens/settings/ChangePasswordScreen';
+import HelpScreen from '../screens/settings/HelpScreen';
 
 const RootStack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -53,6 +54,7 @@ function SettingsStackNavigator() {
     <SettingsStack.Navigator screenOptions={{ headerShown: false }}>
       <SettingsStack.Screen name="Settings" component={SettingsScreen} />
       <SettingsStack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+      <SettingsStack.Screen name="Help" component={HelpScreen} />
     </SettingsStack.Navigator>
   );
 }
