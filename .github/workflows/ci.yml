@@ -114,6 +114,9 @@ jobs:
         # regressions stay detectable. timeout-minutes above is the safety net.
         run: npm test -- --coverage
 
+      - name: Check FAQ content sync (web/mobile)
+        run: node scripts/check-faq-sync.js
+
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         if: always()
