@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Linking,
   StyleSheet,
+  Alert,
 } from 'react-native';
 import apiClient from '../services/apiClient';
 import secureAuthStorage from '../services/secureAuthStorage';
@@ -81,6 +82,14 @@ export default function GPSConsentDialog({ visible, onConsent, onDecline }) {
       });
       await secureAuthStorage.setUser({ gps_consent_given: true });
       onConsent();
+    } catch (err) {
+      // Senza questo catch, un fallimento di rete lasciava il dipendente col dialog
+      // ancora aperto e nessuna spiegazione — il bottone si riabilitava in silenzio
+      // e il check-in non procedeva mai (code review 2026-08-10).
+      Alert.alert(
+        'Errore',
+        'Non è stato possibile registrare il consenso. Verifica la connessione e riprova.'
+      );
     } finally {
       setSubmitting(false);
     }

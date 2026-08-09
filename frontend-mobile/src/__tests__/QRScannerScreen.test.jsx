@@ -442,6 +442,34 @@ describe('QRScannerScreen', () => {
     const raw = await AsyncStorage.getItem(STORAGE_KEYS.CACHE_GEOFENCING_STATUS);
     expect(JSON.parse(raw)).toEqual({ 'site-77': { geofenced: true } });
   });
+
+  test('un fallimento nella scrittura della cache geofencing dopo un check-in riuscito NON fa apparire il check-in come fallito (regression, code review 2026-08-10)', async () => {
+    apiClient.post.mockResolvedValue({ data: { data: { id: 'checkin-1' } } });
+    jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('storage full'));
+
+    const { navigation } = await renderScreen();
+    await scan(buildQrString({ siteId: 'site-42', clientId: 'client-1' }));
+
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith('Success', expect.objectContaining({ checkIn: { id: 'checkin-1' } })));
+    expect(Alert.alert).not.toHaveBeenCalledWith('Errore check-in', expect.any(String), expect.any(Array));
+    AsyncStorage.setItem.mockRestore();
+  });
+
+  test('un fallimento nella scrittura della cache geofencing nel ramo GEOFENCE_COORDINATES_REQUIRED non blocca il flusso di retry GPS (regression, code review 2026-08-10)', async () => {
+    const geofenceError = makeResponseError('GPS required');
+    geofenceError.response = { status: 400, data: { error: 'VALIDATION_ERROR', details: { code: 'GEOFENCE_COORDINATES_REQUIRED' } } };
+    apiClient.post.mockRejectedValueOnce(geofenceError).mockResolvedValueOnce({ data: { data: { id: 'checkin-3' } } });
+    authService.getUser.mockResolvedValue({ employee_id: 'emp-1', gps_consent_given: true });
+    Location.getCurrentPositionAsync.mockResolvedValue({ coords: { latitude: 45.46, longitude: 9.18 } });
+    jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('storage full'));
+
+    const { navigation } = await renderScreen();
+    await scan(buildQrString({ siteId: 'site-88', clientId: 'client-1' }));
+
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith('Success', expect.objectContaining({ checkIn: { id: 'checkin-3' } })));
+    AsyncStorage.setItem.mockRestore();
+  });
 });
 
 describe('QRScannerScreen — low-end device animations', () => {

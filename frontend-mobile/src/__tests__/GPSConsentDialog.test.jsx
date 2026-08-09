@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { render, fireEvent, act, waitFor } from '@testing-library/react-native';
 
 jest.mock('../services/apiClient', () => ({
@@ -64,6 +65,25 @@ describe('GPSConsentDialog', () => {
     );
     expect(secureAuthStorage.setUser).toHaveBeenCalledWith({ gps_consent_given: true });
     await waitFor(() => expect(onConsent).toHaveBeenCalled());
+  });
+
+  test('on "Accetto" with a failing POST: shows an error alert, does not call onConsent, re-enables the button (regression, code review 2026-08-10)', async () => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    apiClient.post.mockRejectedValue(new Error('Network Error'));
+    const onConsent = jest.fn();
+
+    const { getByText } = await renderDialog({ visible: true, onConsent });
+
+    await act(async () => {
+      fireEvent.press(getByText('Accetto'));
+    });
+
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(
+      'Errore',
+      expect.stringContaining('consenso')
+    ));
+    expect(onConsent).not.toHaveBeenCalled();
+    Alert.alert.mockRestore();
   });
 
   test('on "Rifiuto": does not call the endpoint, calls onDecline', async () => {

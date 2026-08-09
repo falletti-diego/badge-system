@@ -35,10 +35,20 @@ async function readGeofencingCache() {
   }
 }
 
+// Best-effort: una scrittura di cache fallita (storage pieno, errore nativo) non deve
+// mai far apparire fallito un check-in già riuscito, né bloccare il ramo GPS-required
+// (entrambi i call-site sono in mezzo al flusso principale, senza un try/catch proprio —
+// se questa funzione lanciasse, l'eccezione risalirebbe fino al catch generico dello
+// screen e produrrebbe un falso "Errore check-in" o, nel ramo geofence, uno spinner
+// bloccato senza via d'uscita, code review 2026-08-10).
 async function writeGeofencingStatus(siteId, geofenced) {
-  const cache = await readGeofencingCache();
-  cache[siteId] = { geofenced };
-  await AsyncStorage.setItem(STORAGE_KEYS.CACHE_GEOFENCING_STATUS, JSON.stringify(cache));
+  try {
+    const cache = await readGeofencingCache();
+    cache[siteId] = { geofenced };
+    await AsyncStorage.setItem(STORAGE_KEYS.CACHE_GEOFENCING_STATUS, JSON.stringify(cache));
+  } catch (e) {
+    console.warn('writeGeofencingStatus failed (non-fatal):', e);
+  }
 }
 
 // true SOLO se la sede è nota in cache come NON geofenced. Sede sconosciuta o nota
