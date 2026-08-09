@@ -384,11 +384,16 @@ describe('POST /api/admin/sites/:id/regenerate-qr', () => {
   });
 
   it('admin del proprio cliente → 200, nuovo qr_code_content diverso dal vecchio, audit log scritto', async () => {
+    // 3 chiamate pool.query in sequenza: SELECT (legge client_id/qr_code_content attuali),
+    // UPDATE (scrive il nuovo qr_code_content), INSERT audit_log (dentro logAudit).
     pool.query
       .mockResolvedValueOnce({
         rows: [{ id: SITE_ID, name: 'Torino Store', client_id: CLIENT_A, qr_code_content: 'badge://checkin?site_id=X&client_id=Y&v=OLD' }],
         rowCount: 1,
-      })
+      }) // SELECT
+      .mockResolvedValueOnce({
+        rows: [{ id: SITE_ID, name: 'Torino Store', client_id: CLIENT_A, qr_code_content: `badge://checkin?site_id=${SITE_ID}&client_id=${CLIENT_A}&v=NEW` }],
+      }) // UPDATE
       .mockResolvedValueOnce({ rows: [] }); // audit log
 
     const res = await request(app)
@@ -398,7 +403,7 @@ describe('POST /api/admin/sites/:id/regenerate-qr', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.qr_code_content).not.toBe('badge://checkin?site_id=X&client_id=Y&v=OLD');
     expect(res.body.data.qr_code_content).toMatch(new RegExp(`^badge://checkin\\?site_id=${SITE_ID}&client_id=`));
-    expect(pool.query).toHaveBeenCalledTimes(2); // UPDATE + audit log
+    expect(pool.query).toHaveBeenCalledTimes(3); // SELECT + UPDATE + audit log
   });
 
   it('sede inesistente → 404', async () => {
