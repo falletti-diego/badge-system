@@ -6,8 +6,8 @@
 **Rappresentante:** Diego Falletti  
 **Contatto Privacy:** privacy@dataxiom.it
 
-**Data Ultimo Aggiornamento:** 11 Giugno 2026  
-**Versione:** 2.0 (inclusiva geolocalizzazione GPS)
+**Data Ultimo Aggiornamento:** 10 Agosto 2026  
+**Versione:** 2.1 (corretto comportamento GPS post-enforcement reale, diritto di revoca, sub-processori)
 
 ---
 
@@ -63,12 +63,12 @@ Badge System elabora i dati personali esclusivamente per:
 
 Il dipendente ha il diritto di:
 
-- **Acceso (Art. 15):** Richiedere copia di tutte le coordinate GPS registrate per lui → scaricate via API privata o export CSV
+- **Accesso (Art. 15):** Richiedere copia di tutte le coordinate GPS registrate per lui → richiesta da inviare a privacy@dataxiom.it, evasa dal Titolare entro i termini di legge (non è oggi un self-service via app o dashboard)
 - **Rettifica (Art. 16):** Se le coordinate sono errate (es. malfunzionamento GPS), richiedere la correzione → l'admin può regolare manualmente
 - **Cancellazione (Art. 17):** Richiedere cancellazione anticipata delle coordinate GPS (oltre i 90 giorni automatici) → eliminazione garantita entro 7 giorni
 - **Portabilità (Art. 20):** Ricevere i propri dati GPS in formato strutturato (CSV) per portarli ad altro provider
-- **Limitazione (Art. 18):** Disabilitare geofencing per check-in senza GPS (se base legale non è obbligatoria)
-- **Opposizione (Art. 21):** Rifiutare il geofencing basato su legittimo interesse → il datore di lavoro valuta se è possibile (es. ruoli di telelavoro)
+- **Revoca del consenso (Art. 7(3)):** Revocare il consenso alla geolocalizzazione in qualsiasi momento dalla sezione Impostazioni dell'app mobile. Dopo la revoca, il check-in resta bloccato sulle sedi con verifica GPS attiva finché il consenso non viene ridato.
+- **Limitazione/Opposizione (Art. 18, 21):** Quando una sede ha la verifica GPS attiva, fornire le coordinate è condizione necessaria per registrare il check-in in quella sede — non esiste oggi una modalità di check-in senza GPS su una sede con geofencing attivo. Il dipendente può sempre opporsi non prestando il consenso, con l'effetto di non poter timbrare su quella sede finché non lo fa.
 
 ### 3.3 Contatti per Esercitare i Diritti
 
@@ -91,7 +91,11 @@ Dataxiom utilizza i seguenti servizi AWS per ospitare Badge System:
 
 **Garantie:** AWS è sottoposto al Data Processing Addendum (DPA) secondo Standard Contractual Clauses (SCC). Dataxiom ha eseguito Data Transfer Impact Assessment (DTIA) per il trasferimento in Irlanda (UE, high protection). Nessun trasferimento verso Paesi extra-UE.
 
-### 4.2 Criptografia
+### 4.2 Sentry (Error Monitoring, UE)
+
+Dataxiom utilizza **Sentry.io** per il monitoraggio degli errori applicativi. Sentry riceve un identificativo utente pseudonimizzato (UUID interno) e il ruolo (dipendente/manager/admin) associati a ogni richiesta autenticata — mai il nome, l'email o le coordinate GPS. Organizzazione Sentry configurata su regione UE, stesso sub-processore già dichiarato nel DPA (`dpa-template-it.html`, sezione "Sub-Processori").
+
+### 4.3 Criptografia
 
 - **In Transit:** TLS 1.3 (256-bit AES-GCM) per tutte le comunicazioni client-server
 - **At Rest:** AWS RDS encryption (AES-256) per il database
@@ -136,9 +140,9 @@ Dataxiom ha implementato le seguenti misure di sicurezza:
 ### 7.2 Geofencing (Art. 6(1)(f) + Art. 7 GDPR — Consenso Supplementare)
 
 **Modalità di Consenso:**
-- Alla prima timbratura con GPS abilitato, il dipendente vede una dialog: *"Il datore di lavoro ha abilitato la verifica di sede (GPS). Badge System registra la tua posizione solo al momento del check-in per verificare sei in sede. Le coordinate sono cancellate dopo 90 giorni. Vedi la Privacy Policy: <link>. Accetti?"*
-- Bottone: `[Rifiuto]` (check-in senza GPS, se è facoltativo) | `[Accetto]` (attiva geofencing)
-- Scelta reversibile: l'admin può disabilitare geofencing per il dipendente dalle Impostazioni globali
+- Alla prima timbratura su una sede con verifica GPS attiva, il dipendente vede una dialog che spiega i dati raccolti, la finalità, la conservazione (90 giorni) e i diritti — inclusa la possibilità di revocare il consenso in qualsiasi momento da Impostazioni — con link a questa Privacy Policy.
+- Bottone: `[Rifiuto]` (il check-in su quella sede resta bloccato finché non si presta il consenso) | `[Accetto]` (procede con l'acquisizione GPS e il check-in)
+- Scelta reversibile in entrambe le direzioni: il dipendente può revocare il consenso in qualsiasi momento da Impostazioni (dopo la revoca, il check-in torna bloccato su sedi con verifica GPS attiva finché non riconsente); l'admin può disattivare la verifica GPS per l'intera sede dalle Impostazioni amministrative.
 
 ---
 
@@ -158,6 +162,7 @@ Dataxiom ha implementato le seguenti misure di sicurezza:
 
 | Versione | Data | Cambio |
 |----------|------|--------|
+| 2.1 | 10 Agosto 2026 | Corretto: GPS obbligatorio senza bypass su sedi con verifica attiva (non più facoltativo); aggiunto diritto di revoca consenso; corretto meccanismo di accesso Art. 15 (richiesta manuale, non self-service); aggiunto Sentry come sub-processore |
 | 2.0 | 11 Giugno 2026 | Aggiunto geofencing GPS, consenso esplicito, Art. 7 GDPR |
 | 1.0 | 1 Maggio 2026 | Versione iniziale (timbrature + Face ID) |
 
