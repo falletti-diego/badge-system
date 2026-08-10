@@ -20,11 +20,15 @@ Il contenuto sorgente esiste già (`docs/privacy-policy-IT.md`, scritto Session 
 - Aggiungere il redirect Netlify che la rende raggiungibile su `/privacy-policy-it`
 
 **Fuori scope (backlog separato, non affrontato qui):**
-Durante l'analisi critica sono emersi 2 gap più profondi, non risolvibili con una correzione di testo:
-1. **Base giuridica del consenso GPS potenzialmente invalida.** Con Fase C il GPS è obbligatorio (rifiuto → check-in bloccato, nessun bypass). Le Linee Guida EDPB 05/2020 sul consenso presumono che il consenso in un rapporto di lavoro non sia "liberamente prestato" quando il rifiuto ha conseguenze negative — l'attuale architettura (dialog "Accetto/Rifiuto" su base Art. 7) potrebbe richiedere una base giuridica diversa (Art. 6(1)(b) contratto o 6(1)(f) legittimo interesse con bilanciamento documentato).
-2. **Statuto dei Lavoratori Art. 4 (L. 300/1970)** — uno strumento capace di tracciare la posizione di un dipendente richiede accordo sindacale aziendale o autorizzazione dell'Ispettorato Territoriale del Lavoro prima dell'attivazione, obbligo del cliente (datore di lavoro), non coperto da GDPR/privacy-policy e oggi non comunicato in nessun punto dell'onboarding cliente.
+Durante l'analisi critica (verificata anche contro fonti pubbliche aggiornate, non solo lettura del codice) sono emersi 3 gap più profondi, non risolvibili con una correzione di testo:
 
-Entrambi vanno registrati come nuove voci nel backlog GDPR di `TASKS.md` (sezione "GDPR/Privacy Findings"), da affrontare in una sessione dedicata con `/grilling` — non in questo piano.
+1. **Base giuridica del consenso GPS potenzialmente invalida.** Con Fase C il GPS è obbligatorio (rifiuto → check-in bloccato, nessun bypass). **EDPB Guidelines 05/2020 on consent under Regulation 2016/679, §21-22 ca. (sezione "Imbalance of power")**: *"Given the dependency that results from the employer/employee relationship, it is unlikely that the data subject is able to deny his/her employer consent to data processing without experiencing the fear or real risk of detrimental effects as a result of a refusal."* — scenario che corrisponde esattamente al comportamento attuale (rifiuto = check-in bloccato = potenziale impatto disciplinare/retributivo). L'attuale architettura (dialog "Accetto/Rifiuto" su base Art. 7) potrebbe richiedere una base giuridica diversa (Art. 6(1)(b) contratto o 6(1)(f) legittimo interesse con bilanciamento documentato).
+
+2. **Statuto dei Lavoratori Art. 4 (L. 300/1970)** — uno strumento capace di tracciare la posizione di un dipendente richiede accordo sindacale aziendale o autorizzazione dell'Ispettorato Territoriale del Lavoro (ITL) prima dell'attivazione, obbligo del cliente (datore di lavoro), non coperto da GDPR/privacy-policy e oggi non comunicato in nessun punto dell'onboarding cliente. Confermato da un caso reale recente: **Garante Privacy, Provvedimento n. 7 del 16 gennaio 2025** — sanzione per geolocalizzazione GPS difforme dall'autorizzazione ITL già ottenuta, con l'indicazione esplicita che l'informativa deve descrivere le modalità operative specifiche del sistema e che *"la posizione (...) di regola non dovrebbe essere monitorata continuativamente"*. **Nota positiva**: il nostro sistema cattura le coordinate solo al momento del check-in (nessun tracking continuo in background) — già allineato alla mitigazione che il Garante richiede in questi casi, non serve modificare questo comportamento.
+
+3. **DPIA (Valutazione d'Impatto, Art. 35 GDPR) — obbligatoria, non solo "probabile".** **Delibera Garante Privacy n. 467 dell'11 ottobre 2018** (elenco vincolante dei trattamenti soggetti a DPIA ex Art. 35(4) GDPR, G.U. 19 novembre 2018) include testualmente: *"trattamenti effettuati nell'ambito del rapporto di lavoro mediante sistemi tecnologici (...) dai quali derivi la possibilità di effettuare un controllo a distanza dell'attività dei dipendenti"* — il geofencing rientra a definizione. La DPIA è obbligo del **Titolare** (il cliente, non Dataxiom — coerente con quanto già scritto nella privacy policy: "Titolare del Trattamento: [Cliente]"), ma come per il DPA (S.25) è probabile che serva un **template DPIA precompilato fornito da Dataxiom**, altrimenti nessun cliente reale la produce da sé.
+
+Tutti e 3 vanno registrati come nuove voci nel backlog GDPR di `TASKS.md` (sezione "GDPR/Privacy Findings"), da affrontare in una sessione dedicata con `/grilling` — non in questo piano.
 
 ## Contenuto — 4 correzioni a `docs/privacy-policy-IT.md`
 
@@ -57,5 +61,11 @@ Nessun test automatico: è una pagina HTML statica, stesso trattamento del DPA (
 
 ## Rischi residui accettati
 
-- I 2 gap fuori scope (base giuridica consenso, Statuto Lavoratori) restano aperti come backlog — la pagina descrive accuratamente lo stato attuale del sistema, ma lo stato attuale del sistema ha questi 2 problemi irrisolti a monte.
+- I 3 gap fuori scope (base giuridica consenso, Statuto Lavoratori, DPIA) restano aperti come backlog — la pagina descrive accuratamente lo stato attuale del sistema, ma lo stato attuale del sistema ha questi 3 problemi irrisolti a monte.
 - Il placeholder `[Cliente]` richiede un passo manuale (compilazione) prima di essere davvero utilizzabile da un cliente reale — accettabile per una pagina di riferimento generica, coerente con come il DPA è già gestito oggi.
+
+## Fonti consultate (backlog fuori scope)
+
+- EDPB, *Guidelines 05/2020 on consent under Regulation 2016/679*, versione 1.1 — sezione sull'imbalance of power nel rapporto di lavoro: https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf
+- Garante per la protezione dei dati personali, *Provvedimento n. 7 del 16 gennaio 2025* — geolocalizzazione GPS su mezzi aziendali, difformità dall'autorizzazione ITL: https://www.ancebrescia.it/2025/garante-privacy-installazione-gps-su-mezzi-aziendali-controllo-a-distanza-dei-lavoratori-provvedimento-16-gennaio-2025/
+- Garante per la protezione dei dati personali, *Delibera n. 467 dell'11 ottobre 2018* — elenco delle tipologie di trattamenti soggetti a DPIA ex Art. 35(4) GDPR: https://www.garanteprivacy.it/home/docweb/-/docweb-display/docweb/9058979
