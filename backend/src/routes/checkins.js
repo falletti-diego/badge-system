@@ -16,6 +16,7 @@ const { haversineDistance } = require('../utils/geo');
 const { deleteCacheByPattern } = require('../db/redis');
 const { resolveEmployeeId, resolveSiteId } = require('../utils/resolvers');
 const { buildScopedFilters } = require('../utils/queryScope');
+const { invalidateSignatureIfExists } = require('../utils/timesheetSignature');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -196,6 +197,12 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
           userId: req.user.user_id,
         });
       }
+
+      // Fix #3 (firma digitale): un nuovo check-in — incluso il sync offline con
+      // occurred_at backdated fino a 48h (validation.js) — deve invalidare una firma
+      // già data per quel mese. Chiamata incondizionata: se non esiste nessuna firma
+      // signed per quel mese, la UPDATE tocca 0 righe, no-op sicuro.
+      await invalidateSignatureIfExists(client, checkin.employee_id, checkin.timestamp);
 
       return { checkin, deduplicated };
     });
@@ -489,6 +496,13 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
         newValue: { ...newValues, modified_by: correctorName },
         userId: req.user.user_id,
       });
+
+      // Fix #3: invalida sia il mese vecchio sia il nuovo se una correzione sposta
+      // il timestamp in un mese diverso (entrambi potrebbero avere una firma attiva).
+      await invalidateSignatureIfExists(client, checkin.employee_id, oldValues.timestamp);
+      if (updated.timestamp !== oldValues.timestamp) {
+        await invalidateSignatureIfExists(client, checkin.employee_id, updated.timestamp);
+      }
 
       return { updated, oldValues };
     });

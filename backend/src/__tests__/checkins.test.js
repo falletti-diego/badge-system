@@ -120,6 +120,7 @@ describe('POST /api/checkins — success', () => {
         }],
       }) // INSERT
       .mockResolvedValueOnce({}) // audit log INSERT
+      .mockResolvedValueOnce({ rowCount: 0 }) // invalidateSignatureIfExists (no signature to invalidate)
       .mockResolvedValueOnce({}); // COMMIT
 
     const res = await request(app)
@@ -131,6 +132,41 @@ describe('POST /api/checkins — success', () => {
     expect(res.body.data.type).toBe('IN');
     expect(res.body.data.site_name).toBe('Milano Centro');
     expect(res.body.message).toBe('Check-in created successfully');
+  });
+
+  test('un nuovo check-in in un mese già firmato invalida la firma (firma digitale, fix #3 — copre anche il sync offline)', async () => {
+    const checkinTimestamp = new Date().toISOString();
+    // Fallback generico per SAVEPOINT/RELEASE SAVEPOINT/audit/invalidazione/COMMIT
+    // (il loro esatto conteggio di chiamate non è ciò che questo test verifica);
+    // le 4 chiamate il cui valore di ritorno conta davvero usano mockResolvedValueOnce
+    // e vengono consumate per prime, in ordine, prima che scatti questo fallback.
+    pool.query.mockResolvedValue({ rows: [] });
+    pool.query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] }) // employee
+      .mockResolvedValueOnce({ rows: [{ id: TEST_SITE_ID, name: 'Milano Centro' }] }) // site
+      .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }) // assignment
+      .mockResolvedValueOnce({
+        rows: [{
+          id: TEST_CHECKIN_ID,
+          employee_id: TEST_EMPLOYEE_ID,
+          site_id: TEST_SITE_ID,
+          type: 'IN',
+          timestamp: checkinTimestamp,
+          created_at: checkinTimestamp,
+        }],
+      }); // INSERT
+
+    const res = await request(app)
+      .post('/api/v1/checkins')
+      .send({ employee_id: TEST_EMPLOYEE_ID, site_id: TEST_SITE_ID, type: 'IN' });
+
+    expect(res.status).toBe(201);
+    // logAudit avvolge l'INSERT in SAVEPOINT/RELEASE SAVEPOINT: non assumere una
+    // posizione fissa nella sequenza di chiamate, cercare quella giusta.
+    const invalidationCall = pool.query.mock.calls.find((c) => /UPDATE timesheet_signatures/i.test(c[0]));
+    expect(invalidationCall).toBeDefined();
+    expect(invalidationCall[1]).toEqual([TEST_EMPLOYEE_ID, expect.any(Number), expect.any(Number)]);
   });
 
   test('returns 404 when employee not found in DB', async () => {
@@ -297,6 +333,7 @@ describe('PUT /api/checkins/:id', () => {
         }],
       }) // UPDATE
       .mockResolvedValueOnce({}) // audit INSERT
+      .mockResolvedValueOnce({ rowCount: 0 }) // invalidateSignatureIfExists (stesso timestamp, un'unica invalidazione tentata)
       .mockResolvedValueOnce({}); // COMMIT
 
     const res = await request(app)
