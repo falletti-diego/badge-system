@@ -4,6 +4,7 @@
 
 # Static legal pages — must come before SPA catch-all
 /dpa-template-it  /dpa-template-it.html  200
+/privacy-policy-it  /privacy-policy-it.html  200
 
 # SPA catch-all: all other routes → React app
 /*  /index.html  200
