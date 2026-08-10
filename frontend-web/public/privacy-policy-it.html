@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Informativa Privacy — GPS e Geolocalizzazione | Badge System</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Georgia, 'Times New Roman', serif; color: #1a1a1a; background: #fff; }
+    .wrapper { max-width: 860px; margin: 0 auto; padding: 40px 32px 80px; }
+    .header { border-bottom: 3px solid #1E3A5F; padding-bottom: 24px; margin-bottom: 32px; }
+    .header h1 { font-size: 1.6rem; color: #1E3A5F; font-weight: 700; }
+    .header p { margin-top: 8px; color: #666; font-size: 0.9rem; font-family: Arial, sans-serif; }
+    .badge { display: inline-block; background: #1E3A5F; color: #fff; font-size: 0.75rem;
+             font-family: Arial, sans-serif; padding: 3px 10px; border-radius: 3px; margin-top: 6px; }
+    .download-bar { background: #F0F4F8; border: 1px solid #CBD5E0; border-radius: 6px;
+                    padding: 16px 20px; margin-bottom: 32px; display: flex;
+                    align-items: center; gap: 16px; font-family: Arial, sans-serif; flex-wrap: wrap; }
+    .download-bar span { flex: 1; min-width: 200px; font-size: 0.9rem; color: #444; }
+    .btn-print { background: #1E3A5F; color: #fff; border: none; padding: 10px 20px;
+                 border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-family: Arial, sans-serif; }
+    .btn-print:hover { background: #162D47; }
+    h2 { font-size: 1.15rem; color: #1E3A5F; margin: 36px 0 12px; border-bottom: 1px solid #E2E8F0; padding-bottom: 6px; }
+    h3 { font-size: 1rem; color: #1E3A5F; margin: 20px 0 8px; }
+    p { line-height: 1.7; margin-bottom: 12px; font-size: 0.95rem; }
+    ul, ol { padding-left: 24px; margin-bottom: 12px; }
+    li { line-height: 1.7; font-size: 0.95rem; margin-bottom: 4px; }
+    strong { color: #1E3A5F; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0 20px; font-size: 0.88rem; font-family: Arial, sans-serif; }
+    th { background: #1E3A5F; color: #fff; padding: 10px 12px; text-align: left; font-weight: 600; }
+    td { padding: 9px 12px; border-bottom: 1px solid #E2E8F0; vertical-align: top; }
+    tr:hover td { background: #F7FAFC; }
+    .footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid #E2E8F0;
+              font-family: Arial, sans-serif; font-size: 0.8rem; color: #888; text-align: center; }
+    @media print {
+      .download-bar { display: none !important; }
+      body { font-size: 11pt; }
+      h2 { page-break-before: auto; }
+      .wrapper { max-width: 100%; padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <div class="header">
+    <h1>Informativa Privacy — Badge System</h1>
+    <p>GDPR Art. 13-14 — Geolocalizzazione GPS e trattamento dati dipendenti</p>
+    <span class="badge">Versione 2.1 · 10 Agosto 2026</span>
+  </div>
+
+  <div class="download-bar">
+    <span>📄 Puoi stampare questa informativa per affiggerla in bacheca aziendale.</span>
+    <button class="btn-print" onclick="window.print()">🖨️ Stampa / Salva PDF</button>
+  </div>
+
+  <p><strong>Titolare del Trattamento (Data Controller):</strong> [Cliente — azienda cliente che acquista Badge System]</p>
+  <p><strong>Responsabile del Trattamento (Data Processor):</strong> Dataxiom S.r.l.<br>
+     <strong>Rappresentante:</strong> Diego Falletti<br>
+     <strong>Contatto Privacy:</strong> privacy@dataxiom.it</p>
+
+  <h2>1. Dati Personali Raccolti</h2>
+  <table>
+    <thead>
+      <tr><th>Categoria</th><th>Descrizione</th><th>Base Legale</th><th>Retention</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Identificativi</strong></td><td>Nome, email, numero dipendente, telefono</td><td>Art. 6(1)(b) Contratto</td><td>Durata rapporto + 12 mesi</td></tr>
+      <tr><td><strong>Biometrici</strong></td><td>Face ID (autenticazione)</td><td>Art. 6(1)(b) Contratto + consenso Art. 9</td><td>Durata rapporto + 12 mesi</td></tr>
+      <tr><td><strong>Localizzazione (GPS)</strong></td><td>Latitudine, longitudine (geofencing sede)</td><td>Art. 6(1)(f) Legittimo interesse OR Art. 6(1)(b) Contratto*</td><td><strong>90 giorni</strong> (poi cancellazione automatica)</td></tr>
+      <tr><td><strong>Timbrature</strong></td><td>Data, ora, tipo (Entrata/Uscita), luogo</td><td>Art. 6(1)(b) Contratto</td><td><strong>24 mesi</strong> (obblighi fiscali/previdenziali)</td></tr>
+      <tr><td><strong>Log di Audit</strong></td><td>Chi ha modificato quali dati, quando</td><td>Art. 6(1)(b) Contratto</td><td><strong>3 anni</strong> (obblighi legali/compliance)</td></tr>
+    </tbody>
+  </table>
+  <p><em>*= La base legale per il geofencing dipende dalla legislazione nazionale. In Italia si ammette Art. 6(1)(f) (legittimo interesse alla sicurezza sede) con comunicazione preventiva, oppure Art. 6(1)(b) se il contratto di lavoro esplicitamente menziona il controllo della sede.</em></p>
+
+  <h2>2. Finalità del Trattamento</h2>
+  <ol>
+    <li><strong>Tracciamento Presenze</strong> — registrare orari entrata/uscita dipendenti (Art. 6(1)(b) Contratto)</li>
+    <li><strong>Gestione Turni</strong> — assegnazione e verifica orari di lavoro (Art. 6(1)(b) Contratto)</li>
+    <li><strong>Verifica Geofencing (Sede)</strong> — controllare che il dipendente sia fisicamente in sede prima di registrare la timbratura (Art. 6(1)(f) Legittimo interesse + consenso esplicito Art. 7)</li>
+    <li><strong>Reporting Manageriale</strong> — dashboard con presenze aggregate, esportazioni CSV per paghe/HR (Art. 6(1)(b) Contratto)</li>
+    <li><strong>Conformità Legale</strong> — conservazione dati per audit fiscali, INPS, ispezioni del lavoro (Art. 6(1)(c) Obbligo legale)</li>
+  </ol>
+
+  <h2>3. Geolocalizzazione GPS — Dettagli e Diritti</h2>
+  <h3>3.1 Come Funziona il Geofencing</h3>
+  <ul>
+    <li><strong>Tecnologia:</strong> Haversine distance (formula matematica open-source)</li>
+    <li><strong>Dati Raccolti:</strong> Latitudine e longitudine del dispositivo solo al momento del check-in (nessun tracciamento continuo in background)</li>
+    <li><strong>Uso:</strong> Verifica che il dipendente sia entro un raggio configurabile (default 150 metri dalla sede)</li>
+    <li><strong>Conservazione:</strong> <strong>90 giorni</strong> (pulizia automatica ogni notte)</li>
+    <li><strong>Non Condivisi:</strong> Le coordinate GPS non sono mai condivise con terzi (salvo sub-processori sotto DPA)</li>
+  </ul>
+
+  <h3>3.2 Diritti del Dipendente (Art. 15-22 GDPR)</h3>
+  <p>Il dipendente ha il diritto di:</p>
+  <ul>
+    <li><strong>Accesso (Art. 15):</strong> Richiedere copia di tutte le coordinate GPS registrate per lui → richiesta da inviare a privacy@dataxiom.it, evasa dal Titolare entro i termini di legge (non è oggi un self-service via app o dashboard)</li>
+    <li><strong>Rettifica (Art. 16):</strong> Se le coordinate sono errate (es. malfunzionamento GPS), richiedere la correzione → l'admin può regolare manualmente</li>
+    <li><strong>Cancellazione (Art. 17):</strong> Richiedere cancellazione anticipata delle coordinate GPS (oltre i 90 giorni automatici) → eliminazione garantita entro 7 giorni</li>
+    <li><strong>Portabilità (Art. 20):</strong> Ricevere i propri dati GPS in formato strutturato (CSV) per portarli ad altro provider</li>
+    <li><strong>Revoca del consenso (Art. 7(3)):</strong> Revocare il consenso alla geolocalizzazione in qualsiasi momento dalla sezione Impostazioni dell'app mobile. Dopo la revoca, il check-in resta bloccato sulle sedi con verifica GPS attiva finché il consenso non viene ridato.</li>
+    <li><strong>Limitazione/Opposizione (Art. 18, 21):</strong> Quando una sede ha la verifica GPS attiva, fornire le coordinate è condizione necessaria per registrare il check-in in quella sede — non esiste oggi una modalità di check-in senza GPS su una sede con geofencing attivo. Il dipendente può sempre opporsi non prestando il consenso, con l'effetto di non poter timbrare su quella sede finché non lo fa.</li>
+  </ul>
+
+  <h3>3.3 Contatti per Esercitare i Diritti</h3>
+  <ul>
+    <li><strong>Contatto Privacy Azienda:</strong> [Cliente HR Manager — fornito al momento dell'onboarding]</li>
+    <li><strong>Contatto Responsabile Dataxiom:</strong> privacy@dataxiom.it</li>
+    <li><strong>Ricorso Autorità:</strong> Garante Privacy italiano (garanteprivacy.it) — reclamo gratuito</li>
+  </ul>
+
+  <h2>4. Sub-Processori e Trasferimenti Dati</h2>
+  <h3>4.1 Infrastruttura AWS (UE)</h3>
+  <ul>
+    <li><strong>Amazon RDS PostgreSQL</strong> (eu-west-1 Irlanda) — database persistente con encryption at rest</li>
+    <li><strong>Amazon EC2</strong> (eu-west-1 Irlanda) — API backend con TLS 1.3</li>
+    <li><strong>AWS Secrets Manager</strong> — chiavi crittografiche e credenziali</li>
+  </ul>
+  <p><strong>Garanzie:</strong> AWS è sottoposto a Standard Contractual Clauses (SCC). Nessun trasferimento verso Paesi extra-UE.</p>
+
+  <h3>4.2 Sentry (Error Monitoring, UE)</h3>
+  <p>Dataxiom utilizza <strong>Sentry.io</strong> per il monitoraggio degli errori applicativi. Sentry riceve un identificativo utente pseudonimizzato (UUID interno) e il ruolo (dipendente/manager/admin) associati a ogni richiesta autenticata — mai il nome, l'email o le coordinate GPS. Organizzazione Sentry configurata su regione UE.</p>
+
+  <h3>4.3 Crittografia</h3>
+  <ul>
+    <li><strong>In Transit:</strong> TLS 1.3 (256-bit AES-GCM)</li>
+    <li><strong>At Rest:</strong> AWS RDS encryption (AES-256)</li>
+    <li><strong>API Keys & Secrets:</strong> AWS Secrets Manager</li>
+  </ul>
+
+  <h2>5. Sicurezza e Protezione dei Dati</h2>
+  <ul>
+    <li><strong>Authentication:</strong> JWT con chiave asimmetrica RSA-2048 (access token 15min, refresh token 7 giorni)</li>
+    <li><strong>Authorization:</strong> Role-based access control (RBAC)</li>
+    <li><strong>Audit Logging:</strong> Ogni modifica registrata con user ID, timestamp, old/new value → conservazione 3 anni</li>
+    <li><strong>Monitoring:</strong> CloudWatch alarms su accessi anomali, errori 5xx</li>
+    <li><strong>Incident Response:</strong> SLA 2 ore per security incident critici</li>
+  </ul>
+
+  <h2>6. Retention e Cancellazione</h2>
+  <table>
+    <thead><tr><th>Dati</th><th>Retention</th><th>Cancellazione</th></tr></thead>
+    <tbody>
+      <tr><td>Coordinate GPS</td><td><strong>90 giorni</strong></td><td>Automatica ogni notte</td></tr>
+      <tr><td>Check-in records</td><td>24 mesi</td><td>Richiesta dipendente = 7 giorni</td></tr>
+      <tr><td>Audit log</td><td>3 anni</td><td>Automatica scadenza + GDPR Art. 17</td></tr>
+      <tr><td>Face ID biometrico</td><td>Durata rapporto + 12 mesi</td><td>Cancellazione entro 7 giorni termine rapporto</td></tr>
+    </tbody>
+  </table>
+
+  <h2>7. Consenso per la Biometrica (Face ID) e Geofencing</h2>
+  <h3>7.1 Face ID (Art. 9 GDPR — Dati Biometrici)</h3>
+  <p>Al primo login su app mobile, il dipendente vede una dialog di consenso: il volto non è mai trasmesso ai server, il match avviene localmente sul dispositivo (Apple Secure Enclave / Android BiometricPrompt). Scelta reversibile dalle Impostazioni dell'app.</p>
+
+  <h3>7.2 Geofencing (Art. 6(1)(f) + Art. 7 GDPR — Consenso Supplementare)</h3>
+  <p><strong>Modalità di Consenso:</strong></p>
+  <ul>
+    <li>Alla prima timbratura su una sede con verifica GPS attiva, il dipendente vede una dialog che spiega i dati raccolti, la finalità, la conservazione (90 giorni) e i diritti — inclusa la possibilità di revocare il consenso in qualsiasi momento da Impostazioni — con link a questa Privacy Policy.</li>
+    <li>Bottone: <strong>[Rifiuto]</strong> (il check-in su quella sede resta bloccato finché non si presta il consenso) | <strong>[Accetto]</strong> (procede con l'acquisizione GPS e il check-in)</li>
+    <li>Scelta reversibile in entrambe le direzioni: il dipendente può revocare il consenso in qualsiasi momento da Impostazioni; l'admin può disattivare la verifica GPS per l'intera sede dalle Impostazioni amministrative.</li>
+  </ul>
+
+  <h2>8. Contatti e Reclami</h2>
+  <p><strong>Per domande su questa Privacy Policy:</strong> privacy@dataxiom.it — risposta entro 5 giorni lavorativi</p>
+  <p><strong>Per reclami (Art. 77 GDPR):</strong> Garante Privacy Italia (garanteprivacy.it/home/diritti/come-reclamo) — è possibile presentare un reclamo anche senza contattare Dataxiom direttamente</p>
+
+  <h2>9. Versioni Precedenti</h2>
+  <table>
+    <thead><tr><th>Versione</th><th>Data</th><th>Cambio</th></tr></thead>
+    <tbody>
+      <tr><td>2.1</td><td>10 Agosto 2026</td><td>Corretto: GPS obbligatorio senza bypass su sedi con verifica attiva (non più facoltativo); aggiunto diritto di revoca consenso; corretto meccanismo di accesso Art. 15; aggiunto Sentry come sub-processore</td></tr>
+      <tr><td>2.0</td><td>11 Giugno 2026</td><td>Aggiunto geofencing GPS, consenso esplicito, Art. 7 GDPR</td></tr>
+      <tr><td>1.0</td><td>1 Maggio 2026</td><td>Versione iniziale (timbrature + Face ID)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <p>Informativa Privacy © Dataxiom S.r.l. — Riproduzione vietata senza consenso.</p>
+    <p>privacy@dataxiom.it — https://www.dataxiom.it</p>
+  </div>
+
+</div>
+</body>
+</html>
