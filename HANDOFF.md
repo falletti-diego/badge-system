@@ -1,40 +1,55 @@
-# Badge System — Session 98 Handoff
+# Badge System — Session 99 Handoff
 
-**Date:** 2026-08-09
-**Session:** 98 — Gruppo 1 backlog post-Fase-C: PDF export Riepilogo Ore + Help/FAQ in-app (web+mobile)
-**Status:** ✅ Gruppo 1 chiuso e in produzione su `origin/main`. Nessun punto P0/P1/P2 aperto — il prossimo lavoro sostanziale è Fase C (P0, geofencing/QR rotation, finding #2+#5) oppure il resto del backlog post-Fase-C (Gruppo 2+: notifiche push, alert frodi, firma digitale, trust signal, branding, pricing, shift swap).
+**Date:** 2026-08-10
+**Session:** 99 — Fase C: geofencing GPS reale + invalidazione QR (finding #2+#5) chiusa e in produzione
+**Status:** ✅ **Ultimo P0 aperto chiuso.** `findings2agosto2016.md` interamente risolto tranne il #3 (deliberatamente non affrontato, decisione già presa). S.26 (GDPR consenso GPS) chiuso. S.24 (GDPR disclosure GPS) 3/4 sotto-task, resta solo la pagina pubblica privacy policy. Prossimo lavoro sostanziale: Gruppo 2+ del backlog post-Fase-C (notifiche push, alert frodi, firma digitale, trust signal, branding, pricing, shift swap).
 
 ---
 
-## Goal (Session 98)
+## Goal (Session 99)
 
-Con Fase C tenuta deliberatamente da parte, l'utente ha chiesto quali altre attività indirizzare dal backlog MVP. `/superpowers:brainstorming` ha prodotto 9 item, raggruppati in batch coerenti su richiesta esplicita. L'utente ha scelto il Gruppo 1 (quick win frontend-web): PDF export sul Riepilogo Ore + Help/FAQ in-app statica (web+mobile).
+Chiudere Fase C (geofencing GPS reale + invalidazione QR), tenuta deliberatamente da parte durante tutta Session 98. Ciclo completo: brainstorming→spec→piano→esecuzione task-by-task→verifica staging→build nativa→merge produzione, tutto nella stessa sessione.
 
-## Esito (Session 98)
+## Esito (Session 99)
 
-Ciclo completo design→spec→piano→implementazione→merge→push via skill chain `superpowers:brainstorming` → `writing-plans` → (`subagent-driven-development` poi switchato su richiesta a `executing-plans`) → `finishing-a-development-branch`.
+**Piano 14 task** eseguito via `/superpowers:subagent-driven-development` con **pausa esplicita dopo ogni singolo task** (override del default "esecuzione continua" dello skill, su istruzione esplicita dell'utente). Backend: rimosso gate morto `GEOFENCING_ENABLED`, validazione `qr_content` contro `sites.qr_code_content`, `POST /admin/sites/:id/regenerate-qr`, script retention GPS 90gg, `POST /consent/gps-revoke` (nel farlo, trovato e fixato un bug preesistente: `logAudit` su `/gps-acceptance` scartava silenziosamente i parametri per naming mismatch). Mobile: `expo-location`, **riscrittura completa di `GPSConsentDialog.jsx`** (importava `AlertDialog` da `react-native` — componente inesistente, mai eseguibile), retry GPS su `GEOFENCE_COORDINATES_REQUIRED`, blocco offline fail-safe su sedi geofenced note/sconosciute, revoca consenso in Impostazioni. Web: bottone "Rigenera QR".
 
-**Due passate critiche esplicite sulla spec** (richieste dall'utente, non spontanee) hanno trovato bug reali prima di scrivere codice: (1) il filtro di visibilità per ruolo era fail-open (`role !== 'employee'`), sostituito con un'allowlist fail-closed `isVisible()`; (2) lo script di sync-check FAQ web/mobile come concepito era tecnicamente infattibile (richiedeva eseguire moduli cross-progetto tra un `frontend-web` ESM puro e un `frontend-mobile` senza risoluzione Metro), ridisegnato come estrazione testuale via regex.
+**3 livelli di review, tutti richiesti esplicitamente dall'utente**, hanno trovato **5 bug reali** che le review più leggere non avrebbero catturato: 3 durante il checkpoint a metà piano (scrittura cache GPS senza try/catch dopo check-in riuscito — mostrava "Errore check-in" a un check-in in realtà riuscito; stessa scrittura poteva causare unhandled rejection con `loading` bloccato per sempre; consenso GPS fallito senza feedback utente), 2 durante la review finale sull'intero piano (script di retention GPS mai agganciato al vero cron di produzione — `exec` nel wrapper impediva strutturalmente a un secondo comando di girare; permesso posizione negato permanentemente non gestito, a differenza del pattern già esistente per la fotocamera).
 
-**Self-review del piano** ha trovato e corretto un test scritto in sintassi Jest che non avrebbe mai girato (riscritto con `node:test` nativo) e uno script senza error handling sui file mancanti (verificato con dry-run reale in `/tmp`).
+**Verifica manuale staging eseguita da Claude** (su richiesta esplicita dell'utente, non dall'utente stesso) via chiamate API dirette invece che app mobile reale — stesso approccio di Session 97. Tutti i comportamenti attesi confermati: toggle geofencing solo via API admin (nessun SSM), `GEOFENCE_COORDINATES_REQUIRED`, `OUTSIDE_GEOFENCE` con distanza corretta, rigenerazione QR invalida il vecchio, consenso GPS accept/revoke con audit trail. Staging ripristinato a fine verifica.
 
-**2 scoperte implementative non previste dal piano**, entrambe diagnosticate correttamente: MUI `Accordion` tiene montato il contenuto collassato nel DOM (fix `TransitionProps={{ unmountOnExit: true }}`); `SettingsScreen.jsx` mobile richiede un vero `NavigationContainer` per `useFocusEffect` (test riscritto con navigator reale).
+**Build nativa Codemagic — 2 fallimenti diagnosticati sistematicamente, non 2 tentativi al buio**: primo fallimento (`bundle version must be higher than 35`) diagnosticato confrontando `app.json` di `main` vs `develop` — ipotesi: branch sbagliato. Secondo fallimento con lo stesso identico errore dopo che l'utente credeva di aver corretto — richiesto il log completo invece di ipotizzare alla cieca, che ha mostrato il commit checked-out essere esattamente la punta di `main`: la selezione branch su Codemagic non era stata applicata. Terzo tentativo con `develop` confermato esplicitamente → Build 36 su TestFlight.
 
-**Risultato**: 10/10 task TDD completati, nessuna modifica backend, Help/FAQ mobile distribuibile via OTA (nessun modulo nativo). Merge locale su raccomandazione esplicita, push su `origin/main` (commit `5f1eca6`→`8118387`). Worktree/branch temporaneo puliti manualmente dopo un errore di provenance su `ExitWorktree`.
+**Merge finale**: `main` fast-forward pulito a `f1d9270`, push, CI a cascata verificata (`Build & Push Backend to ECR` → `Deploy to EC2` produzione, entrambi ✅). Worktree e branch temporaneo rimossi a fine sessione.
 
-**Dettaglio completo**: vedi `PROJECT_DECISIONS.md` sezione Session 98.
+**Dettaglio completo**: vedi `PROJECT_DECISIONS.md` sezione Session 99.
 
 ## Backlog per la prossima sessione (in ordine di urgenza)
 
-1. **Fase C** (geofencing/QR rotation reali, finding #2+#5) — non iniziata. Resta l'unico finding HIGH aperto di `findings2agosto2016.md` e l'unica priorità P0 rimasta.
-2. **Gruppo 2+ del backlog post-Fase-C** (non ancora brainstormato in dettaglio): notifiche push, alert frodi, firma digitale, trust signal, branding, pricing, shift swap.
-3. **S.26** — consenso GPS esplicito (GDPR Art. 7, HIGH) — dormiente finché nessun cliente reale chiede il geofencing, va di pari passo con Fase C.
-4. **ANDROID.1/1b** — verifica manuale scan QR reale su device fisico/Virtual Scene, bloccato da un limite di automazione GUI-only.
-5. (Opzionale) Verifica manuale della Build 35 su un dispositivo reale — login, secure storage, TestFlight expiry esatta su App Store Connect.
+1. **Gruppo 2+ del backlog post-Fase-C** (non ancora brainstormato in dettaglio): notifiche push, alert frodi, firma digitale, trust signal, branding, pricing, shift swap.
+2. **S.24 residuo** — pagina pubblica `privacy-policy-it.html` su Netlify (stesso pattern del DPA in S.25), da fare prima di attivare il geofencing con un cliente reale.
+3. **ANDROID.1/1b** — verifica manuale scan QR reale su device fisico/Virtual Scene, bloccato da un limite di automazione GUI-only.
+4. (Opzionale) Verifica manuale della Build 36 su un dispositivo reale — login, geofencing GPS reale, TestFlight expiry esatta su App Store Connect.
+
+## Note operative (Session 99)
+
+- **Il branch selector di Codemagic non sempre applica la selezione manuale** (probabile dropdown popolato solo dai branch già buildati in passato, `develop` non essendoci mai finito). Se un errore di build cita un valore "precedente" inatteso, confrontare `app.json` tra i branch candidati prima di ipotizzare altro, e richiedere sempre il log completo (non solo l'errore finale) — il passo di checkout mostra il commit hash esatto usato.
+- **Non riproporre un secondo fix dopo che il primo non ha funzionato senza nuova evidenza** (`/superpowers:systematic-debugging` Fase 3): lo stesso identico errore alla seconda run è un segnale che l'ipotesi non è stata davvero testata, non che serve un'ipotesi diversa.
+- **Un meccanismo GDPR "esiste nel codice" non equivale a "è vincolante in pratica"**: S.26 (consenso GPS) era implementato dal 2026-06-11 ma dormiente perché senza enforcement server-side reale il client poteva sempre saltare il GPS — solo l'enforcement di Fase C lo ha reso davvero non aggirabile.
 
 ---
 
 ## Handoff precedenti (invariati, riportati sotto per contesto)
+
+### Session 98 — Gruppo 1 backlog post-Fase-C: PDF export Riepilogo Ore + Help/FAQ in-app (web+mobile)
+
+**Goal:** Con Fase C tenuta deliberatamente da parte, l'utente ha chiesto quali altre attività indirizzare dal backlog MVP. `/superpowers:brainstorming` ha prodotto 9 item, raggruppati in batch coerenti su richiesta esplicita. L'utente ha scelto il Gruppo 1 (quick win frontend-web): PDF export sul Riepilogo Ore + Help/FAQ in-app statica (web+mobile).
+
+**Esito:** Ciclo completo design→spec→piano→implementazione→merge→push via skill chain `superpowers:brainstorming` → `writing-plans` → (`subagent-driven-development` poi switchato su richiesta a `executing-plans`) → `finishing-a-development-branch`. **Due passate critiche esplicite sulla spec** (richieste dall'utente, non spontanee) hanno trovato bug reali prima di scrivere codice: (1) il filtro di visibilità per ruolo era fail-open (`role !== 'employee'`), sostituito con un'allowlist fail-closed `isVisible()`; (2) lo script di sync-check FAQ web/mobile come concepito era tecnicamente infattibile (richiedeva eseguire moduli cross-progetto tra un `frontend-web` ESM puro e un `frontend-mobile` senza risoluzione Metro), ridisegnato come estrazione testuale via regex. **Self-review del piano** ha trovato e corretto un test scritto in sintassi Jest che non avrebbe mai girato (riscritto con `node:test` nativo) e uno script senza error handling sui file mancanti (verificato con dry-run reale in `/tmp`). **2 scoperte implementative non previste dal piano**, entrambe diagnosticate correttamente: MUI `Accordion` tiene montato il contenuto collassato nel DOM (fix `TransitionProps={{ unmountOnExit: true }}`); `SettingsScreen.jsx` mobile richiede un vero `NavigationContainer` per `useFocusEffect` (test riscritto con navigator reale). **Risultato**: 10/10 task TDD completati, nessuna modifica backend, Help/FAQ mobile distribuibile via OTA (nessun modulo nativo). Merge locale su raccomandazione esplicita, push su `origin/main` (commit `5f1eca6`→`8118387`). Worktree/branch temporaneo puliti manualmente dopo un errore di provenance su `ExitWorktree`.
+
+**Dettaglio completo**: vedi `PROJECT_DECISIONS.md` sezione Session 98.
+
+---
 
 ### Session 97 — P2.5: checklist wizard 6.4/6.5 verificate via API diretta su staging, chiude l'intero backlog P2
 

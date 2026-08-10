@@ -6,6 +6,73 @@
 
 ---
 
+## Session 99 — Fase C chiusa: geofencing GPS reale + invalidazione QR (finding #2+#5) in produzione — ultimo P0 aperto chiuso (10 Agosto 2026)
+
+### Contesto
+Fase C era stata tenuta deliberatamente da parte durante tutta Session 98 su richiesta esplicita dell'utente. `findings2agosto2016.md` (analisi del 2 Agosto) segnalava #2 [HIGH] "Geofencing costruito ma mai applicato — nessun GPS inviato" e #5 [MEDIUM] "QR statico riutilizzabile, nessuna rotazione" come gli unici finding rimasti aperti dopo Fase A (Session 93) e Fase B (Session 94). Il ciclo completo è stato eseguito in una singola sessione: `/superpowers:brainstorming` → `/superpowers:writing-plans` → `/superpowers:subagent-driven-development` → verifica staging → build nativa → merge produzione.
+
+### Design (2 review critiche esplicite, stesso pattern richiesto in Session 98)
+Spec scritta in `docs/superpowers/specs/2026-08-09-geofencing-qr-rotation-design.md`, sottoposta a 2 passate `/senior-architect`-style prima dell'approvazione. Decisioni chiave: enforcement **fail-closed** (GPS obbligatorio senza bypass quando `geofence_enabled=true` sulla sede, nessuna env var globale — controllato interamente dai toggle admin già esistenti), confronto `qr_content` in memoria (nessuna query SQL aggiuntiva, zero rischio di concatenazione), retention GPS 90gg **nullifica** le coordinate (non cancella la riga check-in), cache locale mobile del "sede nota come non-geofenced" **default `false`** (una sede sconosciuta o mai vista si comporta come geofenced ai fini del blocco offline — mai il contrario).
+
+### Piano — 14 task, esecuzione task-by-task con conferma esplicita ad ogni passo
+Su istruzione esplicita dell'utente ("attendi e chiedimi se posso procedere al prossimo"), la modalità continua di default dello skill `subagent-driven-development` è stata **sovrascritta**: pausa dopo ogni singolo task, non solo dopo i checkpoint di review. Bug di pianificazione trovato e corretto **prima** di dispatchare l'implementer (non durante la review): il test del Task 3 (rigenerazione QR) nel piano assumeva 2 chiamate `pool.query`, ma l'endpoint disegnato ne fa 3 (SELECT+UPDATE+audit) — corretto nel piano stesso (commit `3e6b73f`) prima dell'esecuzione.
+
+### Backend (Task 1-5)
+Rimosso il gate morto `process.env.GEOFENCING_ENABLED === 'true'` in `checkins.js` (il controllo reale erano già i toggle admin, l'env var non veniva mai letta altrove). Aggiunta validazione `qr_content` (nuovo campo opzionale in `PostCheckinSchema`, confrontato byte-per-byte contro `site.qr_code_content` già in memoria dalla query precedente) prima del blocco geofence esistente. Nuovo `POST /admin/sites/:id/regenerate-qr`: SELECT tenant-scoped → UPDATE con nonce `crypto.randomUUID()` → audit log. Nuovo script `backend/scripts/checkin-gps-retention.js`, con `runRetention({pool, retentionDays, dryRun})` esportato separatamente dal wrapper CLI per essere testabile. Nuovo `POST /consent/gps-revoke`, simmetrico a `/gps-acceptance` (GDPR Art. 7(3) — la revoca deve essere facile quanto l'accettazione) — **nel farlo, trovato e fixato un bug preesistente** in `/gps-acceptance`: `logAudit` veniva chiamato con parametri snake_case (`old_value`, `new_value`) che l'implementazione reale della funzione (camelCase) scartava silenziosamente — il consenso GPS veniva registrato sul dipendente ma **mai** nell'audit trail.
+
+### Mobile (Task 6-11)
+`expo-location` aggiunto come plugin Expo (config plugin inietta automaticamente `NSLocationWhenInUseUsageDescription` in Info.plist — verificato con `npx expo config --type introspect`, non serve avviare un dev server). **`GPSConsentDialog.jsx` era completamente rotto**: importava `AlertDialog` da `react-native`, un componente che non esiste in quel modulo — non sarebbe mai stato eseguibile, bug preesistente mai scoperto perché il flusso di enforcement reale non era mai stato raggiunto prima d'ora. Riscritto da zero con `Modal`/`View`/`TouchableOpacity`. `QRScannerScreen.jsx` esteso: su `GEOFENCE_COORDINATES_REQUIRED` acquisisce il GPS (mostrando prima il consenso se non ancora dato) e ritenta il check-in riusando lo stesso `client_uuid` (idempotenza via `ON CONFLICT ... DO NOTHING`, pattern già in uso); su errore di rete senza risposta, decide se accodare offline in base a una cache locale `AsyncStorage` `isSiteKnownNotGeofenced()` — fail-safe: sconosciuto o non in cache ⇒ blocca con "Connessione richiesta" invece di accodare silenziosamente un check-in che il server rifiuterebbe comunque al successivo sync. Nuova riga "Revoca consenso posizione" in `SettingsScreen.jsx`, visibile solo se `gps_consent_given === true`.
+
+### Web (Task 12-13)
+Bottone "Rigenera QR" in `SitesTab.jsx` (icona QR, riusa `ConfirmDeleteDialog` generalizzato con `confirmLabel`/`confirmColor` opzionali — default invariati per tutti gli altri call-site).
+
+### 3 livelli di review, tutti richiesti esplicitamente dall'utente — nessuno spontaneo
+**Per-task**: implementer + review dopo ogni singolo task. **Due checkpoint approfonditi a metà piano** (richiesti esplicitamente prima del Task 6 e prima del Task 12, ciascuno con `/code-review:code-review` + `/test-all` sugli ultimi 5 task e le loro dipendenze): quello dopo Task 6-10 ha trovato **3 bug reali non catturati da nessuna review per-task** (confermati indipendentemente da 2 agenti paralleli che hanno individuato lo stesso problema in `GPSConsentDialog`, non un falso positivo):
+1. `writeGeofencingStatus()` chiamata senza try/catch **dopo un check-in riuscito** — un fallimento di scrittura locale (spazio disco, AsyncStorage corrotto) avrebbe fatto cadere il flusso nel catch generico, mostrando "Errore check-in" a un utente il cui check-in era in realtà già stato accettato dal server.
+2. La stessa chiamata dentro il ramo di retry GPS poteva generare un unhandled rejection, lasciando `loading:true` per sempre con "Annulla" disabilitato (`disabled={loading}`) — nessuna via d'uscita se non forzare la chiusura dell'app.
+3. `GPSConsentDialog.handleAccept` aveva `try`/`finally` ma **nessun `catch`** — un consenso fallito riabilitava silenziosamente il bottone senza alcun feedback, `onConsent()` mai chiamato.
+Fix: `writeGeofencingStatus` resa internamente swallow-and-warn (unico punto di fix per entrambi i call-site), `catch`+`Alert.alert` aggiunto a `handleAccept`. 3 test di regressione aggiunti.
+
+**Review finale sull'intero piano** (richiesta esplicitamente prima del push su `develop`, con invito a usare `/grilling` se necessario — non servito, nessuna ambiguità residua): ha trovato **2 gap strutturali**, non bug di codice isolati:
+1. `checkin-gps-retention.js` (Task 4) non era mai stato agganciato al vero cron di produzione `scripts/run-retention.sh` — che faceva `exec node audit-log-retention.js "$@"`, e `exec` **sostituisce il processo corrente**, impedendo strutturalmente a un secondo comando di girare anche se qualcuno lo avesse aggiunto ingenuamente dopo. La promessa testuale di `GPSConsentDialog` ("i dati sono cancellati dopo 90 giorni") non sarebbe mai stata mantenuta in produzione. Fix: rimosso `exec`, due chiamate `node` sequenziali, commento che spiega il perché.
+2. `acquireLocationAndRetry` non gestiva il permesso di posizione **negato permanentemente** (`canAskAgain:false`) — "Riprova" avrebbe mostrato lo stesso alert generico all'infinito, a differenza del pattern già esistente per il permesso fotocamera nello stesso file (check `canAskAgain` + "Apri Impostazioni" + `Linking.openSettings()`). Non testato, non elencato nella sezione "Rischi residui accettati" della spec. Fix: stesso escape-hatch applicato anche al GPS, con mock e test di regressione dedicati.
+
+Entrambi i fix committati insieme (`f1d9270`) con messaggio di commit dettagliato. Suite mobile riverificata: 20/20 suite, 141/141 test.
+
+### Push su `develop` — worktree già occupato
+`develop` era checked-out in un altro worktree attivo (`employee-sync-wizard`) — `git checkout develop` diretto non possibile. Risolto con `ExitWorktree(action="keep")` per tornare alla root, branch temporaneo locale `temp-merge-fase-c` che traccia `origin/develop`, merge pulito (nessun conflitto, 69 file — include anche altro lavoro già su `main` ma non ancora su `develop`), `git push origin temp-merge-fase-c:develop`, pulizia del branch temporaneo, rientro nel worktree via `EnterWorktree(path=...)`.
+
+### Verifica manuale staging — eseguita da Claude, non dall'utente (su richiesta esplicita)
+L'utente ha chiesto esplicitamente di eseguire la verifica manuale su staging (normalmente riservata all'utente stesso), invocando `/superpowers:systematic-debugging` e `/superpowers:using-superpowers`. Eseguita interamente via chiamate API dirette (login `pippo`/`maria`/`pino` su `https://staging-api.dataxiom.it`, password da SSM `/badge/staging/DEMO_*_PASSWORD`) invece che tramite l'app mobile reale — stesso approccio già validato e motivato in Session 97 ("la logica sotto test vive lato server, un test via API è equivalente per lo scopo del test"). Risultati, tutti ✅:
+- **Toggle geofencing solo admin, senza SSM**: `PUT /admin/sites/:id` con `latitude/longitude/geofence_radius_meters/geofence_enabled` — attivato su Torino Store via API pura.
+- **GPS richiesto sul primo check-in fuori raggio**: check-in senza coordinate → `400 GEOFENCE_COORDINATES_REQUIRED`.
+- **Enforcement raggio**: coordinate Roma (fuori raggio Torino) → `403 OUTSIDE_GEOFENCE`, `distance_meters: 523978` (coerente con la distanza reale Roma↔Torino — buon sanity check sull'haversine); coordinate corrette → `201`.
+- **Rigenerazione QR**: `POST /admin/sites/:id/regenerate-qr` → check-in col vecchio QR → `403 QR_CODE_INVALID`; check-in col nuovo QR → `201`.
+- **Consenso GPS accept/revoke**: entrambi loggati correttamente in `employee_consent_log` con timestamp, flag `employees.gps_consent_given` aggiornato.
+- **Re-consenso dopo revoca** e **blocco offline "Connessione richiesta"**: logica client-side, non riproducibile via curl (nessuno stato "offline" reale raggiungibile da terminale) — verificata leggendo il codice deployato (`QRScannerScreen.jsx:191,210-213`) e confermando che i test di regressione dedicati (aggiunti nella review Task 6-10) erano verdi.
+
+Staging **ripristinato allo stato originale** a fine verifica (geofencing Torino Store rimesso a `disabled`/coordinate `null`, consenso GPS di Maria rimesso a `true`) per non lasciare tracce che confondano future verifiche manuali.
+
+### Build nativa Codemagic — 2 fallimenti diagnosticati, non 2 tentativi al buio
+Primo lancio: fallito con `ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE`, `"The bundle version must be higher than the previously uploaded version: '35'"`. Diagnosi (non un fix a caso): confronto diretto `git show origin/main:frontend-mobile/app.json` (`buildNumber:35`) vs `origin/develop` (`buildNumber:36`, bump fatto nel Task 6-11 insieme a `expo-location`) — ipotesi: la build era partita da `main`, non da `develop`. Indicato all'utente di selezionare esplicitamente `develop` nel branch selector di Codemagic.
+
+Secondo lancio: **stesso identico errore**, `previousBundleVersion:35` di nuovo. Per `/superpowers:systematic-debugging` (Fase 3 — non proporre un secondo fix al buio dopo che il primo non ha funzionato, tornare a raccogliere evidenza), richiesto il log completo invece di ipotizzare una seconda causa. Il log ha mostrato `Checking out commit hash b160b9894b03...` — verificato con `git log -1 origin/main`: è **esattamente** la punta di `main`. Confermato che la selezione branch su Codemagic non era stata applicata (probabile UI che non mostra `develop` in un dropdown popolato solo dai branch già buildati in passato). Terzo lancio, con l'utente che ha confermato esplicitamente `develop` prima di avviare → **Build 36 pubblicata con successo su TestFlight**.
+
+### Merge in produzione
+`main` era già alla punta con `origin/main` (`b160b98`, la stessa punta vista durante il debug Codemagic). Fetch, `git merge origin/develop` → fast-forward pulito a `f1d9270` (nessun conflitto, main era rimasto indietro solo di questo lavoro). Push. CI a cascata verificata passo-passo: `Build & Push Backend to ECR` ✅ (lint+test backend, solo warning preesistenti già noti) → `Deploy to EC2` (produzione, triggerato automaticamente via `workflow_run`) ✅ in 52s.
+
+### Chiusura backlog GDPR collegato
+**S.26** (consenso GPS esplicito, GDPR Art. 7, HIGH, aperto dalla Session 31/33) — il meccanismo di base (`gps_consent_given`, `employee_consent_log`, `GPSConsentDialog`) esisteva già dal 2026-06-11, ma restava **dormiente**: senza enforcement server-side reale il GPS era solo `tryGetLocation()` opzionale, il consenso non vincolava nulla in pratica. Fase C lo rende effettivo (GPS obbligatorio quando il geofencing è attivo → consenso non più aggirabile) e aggiunge l'endpoint di revoca che mancava. **Marcato chiuso.**
+**S.24** (disclosure GDPR GPS, HIGH, deferred dalla Session 46 fino al primo geofencing reale) — 3 dei 4 sotto-task del piano originale risultano già chiusi come effetto collaterale di Fase C (fix `GPSConsentDialog`, script+cron retention, test `/admin/employee-consents` già esistente). **Resta solo la pagina pubblica `privacy-policy-it.html`** (esiste solo `docs/privacy-policy-IT.md`, mai pubblicata su Netlify) — stesso pattern già usato per il DPA (S.25, `dpa-template-it.html`), da fare prima di attivare il geofencing con un cliente reale.
+
+### Pulizia finale
+Worktree `.claude/worktrees/geofencing-qr-rotation` e branch `worktree-geofencing-qr-rotation` rimossi su richiesta esplicita a fine sessione (`git worktree remove` + `git branch -d`, entrambi puliti perché ogni commit era già ancestor di `main`/`develop`).
+
+### Risultato
+14/14 task del piano completati con TDD, 3 livelli di review (tutti su richiesta esplicita, mai spontanei) hanno trovato 5 bug reali totali che le review più leggere non avrebbero catturato. **Chiude l'ultimo finding P0 aperto** di `findings2agosto2016.md` (#2+#5) — l'intero documento risulta ora chiuso tranne il #3 (deliberatamente non affrontato, decisione già presa). Build 36 su TestFlight, deploy produzione verificato via CI a cascata. Prossimo lavoro sostanziale: Gruppo 2+ del backlog post-Fase-C (notifiche push, alert frodi, firma digitale, trust signal, branding, pricing, shift swap), oppure la pagina pubblica privacy policy residua di S.24.
+
+---
+
 ## Session 98 — Gruppo 1 backlog post-Fase-C: PDF export Riepilogo Ore + Help/FAQ in-app (web+mobile) (9 Agosto 2026)
 
 ### Contesto
