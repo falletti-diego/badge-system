@@ -1126,14 +1126,14 @@ Valutazione richiesta esplicitamente dall'utente dopo l'apertura della PR #3 (`w
 ### 🚨 GDPR/Privacy Findings from Session 31 Security Review
 **Bloccanti per commercializzazione in Italia — PRIORITÀ MASSIMA**
 
-- [ ] **S.24** Missing GDPR Disclosure for GPS Data Collection (HIGH) — **🟡 3/4 sotto-task chiusi come effetto collaterale di Fase C (Session 99), resta solo la pagina pubblica**
-  - **Issue:** Geofencing feature raccoglie coordinate GPS sensibili. Privacy Policy pubblica insufficiente (GDPR Art. 13-14). Geofencing resta **disabilitato per default per sede** — nessun cliente reale l'ha ancora attivato — ma con Fase C il meccanismo di enforcement/consenso è ora reale e completo, non più solo teorico.
-  - **Piano originale:** `docs/superpowers/plans/2026-06-20-s24-gdpr-gps-disclosure.md` — 4 task:
-    1. ✅ Fix `GPSConsentDialog` (AlertDialog inesistente → `Modal` nativo — chiuso in Fase C, Task 6-11, era ancora rotto)
-    2. ⬜ **Pagina pubblica `privacy-policy-it.html` + `_redirects` Netlify — MAI FATTA.** Esiste solo `docs/privacy-policy-IT.md` (markdown interno, non pubblicata), diversamente da `dpa-template-it.html` (S.25) che invece è pubblica su `badge.dataxiom.it/dpa-template-it`. Stesso pattern da replicare.
-    3. ✅ Script retention GPS + cron — chiuso in Fase C (`backend/scripts/checkin-gps-retention.js`, agganciato a `scripts/run-retention.sh`, review finale ha scoperto che senza quel wiring la promessa "cancellato dopo 90gg" non sarebbe mai stata mantenuta in produzione)
+- [x] **S.24** Missing GDPR Disclosure for GPS Data Collection (HIGH) — ✅ **COMPLETATO Session 99 (2026-08-10)**
+  - **Issue:** Geofencing feature raccoglie coordinate GPS sensibili. Privacy Policy pubblica insufficiente (GDPR Art. 13-14).
+  - **Piano originale:** `docs/superpowers/plans/2026-06-20-s24-gdpr-gps-disclosure.md` — 4/4 task chiusi:
+    1. ✅ Fix `GPSConsentDialog` (AlertDialog inesistente → `Modal` nativo — chiuso in Fase C, Task 6-11)
+    2. ✅ **Pagina pubblica `privacy-policy-it.html` + `_redirects` Netlify** — pubblicata su `badge.dataxiom.it/privacy-policy-it`, stesso pattern del DPA (S.25). Prima del deploy, `docs/privacy-policy-IT.md` (v2.0→2.1) è stato corretto su 6 punti dove descriveva un GPS ancora "facoltativo" (comportamento pre-Fase-C, non più vero): sostituito ovunque con la realtà attuale (GPS obbligatorio su sedi con verifica attiva, nessun bypass), aggiunto il diritto di revoca consenso (`/consent/gps-revoke`), corretto il meccanismo di Accesso Art. 15 (richiesta manuale, non self-service — verificato che le coordinate non sono mai esposte da nessun endpoint), aggiunto Sentry alla lista sub-processori. Piano: `docs/superpowers/plans/2026-08-10-privacy-policy-public-page-plan.md`, spec: `docs/superpowers/specs/2026-08-10-privacy-policy-public-page-design.md`. Commits: `ad379fa`, `7597689`, `b8ed90b`, `6c3bb13`.
+    3. ✅ Script retention GPS + cron — chiuso in Fase C (`backend/scripts/checkin-gps-retention.js`, agganciato a `scripts/run-retention.sh`)
     4. ✅ Test `GET /admin/employee-consents` — già coperto (`backend/src/__tests__/consent-active-filter.test.js`)
-  - **Trigger residuo:** prima di mostrare/attivare il geofencing a un cliente reale, pubblicare la pagina privacy policy pubblica (punto 2, ~30-45 min, stesso pattern DPA).
+  - **Gap più profondi trovati durante la correzione della pagina, fuori scope, spostati in S.27/S.28/S.29 sotto** (base giuridica del consenso, autorizzazione Statuto Lavoratori, DPIA obbligatoria).
 
 - [x] **S.25** Missing Data Processing Agreement (DPA) — GDPR Art. 28 (HIGH) — ✅ **COMPLETATO Session 47 (2026-06-21)**
   - **Fix:** `req.user.id` → `req.user.user_id` in `admin.js:158,172` — bug silenzioso che avrebbe causato FK violation in produzione
@@ -1152,6 +1152,24 @@ Valutazione richiesta esplicitamente dall'utente dopo l'apertura della PR #3 (`w
     4. AdminPage: nuova sezione "Consensi GPS" — tabella employees con colonna "GPS Accettato" (sì/no/data), bottone "Notifica dipendenti" (send email reminder)
   - **Effort:** 4-5 ore
   - **Success:** Dipendente vede consent dialog prima di primo GPS checkin, accettazione loggata in audit_log, admin vede storico consensi
+
+- [ ] **S.27** Base giuridica del consenso GPS potenzialmente invalida (HIGH) — **trovato Session 99 (2026-08-10), durante la correzione della privacy policy pubblica (S.24)**
+  - **Issue:** Con Fase C il GPS è obbligatorio su sedi con verifica attiva — rifiuto del consenso → check-in bloccato, nessun bypass. **EDPB Guidelines 05/2020 on consent under Regulation 2016/679, §21-22 ca.** (sezione "Imbalance of power"): *"Given the dependency that results from the employer/employee relationship, it is unlikely that the data subject is able to deny his/her employer consent to data processing without experiencing the fear or real risk of detrimental effects as a result of a refusal."* — scenario che corrisponde esattamente al comportamento attuale. L'architettura oggi in produzione (dialog "Accetto/Rifiuto" su base Art. 7 GDPR) potrebbe quindi poggiare sulla base giuridica sbagliata.
+  - **Possibile fix:** rivedere la base giuridica verso Art. 6(1)(b) (contratto) o 6(1)(f) (legittimo interesse, con bilanciamento documentato — Legitimate Interest Assessment), lasciando comunque un diritto di opposizione/revoca (già implementato in S.26).
+  - **Fonte:** https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf
+  - **Trigger:** sessione dedicata con `/grilling` prima del primo cliente reale con geofencing attivo.
+
+- [ ] **S.28** Statuto dei Lavoratori Art. 4 (L. 300/1970) — autorizzazione ITL/accordo sindacale mancante nell'onboarding cliente (HIGH) — **trovato Session 99 (2026-08-10)**
+  - **Issue:** Uno strumento capace di tracciare la posizione di un dipendente richiede accordo sindacale aziendale o autorizzazione dell'Ispettorato Territoriale del Lavoro (ITL) **prima** dell'attivazione — obbligo del cliente (datore di lavoro), non coperto da GDPR/privacy-policy. Confermato da un caso reale recente: **Garante Privacy, Provvedimento n. 7 del 16 gennaio 2025** — sanzione per geolocalizzazione GPS difforme dall'autorizzazione ITL già ottenuta, con l'indicazione esplicita che il monitoraggio non dovrebbe essere continuativo. **Nota positiva:** il nostro sistema cattura le coordinate solo al momento del check-in, mai in background — già allineato a questa mitigazione.
+  - **Possibile fix:** avviso esplicito nel runbook onboarding cliente (`docs/runbook.md`) prima che un admin possa attivare `geofence_enabled=true` su una sede, e/o un banner di conferma nella UI `GeofenceDialog` (AdminPage) che richiama l'obbligo.
+  - **Fonte:** https://www.ancebrescia.it/2025/garante-privacy-installazione-gps-su-mezzi-aziendali-controllo-a-distanza-dei-lavoratori-provvedimento-16-gennaio-2025/
+  - **Trigger:** stessa sessione di S.27, prima che un cliente reale attivi il geofencing in produzione.
+
+- [ ] **S.29** DPIA (Valutazione d'Impatto, Art. 35 GDPR) mai eseguita per il geofencing — obbligatoria, non facoltativa (HIGH) — **trovato Session 99 (2026-08-10)**
+  - **Issue:** **Garante Privacy, Delibera n. 467 dell'11 ottobre 2018** (elenco vincolante dei trattamenti soggetti a DPIA ex Art. 35(4) GDPR) include testualmente: *"trattamenti effettuati nell'ambito del rapporto di lavoro mediante sistemi tecnologici (...) dai quali derivi la possibilità di effettuare un controllo a distanza dell'attività dei dipendenti"* — il geofencing rientra a definizione. Non è una DPIA "probabilmente necessaria", è sull'elenco ufficiale.
+  - **Chi la fa:** la DPIA è obbligo del **Titolare** (il cliente, non Dataxiom — coerente con la privacy policy: "Titolare del Trattamento: [Cliente]"). Ma come per il DPA (S.25, template fornito da Dataxiom), è probabile che serva un **template DPIA precompilato**, altrimenti nessun cliente reale la produce da sé.
+  - **Fonte:** https://www.garanteprivacy.it/home/docweb/-/docweb-display/docweb/9058979
+  - **Trigger:** stessa sessione di S.27/S.28.
 
 ---
 
