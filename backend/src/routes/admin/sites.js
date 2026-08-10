@@ -186,7 +186,7 @@ router.post('/:id/regenerate-qr', async (req, res, next) => {
     const newQrContent = `badge://checkin?site_id=${site.id}&client_id=${site.client_id}&v=${randomUUID()}`;
 
     const updateResult = await pool.query(
-      `UPDATE sites SET qr_code_content = $1, updated_at = NOW() WHERE id = $2::uuid RETURNING id, name, client_id, qr_code_content`,
+      'UPDATE sites SET qr_code_content = $1, updated_at = NOW() WHERE id = $2::uuid RETURNING id, name, client_id, qr_code_content',
       [newQrContent, site.id]
     );
 

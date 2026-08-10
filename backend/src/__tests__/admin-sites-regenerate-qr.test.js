@@ -25,7 +25,6 @@ function makeToken(payload) {
 }
 
 const CLIENT_A = '550e8400-e29b-41d4-a716-446655440001';
-const CLIENT_B = '550e8400-e29b-41d4-a716-446655440002';
 const SITE_ID = '550e8400-e29b-41d4-a716-446655440010';
 
 const ADMIN_A_TOKEN = makeToken({ user_id: 'admin-a', client_id: CLIENT_A, role: 'admin' });
@@ -96,7 +95,7 @@ describe('POST /api/v1/admin/sites/:id/regenerate-qr', () => {
     pool.query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
     const res = await request(app)
-      .post(`/api/v1/admin/sites/00000000-0000-0000-0000-000000000000/regenerate-qr`)
+      .post('/api/v1/admin/sites/00000000-0000-0000-0000-000000000000/regenerate-qr')
       .set('Authorization', `Bearer ${ADMIN_A_TOKEN}`);
 
     expect(res.status).toBe(404);
