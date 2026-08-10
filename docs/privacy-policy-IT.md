@@ -39,7 +39,7 @@ Badge System elabora i dati personali esclusivamente per:
 
 3. **Verifica Geofencing (Sede)** — controllare che il dipendente sia fisicamente in sede prima di registrare la timbratura  
    Base Legale: Art. 6(1)(f) Legittimo interesse (sicurezza sede, frode) + consenso esplicito Art. 7  
-   **Coordinamento:** se la base legale è Art. 6(1)(f), il dipendente può comunque rifiutare il geofencing (check-in senza GPS). Se base è contrattuale, il datore di lavoro ha discrezione nel renderla obbligatoria.
+   **Coordinamento:** quando la verifica GPS è attiva su una sede, fornire le coordinate è condizione necessaria per registrare il check-in in quella sede — non esiste oggi una modalità di check-in senza GPS su una sede con geofencing attivo (vedi §3.2 per il dettaglio dei diritti del dipendente, inclusa la revoca del consenso).
 
 4. **Reporting Manageriale** — dashboard con presenze aggregate, esportazioni CSV per paghe/HR  
    Base Legale: Art. 6(1)(b) Contratto
@@ -56,7 +56,7 @@ Badge System elabora i dati personali esclusivamente per:
 - **Tecnologia:** Haversine distance (formula matematica open-source)
 - **Dati Raccolti:** Latitudine e longitudine del dispositivo al momento del check-in
 - **Uso:** Verifica che il dipendente sia entro un raggio configurabile (default 150 metri dalla sede)
-- **Conservazione:** **90 giorni** (pulizia automatica ogni notte via AWS Lambda/cron job)
+- **Conservazione:** **90 giorni** (pulizia automatica ogni notte via cron job sul server, ore 02:00 UTC)
 - **Non Condivisi:** Le coordinate GPS non sono mai condivise con terzi (salvo sub-processori AWS sotto DPA)
 
 ### 3.2 Diritti del Dipendente (Art. 15-22 GDPR)
