@@ -119,6 +119,13 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
       allEmployeeIds = Array.from(employeeMeta.entries()).map(([id, meta]) => ({ id, ...meta }));
     }
 
+    const signaturesResult = await pool.query(
+      `SELECT employee_id, status, signed_at FROM timesheet_signatures
+       WHERE client_id = $1::uuid AND month = $2 AND year = $3`,
+      [client_id, month, year]
+    );
+    const signatureByEmployee = new Map(signaturesResult.rows.map((r) => [r.employee_id, r]));
+
     const employees = [];
     const seenIds = new Set();
 
@@ -145,6 +152,8 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
         ore_straordinarie: agg.ore_straordinarie,
         buoni_pasto: agg.buoni_pasto,
         presenze_aperte: agg.presenze_aperte,
+        signature_status: signatureByEmployee.get(empId)?.status || null,
+        signed_at: signatureByEmployee.get(empId)?.signed_at || null,
       });
     }
 

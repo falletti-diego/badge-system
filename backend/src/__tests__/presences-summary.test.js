@@ -63,6 +63,10 @@ function makeCheckins() {
 describe('GET /api/presences/summary', () => {
   beforeEach(() => {
     jest.resetAllMocks();
+    // Fallback per la query "Firmato" (timesheet_signatures) aggiunta dopo le
+    // chiamate specifiche di ogni test — i test in questo describe non
+    // verificano lo stato firma, quindi un default vuoto è sufficiente.
+    pool.query.mockResolvedValue({ rows: [] });
   });
 
   it('no auth → 401', async () => {
@@ -106,6 +110,37 @@ describe('GET /api/presences/summary', () => {
     expect(emp.buoni_pasto).toBe(1);
     expect(emp.giorni_presenti).toBe(1);
     expect(emp.presenze_aperte).toBe(0);
+  });
+
+  it('include lo stato della firma per ogni dipendente (finding firma digitale)', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: makeCheckins() }) // check-ins query
+      .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] }) // clients query
+      .mockResolvedValueOnce({ rows: [{ id: EMP_ID, name: 'Mario Rossi', matricola: '001' }] }) // all employees query
+      .mockResolvedValueOnce({ rows: [{ employee_id: EMP_ID, status: 'signed', signed_at: '2026-07-02T09:00:00Z' }] }); // firme del periodo
+
+    const res = await request(app)
+      .get('/api/v1/presences/summary?month=6&year=2026')
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.employees[0].signature_status).toBe('signed');
+    expect(res.body.data.employees[0].signed_at).toBe('2026-07-02T09:00:00Z');
+  });
+
+  it('signature_status è null quando il dipendente non ha mai firmato', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: makeCheckins() })
+      .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] })
+      .mockResolvedValueOnce({ rows: [{ id: EMP_ID, name: 'Mario Rossi', matricola: '001' }] })
+      .mockResolvedValueOnce({ rows: [] }); // nessuna firma
+
+    const res = await request(app)
+      .get('/api/v1/presences/summary?month=6&year=2026')
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.employees[0].signature_status).toBeNull();
   });
 
   it('viewer gets summary → 200', async () => {
