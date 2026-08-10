@@ -25,6 +25,7 @@ import { EmployeeIllnessReport } from './features/illness/pages/EmployeeIllnessR
 import { ManagerIllnessReport } from './features/illness/pages/ManagerIllnessReport';
 import { AdminIllnessManagement } from './features/illness/pages/AdminIllnessManagement';
 import SummaryPage from './pages/SummaryPage';
+import MySummaryPage from './pages/MySummaryPage';
 import HelpPage from './pages/HelpPage';
 import { OnboardingWizardPage } from './features/admin/pages/OnboardingWizardPage';
 
@@ -281,6 +282,16 @@ function AppRouter() {
             element={
               <ProtectedRoute requiredRoles={['admin', 'manager', 'viewer']}>
                 <SummaryPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Employee: Il Mio Cartellino (firma digitale) */}
+          <Route
+            path="/my-summary"
+            element={
+              <ProtectedRoute requiredRole="employee">
+                <MySummaryPage />
               </ProtectedRoute>
             }
           />
