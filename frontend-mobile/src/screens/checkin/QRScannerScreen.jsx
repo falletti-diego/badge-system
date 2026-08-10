@@ -301,11 +301,28 @@ export default function QRScannerScreen({ navigation, route }) {
           { text: 'Annulla', onPress: () => navigation.goBack() },
         ]);
       } else {
-        // Timeout/permesso negato sull'acquisizione GPS stessa.
-        Alert.alert('Posizione non disponibile', 'Attiva la posizione per timbrare qui.', [
-          { text: 'Riprova', onPress: () => acquireLocationAndRetry() },
-          { text: 'Annulla', onPress: () => navigation.goBack() },
-        ]);
+        // Timeout, o permesso negato sull'acquisizione GPS stessa. Se il permesso è
+        // negato IN MODO PERMANENTE (canAskAgain: false, stesso concetto già gestito
+        // per la fotocamera più sotto in questo file), "Riprova" richiamerebbe
+        // getCurrentPositionAsync in loop infinito senza mai poter avere successo —
+        // serve la stessa via d'uscita "Apri Impostazioni" (gap trovato in review
+        // finale 2026-08-10, mai coperta da nessun test prima di questo fix).
+        const permission = await Location.getForegroundPermissionsAsync().catch(() => null);
+        if (permission && !permission.canAskAgain) {
+          Alert.alert(
+            'Posizione non disponibile',
+            'Il permesso di posizione è disattivato. Vai in Impostazioni per riattivarlo.',
+            [
+              { text: 'Apri Impostazioni', onPress: () => Linking.openSettings() },
+              { text: 'Annulla', onPress: () => navigation.goBack() },
+            ]
+          );
+        } else {
+          Alert.alert('Posizione non disponibile', 'Attiva la posizione per timbrare qui.', [
+            { text: 'Riprova', onPress: () => acquireLocationAndRetry() },
+            { text: 'Annulla', onPress: () => navigation.goBack() },
+          ]);
+        }
       }
       setLoading(false);
     }

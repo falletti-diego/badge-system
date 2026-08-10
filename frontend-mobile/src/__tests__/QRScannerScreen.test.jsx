@@ -42,6 +42,7 @@ jest.mock('../utils/deviceTier', () => ({
 jest.mock('expo-location', () => ({
   getCurrentPositionAsync: jest.fn(),
   requestForegroundPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  getForegroundPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted', canAskAgain: true }),
 }));
 
 jest.mock('../services/secureAuthStorage', () => ({ setUser: jest.fn() }));
@@ -350,6 +351,31 @@ describe('QRScannerScreen', () => {
     // "Riprova" ritenta SOLO getCurrentPositionAsync — nessuna nuova chiamata a apiClient.post
     // per un secondo tentativo di check-in "al buio" (il codice geofence è già confermato).
     expect(apiClient.post).toHaveBeenCalledTimes(1);
+  });
+
+  test('permesso posizione negato permanentemente: mostra "Apri Impostazioni" invece di un loop infinito su "Riprova" (regression, review finale 2026-08-10)', async () => {
+    const geofenceError = makeResponseError('GPS coordinates required');
+    geofenceError.response = { status: 400, data: { error: 'VALIDATION_ERROR', details: { code: 'GEOFENCE_COORDINATES_REQUIRED' } } };
+
+    apiClient.post.mockRejectedValueOnce(geofenceError);
+    authService.getUser.mockResolvedValue({ employee_id: 'emp-1', gps_consent_given: true });
+    Location.getCurrentPositionAsync.mockRejectedValueOnce(new Error('Permission denied'));
+    Location.getForegroundPermissionsAsync.mockResolvedValueOnce({ status: 'denied', canAskAgain: false });
+    const openSettingsSpy = jest.spyOn(Linking, 'openSettings').mockImplementation(() => {});
+
+    await renderScreen();
+    await scan(buildQrString({ siteId: 'site-42', clientId: 'client-1' }));
+
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(
+      'Posizione non disponibile',
+      expect.stringContaining('Impostazioni'),
+      expect.arrayContaining([expect.objectContaining({ text: 'Apri Impostazioni' })])
+    ));
+
+    const alertCall = Alert.alert.mock.calls.find(([title]) => title === 'Posizione non disponibile');
+    const settingsButton = alertCall[2].find((b) => b.text === 'Apri Impostazioni');
+    settingsButton.onPress();
+    expect(openSettingsSpy).toHaveBeenCalledTimes(1);
   });
 
   test('un secondo rifiuto (OUTSIDE_GEOFENCE) dopo il retry con GPS è un errore finale, nessun ulteriore tentativo automatico', async () => {
