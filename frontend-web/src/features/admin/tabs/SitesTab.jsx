@@ -9,6 +9,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
+import QrCodeIcon from '@mui/icons-material/QrCode';
 import apiClient from '../../../services/apiClient';
 import { useFetch } from '../components/useFetch';
 import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
@@ -171,6 +172,8 @@ export function SitesTab() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [geofenceTarget, setGeofenceTarget] = useState(null);
+  const [regenerateTarget, setRegenerateTarget] = useState(null);
+  const [regenerating, setRegenerating] = useState(false);
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -183,6 +186,20 @@ export function SitesTab() {
       setDeleteTarget(null);
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleRegenerateQr = async () => {
+    setRegenerating(true);
+    try {
+      await apiClient.post(`/api/v1/admin/sites/${regenerateTarget.id}/regenerate-qr`);
+      setRegenerateTarget(null);
+      reload();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.message || err.message });
+      setRegenerateTarget(null);
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -305,6 +322,11 @@ export function SitesTab() {
                       </TableCell>
                       <TableCell>{new Date(s.created_at).toLocaleDateString('it-IT')}</TableCell>
                       <TableCell align="right">
+                        <Tooltip title="Rigenera QR — il poster stampato smette di funzionare">
+                          <IconButton size="small" onClick={() => setRegenerateTarget(s)}>
+                            <QrCodeIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                         <Tooltip title="Elimina sede">
                           <IconButton size="small" color="error" onClick={() => setDeleteTarget(s)}>
                             <DeleteIcon fontSize="small" />
@@ -330,6 +352,17 @@ export function SitesTab() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
         loading={deleting}
+      />
+
+      <ConfirmDeleteDialog
+        open={!!regenerateTarget}
+        title={`Rigenera QR per "${regenerateTarget?.name}"?`}
+        description="Il poster stampato attualmente in uso smette immediatamente di funzionare. Dovrai scaricare e ristampare il nuovo QR."
+        onConfirm={handleRegenerateQr}
+        onCancel={() => setRegenerateTarget(null)}
+        loading={regenerating}
+        confirmLabel="Rigenera"
+        confirmColor="warning"
       />
 
       {geofenceTarget && (
