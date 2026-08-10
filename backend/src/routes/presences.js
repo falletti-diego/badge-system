@@ -7,7 +7,7 @@
 
 const express = require('express');
 const { pool } = require('../db/pool');
-const { createValidationMiddleware, GetPresencesSummarySchema, GetPresencesTrendSchema } = require('../middleware/validation');
+const { createValidationMiddleware, GetPresencesSummarySchema, GetMySummarySchema, GetPresencesTrendSchema } = require('../middleware/validation');
 const { requireAuth } = require('../middleware/auth');
 const { ForbiddenError } = require('../utils/errors');
 const { calculateDailyHours, aggregateMonthly, toUtcDateString } = require('../utils/hours');
@@ -169,6 +169,73 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
         meal_voucher_threshold_hours: Number(mealVoucherHours),
         employees,
         totals,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =====================================================
+// GET /api/presences/my-summary?month=6&year=2026
+// Self-scoped: employee_id e client_id SEMPRE da req.user, mai da input —
+// elimina strutturalmente la classe di bug "vedo il cartellino di un altro
+// dipendente" invece di prevenirla con un controllo aggiuntivo.
+// =====================================================
+
+router.get('/my-summary', requireAuth, createValidationMiddleware(GetMySummarySchema), async (req, res, next) => {
+  const { month, year } = req.validated.query;
+  const { client_id, employee_id } = req.user;
+
+  if (!employee_id) {
+    return next(new ForbiddenError('Your account has no employee profile', 'NO_EMPLOYEE_PROFILE'));
+  }
+
+  try {
+    const dateFrom = new Date(Date.UTC(year, month - 1, 1));
+    const dateTo = new Date(Date.UTC(year, month, 1));
+
+    const checkinsResult = await pool.query(
+      `SELECT ci.id, ci.employee_id, ci.timestamp, ci.type
+       FROM checkins ci
+       WHERE ci.client_id = $1::uuid AND ci.employee_id = $2::uuid
+         AND ci.timestamp >= $3 AND ci.timestamp < $4
+       ORDER BY ci.timestamp ASC`,
+      [client_id, employee_id, dateFrom.toISOString(), dateTo.toISOString()]
+    );
+
+    const clientResult = await pool.query(
+      'SELECT meal_voucher_hours FROM clients WHERE id = $1::uuid LIMIT 1',
+      [client_id]
+    );
+    const mealVoucherHours = clientResult.rows[0]?.meal_voucher_hours ?? 5.0;
+
+    const dailyEntries = calculateDailyHours(checkinsResult.rows);
+    const monthlyAgg = aggregateMonthly(dailyEntries, Number(mealVoucherHours));
+    const agg = monthlyAgg.get(employee_id) || {
+      ore_totali: 0, ore_ordinarie: 0, ore_straordinarie: 0, buoni_pasto: 0, giorni_presenti: 0, presenze_aperte: 0,
+    };
+
+    const signatureResult = await pool.query(
+      `SELECT status, signed_at FROM timesheet_signatures
+       WHERE employee_id = $1::uuid AND month = $2 AND year = $3`,
+      [employee_id, month, year]
+    );
+    const signature = signatureResult.rows.length > 0
+      ? { status: signatureResult.rows[0].status, signed_at: signatureResult.rows[0].signed_at }
+      : null;
+
+    res.json({
+      success: true,
+      data: {
+        period: { month, year },
+        giorni_presenti: agg.giorni_presenti,
+        ore_totali: agg.ore_totali,
+        ore_ordinarie: agg.ore_ordinarie,
+        ore_straordinarie: agg.ore_straordinarie,
+        buoni_pasto: agg.buoni_pasto,
+        presenze_aperte: agg.presenze_aperte,
+        signature,
       },
     });
   } catch (err) {

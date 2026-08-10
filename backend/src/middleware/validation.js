@@ -535,6 +535,22 @@ const GetPresencesSummarySchema = z.object({
   }),
 });
 
+const GetMySummarySchema = z.object({
+  query: z.object({
+    month: z.coerce
+      .number()
+      .int('month must be an integer')
+      .min(1, 'month must be between 1 and 12')
+      .max(12, 'month must be between 1 and 12')
+      .default(new Date().getMonth() + 1),
+    year: z.coerce
+      .number()
+      .int('year must be an integer')
+      .min(2020, 'year must be 2020 or later')
+      .default(new Date().getFullYear()),
+  }),
+});
+
 // =====================================================
 // LEAVE MANAGEMENT — POST /api/v1/leave/request
 // =====================================================
@@ -592,6 +608,7 @@ module.exports = {
   AdminViewerSchema,
   AdminSettingsSchema,
   GetPresencesSummarySchema,
+  GetMySummarySchema,
   UpdateSiteGeofenceSchema,
   PostLeaveRequestSchema,
   ApproveLeaveSchema,
