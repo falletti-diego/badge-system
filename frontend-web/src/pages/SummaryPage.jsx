@@ -204,7 +204,7 @@ const SummaryPage = () => {
             <Table size="small">
               <TableHead sx={{ backgroundColor: '#F5F2ED' }}>
                 <TableRow>
-                  {['Nome','Matricola','Giorni','Ore Totali','Ore Ord.','Ore Straord.','Buoni Pasto','⚠️ Aperte'].map(h => (
+                  {['Nome','Matricola','Giorni','Ore Totali','Ore Ord.','Ore Straord.','Buoni Pasto','⚠️ Aperte','Firmato'].map(h => (
                     <TableCell key={h} sx={{ fontWeight: 700, color: '#2A2520' }}>{h}</TableCell>
                   ))}
                 </TableRow>
@@ -212,7 +212,7 @@ const SummaryPage = () => {
               <TableBody>
                 {!data || data.employees.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ color: '#6B625A', py: 4 }}>
+                    <TableCell colSpan={9} align="center" sx={{ color: '#6B625A', py: 4 }}>
                       Nessun dipendente trovato per {MONTH_NAMES[month - 1]} {year}
                     </TableCell>
                   </TableRow>
@@ -246,6 +246,15 @@ const SummaryPage = () => {
                             <span style={{ color: '#6B625A' }}>—</span>
                           )}
                         </TableCell>
+                        <TableCell>
+                          {emp.signature_status === 'signed' ? (
+                            <Chip label={`✅ ${new Date(emp.signed_at).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}`} size="small" sx={{ backgroundColor: '#EEF6F1', color: '#2D7049' }} />
+                          ) : emp.signature_status === 'invalidated' ? (
+                            <Chip label="⚠️ Da rifirmare" size="small" color="warning" />
+                          ) : (
+                            <span style={{ color: '#6B625A' }}>—</span>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
 
@@ -257,6 +266,7 @@ const SummaryPage = () => {
                       <TableCell sx={{ fontWeight: 700 }}>{formatHours(data.totals.ore_ordinarie)}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{formatHours(data.totals.ore_straordinarie)}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{data.totals.buoni_pasto}</TableCell>
+                      <TableCell />
                       <TableCell />
                     </TableRow>
                   </>

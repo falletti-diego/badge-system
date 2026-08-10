@@ -50,6 +50,42 @@ describe('SummaryPage — PDF export', () => {
     expect(mockPrint).toHaveBeenCalledTimes(1);
   });
 
+  test('mostra la colonna "Firmato" con lo stato corretto', async () => {
+    apiClient.get.mockResolvedValueOnce({
+      data: {
+        data: {
+          employees: [
+            { id: 'e1', name: 'Mario Rossi', matricola: 'M001', giorni_presenti: 20, ore_totali: 160, ore_ordinarie: 160, ore_straordinarie: 0, buoni_pasto: 20, presenze_aperte: 0, signature_status: 'signed', signed_at: '2026-07-02T09:00:00Z' },
+          ],
+          totals: { giorni_presenti: 20, ore_totali: 160, ore_ordinarie: 160, ore_straordinarie: 0, buoni_pasto: 20 },
+          meal_voucher_threshold_hours: 6,
+        },
+      },
+    });
+
+    render(<Router><SummaryPage /></Router>);
+    await waitFor(() => expect(screen.getByText('Mario Rossi')).toBeInTheDocument());
+    expect(screen.getByText(/02\/07/)).toBeInTheDocument();
+  });
+
+  test('mostra "Da rifirmare" quando la firma è invalidata', async () => {
+    apiClient.get.mockResolvedValueOnce({
+      data: {
+        data: {
+          employees: [
+            { id: 'e1', name: 'Mario Rossi', matricola: 'M001', giorni_presenti: 20, ore_totali: 160, ore_ordinarie: 160, ore_straordinarie: 0, buoni_pasto: 20, presenze_aperte: 0, signature_status: 'invalidated', signed_at: '2026-07-02T09:00:00Z' },
+          ],
+          totals: { giorni_presenti: 20, ore_totali: 160, ore_ordinarie: 160, ore_straordinarie: 0, buoni_pasto: 20 },
+          meal_voucher_threshold_hours: 6,
+        },
+      },
+    });
+
+    render(<Router><SummaryPage /></Router>);
+    await waitFor(() => expect(screen.getByText('Mario Rossi')).toBeInTheDocument());
+    expect(screen.getByText(/Da rifirmare/i)).toBeInTheDocument();
+  });
+
   test('il titolo di stampa mostra il mese e anno correnti', async () => {
     render(<Router><SummaryPage /></Router>);
     await waitFor(() => expect(screen.getByText('Mario Rossi')).toBeInTheDocument());
