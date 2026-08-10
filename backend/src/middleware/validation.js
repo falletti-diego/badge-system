@@ -551,6 +551,13 @@ const GetMySummarySchema = z.object({
   }),
 });
 
+const PostTimesheetSignSchema = z.object({
+  body: z.object({
+    month: z.number().int('month must be an integer').min(1).max(12),
+    year: z.number().int('year must be an integer').min(2020).max(2100),
+  }),
+});
+
 // =====================================================
 // LEAVE MANAGEMENT — POST /api/v1/leave/request
 // =====================================================
@@ -609,6 +616,7 @@ module.exports = {
   AdminSettingsSchema,
   GetPresencesSummarySchema,
   GetMySummarySchema,
+  PostTimesheetSignSchema,
   UpdateSiteGeofenceSchema,
   PostLeaveRequestSchema,
   ApproveLeaveSchema,
