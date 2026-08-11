@@ -1,16 +1,48 @@
-# Badge System — Session 100 Handoff
+# Badge System — Session 101 Handoff
 
 **Date:** 2026-08-11
-**Session:** 100 — S.24 chiuso (privacy policy pubblica) + Firma digitale cartellino mensile in produzione
-**Status:** ✅ S.24 chiuso (4/4 sotto-task). ✅ Firma digitale cartellino mensile implementata e in produzione. Nuovo backlog GDPR **S.27/S.28/S.29** aperto (base giuridica consenso GPS, autorizzazione Statuto Lavoratori, DPIA obbligatoria) — da affrontare con `/grilling` prima che un cliente reale attivi il geofencing. Prossimo lavoro sostanziale: resto del Gruppo 2+ del backlog post-Fase-C (notifiche push, alert frodi, trust signal, branding, pricing, shift swap).
+**Session:** 101 — Plugin `marketing-skills` installato + design/piano documento di contesto marketing (Task 1/6 eseguito, sessione sospesa per riavvio VS Code)
+**Status:** ⏸️ **AZIONE RICHIESTA PRIMA DI RIPRENDERE: riavviare Visual Studio Code.** Plugin `marketing-skills@marketingskills` (49 skill) installato ma non ancora scoperto correttamente dal tool Skill nella sessione in cui è stato installato. `.agents/product-marketing.md` v1 creato (Task 1/6 del piano) leggendo `SKILL.md` manualmente invece di invocare la skill — funzionalmente corretto ma da rifare "nel modo giusto" una volta riavviato VS Code, se si vuole verificare che il meccanismo skill funzioni per i Task 2-6. Piano completo: `docs/superpowers/plans/2026-08-11-product-marketing-context-plan.md`.
 
 ---
 
-## Goal (Session 100)
+## Goal (Session 101)
 
-Continuazione diretta di Session 99. Due lavori: chiudere l'ultimo sotto-task di S.24 (pagina pubblica privacy policy GPS, mai pubblicata) e implementare "Firma digitale cartellino mensile" (backlog Session 57).
+Continuazione diretta di Session 100. Con S.24 e la firma digitale chiusi, spostare l'attenzione dal codice alla validazione di mercato: installare skill Claude Code per marketing e costruire il documento di contesto marketing fondativo (`.agents/product-marketing.md`) che alimenta tutte le altre skill del plugin.
 
-## Esito (Session 100)
+## Esito (Session 101)
+
+Ricerca comparativa di skill marketing su GitHub (verificata con `gh api`, non fidandosi dei riassunti di ricerca web che gonfiavano alcuni star count) → installato `coreyhaines31/marketingskills` (43.864★, 49 skill: positioning, pricing, cold-email, sales-enablement, competitor-profiling, SEO, ads). Design (`docs/superpowers/specs/2026-08-11-product-marketing-context-design.md`) e piano 6 task via `/superpowers:brainstorming`+`/grilling`+`/superpowers:writing-plans`: auto-draft di `.agents/product-marketing.md` pilotato sullo spec di positioning/pricing già approvato il 26/7 (non uno scan generico del codebase, inutile per un repo interno), seguito da verifica di seconda mano con `competitor-profiling`/`pricing` (con vincolo: eventuali scostamenti producono solo una *proposta* di revisione dello spec 26/7, mai una sovrascrittura), seguito da materiale prospect-facing (`sales-enablement` one-pager + `cold-email` template) — quest'ultima fase aggiunta dopo un'osservazione critica esplicita dell'utente: senza di essa, il lavoro sarebbe rimasto solo interno, contro la priorità già stabilita di validare con un prospect reale.
+
+Esecuzione **Subagent-Driven** (scelta dall'utente). **Task 1 completato**: `.agents/product-marketing.md` v1 creato (commit `9e12778`), verificato di buona qualità con un compliance-check manuale contro lo spec (ogni sezione tracciata a fonte o marcata "non validato — zero clienti reali", pricing esatto senza arrotondamenti). **Scoperta di processo**: il subagent non riusciva a invocare la skill `product-marketing` via tool Skill — non ancora nell'elenco skill caricato nella sua sessione isolata, nonostante il plugin fosse installato su disco. L'utente ha identificato la causa: **le skill di un plugin appena installato in una sessione richiedono un riavvio di VS Code** per essere scoperte correttamente in tutte le sotto-sessioni successive (incluse quelle dei subagent dispatchati dopo l'installazione).
+
+**Sessione sospesa qui su richiesta esplicita dell'utente**, in attesa del riavvio.
+
+**Dettaglio completo**: vedi `PROJECT_DECISIONS.md` sezione Session 101.
+
+## Backlog per la prossima sessione (in ordine di urgenza)
+
+1. **Riavviare Visual Studio Code** (azione dell'utente, non di Claude) — precondizione per tutto il resto di questa lista.
+2. **Task 2-6 del piano `docs/superpowers/plans/2026-08-11-product-marketing-context-plan.md`**: Task 2 (`competitor-profiling` su NoBadge/Zucchetti/Factorial/Personio/Deputy, verifica URL pubblici prima di invocare), Task 3 (`pricing` stress-test dello schema a scaglioni), Task 4 (sintesi in `.agents/product-marketing.md` v2 + eventuale sezione di revisione allo spec 26/7), Task 5 (`sales-enablement` one-pager + `cold-email` template in `docs/marketing/`), Task 6 (chiusura sessione).
+3. **S.27/S.28/S.29** (backlog GDPR, HIGH) — base giuridica consenso GPS, autorizzazione Statuto Lavoratori/ITL, DPIA obbligatoria. Sessione dedicata con `/grilling` **prima** che un cliente reale attivi il geofencing in produzione.
+4. Resto del Gruppo 2+ del backlog post-Fase-C: notifiche push, alert frodi, trust signal, branding, shift swap.
+5. **ANDROID.1/1b** — verifica manuale scan QR reale su device fisico/Virtual Scene, bloccato da un limite di automazione GUI-only.
+
+## Note operative (Session 101)
+
+- **Un plugin/skill installato a metà sessione non è affidabilmente invocabile via tool Skill nella stessa sessione (né nei subagent dispatchati da essa) finché VS Code non viene riavviato** — se un subagent riporta che una skill "non esiste" nonostante sia visibile su disco (`~/.claude/plugins/...`), prima di investigare come un bug applicativo, verificare se il plugin è stato installato di recente nella sessione corrente.
+- **Quando una skill non è invocabile ma le sue istruzioni (`SKILL.md`) sono leggibili, un subagent può replicarne manualmente il workflow** come fallback ragionevole — ma va sempre segnalato esplicitamente nel report, non presentato come "skill eseguita" senza distinzione.
+- **Per documenti/task senza rischio di regressione produzione (lavoro puramente documentale), committare direttamente su `main` è una scelta esplicita legittima** — non ogni piano richiede un branch/worktree/PR; il piano stesso lo dichiara quando è il caso.
+
+---
+
+## Handoff precedenti (invariati, riportati sotto per contesto)
+
+### Session 100 — S.24 chiuso (privacy policy pubblica) + Firma digitale cartellino mensile in produzione
+
+**Goal:** Continuazione diretta di Session 99. Due lavori: chiudere l'ultimo sotto-task di S.24 (pagina pubblica privacy policy GPS, mai pubblicata) e implementare "Firma digitale cartellino mensile" (backlog Session 57).
+
+**Esito:**
 
 **S.24**: `docs/privacy-policy-IT.md` conteneva testo pre-Fase-C ancora "facoltativo" sul GPS — corretto su 6 punti (revoca consenso reale aggiunta, Accesso Art.15 corretto da falso self-service a richiesta manuale, Sentry aggiunto ai sub-processori). **Analisi critica contro fonti GDPR verificate online** (non solo lettura codice) prima di pubblicare ha trovato 3 gap più profondi, registrati come nuovo backlog con citazioni verificate: **S.27** base giuridica consenso GPS probabilmente invalida (EDPB Guidelines 05/2020 §21-22 — consenso in rapporto di lavoro non "liberamente prestato" se il rifiuto ha conseguenze negative, esattamente lo scenario Fase C); **S.28** Statuto Lavoratori Art.4/autorizzazione ITL mancante nell'onboarding cliente (confermato da un caso sanzionatorio reale, Garante Provvedimento n.7/16-01-2025); **S.29** DPIA mai eseguita ma esplicitamente obbligatoria (non "probabile") per la Delibera Garante n.467/2018. Pagina pubblicata (`privacy-policy-it.html`, pattern DPA), verificata live — un primo check aveva mostrato la SPA per cache Netlify Edge su un path mai richiesto prima, non un bug della regola, risolto da solo con retry.
 
@@ -19,20 +51,6 @@ Continuazione diretta di Session 99. Due lavori: chiudere l'ultimo sotto-task di
 **Verifica finale**: backend 750/750, frontend-web 299/299, 0 errori lint, push su `main`, CI a cascata verde, endpoint verificati live in produzione (401 non 404 — migration confermata applicata anche in produzione dato che girano fail-fast all'avvio container).
 
 **Dettaglio completo**: vedi `PROJECT_DECISIONS.md` sezione Session 100.
-
-## Backlog per la prossima sessione (in ordine di urgenza)
-
-1. **S.27/S.28/S.29** (nuovo backlog GDPR, HIGH) — base giuridica consenso GPS, autorizzazione Statuto Lavoratori/ITL, DPIA obbligatoria. Sessione dedicata con `/grilling` **prima** che un cliente reale attivi il geofencing in produzione.
-2. **Resto del Gruppo 2+ del backlog post-Fase-C**: notifiche push, alert frodi, trust signal, branding, pricing, shift swap.
-3. **ANDROID.1/1b** — verifica manuale scan QR reale su device fisico/Virtual Scene, bloccato da un limite di automazione GUI-only.
-4. (Opzionale) Verifica manuale della Build 36 su un dispositivo reale.
-
-## Note operative (Session 100)
-
-- **Prima di pubblicare un documento legale/GDPR, verificarne l'accuratezza contro il comportamento REALE attuale del sistema, non fidarsi del testo esistente** — `privacy-policy-IT.md` descriveva un GPS "facoltativo" che non lo è più da Fase C; pubblicarlo invariato avrebbe dichiarato pubblicamente un diritto inesistente.
-- **Le skill "senior-*" con grilling greenfield (`/senior-fullstack`, `/senior-backend`) non sono adatte a feature su stack già deciso e in produzione** — chiedono team-size/QPS/tenancy come se si stesse scegliendo uno stack da zero. Per una critical review su codice esistente, applicarne lo spirito manualmente (leggere il codice reale, cercare edge case) invece di eseguire il loro grilling letterale.
-- **Un endpoint self-scoped (`employee_id` sempre da `req.user`, mai da input) elimina strutturalmente una classe di bug invece di prevenirla con un controllo aggiuntivo** — pattern riusabile ogni volta che serve un "i miei dati" endpoint.
-- **Le funzioni di invalidazione/side-effect legate a un'entità (qui: check-in che invalida una firma) vanno agganciate a TUTTI i path che scrivono quell'entità, non solo al più ovvio** — la sincronizzazione offline (`POST`, non `PUT`) è un path facile da dimenticare se si pensa solo al flusso "utente corregge un errore".
 
 ---
 

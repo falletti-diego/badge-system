@@ -6,6 +6,39 @@
 
 ---
 
+## Session 101 — Plugin marketing-skills installato + design/piano documento di contesto marketing (Task 1/6 eseguito, sessione sospesa per restart VS Code) (11 Agosto 2026)
+
+### Contesto
+Continuazione diretta di Session 100. Con S.24 e la firma digitale cartellino chiusi, l'utente ha chiesto una valutazione di cosa manca per un MVP "solido e vendibile" — la risposta ha identificato che il collo di bottiglia più grande non è più codice ma validazione di mercato: pricing/posizionamento mai testati con un prospect reale. L'utente ha spostato l'attenzione su marketing: ricerca di skill Claude Code per una campagna marketing, poi costruzione del documento di contesto marketing fondativo (`product-marketing`).
+
+### Parte 1 — Ricerca skill marketing e installazione
+
+Ricerca comparativa richiesta esplicitamente con verifica **dati reali via GitHub API**, non fidandosi dei riassunti di ricerca web (che hanno riportato star count palesemente gonfiati per alcuni mega-repo di liste curate). Confrontati 8 repository, scelto **`coreyhaines31/marketingskills`** (43.864★ verificate via `gh api`, 49 skill: positioning, pricing, cold-email, sales-enablement, competitor-profiling, copy, SEO, ads — copre l'intero funnel B2B SaaS) su `OpenClaudia/openclaudia-skills` (75 skill ma richiede credenziali API a pagamento SEMrush/Ahrefs, prematuro senza budget marketing) e `alirezarezvani/claude-skills` (24.268★ ma marketing è solo una categoria tra 345 skill generaliste, troppo diluito). Installato via `/plugin marketplace add` + `/plugin install marketing-skills` — stesso pattern già usato per `superpowers`, scope `user` (disponibile in tutte le sessioni, non solo questo progetto).
+
+### Parte 2 — Design e piano per il documento di contesto marketing
+
+Via `/superpowers:brainstorming` + `/grilling`: scoperto che questo repo ha già uno **spec di positioning/pricing approvato** (`docs/superpowers/specs/2026-07-26-competitive-positioning-pricing-design.md`, analisi competitiva reale su 5 player — NoBadge, Zucchetti/TeamSystem, Factorial, Personio, Deputy — pricing a scaglioni €8/7/6,50, messaging commerciale) — questo ha cambiato l'approccio da "auto-draft generico dal codebase" (inutile per un tool interno senza landing page pubblica) a **auto-draft pilotato esplicitamente su quello spec + `CLAUDE.md`**.
+
+Due round di analisi critica richiesti esplicitamente dall'utente prima di scrivere la spec, entrambi hanno esteso lo scope in modo mirato:
+1. **"verifica se possiamo migliorare l'attuale positioning/pricing"** → aggiunta una verifica di seconda mano con le skill dedicate appena installate (`competitor-profiling`, `pricing`), non solo il ragionamento manuale già fatto il 26/7 — con vincolo esplicito che un eventuale scostamento trovato produce solo una **proposta di revisione** dello spec approvato (sezione aggiuntiva "Revisione [data]"), mai una sovrascrittura silenziosa delle conclusioni già prese.
+2. **"verifica se possiamo implementare qualcos'altro prima di scrivere la spec"** → osservazione critica: nessuna delle fasi pianificate produceva un artefatto *prospect-facing* — solo documentazione interna — nonostante la priorità già stabilita fosse "andare a validare con un prospect reale". Aggiunta una Fase 5 (`sales-enablement` per un one-pager, `cold-email` per un template di outreach generico, dato che non esiste ancora un prospect nominato).
+
+**Spec** (`docs/superpowers/specs/2026-08-11-product-marketing-context-design.md`) e **piano** (`docs/superpowers/plans/2026-08-11-product-marketing-context-plan.md`, 6 task) scritti e committati direttamente su `main` (lavoro documentale, nessun rischio di regressione a un sistema in produzione — deciso esplicitamente nel piano).
+
+### Parte 3 — Esecuzione Subagent-Driven, Task 1 completato
+
+L'utente ha scelto **Subagent-Driven** nonostante la mia raccomandazione per l'esecuzione inline (motivata dal fatto che ogni fase del piano richiede revisione umana del *contenuto*, non solo compliance di spec/qualità automatica — tensione nota ma non bloccante, gestita facendo io da controller la revisione di merito tra un task subagent e l'altro).
+
+**Task 1** (bozza v1 `.agents/product-marketing.md`) dispatchato a un subagent generico. **Scoperta di processo**: il subagent ha riportato che il tool Skill non riconosceva `product-marketing` come skill invocabile nel suo contesto isolato, nonostante il plugin fosse installato su disco — ha letto `SKILL.md` manualmente e ne ha replicato il workflow a mano. **Causa identificata dall'utente**: la scoperta di nuove skill installate richiede un **riavvio di Visual Studio Code** — il plugin era stato installato a metà di questa sessione, quindi nessuna sotto-sessione (incluse quelle dei subagent) lo vedeva ancora nell'elenco skill caricato.
+
+Contenuto comunque verificato di buona qualità tramite compliance-check manuale (fatto da me, con lo spec completo in contesto, invece di dispatchare un secondo subagent reviewer per un semplice documento): ogni sezione traccia a una fonte o è marcata esplicitamente "non validato — zero clienti reali", pricing riprodotto esatto senza arrotondamenti, path/versione/changelog conformi. Il subagent ha aggiunto di iniziativa una sezione "Rischi noti sul posizionamento" non prevista dal template standard — estensione trasparente e ragionevole, non un'invenzione. Commit `9e12778`.
+
+### Stato a fine sessione
+
+**Sessione sospesa qui su richiesta esplicita dell'utente**, in attesa del riavvio di VS Code necessario perché la skill `product-marketing` (e le altre 4 del piano: `competitor-profiling`, `pricing`, `sales-enablement`, `cold-email`) diventino invocabili correttamente nei prossimi task. Restano da eseguire i Task 2-6 del piano (verifica competitor fresca, stress-test pricing, sintesi in v2 + eventuale proposta di revisione allo spec 26/7, one-pager + email di outreach, chiusura). Todo list della sessione preservata con Task 1 completato, Task 2-6 pending.
+
+---
+
 ## Session 100 — S.24 chiuso (privacy policy pubblica) + Firma digitale cartellino mensile in produzione (11 Agosto 2026)
 
 ### Contesto
