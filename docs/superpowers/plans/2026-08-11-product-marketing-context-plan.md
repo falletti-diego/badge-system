@@ -25,7 +25,7 @@
 - Create: `.agents/product-marketing.md`
 - Read (fonti): `docs/superpowers/specs/2026-07-26-competitive-positioning-pricing-design.md`, `CLAUDE.md`, `docs/superpowers/specs/2026-07-26-tenant-branding-and-whitelabel-design.md`
 
-- [ ] **Step 1: Invocare la skill `product-marketing`**
+- [x] **Step 1: Invocare la skill `product-marketing`**
 
 Nel prompt di invocazione, indicare esplicitamente le tre fonti da leggere (non lasciare che la skill "studi il codebase" genericamente — questo repo è un tool interno, non ha landing page pubblica):
 
@@ -44,19 +44,19 @@ Per Personas: la fonte esplicita solo "HR/Ops Director di catene multi-sede" com
 Le altre righe della tabella persona (User, Champion, Financial Buyer) vanno marcate come ipotesi da validare, non fatti.
 ```
 
-- [ ] **Step 2: Presentare la bozza e raccogliere correzioni**
+- [x] **Step 2: Presentare la bozza e raccogliere correzioni**
 
 La skill presenterà la bozza e chiederà cosa correggere/manca. Rispondere con eventuali correzioni note dal contesto di sessione (es. pricing a scaglioni €8/7/6,50, target "catene multi-sede 3+", claim primario "impedire che qualcuno timbri al posto di un collega").
 
-- [ ] **Step 3: Verificare la versione e il changelog**
+- [x] **Step 3: Verificare la versione e il changelog**
 
 Expected: `Document version: v1`, changelog `- v1 (2026-08-11) — Bozza iniziale da spec positioning/pricing 26/7 e CLAUDE.md.`
 
-- [ ] **Step 4: Presentare il documento completo all'utente per revisione**
+- [x] **Step 4: Presentare il documento completo all'utente per revisione**
 
 Non procedere al Task 2 finché l'utente non conferma che la bozza v1 è accettabile — le skill successive la useranno come contesto.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .agents/product-marketing.md
@@ -75,11 +75,11 @@ marked as unvalidated (zero paying customers to date) rather than invented."
 - Read: `.agents/product-marketing.md` (la skill lo legge automaticamente)
 - No file creato da questo task di per sé — l'output confluisce nel Task 4
 
-- [ ] **Step 1: Verificare gli URL pubblici dei 5 competitor**
+- [x] **Step 1: Verificare gli URL pubblici dei 5 competitor**
 
 Gli URL non erano linkati nello spec 26/7, solo nominati. Prima di invocare la skill, cercare/confermare l'URL corretto per: NoBadge, Zucchetti/TeamSystem HR (modulo rilevazione presenze), Factorial, Personio, Deputy.
 
-- [ ] **Step 2: Invocare la skill `competitor-profiling`**
+- [x] **Step 2: Invocare la skill `competitor-profiling`**
 
 ```
 Usa la skill competitor-profiling.
@@ -93,11 +93,11 @@ difendibile in modo permanente" nello spec — verificare se un competitor lo ha
 già implementato).
 ```
 
-- [ ] **Step 3: Confrontare l'output con la tabella dello spec 26/7**
+- [x] **Step 3: Confrontare l'output con la tabella dello spec 26/7**
 
 Per ciascun competitor, annotare: confermato invariato, oppure scostamento trovato (con dettaglio).
 
-- [ ] **Step 4: Presentare il confronto all'utente**
+- [x] **Step 4: Presentare il confronto all'utente**
 
 Non serve un commit separato — l'output alimenta la sintesi del Task 4.
 
@@ -109,7 +109,7 @@ Non serve un commit separato — l'output alimenta la sintesi del Task 4.
 - Read: `.agents/product-marketing.md` (letto automaticamente dalla skill)
 - No file creato — output confluisce nel Task 4
 
-- [ ] **Step 1: Invocare la skill `pricing`**
+- [x] **Step 1: Invocare la skill `pricing`**
 
 ```
 Usa la skill pricing.
@@ -127,7 +127,7 @@ Dai un esito esplicito: CONFERMA (nessuna modifica) oppure AGGIUSTAMENTO
 PROPOSTO (con motivazione puntuale).
 ```
 
-- [ ] **Step 2: Presentare l'esito all'utente**
+- [x] **Step 2: Presentare l'esito all'utente**
 
 Se l'esito è "aggiustamento proposto", chiedere conferma esplicita che vada portato nel Task 4 come proposta di revisione (non applicarlo automaticamente allo spec 26/7).
 
@@ -139,7 +139,7 @@ Se l'esito è "aggiustamento proposto", chiedere conferma esplicita che vada por
 - Modify: `.agents/product-marketing.md`
 - Modify (condizionale): `docs/superpowers/specs/2026-07-26-competitive-positioning-pricing-design.md`
 
-- [ ] **Step 1: Aggiornare `.agents/product-marketing.md` a v2**
+- [x] **Step 1: Aggiornare `.agents/product-marketing.md` a v2**
 
 Invocare di nuovo la skill `product-marketing` (rilegge il documento esistente, chiede quali sezioni aggiornare):
 
@@ -153,13 +153,13 @@ l'esito della skill pricing (Task 3).
 Expected: `Document version: v2`, nuova entry changelog che nomina le sezioni toccate, es.:
 `- v2 (2026-08-11) — Aggiornato competitive landscape dopo verifica fresca (competitor-profiling); [esito pricing: confermato invariato / aggiustamento proposto].`
 
-- [ ] **Step 2: Decidere se serve la sezione di revisione allo spec 26/7**
+- [x] **Step 2: Decidere se serve la sezione di revisione allo spec 26/7**
 
 **Se** Task 2 o Task 3 hanno trovato uno scostamento concreto (prezzo competitor cambiato in modo rilevante, o la skill `pricing` ha proposto un aggiustamento): procedere allo Step 3.
 
 **Se** nessuno scostamento: skip allo Step 4.
 
-- [ ] **Step 3 (condizionale): Aggiungere la sezione di revisione**
+- [x] **Step 3 (condizionale): Aggiungere la sezione di revisione**
 
 In fondo a `docs/superpowers/specs/2026-07-26-competitive-positioning-pricing-design.md`, dopo la sezione `## Changelog` esistente (se presente) o in fondo al file, aggiungere:
 
@@ -179,9 +179,9 @@ In fondo a `docs/superpowers/specs/2026-07-26-competitive-positioning-pricing-de
 
 Non modificare nessuna riga delle sezioni esistenti del documento (tabella competitor, pricing definitivo, ecc.) — solo append.
 
-- [ ] **Step 4: Presentare il risultato della sintesi all'utente**
+- [x] **Step 4: Presentare il risultato della sintesi all'utente**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .agents/product-marketing.md docs/superpowers/specs/2026-07-26-competitive-positioning-pricing-design.md
@@ -204,13 +204,13 @@ existing approved conclusions left untouched]."
 - Create: `docs/marketing/one-pager-badge-system.md`
 - Create: `docs/marketing/cold-email-outreach-template.md`
 
-- [ ] **Step 1: Creare la cartella se non esiste**
+- [x] **Step 1: Creare la cartella se non esiste**
 
 ```bash
 mkdir -p docs/marketing
 ```
 
-- [ ] **Step 2: Invocare la skill `sales-enablement`**
+- [x] **Step 2: Invocare la skill `sales-enablement`**
 
 ```
 Usa la skill sales-enablement.
@@ -221,9 +221,9 @@ Usa il contesto già in .agents/product-marketing.md (la skill lo legge automati
 Salva il risultato in docs/marketing/one-pager-badge-system.md.
 ```
 
-- [ ] **Step 3: Presentare il one-pager e raccogliere correzioni dall'utente**
+- [x] **Step 3: Presentare il one-pager e raccogliere correzioni dall'utente**
 
-- [ ] **Step 4: Invocare la skill `cold-email`**
+- [x] **Step 4: Invocare la skill `cold-email`**
 
 ```
 Usa la skill cold-email.
@@ -236,9 +236,9 @@ Usa il contesto già in .agents/product-marketing.md.
 Salva il risultato in docs/marketing/cold-email-outreach-template.md.
 ```
 
-- [ ] **Step 5: Presentare il template e raccogliere correzioni dall'utente**
+- [x] **Step 5: Presentare il template e raccogliere correzioni dall'utente**
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add docs/marketing/one-pager-badge-system.md docs/marketing/cold-email-outreach-template.md
@@ -252,11 +252,11 @@ reusable template with placeholders — no named prospect identified yet."
 
 ## Task 6: Chiusura sessione
 
-- [ ] **Step 1: Aggiornare TASKS.md**
+- [x] **Step 1: Aggiornare TASKS.md**
 
 Aggiungere una riga al Session Log che riassume: plugin marketing-skills installato, `.agents/product-marketing.md` creato (v1→v2), esito verifica competitor/pricing, materiale prospect-facing prodotto.
 
-- [ ] **Step 2: Commit finale**
+- [x] **Step 2: Commit finale**
 
 ```bash
 git add TASKS.md
