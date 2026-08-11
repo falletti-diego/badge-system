@@ -1,6 +1,6 @@
 # Product Marketing Context
 
-**Document version:** v1
+**Document version:** v2
 **Last updated:** 2026-08-11
 
 ## Product Overview
@@ -55,19 +55,21 @@
 **Emotional tension:** *(non esplicitato nella fonte oltre al concetto di time-theft/compliance — non aggiunto per evitare invenzione)*
 
 ## Competitive Landscape
-**Direct:** NoBadge (IT) — smartphone-only, QR+GPS, verticale retail/commercio esplicito, dati su server italiani, **€4,20-5,04/utente/mese, nessun costo attivazione/hardware, nessun fee per sede**, paga solo chi timbra nel mese corrente. Descritto nella fonte come "concorrente diretto quasi identico" a Badge System. Falls short perché: nessuna autenticazione biometrica menzionata → QR/GPS restano clonabili/condivisibili, nessuna prevenzione strutturale del buddy punching.
+**Direct:** NoBadge (IT) — smartphone-only, QR+GPS, verticale retail/commercio esplicito, dati su server italiani, **€5,04/utente/mese** (verificato 2026-08-11, in cima alla fascia €4,20-5,04 nota dal 26/7, nessun cambiamento sostanziale), nessun costo attivazione/hardware, nessun fee per sede, paga solo chi timbra nel mese corrente. Descritto nella fonte come "concorrente diretto quasi identico" a Badge System. **Aggiornamento 2026-08-11:** il QR è ora descritto come "dinamico, cambia ogni secondo" per anti-frode — mitiga la clonabilità dello screenshot/foto del QR statico, ma non risolve l'impersonificazione (un collega può comunque scansionarlo al posto di un altro). Nessuna autenticazione biometrica (Face ID/impronta) presente. Falls short perché: resta privo di verifica dell'identità fisica di chi timbra → nessuna prevenzione strutturale del buddy punching.
 
 **Secondary:**
-- Libemax / EcosAgile eClock (IT) — stessa meccanica QR, ma più legata a terminali fisici/postazioni fisse, meno smartphone-first. Prezzo su richiesta.
-- Zucchetti / TeamSystem HR (IT) — incumbent enterprise/mid-market HR suite, prezzo opaco (nessun listino pubblico), tipicamente licenza + hardware + canone + implementazione. Alto switching cost per chi già ce l'ha, ma percepito pesante/costoso da PMI 25-200 dipendenti che vogliono solo il modulo presenze.
-- Factorial (ES/EU) — suite HR modulare, ~€7-15/dipendente/mese a modulo, prezzo custom per headcount + moduli. Falls short: suite completa (talent, finance, IT) — overkill per chi vuole solo badge/presenze.
-- Personio (DE/EU) — suite HR enterprise-lite, ~€7,60+/dipendente/mese core (fino a €12-15 con moduli), contratto annuale custom. Target HR-manager di aziende strutturate generiche, non specificamente retail.
+- Libemax / EcosAgile eClock (IT) — stessa meccanica QR, ma più legata a terminali fisici/postazioni fisse, meno smartphone-first. Prezzo su richiesta. *(Non riverificato il 2026-08-11 — non incluso nello scan di oggi.)*
+- Zucchetti / TeamSystem HR (IT) — incumbent enterprise/mid-market HR suite, prezzo opaco (nessun listino pubblico, confermato 2026-08-11). Tipicamente licenza + hardware + canone + implementazione. Alto switching cost per chi già ce l'ha, ma percepito pesante/costoso da PMI 25-200 dipendenti che vogliono solo il modulo presenze. **Nota 2026-08-11:** il sito menziona "lettori biometrici" come opzione hardware per i terminali fissi — non è una novità (hardware da postazione, non Face ID nativo da smartphone), non intacca il differenziatore.
+- Factorial (ES/EU) — suite HR modulare, **da "$8/utente/mese" a salire** (verificato 2026-08-11, in linea con la fascia ~€7-15 nota dal 26/7), prezzo custom per headcount + moduli. Time tracking include geolocalizzazione e QR, nessuna biometria. Falls short: suite completa (talent, finance, IT) — overkill per chi vuole solo badge/presenze.
+- Personio (DE/EU) — suite HR enterprise-lite, ~€7,60+/dipendente/mese core (fino a €12-15 con moduli), contratto annuale custom. *(Non riverificato direttamente il 2026-08-11 — sito ha bloccato la richiesta con rate-limit; dato confermato solo da fonti terze indipendenti, coerente con lo spec 26/7.)* Target HR-manager di aziende strutturate generiche, non specificamente retail.
 
-**Indirect:** Deputy (AU/US) — scheduling + time tracking, $4-9/dipendente/mese (PEPM a fasce, minimo $30/mese). Falls short: non localizzato IT/GDPR-first, forte su scheduling ma debole su compliance italiana.
+**Indirect:**
+- Deputy (AU/US) — scheduling + time tracking, **$4,50-9/utente/mese** a piani (verificato 2026-08-11, in linea con lo spec 26/7). Falls short: localizzazione esplicita solo per Australia/USA/UK, GDPR menzionato genericamente ma nessun supporto IT/EU dedicato — conferma la valutazione "non localizzato IT/GDPR-first".
+- 4HSE Digital Badge (IT) — **aggiunto 2026-08-11, categoria adiacente non nello spec 26/7**: badge digitale di identità/conformità sicurezza per cantieri edili (QR statico per verifica anagrafica, formazione, certificazioni ex D.Lgs. 81/08), non un time-tracking presenze. Non è un concorrente diretto sul check-in/audit presenze — citato come riferimento di mercato adiacente (compliance via QR in un altro segmento verticale italiano), non come minaccia competitiva diretta.
 
 ## Differentiation
 **Key differentiators:**
-- Face ID nativo come anti-frode: rende strutturalmente più difficile il buddy punching rispetto a QR/GPS clonabili/condivisibili — assente nei competitor italiani analizzati
+- Face ID nativo come anti-frode: lega il check-in all'identità fisica della persona, prevenendo l'**impersonificazione** (un collega che timbra al posto di un altro) — non solo la clonabilità del QR. **Nota 2026-08-11:** NoBadge ha introdotto un QR "dinamico" (cambia ogni secondo) che mitiga lo screenshot/foto del QR statico, ma non risolve l'impersonificazione: un collega può comunque scansionare il QR dinamico al posto del titolare. Il differenziatore Face ID resta quindi valido, ma il messaging va precisato su *chi* timbra, non su *come* viene generato il codice — assente in tutti i competitor italiani analizzati
 - Audit log completo (chi/quando/cosa) + RBAC, rilevante per un HR/Ops director di catena multi-sede, non per il singolo negozio
 - Opzione white-label Tier 2 (branding completo: nome/icona proprie, possibile dominio dedicato) per clienti grandi — nessun competitor italiano citato la offre. *(Fonte: `docs/superpowers/specs/2026-07-26-tenant-branding-and-whitelabel-design.md` — Tier 1 SaaS multi-tenant condiviso è il modello base/listino; Tier 2 white-label dedicato è una trattativa custom fuori listino per clienti grandi con scala attesa di 1-2 clienti nel primo anno.)*
 
@@ -134,6 +136,8 @@ Nessuna citazione verbatim di clienti, nessun linguaggio "as heard in sales" è 
 - Per sede aggiuntiva (una tantum): **€250** (sedi 1-3) → **€150** (sedi 4-10) → **€100** (sedi 11+)
 - Tier 2 white-label: fuori listino, trattativa custom (invariato)
 
+**Verifica pricing 2026-08-11 (skill `pricing`, framework value metric / willingness-to-pay / packaging):** esito **CONFERMA — nessuna modifica**. Value metric (per-dipendente ricorrente + per-sede una tantum decrescente) allineato al valore percepito e coerente col segmento target multi-sede. Gap reale vs. NoBadge ricalcolato: **1,59x** in fascia bassa (€8/€5,04), **1,29x** in fascia alta (€6,50/€5,04) — leggermente sotto il range dichiarato "1,3-1,9x" nello spec 26/7 ma entro soglia comunemente difendibile con differenziazione chiara. Nessun aggiustamento di prezzo proposto; unico follow-up è di messaging (vedi Differentiation, nota Face ID/impersonificazione).
+
 **Conversion action:** Firma del primo cliente pilota (catena multi-sede, 3+ sedi, 25-200 dipendenti) sul listino Tier 1 sopra.
 
 **Current metrics:** Zero clienti paganti ad oggi. Margine stimato (non ancora verificato su un cliente reale) sul primo pilota: ricavo ~€200/mese (€8 × 25 dipendenti) contro un costo infrastrutturale reale attuale stimato di ~€85-130/mese (Auth0 non ancora attivo), per un margine stimato di ~€70-115/mese. *(Fonte: spec positioning/pricing, sezione "Verifica margine sul primo cliente MVP", che a sua volta cita `CLAUDE.md` sezione "Monthly Operating".)*
@@ -146,4 +150,5 @@ Nessuna citazione verbatim di clienti, nessun linguaggio "as heard in sales" è 
 
 ## Changelog
 *Newest first. One line per revision: what changed and why.*
+- v2 (2026-08-11) — Aggiornato Competitive Landscape dopo verifica fresca (competitor-profiling: NoBadge ha aggiunto QR dinamico anti-frode ma resta senza biometria, pricing competitor invariato, aggiunto 4HSE come indirect/categoria adiacente su richiesta esplicita); pricing skill: esito CONFERMATO, nessun aggiustamento; precisato messaging Face ID (impersonificazione, non solo clonabilità QR).
 - v1 (2026-08-11) — Bozza iniziale da spec positioning/pricing 26/7 e CLAUDE.md.
