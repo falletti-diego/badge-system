@@ -1,16 +1,48 @@
-# Badge System — Session 99 Handoff
+# Badge System — Session 100 Handoff
 
-**Date:** 2026-08-10
-**Session:** 99 — Fase C: geofencing GPS reale + invalidazione QR (finding #2+#5) chiusa e in produzione
-**Status:** ✅ **Ultimo P0 aperto chiuso.** `findings2agosto2016.md` interamente risolto tranne il #3 (deliberatamente non affrontato, decisione già presa). S.26 (GDPR consenso GPS) chiuso. S.24 (GDPR disclosure GPS) 3/4 sotto-task, resta solo la pagina pubblica privacy policy. Prossimo lavoro sostanziale: Gruppo 2+ del backlog post-Fase-C (notifiche push, alert frodi, firma digitale, trust signal, branding, pricing, shift swap).
+**Date:** 2026-08-11
+**Session:** 100 — S.24 chiuso (privacy policy pubblica) + Firma digitale cartellino mensile in produzione
+**Status:** ✅ S.24 chiuso (4/4 sotto-task). ✅ Firma digitale cartellino mensile implementata e in produzione. Nuovo backlog GDPR **S.27/S.28/S.29** aperto (base giuridica consenso GPS, autorizzazione Statuto Lavoratori, DPIA obbligatoria) — da affrontare con `/grilling` prima che un cliente reale attivi il geofencing. Prossimo lavoro sostanziale: resto del Gruppo 2+ del backlog post-Fase-C (notifiche push, alert frodi, trust signal, branding, pricing, shift swap).
 
 ---
 
-## Goal (Session 99)
+## Goal (Session 100)
 
-Chiudere Fase C (geofencing GPS reale + invalidazione QR), tenuta deliberatamente da parte durante tutta Session 98. Ciclo completo: brainstorming→spec→piano→esecuzione task-by-task→verifica staging→build nativa→merge produzione, tutto nella stessa sessione.
+Continuazione diretta di Session 99. Due lavori: chiudere l'ultimo sotto-task di S.24 (pagina pubblica privacy policy GPS, mai pubblicata) e implementare "Firma digitale cartellino mensile" (backlog Session 57).
 
-## Esito (Session 99)
+## Esito (Session 100)
+
+**S.24**: `docs/privacy-policy-IT.md` conteneva testo pre-Fase-C ancora "facoltativo" sul GPS — corretto su 6 punti (revoca consenso reale aggiunta, Accesso Art.15 corretto da falso self-service a richiesta manuale, Sentry aggiunto ai sub-processori). **Analisi critica contro fonti GDPR verificate online** (non solo lettura codice) prima di pubblicare ha trovato 3 gap più profondi, registrati come nuovo backlog con citazioni verificate: **S.27** base giuridica consenso GPS probabilmente invalida (EDPB Guidelines 05/2020 §21-22 — consenso in rapporto di lavoro non "liberamente prestato" se il rifiuto ha conseguenze negative, esattamente lo scenario Fase C); **S.28** Statuto Lavoratori Art.4/autorizzazione ITL mancante nell'onboarding cliente (confermato da un caso sanzionatorio reale, Garante Provvedimento n.7/16-01-2025); **S.29** DPIA mai eseguita ma esplicitamente obbligatoria (non "probabile") per la Delibera Garante n.467/2018. Pagina pubblicata (`privacy-policy-it.html`, pattern DPA), verificata live — un primo check aveva mostrato la SPA per cache Netlify Edge su un path mai richiesto prima, non un bug della regola, risolto da solo con retry.
+
+**Firma digitale cartellino mensile**: scoperto che il dipendente non aveva nessuna vista sulle proprie ore (`GET /presences/summary` vietato al ruolo employee) — costruita anche quella. **Analisi critica esplicita** (`/senior-architect` + verifica manuale — `/senior-fullstack`/`/senior-backend` giudicate non pertinenti, tarate per grilling greenfield non per una feature su stack già deciso) ha trovato 3 problemi nella bozza: nessuna idempotenza su `POST /timesheet/sign` (fix: `UNIQUE(employee_id,month,year)` + upsert), nessun blocco server-side sul mese corrente (fix: guard esplicito), invalidazione della firma pensata solo per correzioni — mancava il caso della sincronizzazione offline (`POST /checkins` con backdating fino a 48h) che avrebbe potuto invalidare una firma silenziosamente (fix: funzione condivisa richiamata da creazione E correzione check-in). **Bug ambientale reale trovato in esecuzione**: la migration 039 era applicata solo al DB `development`, non al DB `test` — 2 integration test reali fallivano; risolto applicandola anche lì. Esecuzione inline con `/superpowers:executing-plans` (non subagent-driven, su richiesta esplicita).
+
+**Verifica finale**: backend 750/750, frontend-web 299/299, 0 errori lint, push su `main`, CI a cascata verde, endpoint verificati live in produzione (401 non 404 — migration confermata applicata anche in produzione dato che girano fail-fast all'avvio container).
+
+**Dettaglio completo**: vedi `PROJECT_DECISIONS.md` sezione Session 100.
+
+## Backlog per la prossima sessione (in ordine di urgenza)
+
+1. **S.27/S.28/S.29** (nuovo backlog GDPR, HIGH) — base giuridica consenso GPS, autorizzazione Statuto Lavoratori/ITL, DPIA obbligatoria. Sessione dedicata con `/grilling` **prima** che un cliente reale attivi il geofencing in produzione.
+2. **Resto del Gruppo 2+ del backlog post-Fase-C**: notifiche push, alert frodi, trust signal, branding, pricing, shift swap.
+3. **ANDROID.1/1b** — verifica manuale scan QR reale su device fisico/Virtual Scene, bloccato da un limite di automazione GUI-only.
+4. (Opzionale) Verifica manuale della Build 36 su un dispositivo reale.
+
+## Note operative (Session 100)
+
+- **Prima di pubblicare un documento legale/GDPR, verificarne l'accuratezza contro il comportamento REALE attuale del sistema, non fidarsi del testo esistente** — `privacy-policy-IT.md` descriveva un GPS "facoltativo" che non lo è più da Fase C; pubblicarlo invariato avrebbe dichiarato pubblicamente un diritto inesistente.
+- **Le skill "senior-*" con grilling greenfield (`/senior-fullstack`, `/senior-backend`) non sono adatte a feature su stack già deciso e in produzione** — chiedono team-size/QPS/tenancy come se si stesse scegliendo uno stack da zero. Per una critical review su codice esistente, applicarne lo spirito manualmente (leggere il codice reale, cercare edge case) invece di eseguire il loro grilling letterale.
+- **Un endpoint self-scoped (`employee_id` sempre da `req.user`, mai da input) elimina strutturalmente una classe di bug invece di prevenirla con un controllo aggiuntivo** — pattern riusabile ogni volta che serve un "i miei dati" endpoint.
+- **Le funzioni di invalidazione/side-effect legate a un'entità (qui: check-in che invalida una firma) vanno agganciate a TUTTI i path che scrivono quell'entità, non solo al più ovvio** — la sincronizzazione offline (`POST`, non `PUT`) è un path facile da dimenticare se si pensa solo al flusso "utente corregge un errore".
+
+---
+
+## Handoff precedenti (invariati, riportati sotto per contesto)
+
+### Session 99 — Fase C: geofencing GPS reale + invalidazione QR (finding #2+#5) chiusa e in produzione
+
+**Goal:** Chiudere Fase C (geofencing GPS reale + invalidazione QR), tenuta deliberatamente da parte durante tutta Session 98. Ciclo completo: brainstorming→spec→piano→esecuzione task-by-task→verifica staging→build nativa→merge produzione, tutto nella stessa sessione.
+
+**Esito:**
 
 **Piano 14 task** eseguito via `/superpowers:subagent-driven-development` con **pausa esplicita dopo ogni singolo task** (override del default "esecuzione continua" dello skill, su istruzione esplicita dell'utente). Backend: rimosso gate morto `GEOFENCING_ENABLED`, validazione `qr_content` contro `sites.qr_code_content`, `POST /admin/sites/:id/regenerate-qr`, script retention GPS 90gg, `POST /consent/gps-revoke` (nel farlo, trovato e fixato un bug preesistente: `logAudit` su `/gps-acceptance` scartava silenziosamente i parametri per naming mismatch). Mobile: `expo-location`, **riscrittura completa di `GPSConsentDialog.jsx`** (importava `AlertDialog` da `react-native` — componente inesistente, mai eseguibile), retry GPS su `GEOFENCE_COORDINATES_REQUIRED`, blocco offline fail-safe su sedi geofenced note/sconosciute, revoca consenso in Impostazioni. Web: bottone "Rigenera QR".
 
@@ -24,22 +56,7 @@ Chiudere Fase C (geofencing GPS reale + invalidazione QR), tenuta deliberatament
 
 **Dettaglio completo**: vedi `PROJECT_DECISIONS.md` sezione Session 99.
 
-## Backlog per la prossima sessione (in ordine di urgenza)
-
-1. **Gruppo 2+ del backlog post-Fase-C** (non ancora brainstormato in dettaglio): notifiche push, alert frodi, firma digitale, trust signal, branding, pricing, shift swap.
-2. **S.24 residuo** — pagina pubblica `privacy-policy-it.html` su Netlify (stesso pattern del DPA in S.25), da fare prima di attivare il geofencing con un cliente reale.
-3. **ANDROID.1/1b** — verifica manuale scan QR reale su device fisico/Virtual Scene, bloccato da un limite di automazione GUI-only.
-4. (Opzionale) Verifica manuale della Build 36 su un dispositivo reale — login, geofencing GPS reale, TestFlight expiry esatta su App Store Connect.
-
-## Note operative (Session 99)
-
-- **Il branch selector di Codemagic non sempre applica la selezione manuale** (probabile dropdown popolato solo dai branch già buildati in passato, `develop` non essendoci mai finito). Se un errore di build cita un valore "precedente" inatteso, confrontare `app.json` tra i branch candidati prima di ipotizzare altro, e richiedere sempre il log completo (non solo l'errore finale) — il passo di checkout mostra il commit hash esatto usato.
-- **Non riproporre un secondo fix dopo che il primo non ha funzionato senza nuova evidenza** (`/superpowers:systematic-debugging` Fase 3): lo stesso identico errore alla seconda run è un segnale che l'ipotesi non è stata davvero testata, non che serve un'ipotesi diversa.
-- **Un meccanismo GDPR "esiste nel codice" non equivale a "è vincolante in pratica"**: S.26 (consenso GPS) era implementato dal 2026-06-11 ma dormiente perché senza enforcement server-side reale il client poteva sempre saltare il GPS — solo l'enforcement di Fase C lo ha reso davvero non aggirabile.
-
 ---
-
-## Handoff precedenti (invariati, riportati sotto per contesto)
 
 ### Session 98 — Gruppo 1 backlog post-Fase-C: PDF export Riepilogo Ore + Help/FAQ in-app (web+mobile)
 
