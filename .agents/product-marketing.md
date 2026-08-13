@@ -1,7 +1,7 @@
 # Product Marketing Context
 
-**Document version:** v2
-**Last updated:** 2026-08-11
+**Document version:** v3
+**Last updated:** 2026-08-12
 
 ## Product Overview
 **One-liner:** SaaS multi-tenant per il tracciamento delle presenze nel retail italiano/europeo — QR code da smartphone + Face ID nativo, zero hardware.
@@ -29,7 +29,7 @@
 **Use cases:**
 - Timbratura giornaliera entrata/uscita dipendenti multi-sede via smartphone personale
 - Correzione presenze da parte del manager entro una finestra temporale, con log della modifica
-- Export CSV mensile per l'elaborazione paghe (nota: integrazione payroll diretta è esplicitamente fuori dall'MVP — Fase 2, da `CLAUDE.md`)
+- **Export tracciati paghe compatibili Zucchetti/TeamSystem** (confermato reale e funzionante il 2026-08-12, verificato direttamente da Diego — non solo export CSV generico): le presenze arrivano allo studio paghe senza lavoro manuale, un click. **Nota di disallineamento:** `CLAUDE.md` e la Business Goal sotto dichiarano ancora "Payroll API — Fase 2, fuori scope MVP"; quella dicitura riguardava presumibilmente un'integrazione API diretta, non un export tracciati — ma il gap testuale andrebbe chiarito/aggiornato in `CLAUDE.md` per evitare messaging disallineato tra sito e documentazione interna.
 
 ## Personas
 | Persona | Cares about | Challenge | Value we promise |
@@ -72,6 +72,7 @@
 - Face ID nativo come anti-frode: lega il check-in all'identità fisica della persona, prevenendo l'**impersonificazione** (un collega che timbra al posto di un altro) — non solo la clonabilità del QR. **Nota 2026-08-11:** NoBadge ha introdotto un QR "dinamico" (cambia ogni secondo) che mitiga lo screenshot/foto del QR statico, ma non risolve l'impersonificazione: un collega può comunque scansionare il QR dinamico al posto del titolare. Il differenziatore Face ID resta quindi valido, ma il messaging va precisato su *chi* timbra, non su *come* viene generato il codice — assente in tutti i competitor italiani analizzati
 - Audit log completo (chi/quando/cosa) + RBAC, rilevante per un HR/Ops director di catena multi-sede, non per il singolo negozio
 - Opzione white-label Tier 2 (branding completo: nome/icona proprie, possibile dominio dedicato) per clienti grandi — nessun competitor italiano citato la offre. *(Fonte: `docs/superpowers/specs/2026-07-26-tenant-branding-and-whitelabel-design.md` — Tier 1 SaaS multi-tenant condiviso è il modello base/listino; Tier 2 white-label dedicato è una trattativa custom fuori listino per clienti grandi con scala attesa di 1-2 clienti nel primo anno.)*
+- **Export tracciati paghe Zucchetti/TeamSystem un click** (confermato reale 2026-08-12) — nessun competitor tra quelli analizzati dichiara pubblicamente questa integrazione specifica per i due gestionali paghe italiani più diffusi; riduce l'attrito verso lo studio paghe del cliente, un punto di frizione reale per un HR/Ops director
 
 **How we do it differently:** "Zero hardware + QR + smartphone" da solo non è più un differenziatore reale (è commodity in Italia grazie a NoBadge). Il vero differenziale è biometrico (Face ID) e strutturale (audit/RBAC/white-label), non la meccanica di check-in in sé.
 
@@ -119,6 +120,8 @@ Nessuna citazione verbatim di clienti, nessun linguaggio "as heard in sales" è 
 
 **Non ancora validato — zero clienti reali ad oggi.** Nessuna metrica di prodotto in produzione con clienti paganti, nessun cliente/logo referenziabile, nessuna testimonianza. Il documento sorgente è esplicito su questo vincolo di realtà.
 
+**Asset di vendita reale disponibile (verificato 2026-08-12):** pagina pubblica dedicata `dataxiom.it/badge-system` con demo self-serve attiva su `badge.dataxiom.it` (dati realistici, attivabile in pochi secondi, nessun impegno) — non è un proof point cliente, ma è un asset concreto utilizzabile subito in outreach/ads/social invece di "nessuna pagina pubblica" (assunzione precedente, errata, corretta in questa revisione).
+
 **Claim commerciale approvato (non ancora testato su clienti reali, ma è la posizione ufficiale attuale, quindi riportato qui come tale):**
 > "Non solo digitalizzare il cartellino — impedire che qualcuno timbri al posto di un collega, con una traccia di audit che regge a un controllo."
 
@@ -150,5 +153,6 @@ Nessuna citazione verbatim di clienti, nessun linguaggio "as heard in sales" è 
 
 ## Changelog
 *Newest first. One line per revision: what changed and why.*
+- v3 (2026-08-12) — Corretta assunzione errata "nessuna pagina pubblica": esiste dataxiom.it/badge-system con demo self-serve su badge.dataxiom.it, aggiunta come asset in Proof Points; aggiunto export tracciati paghe Zucchetti/TeamSystem come differenziatore reale e funzionante (confermato da Diego), con nota di disallineamento verso CLAUDE.md sulla dicitura "Payroll — Fase 2".
 - v2 (2026-08-11) — Aggiornato Competitive Landscape dopo verifica fresca (competitor-profiling: NoBadge ha aggiunto QR dinamico anti-frode ma resta senza biometria, pricing competitor invariato, aggiunto 4HSE come indirect/categoria adiacente su richiesta esplicita); pricing skill: esito CONFERMATO, nessun aggiustamento; precisato messaging Face ID (impersonificazione, non solo clonabilità QR).
 - v1 (2026-08-11) — Bozza iniziale da spec positioning/pricing 26/7 e CLAUDE.md.
