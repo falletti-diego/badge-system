@@ -1,42 +1,68 @@
-# Badge System — Session 101 Handoff
+# Badge System — Session 103 Handoff
 
-**Date:** 2026-08-11
-**Session:** 101 — Plugin `marketing-skills` installato + design/piano documento di contesto marketing (Task 1/6 eseguito, sessione sospesa per riavvio VS Code)
-**Status:** ⏸️ **AZIONE RICHIESTA PRIMA DI RIPRENDERE: riavviare Visual Studio Code.** Plugin `marketing-skills@marketingskills` (49 skill) installato ma non ancora scoperto correttamente dal tool Skill nella sessione in cui è stato installato. `.agents/product-marketing.md` v1 creato (Task 1/6 del piano) leggendo `SKILL.md` manualmente invece di invocare la skill — funzionalmente corretto ma da rifare "nel modo giusto" una volta riavviato VS Code, se si vuole verificare che il meccanismo skill funzioni per i Task 2-6. Piano completo: `docs/superpowers/plans/2026-08-11-product-marketing-context-plan.md`.
+**Date:** 2026-08-15
+**Session:** 103 — Awareness LinkedIn + budget tattico primo cliente + design/piano lista contatti verificata (non eseguito)
+**Status:** 📋 **Piano pronto e committato, in sospeso — nessuna esecuzione ancora avviata.** Nessuna azione bloccante richiesta all'utente (a differenza dell'handoff precedente): il lavoro di questa sessione è tutto documentale/pianificazione, pronto per essere eseguito quando si deciderà di procedere.
 
 ---
 
-## Goal (Session 101)
+## Goal (Session 103)
 
-Continuazione diretta di Session 100. Con S.24 e la firma digitale chiusi, spostare l'attenzione dal codice alla validazione di mercato: installare skill Claude Code per marketing e costruire il documento di contesto marketing fondativo (`.agents/product-marketing.md`) che alimenta tutte le altre skill del plugin.
+Continuazione diretta di Session 102 (piano documento di contesto marketing chiuso). Tre fili, tutti richiesti dall'utente in sequenza nella stessa sessione: (1) quali attività di awareness perseguire oltre il cold outreach, (2) come allocare €3000 (poi dimezzato a €1500) di budget marketing per acquisire il primo cliente pilota, (3) design + piano di implementazione per il sotto-progetto più concreto emerso da (2): la lista contatti verificata.
 
-## Esito (Session 101)
+## Current Progress
 
-Ricerca comparativa di skill marketing su GitHub (verificata con `gh api`, non fidandosi dei riassunti di ricerca web che gonfiavano alcuni star count) → installato `coreyhaines31/marketingskills` (43.864★, 49 skill: positioning, pricing, cold-email, sales-enablement, competitor-profiling, SEO, ads). Design (`docs/superpowers/specs/2026-08-11-product-marketing-context-design.md`) e piano 6 task via `/superpowers:brainstorming`+`/grilling`+`/superpowers:writing-plans`: auto-draft di `.agents/product-marketing.md` pilotato sullo spec di positioning/pricing già approvato il 26/7 (non uno scan generico del codebase, inutile per un repo interno), seguito da verifica di seconda mano con `competitor-profiling`/`pricing` (con vincolo: eventuali scostamenti producono solo una *proposta* di revisione dello spec 26/7, mai una sovrascrittura), seguito da materiale prospect-facing (`sales-enablement` one-pager + `cold-email` template) — quest'ultima fase aggiunta dopo un'osservazione critica esplicita dell'utente: senza di essa, il lavoro sarebbe rimasto solo interno, contro la priorità già stabilita di validare con un prospect reale.
+- **Awareness LinkedIn**: `docs/marketing/linkedin-content-plan.md` scritto e committato (`2176f94`), cadenza alternata a settimane pari/dispari con un filone BI/Analytics già esistente (routine cloud "Cowork", non un prodotto separato — commit `c8ae48e`). Nuova routine cloud `badge-system-linkedin-content` creata (id `trig_01QDj3iyHhTLg6zjzsiopRom`, ogni lunedì, no-op nelle settimane ISO dispari) e testata con un run manuale — **il primo run con generazione reale di contenuto resta da verificare al 17/8 (settimana ISO 34)**.
+- **Budget tattico**: `docs/marketing/piano-tattico-3000-primo-cliente.md` scritto e committato (`72b2d32`), con scenario pieno €3000 e scenario dimezzato €1500 (ads tagliati per primi, lista contatti ridotta ma non eliminata).
+- **`.agents/product-marketing.md` v2→v3**: corrette 2 assunzioni sbagliate durante la verifica del piano budget — esiste già `dataxiom.it/badge-system` con demo self-serve (`badge.dataxiom.it`), e l'export tracciati paghe Zucchetti/TeamSystem è reale e funzionante (non "Fase 2" come dichiara ancora `CLAUDE.md`).
+- **Lista contatti verificata**: design (`docs/superpowers/specs/2026-08-13-verified-contact-list-design.md`, commit `1e83fb0`) e piano di implementazione 10 task (`docs/superpowers/plans/2026-08-15-verified-contact-list.md`, commit `33222cb`) scritti e committati — **esplicitamente non eseguiti**, su richiesta diretta dell'utente ("lo scriviamo, lo committiamo e lo teniamo lì").
 
-Esecuzione **Subagent-Driven** (scelta dall'utente). **Task 1 completato**: `.agents/product-marketing.md` v1 creato (commit `9e12778`), verificato di buona qualità con un compliance-check manuale contro lo spec (ogni sezione tracciata a fonte o marcata "non validato — zero clienti reali", pricing esatto senza arrotondamenti). **Scoperta di processo**: il subagent non riusciva a invocare la skill `product-marketing` via tool Skill — non ancora nell'elenco skill caricato nella sua sessione isolata, nonostante il plugin fosse installato su disco. L'utente ha identificato la causa: **le skill di un plugin appena installato in una sessione richiedono un riavvio di VS Code** per essere scoperte correttamente in tutte le sotto-sessioni successive (incluse quelle dei subagent dispatchati dopo l'installazione).
+## What Worked
 
-**Sessione sospesa qui su richiesta esplicita dell'utente**, in attesa del riavvio.
+- **Verificare invece di assumere, due volte nella stessa sessione**: quando l'utente ha chiesto "la landing page dataxiom.it non è sufficiente?", un controllo diretto (`WebFetch` + `curl` grezzo) ha corretto un'assunzione sbagliata portata avanti dall'inizio sessione ("nessuna pagina pubblica"). Stesso schema per l'export paghe Zucchetti/TeamSystem, scoperto per caso durante quella stessa verifica.
+- **Analisi critica esplicita richiesta dall'utente prima di scrivere lo spec della lista contatti**: ha trovato 8 problemi reali (il più importante: il design ignorava le relazioni Dataxiom già esistenti, potenzialmente più efficaci di qualunque contatto freddo) — tutti integrati prima di committare, non dopo.
+- **Segnalare esplicitamente quando una skill richiesta è sproporzionata per il compito**: la skill `marketing-plan` è tarata per un piano fCMO a 12 mesi; usarla come lente concettuale invece di eseguirne il template completo a 13 sezioni ha evitato un documento gonfio di sezioni "N/A pre-revenue" per un obiettivo bounded a 4 settimane.
 
-**Dettaglio completo**: vedi `PROJECT_DECISIONS.md` sezione Session 101.
+## What Didn't Work
 
-## Backlog per la prossima sessione (in ordine di urgenza)
+- **Fidarsi di un primo `WebFetch` senza verifica su una pagina che richiede login**: un fetch anonimo della company page LinkedIn ha restituito un riepilogo dettagliato di 4 post — completamente allucinato (un `curl` grezzo ha poi mostrato che la pagina senza login restituisce solo un redirect anti-bot, nessun contenuto reale). Errore riconosciuto esplicitamente, corretto chiedendo il testo reale all'utente. **Lezione**: per pagine dietro login, non fidarsi del riassunto di `WebFetch` senza un secondo controllo grezzo, specialmente prima di dare un giudizio su contenuto altrui.
+- **Il Cowork BI/Analytics esistente cita statistiche con fonti che, verificate, non le contengono** (2/2 controllate: 46% PMI Excel/ERP, 80% tempo pulizia dati — nessuna presente testualmente nelle fonti linkate). Non un errore mio in questa sessione, ma un problema di processo scoperto e non ancora corretto alla fonte — l'istruzione correttiva scritta va incollata manualmente nella routine su claude.ai, **non ancora fatto**.
 
-1. **Riavviare Visual Studio Code** (azione dell'utente, non di Claude) — precondizione per tutto il resto di questa lista.
-2. **Task 2-6 del piano `docs/superpowers/plans/2026-08-11-product-marketing-context-plan.md`**: Task 2 (`competitor-profiling` su NoBadge/Zucchetti/Factorial/Personio/Deputy, verifica URL pubblici prima di invocare), Task 3 (`pricing` stress-test dello schema a scaglioni), Task 4 (sintesi in `.agents/product-marketing.md` v2 + eventuale sezione di revisione allo spec 26/7), Task 5 (`sales-enablement` one-pager + `cold-email` template in `docs/marketing/`), Task 6 (chiusura sessione).
-3. **S.27/S.28/S.29** (backlog GDPR, HIGH) — base giuridica consenso GPS, autorizzazione Statuto Lavoratori/ITL, DPIA obbligatoria. Sessione dedicata con `/grilling` **prima** che un cliente reale attivi il geofencing in produzione.
-4. Resto del Gruppo 2+ del backlog post-Fase-C: notifiche push, alert frodi, trust signal, branding, shift swap.
-5. **ANDROID.1/1b** — verifica manuale scan QR reale su device fisico/Virtual Scene, bloccato da un limite di automazione GUI-only.
+## Next Steps (in ordine di urgenza)
 
-## Note operative (Session 101)
+1. **Incollare l'istruzione correttiva sulla verifica delle fonti nella routine Cowork BI/Analytics** su claude.ai (scritta in questa sessione, mai applicata) — rischio di credibilità concreto se un altro post pubblica una statistica non verificata prima di questo fix.
+2. **Verificare il primo run reale della routine `badge-system-linkedin-content`** al 17/8 (settimana ISO 34) — finora testata solo lo skip nelle settimane dispari, mai la generazione effettiva di una bozza.
+3. **Correggere il disallineamento in `CLAUDE.md`** sulla dicitura "Payroll API — Fase 2, fuori scope MVP", ormai smentita dall'export tracciati Zucchetti/TeamSystem già reale.
+4. **Decidere se e quando eseguire il piano lista contatti** (`docs/superpowers/plans/2026-08-15-verified-contact-list.md`) — pronto ma volutamente non avviato in questa sessione. Il Task 2 (Passo 0, controllo relazioni Dataxiom esistenti) è il punto di partenza a più alto rapporto valore/tempo.
+5. **S.27/S.28/S.29** (backlog GDPR, HIGH, ereditato da sessioni precedenti) — base giuridica consenso GPS, autorizzazione Statuto Lavoratori/ITL, DPIA obbligatoria. Resta prioritario prima che un cliente reale attivi il geofencing.
+6. **ANDROID.1/1b** — verifica manuale scan QR reale su device fisico/Virtual Scene, bloccato da un limite di automazione GUI-only (ereditato, invariato).
 
-- **Un plugin/skill installato a metà sessione non è affidabilmente invocabile via tool Skill nella stessa sessione (né nei subagent dispatchati da essa) finché VS Code non viene riavviato** — se un subagent riporta che una skill "non esiste" nonostante sia visibile su disco (`~/.claude/plugins/...`), prima di investigare come un bug applicativo, verificare se il plugin è stato installato di recente nella sessione corrente.
-- **Quando una skill non è invocabile ma le sue istruzioni (`SKILL.md`) sono leggibili, un subagent può replicarne manualmente il workflow** come fallback ragionevole — ma va sempre segnalato esplicitamente nel report, non presentato come "skill eseguita" senza distinzione.
-- **Per documenti/task senza rischio di regressione produzione (lavoro puramente documentale), committare direttamente su `main` è una scelta esplicita legittima** — non ogni piano richiede un branch/worktree/PR; il piano stesso lo dichiara quando è il caso.
+## Note operative (Session 103)
+
+- **"Claude Cowork" è il nome dato dall'utente a una routine cloud schedulata** (tool `RemoteTrigger`, skill `schedule`) — non un prodotto separato. Utile saperlo per non reinvestigare da zero in una sessione futura.
+- **Il monte ore reale del progetto (10h/settimana, `CLAUDE.md`) va confrontato esplicitamente con qualunque nuovo impegno di tempo proposto** (in questo caso: 5-8h/settimana per la lista contatti) — non è tempo "gratis" aggiuntivo, compete col resto del lavoro sul progetto.
+
+**Dettaglio completo**: vedi `PROJECT_DECISIONS.md` sezione Session 103.
 
 ---
 
 ## Handoff precedenti (invariati, riportati sotto per contesto)
+
+### Session 102 — Piano documento di contesto marketing completato (Task 2-6/6)
+
+**Esito:** Ripresa post-riavvio VS Code (vedi Session 101 sotto), skill `marketing-skills` correttamente disponibili. Task 2 (`competitor-profiling`, adattato con `WebFetch` mirato — tool Firecrawl/DataForSEO del plugin non disponibili): pricing competitor confermato invariato, unico scostamento reale NoBadge con QR "dinamico" anti-frode (mitiga clonazione screenshot, non risolve impersonificazione). Task 3 (`pricing`): stress-test value metric/WTP — esito CONFERMA, nessun aggiustamento. Task 4: `.agents/product-marketing.md` v1→v2 (commit `7397776`). Task 5: one-pager + cold-email template creati (commit `dfe5dc5`). Piano `docs/superpowers/plans/2026-08-11-product-marketing-context-plan.md` chiuso.
+
+**Dettaglio completo**: vedi `TASKS.md` Session Log riga 102 (non fu scritta una sezione dedicata in `PROJECT_DECISIONS.md` per questa sessione).
+
+---
+
+### Session 101 — Plugin marketing-skills installato + design/piano documento di contesto marketing (Task 1/6 eseguito, sessione sospesa per riavvio VS Code)
+
+**Esito:** Ricerca comparativa di skill marketing su GitHub (verificata con `gh api`) → installato `coreyhaines31/marketingskills` (43.864★, 49 skill). Design + piano 6 task via `/superpowers:brainstorming`+`/grilling`+`/superpowers:writing-plans`. Task 1 completato: `.agents/product-marketing.md` v1 creato (commit `9e12778`). **Scoperta di processo**: le skill di un plugin appena installato richiedono un riavvio di VS Code per essere scoperte correttamente — causa identificata, **sessione risolta e completata in Session 102** (vedi sopra), questa nota resta solo per contesto storico.
+
+**Dettaglio completo**: vedi `PROJECT_DECISIONS.md` sezione Session 101.
+
+---
 
 ### Session 100 — S.24 chiuso (privacy policy pubblica) + Firma digitale cartellino mensile in produzione
 

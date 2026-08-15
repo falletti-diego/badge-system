@@ -6,6 +6,57 @@
 
 ---
 
+## Session 103 — Awareness LinkedIn + budget tattico primo cliente + design/piano lista contatti verificata, non eseguito (11-15 Agosto 2026)
+
+### Contesto
+Continuazione diretta di Session 102 (piano documento di contesto marketing chiuso, Task 2-6/6). L'utente ha chiesto quali altre attività operative di awareness perseguire oltre il cold outreach, poi ha posto una domanda strategica più ampia: come allocare €3000 di budget marketing per acquisire il primo cliente pilota.
+
+### Parte 1 — Awareness LinkedIn e correzione del "Claude Cowork"
+
+Proposte iniziali (LinkedIn, community marketing, lead magnet) — gli ultimi due segnalati come bloccati dall'assenza di una landing page pubblica, un'assunzione rivelatasi **sbagliata** più avanti nella sessione (vedi Parte 2). L'utente ha chiesto di verificare un "Claude Cowork" che genera già contenuti LinkedIn per Dataxiom — investigazione ha rivelato che è una **routine cloud schedulata** (tool `RemoteTrigger`, skill `schedule`), non un prodotto separato.
+
+Ho commesso un errore diretto in questa sessione: un primo `WebFetch` sulla pagina company LinkedIn (senza login) ha restituito un riepilogo dettagliato di 4 post — **completamente allucinato**, non contenuto reale (verificato con un `curl` grezzo: la pagina senza login restituisce solo un redirect anti-bot con JS offuscato, nessun contenuto). Errore riconosciuto esplicitamente all'utente, corretto chiedendo il testo reale dei post incollato a mano.
+
+Sui post reali incollati dall'utente (filone BI/Analytics generico, non Badge System): **verificate 2 statistiche citate "con fonte"** (46% PMI Excel/ERP da webeconomico.it, 80% tempo pulizia dati da bnova.it) — **nessuna delle due fonti conteneva effettivamente il numero citato** (verificato con `WebFetch` mirato su ciascuna fonte). Pattern 2/2, giudicato sufficiente dall'utente senza verificare le altre 2 fonti. Scritta un'istruzione correttiva esplicita (procedura: citare solo statistiche verificate testualmente nella fonte) — **da incollare manualmente dall'utente nella routine su claude.ai, non ancora fatto**.
+
+`docs/marketing/linkedin-content-plan.md` creato (3 pillar: educational compliance/time-theft, behind-the-scenes, personale/POV — coerenti col vincolo di onestà zero-clienti-reali) e committato (`2176f94`). Scoperto che il Cowork produce già ~1 post/settimana sul filone BI/Analytics — cadenza rivista per **alternare** settimane pari/dispari tra i due filoni invece di sommarsi a 2 post/settimana (commit `c8ae48e`).
+
+Creata una nuova routine cloud `badge-system-linkedin-content` (skill `schedule`, id `trig_01QDj3iyHhTLg6zjzsiopRom`) via `RemoteTrigger`: gira ogni lunedì, calcola la settimana ISO e produce una bozza solo nelle settimane pari (Badge System), skip nelle dispari (riservate al Cowork BI/Analytics). Primo tentativo di creazione bloccato da `401` (GitHub non collegato all'account claude.ai per le routine) — risolto dall'utente collegando la GitHub App. Test manuale (`RemoteTrigger action:"run"`) eseguito: nessun commit prodotto nel repo dopo l'attesa — **verificato che è il comportamento corretto** (oggi è la settimana ISO 33, dispari) calcolando `date -u +%V` in locale, non un errore della routine. **Il primo run con generazione reale di una bozza (settimana 34, 17/8) resta da verificare** in una sessione futura.
+
+### Parte 2 — Budget tattico €3000 → €1500 per il primo cliente pilota
+
+Su richiesta esplicita, catena di skill `/superpowers:brainstorming` → `marketing-ideas` → `marketing-plan` → `product-marketing`. **Giudizio esplicito sulla skill `marketing-plan`**: è tarata per un piano fCMO a 12 mesi (8-12k parole, AARRR completo, sezioni retention/referral/revenue) — con zero ricavi e un obiettivo bounded a 4 settimane, la sua stessa documentazione sconsiglia l'uso per un compito tattico a canale singolo. Usata come lente concettuale (AARRR/budget-planning), non eseguito il template completo a 13 sezioni — segnalato esplicitamente all'utente prima di procedere, per non produrre un documento sproporzionato pieno di sezioni "N/A pre-revenue".
+
+Tre approcci proposti (A: outbound puro, B: ads come motore, C: ibrido outbound+ads mirati sugli stessi account) — **raccomandato e scelto C**, motivato dal fatto che un acquisto B2B che tocca compliance/dati biometrici raramente si chiude da un click pubblicitario freddo in 4 settimane senza landing page né case study.
+
+**Verifica diretta, non assunta, di due fatti prima di finalizzare il piano** — entrambi hanno corretto assunzioni sbagliate fatte in precedenza nella sessione:
+1. L'utente ha chiesto "la landing page dataxiom.it non è sufficiente?" — verificato con `WebFetch` + `curl` grezzo (dato il precedente errore di allucinazione LinkedIn, non ci si è fidati del solo `WebFetch`): **`dataxiom.it/badge-system` esiste davvero**, con hero, positioning privacy solido, e una **demo self-serve attiva su `badge.dataxiom.it`** — asset di vendita concreto non presente nel contesto marketing esistente. La riga di budget "pagina pubblica minima" (~€300-500) è stata rimossa dal piano.
+2. La stessa pagina menziona un **export tracciati paghe compatibile Zucchetti/TeamSystem** — non presente in `.agents/product-marketing.md`, che anzi (ereditando da `CLAUDE.md`) dichiara l'integrazione payroll "Fase 2, fuori scope MVP". **Confermato dall'utente** come feature reale e funzionante, non pianificata. Aggiunto come differenziatore reale in `.agents/product-marketing.md` v3, con una nota esplicita di disallineamento verso `CLAUDE.md` — **non ancora corretto in `CLAUDE.md` stesso**, resta un gap aperto tra sito pubblico e documentazione interna.
+
+`.agents/product-marketing.md` aggiornato v2→v3 con questi due fatti (changelog aggiornato). Piano tattico finale (`docs/marketing/piano-tattico-3000-primo-cliente.md`, commit `72b2d32`): allocazione €3000 con lista contatti verificata/Sales Navigator/tool sequencing/ads mirati/incentivo pilota, timeline 4-5 settimane, criteri di successo/kill espliciti. **Scenario dimezzato €1500** prodotto su richiesta successiva: tagliati per primi gli ads (€700→€0, supporto non motore), non la lista contatti (collo di bottiglia reale, ridotta solo in scope 900€→600€) — riserva incentivo pilota ridotta ma non azzerata (leva di chiusura, non solo di scoperta).
+
+### Parte 3 — Lista contatti verificata: design + piano, esplicitamente non eseguiti
+
+Sotto-progetto della voce di budget "lista contatti" (€600 nello scenario €1500). Ciclo completo `/superpowers:brainstorming`: esplorato contesto, chiarito con l'utente (costruzione fai-da-te con Sales Navigator, nessuna banca dati camerale disponibile, 5-8h/settimana disponibili), proposti 3 approcci (sequenziale, a batch/rolling, scope ridotto) — **scelto approccio a batch/rolling** su mia raccomandazione, per non bloccare l'intero piano sul completamento della lista.
+
+**Analisi critica richiesta esplicitamente dall'utente** prima di scrivere lo spec ha trovato 8 problemi reali, tutti integrati nel design prima della scrittura:
+1. **Il design ignorava le relazioni Dataxiom esistenti** (clienti BI/Analytics) — potenzialmente più efficace di qualunque contatto freddo, aggiunto come "Passo 0" prioritario
+2. Timeline "25-30 contatti in 3-4 giorni" matematicamente irrealistica per 5-8h/settimana partendo da zero (10-20 min/contatto realistici) — ridimensionato a 10-15/batch
+3. Le 5-8h/settimana competono con l'intero monte ore di progetto (10h/settimana, `CLAUDE.md`) — reso esplicito, non più implicito
+4. Limiti InMail di Sales Navigator (~50/mese) non considerati — aggiunto fallback connessione+messaggio
+5. Criterio di kill "5% su un campione di 25-30" troppo rumoroso (1-2 risposte decidono tutto) — spostata la valutazione a batch 1+2 combinati
+6. Nessun backup del CSV (giustamente escluso da git per GDPR, ma zero backup) — aggiunta copia su cloud privato
+7. Nessuno stato di outreach tracciato nel CSV — aggiunte colonne canale/data contatto/risposta/esito
+8. Targeting "retail" generico — aggiunta priorità esplicita a GDO/supermercati (pain-fit più alto sul buddy punching)
+
+Spec finale committata (`docs/superpowers/specs/2026-08-13-verified-contact-list-design.md`, commit `1e83fb0`). Piano di implementazione (10 task: scaffolding, Passo 0, sourcing/verifica/outreach batch 1, batch 2 in parallelo, valutazione kill combinata, batch 3+ condizionale, backup) scritto via `/superpowers:writing-plans` e committato (`docs/superpowers/plans/2026-08-15-verified-contact-list.md`, commit `33222cb`) — **esplicitamente non eseguito**, su istruzione diretta dell'utente ("lo scriviamo, lo committiamo e lo teniamo lì").
+
+### Stato a fine sessione
+
+Nessun contatto reale ancora costruito, nessuna routine LinkedIn Badge System ancora testata con generazione reale di contenuto, nessuna correzione ancora incollata nel Cowork esistente, nessuna correzione ancora applicata a `CLAUDE.md` sul disallineamento payroll. Tutto il lavoro è documentale/pianificazione, pronto per esecuzione in una sessione futura.
+
+---
+
 ## Session 101 — Plugin marketing-skills installato + design/piano documento di contesto marketing (Task 1/6 eseguito, sessione sospesa per restart VS Code) (11 Agosto 2026)
 
 ### Contesto
