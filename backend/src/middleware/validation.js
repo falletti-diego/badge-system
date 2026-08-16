@@ -479,6 +479,17 @@ const AdminEmployeeSchema = z.object({
       .min(1, 'assigned_sites must contain at least one site')
       .default([]),
     password: z.string().min(8, 'password must be at least 8 characters').max(100).optional(),
+    external_employee_id: z.string()
+      .regex(/^[A-Za-z0-9]+$/, 'external_employee_id must contain only letters and numbers')
+      .max(50)
+      .optional(),
+    hiring_date: z.string()
+      .refine((d) => !isNaN(new Date(d).getTime()), { message: 'hiring_date must be a valid date' })
+      .refine((d) => new Date(d) >= new Date(new Date().toDateString()), {
+        message: 'hiring_date cannot be in the past',
+      })
+      .optional(),
+    manager_id: z.string().uuid('manager_id must be a valid UUID').optional().nullable(),
   }).refine(
     (data) => data.role === 'manager' || data.assigned_sites.length > 0,
     { message: 'employees must have at least one assigned site', path: ['assigned_sites'] }
