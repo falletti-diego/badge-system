@@ -133,6 +133,53 @@ describe('EmployeesTab', () => {
     expect(payload.manager_id).toBeFalsy();
   });
 
+  it('disables the submit button when Matricola has invalid characters', async () => {
+    const user = userEvent.setup();
+    render(<EmployeesTab />);
+
+    await user.click(screen.getByLabelText(/cliente/i));
+    await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
+    await user.type(screen.getByRole('textbox', { name: /^nome/i }), 'Mario Rossi');
+    await user.type(screen.getByRole('textbox', { name: /^email/i }), 'mario.rossi@example.com');
+
+    const submitButton = screen.getByRole('button', { name: /crea dipendente/i });
+    expect(submitButton).toBeEnabled();
+
+    await user.type(screen.getByLabelText(/matricola/i), 'ABC-123');
+
+    expect(submitButton).toBeDisabled();
+
+    // Clearing the invalid characters re-enables it.
+    await user.clear(screen.getByLabelText(/matricola/i));
+    await user.type(screen.getByLabelText(/matricola/i), 'ABC123');
+
+    expect(submitButton).toBeEnabled();
+  });
+
+  it('blocks submit natively when no Sede is selected, without calling the API', async () => {
+    // MUI's <Select required> renders a hidden `MuiSelect-nativeInput` that participates in
+    // native HTML5 form validation, so the browser refuses to fire the `submit` event (and
+    // handleSubmit never runs) when form.site_id === ''. Confirmed directly by inspecting
+    // form.checkValidity() during a checkpoint review — do not "fix" this by assuming
+    // apiClient.post needs a guard for missing site_id.
+    apiClient.post.mockClear();
+    apiClient.post.mockResolvedValue({ data: { data: { name: 'Mario Rossi' }, temp_password: null } });
+    const user = userEvent.setup();
+    render(<EmployeesTab />);
+
+    await user.click(screen.getByLabelText(/cliente/i));
+    await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
+    await user.type(screen.getByRole('textbox', { name: /^nome/i }), 'Mario Rossi');
+    await user.type(screen.getByRole('textbox', { name: /^email/i }), 'mario.rossi@example.com');
+
+    // Deliberately skip selecting a Sede.
+    await user.click(screen.getByRole('button', { name: /crea dipendente/i }));
+
+    // Give any (unexpected) async submit handling a chance to run before asserting.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(apiClient.post).not.toHaveBeenCalled();
+  });
+
   it('shows the real Zod validation message instead of a generic Axios error', async () => {
     apiClient.post.mockRejectedValue({
       response: {
