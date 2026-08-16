@@ -88,6 +88,13 @@ class SessionRevokedError extends ApiError {
   }
 }
 
+class InvalidManagerAssignmentError extends ApiError {
+  constructor(message = 'manager_id does not match a manager of the selected site') {
+    super('INVALID_MANAGER_ASSIGNMENT', message, 400);
+    this.name = 'InvalidManagerAssignmentError';
+  }
+}
+
 module.exports = {
   ApiError,
   ValidationError,
@@ -100,4 +107,5 @@ module.exports = {
   GeofenceError,
   EmploymentNotStartedError,
   SessionRevokedError,
+  InvalidManagerAssignmentError,
 };

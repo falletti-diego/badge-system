@@ -45,6 +45,16 @@ describe('Error Classes', () => {
     });
   });
 
+  describe('InvalidManagerAssignmentError', () => {
+    test('sets code INVALID_MANAGER_ASSIGNMENT, statusCode 400', () => {
+      const { InvalidManagerAssignmentError } = require('../utils/errors');
+      const err = new InvalidManagerAssignmentError();
+      expect(err.code).toBe('INVALID_MANAGER_ASSIGNMENT');
+      expect(err.statusCode).toBe(400);
+      expect(err instanceof Error).toBe(true);
+    });
+  });
+
   describe('ValidationError', () => {
     test('is a 400 VALIDATION_ERROR', () => {
       const err = new ValidationError('Invalid email');

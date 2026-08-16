@@ -161,6 +161,27 @@ describe('POST /api/v1/admin/employees — new fields (Sede/Matricola/Data assun
     expect(res.body.error).toBe('INVALID_MANAGER_ASSIGNMENT');
   });
 
+  it('rejects manager_id when site_id is omitted with 400 INVALID_MANAGER_ASSIGNMENT', async () => {
+    if (!dbAvailable) return;
+    const managerId = await makeManager(clientId, siteId);
+    const token = adminToken(clientId);
+
+    const res = await request(app)
+      .post('/api/v1/admin/employees')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        email: uniqueEmail('manager-no-site'),
+        name: 'Dipendente Senza Sede',
+        role: 'employee',
+        client_id: clientId,
+        assigned_sites: [siteId],
+        manager_id: managerId,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('INVALID_MANAGER_ASSIGNMENT');
+  });
+
   it('creates an employee with no manager_id (optional, site with no manager yet)', async () => {
     if (!dbAvailable) return;
     const token = adminToken(clientId);

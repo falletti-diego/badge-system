@@ -5,7 +5,7 @@ const { z } = require('zod');
 const { randomBytes } = require('crypto');
 const { pool } = require('../../db/pool');
 const { hashPassword } = require('../../auth/password');
-const { ApiError, ValidationError, NotFoundError, ConflictError } = require('../../utils/errors');
+const { ValidationError, NotFoundError, ConflictError, InvalidManagerAssignmentError } = require('../../utils/errors');
 const logger = require('../../utils/logger');
 const { logAudit } = require('../../middleware/audit');
 const { resolveTenantScope } = require('../../utils/tenantScope');
@@ -51,15 +51,11 @@ router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, re
     // malevolo/bug potrebbe inviare un manager_id arbitrario.
     if (data.manager_id) {
       const managerCheck = await pool.query(
-        `SELECT id FROM employees WHERE id = $1 AND client_id = $2 AND role = 'manager' AND site_id = $3`,
+        `SELECT id FROM employees WHERE id = $1 AND client_id = $2 AND role = 'manager' AND site_id = $3 AND active = true`,
         [data.manager_id, targetClientId, data.site_id || null]
       );
       if (managerCheck.rowCount === 0) {
-        return next(new ApiError(
-          'INVALID_MANAGER_ASSIGNMENT',
-          'manager_id does not match a manager of the selected site',
-          400
-        ));
+        return next(new InvalidManagerAssignmentError());
       }
     }
 
