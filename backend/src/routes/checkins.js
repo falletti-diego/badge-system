@@ -11,7 +11,7 @@ const { createValidationMiddleware, PostCheckinSchema, GetCheckinsSchema, PutChe
 const { logAudit } = require('../middleware/audit');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
-const { NotFoundError, ValidationError, ForbiddenError, GeofenceError, ConflictError } = require('../utils/errors');
+const { NotFoundError, ValidationError, ForbiddenError, GeofenceError, ConflictError, EmploymentNotStartedError } = require('../utils/errors');
 const { haversineDistance } = require('../utils/geo');
 const { deleteCacheByPattern } = require('../db/redis');
 const { resolveEmployeeId, resolveSiteId } = require('../utils/resolvers');
@@ -60,8 +60,15 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
 
     const result = await withTransaction(async (client) => {
       // 1. Verify employee exists and belongs to authenticated client
+      // hiring_date is cast to text here (not left as the driver's native DATE
+      // type) so the value is always a plain 'YYYY-MM-DD' string. pg's default
+      // DATE parser builds a JS Date from local-timezone components, which makes
+      // any later Date-object comparison against "today" timezone-fragile (the
+      // same class of bug fixed in AdminEmployeeSchema's hiring_date validation
+      // — see validation.js). Comparing two 'YYYY-MM-DD' strings lexicographically
+      // is TZ-safe and avoids that trap entirely.
       const employeeResult = await client.query(
-        'SELECT id, client_id, active FROM employees WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1',
+        'SELECT id, client_id, active, hiring_date::text AS hiring_date FROM employees WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1',
         [employee_id, clientId]
       );
 
@@ -70,6 +77,14 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
       }
       if (employeeResult.rows[0].active === false) {
         throw new ForbiddenError('This employee is deactivated and cannot check in', 'CHECKIN_EMPLOYEE_INACTIVE');
+      }
+
+      // hiring_date NULL or <= today never blocks — covers legacy employees
+      // (backfilled to created_at by migration 035) and employees created via
+      // this endpoint before this feature existed (hiring_date never set).
+      const { hiring_date: hiringDate } = employeeResult.rows[0];
+      if (hiringDate && hiringDate > new Date().toISOString().slice(0, 10)) {
+        throw new EmploymentNotStartedError(hiringDate);
       }
 
       // 2. Verify site exists and fetch geofence settings (JOIN clients for feature flag)
