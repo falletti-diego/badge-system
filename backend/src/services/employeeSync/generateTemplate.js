@@ -2,7 +2,7 @@
 
 const ExcelJS = require('exceljs');
 
-const DIP_HEADERS = ['nome_completo', 'email', 'telefono', 'ruolo', 'sede', 'matricola', 'stato', 'data_assunzione', 'data_uscita'];
+const DIP_HEADERS = ['nome_completo', 'email', 'telefono', 'ruolo', 'sede', 'matricola', 'stato', 'data_assunzione', 'data_uscita', 'manager_email'];
 const SEDI_HEADERS = ['nome_sede', 'indirizzo', 'latitudine', 'longitudine', 'raggio_geofence_m'];
 const ROLE_LABEL = { employee: 'dipendente', manager: 'responsabile' };
 
@@ -12,6 +12,9 @@ async function generateTemplate({ employees, sites }) {
   const wsDip = wb.addWorksheet('Dipendenti');
   wsDip.addRow(DIP_HEADERS);
   const siteNameById = new Map(sites.map((s) => [s.id, s.name]));
+  const managerEmailById = new Map(
+    employees.filter((e) => e.role === 'manager').map((e) => [e.id, e.email])
+  );
   for (const e of employees) {
     // site_id è popolato solo per i manager (campo "Sede gestita" in Admin);
     // un employee ordinario ha invece assigned_sites[] — usa il primo come
@@ -22,6 +25,7 @@ async function generateTemplate({ employees, sites }) {
       e.name, e.email, e.phone || '', ROLE_LABEL[e.role] || 'dipendente',
       siteNameById.get(primarySiteId) || '', e.external_employee_id || '',
       'Attivo', e.hiring_date || '', '',
+      e.manager_id ? (managerEmailById.get(e.manager_id) || '') : '',
     ]);
   }
 
