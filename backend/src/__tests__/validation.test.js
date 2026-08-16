@@ -35,6 +35,23 @@ describe('AdminEmployeeSchema — new fields', () => {
     expect(result.success).toBe(false);
   });
 
+  test('rejects an invalid/unparseable hiring_date string', () => {
+    const result = AdminEmployeeSchema.safeParse({ body: validBody({ hiring_date: 'not-a-date' }) });
+    expect(result.success).toBe(false);
+  });
+
+  test('rejects hiring_date in a non-YYYY-MM-DD format', () => {
+    const result = AdminEmployeeSchema.safeParse({ body: validBody({ hiring_date: '2026/09/01' }) });
+    expect(result.success).toBe(false);
+  });
+
+  test('rejects role employee with an empty assigned_sites array', () => {
+    const result = AdminEmployeeSchema.safeParse({
+      body: validBody({ role: 'employee', assigned_sites: [] }),
+    });
+    expect(result.success).toBe(false);
+  });
+
   test('accepts a valid manager_id (uuid)', () => {
     const result = AdminEmployeeSchema.safeParse({
       body: validBody({ manager_id: '550e8400-e29b-41d4-a716-446655440099' }),

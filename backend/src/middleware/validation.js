@@ -484,8 +484,9 @@ const AdminEmployeeSchema = z.object({
       .max(50)
       .optional(),
     hiring_date: z.string()
-      .refine((d) => !isNaN(new Date(d).getTime()), { message: 'hiring_date must be a valid date' })
-      .refine((d) => new Date(d) >= new Date(new Date().toDateString()), {
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'hiring_date must be in YYYY-MM-DD format')
+      .refine((d) => !isNaN(new Date(`${d}T00:00:00Z`).getTime()), { message: 'hiring_date must be a valid date' })
+      .refine((d) => d >= new Date().toISOString().slice(0, 10), {
         message: 'hiring_date cannot be in the past',
       })
       .optional(),
