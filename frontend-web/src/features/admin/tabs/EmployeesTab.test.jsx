@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EmployeesTab } from './EmployeesTab';
+import apiClient from '../../../services/apiClient';
 
 const MOCK_CLIENTS = [{ id: 'client-1', name: 'Cliente Test' }];
 const MOCK_SITES = [
@@ -30,6 +31,8 @@ vi.mock('../hooks/useEmployeeSync', () => ({
     error: null,
   }),
 }));
+
+vi.mock('../../../services/apiClient');
 
 describe('EmployeesTab', () => {
   it('no longer renders the legacy CSV import card', () => {
@@ -99,5 +102,34 @@ describe('EmployeesTab', () => {
     expect(managerField).not.toHaveAttribute('aria-disabled', 'true');
     await user.click(managerField);
     expect(screen.getByRole('option', { name: 'Manager Torino' })).toBeInTheDocument();
+  });
+
+  it('does not submit a stale manager_id when switching Ruolo to Manager after picking one as employee', async () => {
+    apiClient.post.mockResolvedValue({ data: { data: { name: 'Mario Rossi' }, temp_password: null } });
+    const user = userEvent.setup();
+    render(<EmployeesTab />);
+
+    await user.click(screen.getByLabelText(/cliente/i));
+    await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
+
+    await user.click(screen.getByRole('combobox', { name: /sede/i }));
+    await user.click(screen.getByRole('option', { name: 'Sede Torino' }));
+
+    // Still role=employee (default): pick a manager di riferimento.
+    await user.click(screen.getByRole('combobox', { name: /manager di riferimento/i }));
+    await user.click(screen.getByRole('option', { name: 'Manager Torino' }));
+
+    // Now switch role to Manager — manager_id should be cleared.
+    await user.click(screen.getByLabelText(/^ruolo$/i));
+    await user.click(screen.getByRole('option', { name: 'Manager' }));
+
+    await user.type(screen.getByRole('textbox', { name: /^nome/i }), 'Mario Rossi');
+    await user.type(screen.getByRole('textbox', { name: /^email/i }), 'mario.rossi@example.com');
+
+    await user.click(screen.getByRole('button', { name: /crea dipendente/i }));
+
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalled());
+    const payload = apiClient.post.mock.calls[0][1];
+    expect(payload.manager_id).toBeFalsy();
   });
 });

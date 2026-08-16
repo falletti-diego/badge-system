@@ -114,7 +114,7 @@ export function EmployeesTab() {
                   <Select
                     labelId="new-employee-client-label"
                     label="Cliente" value={form.client_id}
-                    onChange={(e) => setForm({ ...form, client_id: e.target.value, site_id: '' })}
+                    onChange={(e) => setForm({ ...form, client_id: e.target.value, site_id: '', manager_id: '' })}
                   >
                     {clients.map((c) => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
                   </Select>
@@ -137,7 +137,7 @@ export function EmployeesTab() {
                   <InputLabel id="new-employee-role-label">Ruolo</InputLabel>
                   <Select
                     labelId="new-employee-role-label"
-                    label="Ruolo" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
+                    label="Ruolo" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value, manager_id: '' })}
                   >
                     <MenuItem value="employee">Dipendente</MenuItem>
                     <MenuItem value="manager">Manager</MenuItem>
