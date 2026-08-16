@@ -37,6 +37,8 @@ function validateSyntax(data, { existingManagerEmails = new Set() } = {}) {
     // manager GIÀ esistente in DB per questo cliente — un manager creato
     // nello stesso file non è risolvibile in questo passaggio (il suo id
     // non esiste ancora al momento del calcolo diff), limitazione nota.
+    // existingManagerEmails must contain lowercased emails — manager_email here
+    // is always lowercased by parseTemplate.js's normEmail.
     if (d.manager_email && !existingManagerEmails.has(d.manager_email)) {
       errors.push(`${at}: manager_email "${d.manager_email}" non corrisponde a nessun manager esistente per questo cliente.`);
     }
