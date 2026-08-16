@@ -26,6 +26,8 @@ export function EmployeesTab() {
   const [form, setForm] = useState({
     client_id: '', email: '', name: '', phone: '',
     role: 'employee', site_id: '', password: '',
+    external_employee_id: '', hiring_date: new Date().toISOString().slice(0, 10),
+    manager_id: '',
   });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -51,6 +53,18 @@ export function EmployeesTab() {
 
   const clientSites = allSites.filter((s) => s.client_id === form.client_id);
 
+  const availableManagers = employees.filter(
+    (e) => e.role === 'manager' && e.site_id === form.site_id
+  );
+  const managerFieldDisabled = form.role === 'manager' || !form.site_id;
+  const managerHelperText = form.role === 'manager'
+    ? 'I manager non hanno un manager di riferimento'
+    : !form.site_id
+      ? 'Seleziona prima una sede'
+      : availableManagers.length === 0
+        ? 'Nessun manager assegnato a questa sede — puoi comunque creare il dipendente'
+        : undefined;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -62,8 +76,12 @@ export function EmployeesTab() {
         name: form.name,
         role: form.role,
         ...(form.phone && { phone: form.phone }),
-        ...(form.site_id && { site_id: form.site_id }),
+        ...(form.role === 'manager' && form.site_id && { site_id: form.site_id }),
+        ...(form.role === 'employee' && form.site_id && { site_id: form.site_id, assigned_sites: [form.site_id] }),
         ...(form.password && { password: form.password }),
+        ...(form.external_employee_id && { external_employee_id: form.external_employee_id }),
+        ...(form.hiring_date && { hiring_date: form.hiring_date }),
+        ...(form.manager_id && { manager_id: form.manager_id }),
       };
       const res = await apiClient.post('/api/v1/admin/employees', payload);
       const emp = res.data.data;
@@ -73,7 +91,7 @@ export function EmployeesTab() {
         text: `Dipendente "${emp.name}" creato con successo.`,
         tempPwd,
       });
-      setForm({ ...form, email: '', name: '', phone: '', site_id: '', password: '' });
+      setForm({ ...form, email: '', name: '', phone: '', site_id: '', password: '', external_employee_id: '', manager_id: '' });
       reloadEmployees();
     } catch (err) {
       setMsg({ type: 'error', text: err.response?.data?.message || err.message });
@@ -92,8 +110,9 @@ export function EmployeesTab() {
             <Stack spacing={2}>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <FormControl size="small" required sx={{ minWidth: 180 }}>
-                  <InputLabel>Cliente</InputLabel>
+                  <InputLabel id="new-employee-client-label">Cliente</InputLabel>
                   <Select
+                    labelId="new-employee-client-label"
                     label="Cliente" value={form.client_id}
                     onChange={(e) => setForm({ ...form, client_id: e.target.value, site_id: '' })}
                   >
@@ -115,29 +134,67 @@ export function EmployeesTab() {
                   value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 />
                 <FormControl size="small" sx={{ minWidth: 140 }}>
-                  <InputLabel>Ruolo</InputLabel>
-                  <Select label="Ruolo" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                  <InputLabel id="new-employee-role-label">Ruolo</InputLabel>
+                  <Select
+                    labelId="new-employee-role-label"
+                    label="Ruolo" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
+                  >
                     <MenuItem value="employee">Dipendente</MenuItem>
                     <MenuItem value="manager">Manager</MenuItem>
                   </Select>
                 </FormControl>
-                {form.role === 'manager' && (
-                  <FormControl size="small" sx={{ minWidth: 200 }}>
-                    <InputLabel>Sede gestita</InputLabel>
-                    <Select
-                      label="Sede gestita" value={form.site_id}
-                      onChange={(e) => setForm({ ...form, site_id: e.target.value })}
-                    >
-                      <MenuItem value="">— nessuna —</MenuItem>
-                      {clientSites.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
-                    </Select>
-                  </FormControl>
-                )}
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                  <InputLabel id="new-employee-site-label">Sede</InputLabel>
+                  <Select
+                    labelId="new-employee-site-label"
+                    label="Sede" value={form.site_id}
+                    onChange={(e) => setForm({ ...form, site_id: e.target.value, manager_id: '' })}
+                  >
+                    {clientSites.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
+                  </Select>
+                </FormControl>
                 <TextField
                   label="Password (opzionale, auto se vuota)" fullWidth size="small" type="password"
                   value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
                   helperText="Lascia vuoto per generare automaticamente"
                 />
+              </Stack>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                <TextField
+                  label="Matricola" fullWidth size="small"
+                  value={form.external_employee_id}
+                  onChange={(e) => setForm({ ...form, external_employee_id: e.target.value })}
+                  error={form.external_employee_id !== '' && !/^[A-Za-z0-9]*$/.test(form.external_employee_id)}
+                  helperText={
+                    form.external_employee_id !== '' && !/^[A-Za-z0-9]*$/.test(form.external_employee_id)
+                      ? 'Solo lettere e numeri'
+                      : undefined
+                  }
+                />
+                <TextField
+                  label="Data assunzione" type="date" fullWidth size="small"
+                  InputLabelProps={{ shrink: true }}
+                  inputProps={{ min: new Date().toISOString().slice(0, 10) }}
+                  value={form.hiring_date}
+                  onChange={(e) => setForm({ ...form, hiring_date: e.target.value })}
+                />
+                <FormControl size="small" sx={{ minWidth: 220 }} disabled={managerFieldDisabled}>
+                  <InputLabel htmlFor="new-employee-manager-select">Manager di riferimento</InputLabel>
+                  <Select
+                    native
+                    id="new-employee-manager-select"
+                    label="Manager di riferimento" value={form.manager_id}
+                    onChange={(e) => setForm({ ...form, manager_id: e.target.value })}
+                  >
+                    <option value="">— nessuno —</option>
+                    {availableManagers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </Select>
+                  {managerHelperText && (
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.5 }}>
+                      {managerHelperText}
+                    </Typography>
+                  )}
+                </FormControl>
               </Stack>
               {msg && (
                 <Alert severity={msg.type}>
