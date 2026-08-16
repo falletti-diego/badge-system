@@ -132,4 +132,32 @@ describe('EmployeesTab', () => {
     const payload = apiClient.post.mock.calls[0][1];
     expect(payload.manager_id).toBeFalsy();
   });
+
+  it('shows the real Zod validation message instead of a generic Axios error', async () => {
+    apiClient.post.mockRejectedValue({
+      response: {
+        data: {
+          error: 'Validation Error',
+          details: [{ message: 'employees must have at least one assigned site', path: ['assigned_sites'] }],
+        },
+      },
+      message: 'Request failed with status code 400',
+    });
+    const user = userEvent.setup();
+    render(<EmployeesTab />);
+
+    await user.click(screen.getByLabelText(/cliente/i));
+    await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
+    await user.click(screen.getByRole('combobox', { name: /sede/i }));
+    await user.click(screen.getByRole('option', { name: 'Sede Torino' }));
+    await user.type(screen.getByRole('textbox', { name: /^nome/i }), 'Mario Rossi');
+    await user.type(screen.getByRole('textbox', { name: /^email/i }), 'mario.rossi@example.com');
+
+    await user.click(screen.getByRole('button', { name: /crea dipendente/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/employees must have at least one assigned site/i)).toBeInTheDocument()
+    );
+    expect(screen.queryByText(/request failed with status code 400/i)).not.toBeInTheDocument();
+  });
 });

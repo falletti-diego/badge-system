@@ -16,9 +16,32 @@ import { CopyButton } from '../components/CopyButton';
 import { EmployeeSyncWizardPage } from '../pages/EmployeeSyncWizardPage';
 import { useEmployeeSync } from '../hooks/useEmployeeSync';
 
+// ApiError-derived backend errors (ConflictError, InvalidManagerAssignmentError, ...) put a
+// human-readable string in `data.message`. Zod validation failures (createValidationMiddleware
+// in backend/src/middleware/validation.js) instead return `{ error: 'Validation Error', details:
+// [{ field, message }, ...] }` with NO top-level `message` — so falling back straight to
+// err.message left the admin looking at a generic Axios string like "Request failed with status
+// code 400" (e.g. when submitting with no Sede selected). Surface the real reason instead.
+function extractErrorMessage(err) {
+  const data = err.response?.data;
+  if (data?.message) return data.message;
+  if (Array.isArray(data?.details) && data.details.length > 0) {
+    const details = data.details
+      .map((d) => d?.message)
+      .filter(Boolean);
+    if (details.length > 0) return details.join(', ');
+  }
+  return err.message;
+}
+
 export function EmployeesTab() {
   const { data: clients } = useFetch('/api/v1/admin/clients');
   const { data: allSites } = useFetch('/api/v1/admin/sites');
+  // Unfiltered, independent of the table's "Filtra cliente" selection — used only to
+  // compute availableManagers below, so the create-form's manager lookup never depends
+  // on what the admin happens to have the employee table filtered to (see Fase 2
+  // checkpoint review Finding 1).
+  const { data: allEmployees } = useFetch('/api/v1/admin/employees');
   const [filterClient, setFilterClient] = useState('');
   const { data: employees, loading: empLoading, error: empFetchError, reload: reloadEmployees } = useFetch(
     filterClient ? `/api/admin/employees?client_id=${filterClient}` : '/api/v1/admin/employees'
@@ -53,9 +76,10 @@ export function EmployeesTab() {
 
   const clientSites = allSites.filter((s) => s.client_id === form.client_id);
 
-  const availableManagers = employees.filter(
-    (e) => e.role === 'manager' && e.site_id === form.site_id
+  const availableManagers = allEmployees.filter(
+    (e) => e.role === 'manager' && e.site_id === form.site_id && e.client_id === form.client_id
   );
+  const matricolaInvalid = form.external_employee_id !== '' && !/^[A-Za-z0-9]*$/.test(form.external_employee_id);
   const managerFieldDisabled = form.role === 'manager' || !form.site_id;
   const managerHelperText = form.role === 'manager'
     ? 'I manager non hanno un manager di riferimento'
@@ -94,7 +118,7 @@ export function EmployeesTab() {
       setForm({ ...form, email: '', name: '', phone: '', site_id: '', password: '', external_employee_id: '', manager_id: '' });
       reloadEmployees();
     } catch (err) {
-      setMsg({ type: 'error', text: err.response?.data?.message || err.message });
+      setMsg({ type: 'error', text: extractErrorMessage(err) });
     } finally {
       setSaving(false);
     }
@@ -164,12 +188,8 @@ export function EmployeesTab() {
                   label="Matricola" fullWidth size="small"
                   value={form.external_employee_id}
                   onChange={(e) => setForm({ ...form, external_employee_id: e.target.value })}
-                  error={form.external_employee_id !== '' && !/^[A-Za-z0-9]*$/.test(form.external_employee_id)}
-                  helperText={
-                    form.external_employee_id !== '' && !/^[A-Za-z0-9]*$/.test(form.external_employee_id)
-                      ? 'Solo lettere e numeri'
-                      : undefined
-                  }
+                  error={matricolaInvalid}
+                  helperText={matricolaInvalid ? 'Solo lettere e numeri' : undefined}
                 />
                 <TextField
                   label="Data assunzione" type="date" fullWidth size="small"
@@ -214,7 +234,7 @@ export function EmployeesTab() {
               )}
               <Box>
                 <Button type="submit" variant="contained" startIcon={<AddIcon />}
-                  disabled={saving || !form.client_id}>
+                  disabled={saving || !form.client_id || matricolaInvalid}>
                   {saving ? <CircularProgress size={18} /> : 'Crea Dipendente'}
                 </Button>
               </Box>
