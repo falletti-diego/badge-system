@@ -80,7 +80,7 @@ async function runPreviewDiff(buffer, clientId, db = pool, { createSites = false
     [clientId]
   )).rows;
   const existingManagerEmails = new Set(
-    dbEmployees.filter((e) => e.role === 'manager').map((e) => e.email)
+    dbEmployees.filter((e) => e.role === 'manager').map((e) => e.email.toLowerCase())
   );
 
   const errors = validateSyntax(data, { existingManagerEmails });

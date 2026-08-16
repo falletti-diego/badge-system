@@ -228,6 +228,38 @@ describe('POST /api/v1/admin/employee-sync/preview', () => {
     expect(res.body.data.nuovi).toHaveLength(1);
   });
 
+  it('accepts manager_email matching an existing manager whose DB email is mixed-case', async () => {
+    if (!dbAvailable) return;
+
+    const siteId = await makeSite(clientId, 'Torino');
+    // Simula un manager creato via form admin, dove l'email non ha alcuna
+    // garanzia di essere lowercase (nessun .toLowerCase() nello schema Zod,
+    // nessun vincolo DB) — vedi contratto documentato in validate.js:
+    // existingManagerEmails deve contenere email lowercased perché
+    // manager_email nel foglio Excel è sempre normalizzato lowercase da
+    // parseTemplate.js (normEmail).
+    const mixedCaseManagerEmail = `Manager-${Date.now()}-${Math.random().toString(36).slice(2)}@Example.IT`;
+    await pool.query(
+      `INSERT INTO employees (client_id, email, name, role, site_id, assigned_sites, active)
+       VALUES ($1, $2, 'Manager Mixed Case', 'manager', $3, $4, true)`,
+      [clientId, mixedCaseManagerEmail, siteId, [siteId]]
+    );
+
+    const buffer = await buildFile([
+      ['Dipendente Con Manager Mixed Case', 'con-manager-mixedcase-preview-test@x.it', '', 'dipendente', 'Torino', '', 'Attivo', '2026-07-01', '', mixedCaseManagerEmail.toLowerCase()],
+    ]);
+
+    const token = tokenFor({ client_id: clientId, role: 'admin' });
+    const res = await request(app)
+      .post('/api/v1/admin/employee-sync/preview')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', buffer, 'test.xlsx');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.errors).toEqual([]);
+    expect(res.body.data.nuovi).toHaveLength(1);
+  });
+
   it('handles a file that is not a valid xlsx with a clear error, not a 500 crash', async () => {
     if (!dbAvailable) return;
 
