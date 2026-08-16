@@ -5,7 +5,7 @@ const { ROLE_MAP } = require('../onboarding/parseWorkbook');
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_STATI = ['attivo', 'inattivo'];
 
-function validateSyntax(data) {
+function validateSyntax(data, { existingManagerEmails = new Set() } = {}) {
   const errors = [];
   const sedeNames = new Set((data.sedi || []).map((s) => s.nome_sede));
   const seenEmail = new Set();
@@ -32,6 +32,13 @@ function validateSyntax(data) {
     else if (!sedeNames.has(d.sede)) errors.push(`${at}: sede "${d.sede}" non corrisponde a nessun nome_sede del foglio Sedi.`);
     if (!d.stato || !VALID_STATI.includes(d.stato)) {
       errors.push(`${at}: stato deve essere "Attivo" o "Inattivo" (trovato: ${d.stato || 'vuoto'}).`);
+    }
+    // manager_email è facoltativo, ma se presente deve corrispondere a un
+    // manager GIÀ esistente in DB per questo cliente — un manager creato
+    // nello stesso file non è risolvibile in questo passaggio (il suo id
+    // non esiste ancora al momento del calcolo diff), limitazione nota.
+    if (d.manager_email && !existingManagerEmails.has(d.manager_email)) {
+      errors.push(`${at}: manager_email "${d.manager_email}" non corrisponde a nessun manager esistente per questo cliente.`);
     }
   }
 
