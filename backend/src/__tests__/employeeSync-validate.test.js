@@ -36,4 +36,12 @@ describe('validateSyntax — manager_email', () => {
     );
     expect(errors).toHaveLength(0);
   });
+
+  it('rejects a manager_email equal to the row\'s own email, even when that email is an existing manager', () => {
+    const errors = validateSyntax(
+      { dipendenti: [baseDip({ email: 'capo@x.it', manager_email: 'capo@x.it' })], sedi },
+      { existingManagerEmails: new Set(['capo@x.it']) }
+    );
+    expect(errors.some((e) => e.includes('non può coincidere con la propria email'))).toBe(true);
+  });
 });

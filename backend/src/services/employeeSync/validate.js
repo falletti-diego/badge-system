@@ -42,6 +42,14 @@ function validateSyntax(data, { existingManagerEmails = new Set() } = {}) {
     if (d.manager_email && !existingManagerEmails.has(d.manager_email)) {
       errors.push(`${at}: manager_email "${d.manager_email}" non corrisponde a nessun manager esistente per questo cliente.`);
     }
+    // Un dipendente non può essere manager di se stesso: senza questo guard
+    // computeDiff risolverebbe manager_id sull'id del dipendente stesso se
+    // manager_email == email e quella email appartiene già a un manager
+    // esistente. .toLowerCase() difensivo anche se entrambi i campi sono
+    // già normalizzati in minuscolo da parseTemplate.js's normEmail.
+    if (d.manager_email && d.email && d.manager_email.toLowerCase() === d.email.toLowerCase()) {
+      errors.push(`${at}: manager_email non può coincidere con la propria email (un dipendente non può essere manager di se stesso).`);
+    }
   }
 
   return errors;
