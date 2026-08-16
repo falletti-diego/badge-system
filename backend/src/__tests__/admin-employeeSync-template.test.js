@@ -67,14 +67,14 @@ describe('GET /api/v1/admin/employee-sync/template', () => {
     return result.rows[0].id;
   }
 
-  async function makeEmployee(clientId, name, { active = true, siteId = null, assignedSites = [], role = 'employee' } = {}) {
+  async function makeEmployee(clientId, name, { active = true, siteId = null, assignedSites = [], role = 'employee', managerId = null } = {}) {
     const result = await pool.query(
-      `INSERT INTO employees (client_id, email, name, role, assigned_sites, active, site_id, hiring_date)
-       VALUES ($1, $2, $3, $4, $5::uuid[], $6, $7, '2024-01-10')
-       RETURNING id`,
-      [clientId, uniqueEmail('admin-employeesync-template-employee'), name, role, assignedSites, active, siteId]
+      `INSERT INTO employees (client_id, email, name, role, assigned_sites, active, site_id, hiring_date, manager_id)
+       VALUES ($1, $2, $3, $4, $5::uuid[], $6, $7, '2024-01-10', $8)
+       RETURNING id, email`,
+      [clientId, uniqueEmail('admin-employeesync-template-employee'), name, role, assignedSites, active, siteId, managerId]
     );
-    return result.rows[0].id;
+    return result.rows[0];
   }
 
   function tokenFor({ client_id, role }) {
@@ -198,6 +198,37 @@ describe('GET /api/v1/admin/employee-sync/template', () => {
     });
     expect(dipNames).not.toContain('Account Admin Cliente');
     expect(dipNames).not.toContain('Account Viewer Cliente');
+  });
+
+  it('fills manager_email from manager_id — regression: GET /template query must select id and manager_id', async () => {
+    if (!dbAvailable) return;
+
+    const siteId = await makeSite(clientId, 'Sede Manager Email');
+    const manager = await makeEmployee(clientId, 'Responsabile Test', { active: true, siteId, role: 'manager' });
+    await makeEmployee(clientId, 'Dipendente Con Manager', {
+      active: true,
+      siteId: null,
+      assignedSites: [siteId],
+      managerId: manager.id,
+    });
+
+    const token = tokenFor({ client_id: clientId, role: 'admin' });
+    const res = await request(app)
+      .get('/api/v1/admin/employee-sync/template')
+      .set('Authorization', `Bearer ${token}`)
+      .buffer(true)
+      .parse(binaryParser);
+
+    expect(res.status).toBe(200);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(res.body);
+    const wsDip = wb.getWorksheet('Dipendenti');
+    let managerEmailForRow = null;
+    wsDip.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      if (row.getCell(1).value === 'Dipendente Con Manager') managerEmailForRow = row.getCell(10).value;
+    });
+    expect(managerEmailForRow).toBe(manager.email);
   });
 
   it('rejects superadmin requests without an explicit client_id', async () => {
