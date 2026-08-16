@@ -49,7 +49,7 @@ describe('EmployeesTab', () => {
 
   it('renders Sede, Matricola, Data assunzione fields', () => {
     render(<EmployeesTab />);
-    expect(screen.getByLabelText(/^sede$/i)).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /sede/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/matricola/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/data assunzione/i)).toBeInTheDocument();
   });
@@ -62,7 +62,7 @@ describe('EmployeesTab', () => {
     await user.click(screen.getByLabelText(/^ruolo$/i));
     await user.click(screen.getByRole('option', { name: 'Manager' }));
 
-    expect(screen.getByLabelText(/manager di riferimento/i)).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: /manager di riferimento/i })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByText(/i manager non hanno un manager di riferimento/i)).toBeInTheDocument();
   });
 
@@ -72,7 +72,7 @@ describe('EmployeesTab', () => {
     await user.click(screen.getByLabelText(/cliente/i));
     await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
 
-    expect(screen.getByLabelText(/manager di riferimento/i)).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: /manager di riferimento/i })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByText(/seleziona prima una sede/i)).toBeInTheDocument();
   });
 
@@ -81,7 +81,7 @@ describe('EmployeesTab', () => {
     render(<EmployeesTab />);
     await user.click(screen.getByLabelText(/cliente/i));
     await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
-    await user.click(screen.getByLabelText(/^sede$/i));
+    await user.click(screen.getByRole('combobox', { name: /sede/i }));
     await user.click(screen.getByRole('option', { name: 'Sede Milano' }));
 
     expect(screen.getByText(/nessun manager assegnato a questa sede/i)).toBeInTheDocument();
@@ -92,11 +92,12 @@ describe('EmployeesTab', () => {
     render(<EmployeesTab />);
     await user.click(screen.getByLabelText(/cliente/i));
     await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
-    await user.click(screen.getByLabelText(/^sede$/i));
+    await user.click(screen.getByRole('combobox', { name: /sede/i }));
     await user.click(screen.getByRole('option', { name: 'Sede Torino' }));
 
-    expect(screen.getByLabelText(/manager di riferimento/i)).not.toBeDisabled();
-    await user.click(screen.getByLabelText(/manager di riferimento/i));
+    const managerField = screen.getByRole('combobox', { name: /manager di riferimento/i });
+    expect(managerField).not.toHaveAttribute('aria-disabled', 'true');
+    await user.click(managerField);
     expect(screen.getByRole('option', { name: 'Manager Torino' })).toBeInTheDocument();
   });
 });

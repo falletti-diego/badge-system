@@ -143,7 +143,7 @@ export function EmployeesTab() {
                     <MenuItem value="manager">Manager</MenuItem>
                   </Select>
                 </FormControl>
-                <FormControl size="small" sx={{ minWidth: 180 }}>
+                <FormControl size="small" required sx={{ minWidth: 180 }}>
                   <InputLabel id="new-employee-site-label">Sede</InputLabel>
                   <Select
                     labelId="new-employee-site-label"
@@ -179,15 +179,14 @@ export function EmployeesTab() {
                   onChange={(e) => setForm({ ...form, hiring_date: e.target.value })}
                 />
                 <FormControl size="small" sx={{ minWidth: 220 }} disabled={managerFieldDisabled}>
-                  <InputLabel htmlFor="new-employee-manager-select">Manager di riferimento</InputLabel>
+                  <InputLabel id="new-employee-manager-label">Manager di riferimento</InputLabel>
                   <Select
-                    native
-                    id="new-employee-manager-select"
+                    labelId="new-employee-manager-label"
                     label="Manager di riferimento" value={form.manager_id}
                     onChange={(e) => setForm({ ...form, manager_id: e.target.value })}
                   >
-                    <option value="">— nessuno —</option>
-                    {availableManagers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    <MenuItem value="">— nessuno —</MenuItem>
+                    {availableManagers.map((m) => <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>)}
                   </Select>
                   {managerHelperText && (
                     <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.5 }}>
