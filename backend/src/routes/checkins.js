@@ -79,11 +79,26 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
         throw new ForbiddenError('This employee is deactivated and cannot check in', 'CHECKIN_EMPLOYEE_INACTIVE');
       }
 
-      // hiring_date NULL or <= today never blocks — covers legacy employees
-      // (backfilled to created_at by migration 035) and employees created via
-      // this endpoint before this feature existed (hiring_date never set).
+      // hiring_date NULL or <= the check-in's effective event date never blocks —
+      // covers legacy employees (backfilled to created_at by migration 035) and
+      // employees created via this endpoint before this feature existed
+      // (hiring_date never set).
+      //
+      // The comparison must use the check-in's effective event date, not the
+      // server's "today" — occurred_at (offline/backdated check-ins, up to 48h
+      // in the past per PostCheckinSchema) is the authoritative event time
+      // everywhere else in this handler (it drives is_offline above and is what
+      // actually gets stored as the checkin's timestamp below). Comparing
+      // hiring_date against "today" unconditionally would let an employee hired
+      // today submit a backdated offline check-in from before their hiring_date
+      // and have it wrongly accepted. Kept as a 'YYYY-MM-DD' string comparison
+      // (not Date-object) for the same TZ-safety reason as hiring_date's own
+      // ::text cast above.
       const { hiring_date: hiringDate } = employeeResult.rows[0];
-      if (hiringDate && hiringDate > new Date().toISOString().slice(0, 10)) {
+      const effectiveEventDate = occurred_at
+        ? new Date(occurred_at).toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
+      if (hiringDate && hiringDate > effectiveEventDate) {
         throw new EmploymentNotStartedError(hiringDate);
       }
 

@@ -182,6 +182,55 @@ describe('POST /api/v1/admin/employees — new fields (Sede/Matricola/Data assun
     expect(res.body.error).toBe('INVALID_MANAGER_ASSIGNMENT');
   });
 
+  it('rejects manager_id belonging to a manager on a DIFFERENT client (cross-tenant) with 400 INVALID_MANAGER_ASSIGNMENT', async () => {
+    if (!dbAvailable) return;
+    const otherClientId = await makeClient();
+    const otherSiteId = await makeSite(otherClientId);
+    const managerOnOtherClient = await makeManager(otherClientId, otherSiteId);
+    const token = adminToken(clientId);
+
+    const res = await request(app)
+      .post('/api/v1/admin/employees')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        email: uniqueEmail('cross-tenant-manager'),
+        name: 'Dipendente',
+        role: 'employee',
+        client_id: clientId,
+        site_id: siteId,
+        assigned_sites: [siteId],
+        manager_id: managerOnOtherClient,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('INVALID_MANAGER_ASSIGNMENT');
+
+    await pool.query('DELETE FROM clients WHERE id = $1', [otherClientId]);
+  });
+
+  it('rejects manager_id belonging to a DEACTIVATED manager with 400 INVALID_MANAGER_ASSIGNMENT', async () => {
+    if (!dbAvailable) return;
+    const managerId = await makeManager(clientId, siteId);
+    await pool.query('UPDATE employees SET active = false WHERE id = $1', [managerId]);
+    const token = adminToken(clientId);
+
+    const res = await request(app)
+      .post('/api/v1/admin/employees')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        email: uniqueEmail('deactivated-manager'),
+        name: 'Dipendente',
+        role: 'employee',
+        client_id: clientId,
+        site_id: siteId,
+        assigned_sites: [siteId],
+        manager_id: managerId,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('INVALID_MANAGER_ASSIGNMENT');
+  });
+
   it('creates an employee with no manager_id (optional, site with no manager yet)', async () => {
     if (!dbAvailable) return;
     const token = adminToken(clientId);

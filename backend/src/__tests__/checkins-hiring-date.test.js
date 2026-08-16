@@ -129,6 +129,32 @@ describe('POST /api/v1/checkins — hiring_date guard', () => {
     expect(res.status).toBe(201);
   });
 
+  it('rejects backdated offline check-in with 403 EMPLOYMENT_NOT_STARTED when occurred_at is before hiring_date (today)', async () => {
+    if (!dbAvailable) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const employeeId = await makeEmployee(clientId, siteId, today);
+    const token = tokenFor({ client_id: clientId, role: 'employee', employee_id: employeeId });
+    // 30h in the past: within the 48h offline window, but its UTC date is
+    // guaranteed to fall before "today" — proves the guard now uses occurred_at
+    // (the effective event date) instead of the server's current date.
+    const occurredAt = new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString();
+
+    const res = await request(app)
+      .post('/api/v1/checkins')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        employee_id: employeeId,
+        site_id: siteId,
+        type: 'IN',
+        occurred_at: occurredAt,
+        client_uuid: '55555555-5555-5555-5555-555555555555',
+      });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('EMPLOYMENT_NOT_STARTED');
+    expect(res.body.details.hiring_date).toBe(today);
+  });
+
   it('allows check-in when hiring_date is NULL (legacy employee, no regression)', async () => {
     if (!dbAvailable) return;
     const employeeId = await makeEmployee(clientId, siteId, null);
