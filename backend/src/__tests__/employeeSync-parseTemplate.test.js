@@ -6,7 +6,7 @@ const { parseTemplate } = require('../services/employeeSync/parseTemplate');
 async function buildWorkbook({ dipendenti = [], sedi = [] }) {
   const wb = new ExcelJS.Workbook();
   const wsDip = wb.addWorksheet('Dipendenti');
-  wsDip.addRow(['nome_completo', 'email', 'telefono', 'ruolo', 'sede', 'matricola', 'stato', 'data_assunzione', 'data_uscita']);
+  wsDip.addRow(['nome_completo', 'email', 'telefono', 'ruolo', 'sede', 'matricola', 'stato', 'data_assunzione', 'data_uscita', 'manager_email']);
   for (const d of dipendenti) wsDip.addRow(d);
   const wsSedi = wb.addWorksheet('Sedi');
   wsSedi.addRow(['nome_sede', 'indirizzo', 'latitudine', 'longitudine', 'raggio_geofence_m']);
@@ -42,6 +42,22 @@ describe('parseTemplate', () => {
     });
     const data = await parseTemplate(buffer);
     expect(data.dipendenti[0].data_uscita).toBeNull();
+  });
+
+  it('normalizes manager_email to lowercase and trims whitespace, like the employee email', async () => {
+    const buffer = await buildWorkbook({
+      dipendenti: [['Mario Rossi', 'mario@x.it', '', 'dipendente', 'Torino', '', 'Attivo', '', '', ' MANAGER@X.IT ']],
+    });
+    const data = await parseTemplate(buffer);
+    expect(data.dipendenti[0].manager_email).toBe('manager@x.it');
+  });
+
+  it('treats an empty manager_email cell as null', async () => {
+    const buffer = await buildWorkbook({
+      dipendenti: [['Mario Rossi', 'mario@x.it', '', 'dipendente', 'Torino', '', 'Attivo', '', '', '']],
+    });
+    const data = await parseTemplate(buffer);
+    expect(data.dipendenti[0].manager_email).toBeNull();
   });
 });
 

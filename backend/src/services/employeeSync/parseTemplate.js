@@ -74,6 +74,7 @@ async function parseTemplate(fileOrBuffer) {
     stato: (norm(d.stato) || '').toLowerCase() || null,
     data_assunzione: normDate(d.data_assunzione),
     data_uscita: normDate(d.data_uscita),
+    manager_email: normEmail(d.manager_email),
   }));
 
   const sedi = sediRows.map((s) => ({
