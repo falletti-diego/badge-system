@@ -78,7 +78,7 @@ describe('POST /api/v1/admin/employee-sync/preview', () => {
   async function buildFile(dipendenti, sedi = [['Torino', '', '', '', '']]) {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Dipendenti');
-    ws.addRow(['nome_completo', 'email', 'telefono', 'ruolo', 'sede', 'matricola', 'stato', 'data_assunzione', 'data_uscita']);
+    ws.addRow(['nome_completo', 'email', 'telefono', 'ruolo', 'sede', 'matricola', 'stato', 'data_assunzione', 'data_uscita', 'manager_email']);
     for (const d of dipendenti) ws.addRow(d);
     const wsSedi = wb.addWorksheet('Sedi');
     wsSedi.addRow(['nome_sede', 'indirizzo', 'latitudine', 'longitudine', 'raggio_geofence_m']);
@@ -180,6 +180,52 @@ describe('POST /api/v1/admin/employee-sync/preview', () => {
       .attach('file', buffer, 'test.xlsx');
 
     expect(res.status).toBe(400);
+  });
+
+  it('flags manager_email that does not match any existing manager for the client', async () => {
+    if (!dbAvailable) return;
+
+    await makeSite(clientId, 'Torino');
+
+    const buffer = await buildFile([
+      ['Dipendente Con Manager', 'con-manager-preview-test@x.it', '', 'dipendente', 'Torino', '', 'Attivo', '2026-07-01', '', 'manager-inesistente@x.it'],
+    ]);
+
+    const token = tokenFor({ client_id: clientId, role: 'admin' });
+    const res = await request(app)
+      .post('/api/v1/admin/employee-sync/preview')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', buffer, 'test.xlsx');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.errors.some((e) => e.includes('manager-inesistente@x.it'))).toBe(true);
+    expect(res.body.data.nuovi).toEqual([]);
+  });
+
+  it('accepts manager_email that matches an existing manager for the client', async () => {
+    if (!dbAvailable) return;
+
+    const siteId = await makeSite(clientId, 'Torino');
+    const managerEmail = uniqueEmail('admin-employeesync-preview-manager');
+    await pool.query(
+      `INSERT INTO employees (client_id, email, name, role, site_id, assigned_sites, active)
+       VALUES ($1, $2, 'Manager Esistente', 'manager', $3, $4, true)`,
+      [clientId, managerEmail, siteId, [siteId]]
+    );
+
+    const buffer = await buildFile([
+      ['Dipendente Con Manager', 'con-manager-valido-preview-test@x.it', '', 'dipendente', 'Torino', '', 'Attivo', '2026-07-01', '', managerEmail],
+    ]);
+
+    const token = tokenFor({ client_id: clientId, role: 'admin' });
+    const res = await request(app)
+      .post('/api/v1/admin/employee-sync/preview')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', buffer, 'test.xlsx');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.errors).toEqual([]);
+    expect(res.body.data.nuovi).toHaveLength(1);
   });
 
   it('handles a file that is not a valid xlsx with a clear error, not a 500 crash', async () => {

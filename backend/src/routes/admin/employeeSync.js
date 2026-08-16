@@ -71,15 +71,21 @@ async function runPreviewDiff(buffer, clientId, db = pool, { createSites = false
     // manuale su staging: caricare un file non-xlsx dava INTERNAL_ERROR).
     return { errors: ['Il file caricato non è un file Excel (.xlsx) valido.'], diff: null, data: null };
   }
-  const errors = validateSyntax(data);
-  if (errors.length > 0) return { errors, diff: null, data: null };
-
   // Scope del wizard: solo personale operativo legato a una sede (employee/manager).
   // Admin e viewer non hanno assegnazione di sede e sono gestiti altrove in Admin.
+  // Fetchato PRIMA di validateSyntax (non dopo, come in origine) perché serve
+  // anche per validare manager_email — stesso identico dato, zero query aggiuntive.
   const dbEmployees = (await db.query(
     'SELECT * FROM employees WHERE client_id = $1::uuid AND role IN (\'employee\', \'manager\')',
     [clientId]
   )).rows;
+  const existingManagerEmails = new Set(
+    dbEmployees.filter((e) => e.role === 'manager').map((e) => e.email)
+  );
+
+  const errors = validateSyntax(data, { existingManagerEmails });
+  if (errors.length > 0) return { errors, diff: null, data: null };
+
   const siteIdByName = await resolveSiteIdByName(db, data.sedi, clientId, { create: createSites });
 
   const diff = computeDiff(data.dipendenti, dbEmployees, siteIdByName);
