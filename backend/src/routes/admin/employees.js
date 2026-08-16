@@ -5,7 +5,7 @@ const { z } = require('zod');
 const { randomBytes } = require('crypto');
 const { pool } = require('../../db/pool');
 const { hashPassword } = require('../../auth/password');
-const { ValidationError, NotFoundError } = require('../../utils/errors');
+const { ApiError, ValidationError, NotFoundError, ConflictError } = require('../../utils/errors');
 const logger = require('../../utils/logger');
 const { logAudit } = require('../../middleware/audit');
 const { resolveTenantScope } = require('../../utils/tenantScope');
@@ -45,16 +45,43 @@ router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, re
       }
     }
 
+    // Validazione server-side del manager: deve essere un manager reale,
+    // dello stesso cliente, con site_id coincidente con la sede scelta per
+    // il nuovo dipendente. La UI filtra già correttamente, ma un client
+    // malevolo/bug potrebbe inviare un manager_id arbitrario.
+    if (data.manager_id) {
+      const managerCheck = await pool.query(
+        `SELECT id FROM employees WHERE id = $1 AND client_id = $2 AND role = 'manager' AND site_id = $3`,
+        [data.manager_id, targetClientId, data.site_id || null]
+      );
+      if (managerCheck.rowCount === 0) {
+        return next(new ApiError(
+          'INVALID_MANAGER_ASSIGNMENT',
+          'manager_id does not match a manager of the selected site',
+          400
+        ));
+      }
+    }
+
     const tempPassword = data.password || generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);
 
-    const result = await pool.query(
-      `INSERT INTO employees (client_id, email, name, phone, role, site_id, password_hash, assigned_sites)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::UUID[])
-       RETURNING id, client_id, email, name, phone, role, site_id, assigned_sites, created_at`,
-      [targetClientId, data.email, data.name, data.phone || null,
-        data.role, data.site_id || null, passwordHash, data.assigned_sites]
-    );
+    let result;
+    try {
+      result = await pool.query(
+        `INSERT INTO employees (client_id, email, name, phone, role, site_id, password_hash, assigned_sites, external_employee_id, hiring_date, manager_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::UUID[], $9, $10, $11)
+         RETURNING id, client_id, email, name, phone, role, site_id, assigned_sites, external_employee_id, hiring_date, manager_id, created_at`,
+        [targetClientId, data.email, data.name, data.phone || null,
+          data.role, data.site_id || null, passwordHash, data.assigned_sites,
+          data.external_employee_id || null, data.hiring_date || null, data.manager_id || null]
+      );
+    } catch (err) {
+      if (err.code === '23505' && err.constraint === 'uq_employees_external_id') {
+        return next(new ConflictError('Matricola già in uso per questo cliente', 'DUPLICATE_MATRICOLA'));
+      }
+      throw err;
+    }
 
     const employee = result.rows[0];
     logger.info({ action: 'admin_create_employee', employee_id: employee.id, client_id: targetClientId });
@@ -64,7 +91,10 @@ router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, re
       entityId: employee.id,
       clientId: employee.client_id,
       oldValue: null,
-      newValue: { name: employee.name, email: employee.email, role: employee.role, client_id: employee.client_id },
+      newValue: {
+        name: employee.name, email: employee.email, role: employee.role, client_id: employee.client_id,
+        external_employee_id: employee.external_employee_id, hiring_date: employee.hiring_date, manager_id: employee.manager_id,
+      },
       userId: req.user.user_id,
     });
 
