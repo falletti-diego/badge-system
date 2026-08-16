@@ -24,7 +24,7 @@ const FILE_FIELD_BY_DB_FIELD = {
 // per la UI del wizard — senza, l'admin vedeva solo l'email della riga
 // modificata, senza alcuna indicazione di COSA fosse cambiato (bug segnalato
 // testando la Sezione 6 della checklist manuale su staging).
-function computeFieldChanges(dbRow, row, siteId, siteNameById) {
+function computeFieldChanges(dbRow, row, siteId, siteNameById, managerIdByEmail) {
   const changes = {};
   const currentSiteId = dbRow.site_id || (dbRow.assigned_sites && dbRow.assigned_sites[0]) || null;
   if (currentSiteId !== siteId) {
@@ -34,6 +34,10 @@ function computeFieldChanges(dbRow, row, siteId, siteNameById) {
       fromName: currentSiteId ? siteNameById.get(currentSiteId) || null : null,
       toName: siteId ? siteNameById.get(siteId) || null : null,
     };
+  }
+  const newManagerId = row.manager_email ? (managerIdByEmail.get(row.manager_email) || null) : null;
+  if ((dbRow.manager_id || null) !== newManagerId) {
+    changes.manager_id = { from: dbRow.manager_id || null, to: newManagerId };
   }
   for (const [field, differs] of Object.entries(FIELD_COMPARATORS)) {
     if (differs(dbRow, row)) {
@@ -57,6 +61,15 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
   // quelle menzionate nel file caricato.
   const siteNameById = new Map([...siteIdByName].map(([name, id]) => [id, name]));
 
+  // Email dei manager lowercased: manager_email è sempre lowercased da
+  // normEmail in parseTemplate.js, ma le email dei dipendenti in DB non
+  // hanno questa garanzia (es. creati via form admin) — senza normalizzare
+  // qui, un manager con email mixed-case non verrebbe mai risolto (stesso
+  // bug fixato in employeeSync.js per existingManagerEmails, Task 12).
+  const managerIdByEmail = new Map(
+    dbEmployees.filter((e) => e.role === 'manager').map((e) => [e.email.toLowerCase(), e.id])
+  );
+
   const dbByEmail = new Map(dbEmployees.map((e) => [e.email, e]));
   const seenEmails = new Set();
 
@@ -76,6 +89,7 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
           site_id: siteId,
           external_employee_id: row.matricola,
           hiring_date: row.data_assunzione || new Date().toISOString().slice(0, 10),
+          manager_id: row.manager_email ? (managerIdByEmail.get(row.manager_email) || null) : null,
         });
       }
       continue;
@@ -87,7 +101,7 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
         email: row.email,
         hiring_date: dbRow.hiring_date,
         exit_date: null,
-        changes: computeFieldChanges(dbRow, row, siteId, siteNameById),
+        changes: computeFieldChanges(dbRow, row, siteId, siteNameById, managerIdByEmail),
       });
       continue;
     }
@@ -103,7 +117,7 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
 
     if (!dbRow.active && !fileActive) continue;
 
-    const changes = computeFieldChanges(dbRow, row, siteId, siteNameById);
+    const changes = computeFieldChanges(dbRow, row, siteId, siteNameById, managerIdByEmail);
     if (Object.keys(changes).length > 0) {
       modificati.push({ id: dbRow.id, email: row.email, changes });
     }

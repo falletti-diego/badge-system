@@ -125,3 +125,46 @@ describe('computeDiff', () => {
     expect(diff.riattivati[0].changes).toEqual({});
   });
 });
+
+describe('computeDiff — manager_email resolution', () => {
+  const dbWithManager = [
+    { id: 'mgr-1', email: 'capo@x.it', name: 'Capo', phone: null, role: 'manager', site_id: 'site-torino', assigned_sites: [], active: true, hiring_date: null, exit_date: null, external_employee_id: null, manager_id: null },
+  ];
+
+  it('resolves manager_email to manager_id for a new employee', () => {
+    const diff = computeDiff(
+      [fileRow({ email: 'nuovo@x.it', nome_completo: 'Nuovo', manager_email: 'capo@x.it' })],
+      dbWithManager,
+      siteIdByName
+    );
+    expect(diff.nuovi[0].manager_id).toBe('mgr-1');
+  });
+
+  it('leaves manager_id null when manager_email is empty', () => {
+    const diff = computeDiff(
+      [fileRow({ email: 'nuovo@x.it', nome_completo: 'Nuovo', manager_email: null })],
+      dbWithManager,
+      siteIdByName
+    );
+    expect(diff.nuovi[0].manager_id).toBeNull();
+  });
+
+  it('detects a manager change as "modificato"', () => {
+    const db = [dbEmp({ manager_id: null }), ...dbWithManager];
+    const diff = computeDiff([fileRow({ manager_email: 'capo@x.it' })], db, siteIdByName);
+    expect(diff.modificati).toHaveLength(1);
+    expect(diff.modificati[0].changes.manager_id).toEqual({ from: null, to: 'mgr-1' });
+  });
+
+  it('resolves manager_id even when the DB-stored manager email is mixed-case (managerIdByEmail keys are lowercased)', () => {
+    const dbWithMixedCaseManager = [
+      { id: 'mgr-2', email: 'Capo@X.IT', name: 'Capo', phone: null, role: 'manager', site_id: 'site-torino', assigned_sites: [], active: true, hiring_date: null, exit_date: null, external_employee_id: null, manager_id: null },
+    ];
+    const diff = computeDiff(
+      [fileRow({ email: 'nuovo@x.it', nome_completo: 'Nuovo', manager_email: 'capo@x.it' })],
+      dbWithMixedCaseManager,
+      siteIdByName
+    );
+    expect(diff.nuovi[0].manager_id).toBe('mgr-2');
+  });
+});
