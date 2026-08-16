@@ -133,7 +133,7 @@ if (employee.hiring_date && new Date(employee.hiring_date) > new Date(new Date()
   throw new EmploymentNotStartedError(employee.hiring_date);
 }
 ```
-`hiring_date IS NULL` (tutti i dipendenti esistenti oggi) → condizione falsa, nessun blocco, comportamento invariato.
+**Correzione verificata leggendo `backend/migrations/035_employee_lifecycle.sql` (non un'assunzione)**: i dipendenti esistenti PRIMA della migration 035 hanno già `hiring_date` valorizzata via backfill (`hiring_date = created_at::date`, una data passata) — non `NULL`. Solo i dipendenti creati tramite `POST /admin/employees` **dopo** la 035 ma prima di questa feature possono avere `hiring_date IS NULL` (colonna mai popolata da quell'endpoint). In entrambi i casi il check `hiring_date > oggi` risulta falso (data passata o `NULL`), quindi nessun blocco — il comportamento resta corretto, la spiegazione originale ("tutti NULL") era solo imprecisa, non la logica.
 
 ### 5. Wizard xlsx — `backend/src/services/employeeSync/`
 
