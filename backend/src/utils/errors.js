@@ -73,6 +73,14 @@ class GeofenceError extends ApiError {
   }
 }
 
+class EmploymentNotStartedError extends ApiError {
+  constructor(hiringDate) {
+    super('EMPLOYMENT_NOT_STARTED', 'Employment has not started yet', 403);
+    this.name = 'EmploymentNotStartedError';
+    this.details = { hiring_date: hiringDate };
+  }
+}
+
 class SessionRevokedError extends ApiError {
   constructor(message = 'Session has been revoked') {
     super('SESSION_REVOKED', message, 401);
@@ -90,5 +98,6 @@ module.exports = {
   RateLimitError,
   InternalServerError,
   GeofenceError,
+  EmploymentNotStartedError,
   SessionRevokedError,
 };

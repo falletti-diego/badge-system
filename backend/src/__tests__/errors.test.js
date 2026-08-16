@@ -34,6 +34,17 @@ describe('Error Classes', () => {
     });
   });
 
+  describe('EmploymentNotStartedError', () => {
+    test('sets code EMPLOYMENT_NOT_STARTED, statusCode 403, details.hiring_date', () => {
+      const { EmploymentNotStartedError } = require('../utils/errors');
+      const err = new EmploymentNotStartedError('2026-09-01');
+      expect(err.code).toBe('EMPLOYMENT_NOT_STARTED');
+      expect(err.statusCode).toBe(403);
+      expect(err.details).toEqual({ hiring_date: '2026-09-01' });
+      expect(err instanceof Error).toBe(true);
+    });
+  });
+
   describe('ValidationError', () => {
     test('is a 400 VALIDATION_ERROR', () => {
       const err = new ValidationError('Invalid email');
