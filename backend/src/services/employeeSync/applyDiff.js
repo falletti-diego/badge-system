@@ -43,10 +43,10 @@ async function applyDiff(db, diff, { clientId }) {
     const tempPassword = generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);
     const ins = await db.query(
-      `INSERT INTO employees (client_id, email, name, phone, role, site_id, password_hash, assigned_sites, external_employee_id, hiring_date, active, must_change_password)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::UUID[], $9, $10, true, true) RETURNING id`,
+      `INSERT INTO employees (client_id, email, name, phone, role, site_id, password_hash, assigned_sites, external_employee_id, hiring_date, manager_id, active, must_change_password)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::UUID[], $9, $10, $11, true, true) RETURNING id`,
       [clientId, n.email, n.name, n.phone || null, n.role, n.site_id, passwordHash,
-        n.site_id ? [n.site_id] : [], n.external_employee_id || null, n.hiring_date]
+        n.site_id ? [n.site_id] : [], n.external_employee_id || null, n.hiring_date, n.manager_id || null]
     );
     credentials.push({ id: ins.rows[0].id, email: n.email, name: n.name, password: tempPassword });
     await logAudit(db, { action: 'employee_sync_create', entity: 'employee', entityId: ins.rows[0].id,
