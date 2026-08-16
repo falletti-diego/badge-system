@@ -12,6 +12,8 @@
 
 **Nota di scope scoperta durante la stesura del piano (non nella spec originale):** il wizard xlsx risolve `manager_email` solo contro manager **già esistenti in DB** per quel cliente (da `dbEmployees`, già caricato). Un manager creato nello stesso file upload non è risolvibile nello stesso passaggio (il suo `id` non esiste ancora al momento del calcolo diff) — per assegnare dipendenti a un manager nuovo servono due upload separati (prima il manager, poi i suoi dipendenti). Documentato come limitazione nota, non un bug.
 
+**Struttura a 3 fasi con checkpoint di verifica** (su richiesta esplicita dell'utente): il piano è diviso in Fase 1 (backend core, Task 1-5), Fase 2 (frontend, Task 7), Fase 3 (wizard xlsx, Task 9-14) — ciascuna chiusa da un task di checkpoint dedicato (Task 6, 8, 15) che invoca `/code-review:code-review` e `/test-all` prima di proseguire alla fase successiva. Un problema trovato in un checkpoint va risolto prima di passare oltre, non accumulato.
+
 ---
 
 ## File Structure
@@ -30,6 +32,8 @@
 - Modify: `backend/src/services/employeeSync/applyDiff.js` — `manager_id` nell'INSERT dei nuovi
 
 ---
+
+## Fase 1 — Backend core (migration, validazione, endpoint, enforcement)
 
 ## Task 1: Migration 040 — colonna `manager_id`
 
@@ -789,7 +793,40 @@ created via this endpoint before this feature (hiring_date never set)."
 
 ---
 
-## Task 6: Frontend — campi nel form "Nuovo Dipendente"
+## Task 6: Checkpoint Fase 1 — code review + test-all
+
+**Files:** nessuno — solo verifica
+
+- [ ] **Step 1: Invocare `/code-review:code-review`**
+
+Scope: i commit di Task 1-5 (migration 040, `EmploymentNotStartedError`, `AdminEmployeeSchema`, `POST /admin/employees`, enforcement `hiring_date` in `checkins.js`). Effort consigliato: `medium` (area di media complessità — nuova colonna FK self-referencing, validazione server-side manager, enforcement su un endpoint di produzione critico come il check-in).
+
+- [ ] **Step 2: Valutare i finding**
+
+Per ogni finding con `verdict: CONFIRMED`: applicarlo prima di proseguire. Per `verdict: PLAUSIBLE` senza verifica aggiuntiva: valutare caso per caso, non ignorare silenziosamente — se il dubbio riguarda l'enforcement del check-in (area a rischio più alto di questa fase, tocca un endpoint già in produzione), verificare comunque prima di soprassedere.
+
+- [ ] **Step 3: Invocare `/test-all` (backend)**
+
+La Fase 1 non tocca frontend — eseguire almeno la suite backend (`/test-all backend`, o equivalente completo se la skill non supporta lo scope parziale).
+
+- [ ] **Step 4: Decisione go/no-go**
+
+Se code review e test-all sono puliti (nessun finding CONFIRMED residuo, tutti i test PASS): procedere alla Fase 2. Se emergono problemi non risolvibili rapidamente: fermarsi e chiedere indicazioni prima di continuare — non accumulare debito su una fase successiva che dipende da questa.
+
+- [ ] **Step 5: Commit (solo se sono stati applicati fix ai finding)**
+
+```bash
+git add -A
+git commit -m "fix: address findings from Fase 1 checkpoint code review"
+```
+
+Se non ci sono fix da applicare, nessun commit necessario in questo step.
+
+---
+
+## Fase 2 — Frontend
+
+## Task 7: Frontend — campi nel form "Nuovo Dipendente"
 
 **Files:**
 - Modify: `frontend-web/src/features/admin/tabs/EmployeesTab.jsx`
@@ -1038,7 +1075,38 @@ dropdown."
 
 ---
 
-## Task 7: xlsx wizard — colonna `manager_email` nel template
+## Task 8: Checkpoint Fase 2 — code review + test-all
+
+**Files:** nessuno — solo verifica
+
+- [ ] **Step 1: Invocare `/code-review:code-review`**
+
+Scope: il commit di Task 7 (nuovi campi in `EmployeesTab.jsx`). Effort consigliato: `medium` — attenzione particolare a stati condizionali (Manager di riferimento disabilitato/vuoto) e alla corretta chiusura dei tag `Stack`/`FormControl` nel JSX, dato il refactoring del blocco esistente "Sede gestita".
+
+- [ ] **Step 2: Valutare i finding**
+
+Stessa regola del Task 6: `CONFIRMED` → fix prima di proseguire; `PLAUSIBLE` → valutare, non ignorare silenziosamente.
+
+- [ ] **Step 3: Invocare `/test-all` (entrambi — backend e frontend)**
+
+A differenza del checkpoint Fase 1, qui vale la pena eseguire `/test-all` su **entrambi** i progetti: il frontend consuma il contratto API esteso in Fase 1, un controllo incrociato conferma che l'integrazione end-to-end (payload inviato dal form → endpoint → risposta mostrata) non abbia introdotto un disallineamento silenzioso tra i due lati.
+
+- [ ] **Step 4: Decisione go/no-go**
+
+Stessa logica del Task 6 — procedere alla Fase 3 solo se pulito.
+
+- [ ] **Step 5: Commit (solo se sono stati applicati fix)**
+
+```bash
+git add -A
+git commit -m "fix: address findings from Fase 2 checkpoint code review"
+```
+
+---
+
+## Fase 3 — Wizard xlsx "Aggiorna Dipendenti"
+
+## Task 9: xlsx wizard — colonna `manager_email` nel template
 
 **Files:**
 - Modify: `backend/src/services/employeeSync/generateTemplate.js`
@@ -1149,7 +1217,7 @@ already-downloaded templates."
 
 ---
 
-## Task 8: xlsx wizard — parsing `manager_email`
+## Task 10: xlsx wizard — parsing `manager_email`
 
 **Files:**
 - Modify: `backend/src/services/employeeSync/parseTemplate.js`
@@ -1207,7 +1275,7 @@ git commit -m "feat(xlsx): parse manager_email column (normalized like the emplo
 
 ---
 
-## Task 9: xlsx wizard — validazione `manager_email`
+## Task 11: xlsx wizard — validazione `manager_email`
 
 **Files:**
 - Modify: `backend/src/services/employeeSync/validate.js`
@@ -1338,7 +1406,7 @@ function signature backward compatible with existing callers."
 
 ---
 
-## Task 10: xlsx wizard — passare `existingManagerEmails` dalla route
+## Task 12: xlsx wizard — passare `existingManagerEmails` dalla route
 
 **Files:**
 - Modify: `backend/src/routes/admin/employeeSync.js:63-83`
@@ -1414,7 +1482,7 @@ existingManagerEmails into validateSyntax."
 
 ---
 
-## Task 11: xlsx wizard — risoluzione `manager_email`→`manager_id` in `computeDiff`
+## Task 13: xlsx wizard — risoluzione `manager_email`→`manager_id` in `computeDiff`
 
 **Files:**
 - Modify: `backend/src/services/employeeSync/computeDiff.js`
@@ -1590,7 +1658,7 @@ fetched once per preview/apply call."
 
 ---
 
-## Task 12: xlsx wizard — `manager_id` nell'INSERT dei nuovi dipendenti
+## Task 14: xlsx wizard — `manager_id` nell'INSERT dei nuovi dipendenti
 
 **Files:**
 - Modify: `backend/src/services/employeeSync/applyDiff.js:39-54`
@@ -1629,7 +1697,7 @@ In `backend/src/services/employeeSync/applyDiff.js`, estendere il blocco `for (c
   }
 ```
 
-Nota: il ramo "modificati"/"riattivati" (`buildFieldSetClause`) non richiede modifiche — gestisce già `manager_id` genericamente come qualunque altro campo in `changes` non speciale (stesso meccanismo già usato per `phone`/`external_employee_id`), essendo stato aggiunto in `computeFieldChanges` nel Task 11.
+Nota: il ramo "modificati"/"riattivati" (`buildFieldSetClause`) non richiede modifiche — gestisce già `manager_id` genericamente come qualunque altro campo in `changes` non speciale (stesso meccanismo già usato per `phone`/`external_employee_id`), essendo stato aggiunto in `computeFieldChanges` nel Task 13.
 
 - [ ] **Step 5: Eseguire il test e verificare che passi**
 
@@ -1653,35 +1721,40 @@ buildFieldSetClause — no change needed there."
 
 ---
 
-## Task 13: Verifica finale end-to-end
+## Task 15: Checkpoint Fase 3 (finale) — code review + test-all + verifica end-to-end
 
-**Files:** nessuno — solo esecuzione
+**Files:** nessuno — solo esecuzione/verifica
 
 - [ ] **Step 1: Applicare la migration 040 anche sul DB di test, se non già fatto nel Task 1**
 
 Run: `cd backend && node scripts/run-migrations.js`
 Expected: nessun errore, `040_add_manager_id_to_employees.sql` risulta applicata (idempotente — `IF NOT EXISTS`, rieseguibile senza danni)
 
-- [ ] **Step 2: Suite backend completa**
+- [ ] **Step 2: Invocare `/code-review:code-review`**
 
-Run: `cd backend && npm test`
-Expected: tutti i test PASS, incluso ogni file toccato in questo piano
+Scope: questa volta **sull'intero branch/insieme di commit del piano** (Task 1-14), non solo Fase 3 — è il checkpoint finale, l'occasione per una review olistica che i due checkpoint precedenti (per costruzione, scoped alla singola fase) non potevano dare. Effort consigliato: `high` (copertura più ampia, ultima rete di sicurezza prima della chiusura del piano).
 
-- [ ] **Step 3: Lint backend**
+- [ ] **Step 3: Valutare i finding**
 
-Run: `cd backend && npm run lint`
-Expected: 0 errori
+Stessa regola dei checkpoint precedenti: `CONFIRMED` → fix subito; `PLAUSIBLE` → valutare esplicitamente, non ignorare.
 
-- [ ] **Step 4: Suite frontend-web completa**
+- [ ] **Step 4: Invocare `/test-all` (entrambi — backend e frontend)**
 
-Run: `cd frontend-web && npx vitest run`
-Expected: tutti i test PASS
+Run equivalente a: `cd backend && npm test && npm run lint` più `cd frontend-web && npx vitest run` (o l'invocazione unificata della skill se disponibile).
+Expected: tutti i test PASS, 0 errori lint — copre anche ogni file toccato nelle Fasi 1 e 2, non solo Fase 3.
 
 - [ ] **Step 5: Verifica manuale rapida in locale (facoltativa ma consigliata prima del deploy)**
 
 Avviare backend+frontend in locale, aprire il pannello Admin → Dipendenti → Nuovo Dipendente: creare un manager su una sede, poi un dipendente sulla stessa sede verificando che il dropdown Manager lo mostri; provare a creare un secondo dipendente con la stessa matricola e verificare il messaggio di errore "Matricola già in uso"; scaricare il template xlsx e verificare la colonna `manager_email` valorizzata per il dipendente appena creato.
 
-- [ ] **Step 6: Nessun commit in questo task** — solo verifica, i commit sono già stati fatti task per task.
+- [ ] **Step 6: Commit (solo se sono stati applicati fix ai finding)**
+
+```bash
+git add -A
+git commit -m "fix: address findings from Fase 3 (final) checkpoint code review"
+```
+
+Se non ci sono fix da applicare, nessun commit necessario — il piano è chiuso.
 
 ---
 
