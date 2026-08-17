@@ -1,6 +1,7 @@
 'use strict';
 
 const { AdminEmployeeSchema } = require('../middleware/validation');
+const { todayInTimeZone } = require('../utils/date');
 
 function validBody(overrides = {}) {
   return {
@@ -25,7 +26,7 @@ describe('AdminEmployeeSchema — new fields', () => {
   });
 
   test('accepts hiring_date equal to today', () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayInTimeZone();
     const result = AdminEmployeeSchema.safeParse({ body: validBody({ hiring_date: today }) });
     expect(result.success).toBe(true);
   });

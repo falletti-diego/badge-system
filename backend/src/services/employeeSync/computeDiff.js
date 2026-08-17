@@ -1,6 +1,7 @@
 'use strict';
 
 const { ROLE_MAP } = require('../onboarding/parseWorkbook');
+const { todayInTimeZone } = require('../../utils/date');
 
 const FIELD_COMPARATORS = {
   name: (db, file) => db.name !== file.nome_completo,
@@ -129,7 +130,10 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
           role: ROLE_MAP[row.ruolo],
           site_id: siteId,
           external_employee_id: row.matricola,
-          hiring_date: row.data_assunzione || new Date().toISOString().slice(0, 10),
+          // "Oggi" in Europe/Rome, non UTC — stessa correzione applicata a
+          // checkins.js e validation.js (hiring_date è una data di calendario
+          // italiana, non un istante UTC).
+          hiring_date: row.data_assunzione || todayInTimeZone(),
           manager_id: resolveManagerId(row, siteId),
         });
       }
@@ -151,7 +155,7 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
       rimossi.push({
         id: dbRow.id,
         email: row.email,
-        exit_date: row.data_uscita || new Date().toISOString().slice(0, 10),
+        exit_date: row.data_uscita || todayInTimeZone(),
       });
       continue;
     }

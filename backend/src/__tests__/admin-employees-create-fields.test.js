@@ -2,6 +2,7 @@
 
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
+const { todayInTimeZone } = require('../utils/date');
 
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
@@ -114,7 +115,7 @@ describe('POST /api/v1/admin/employees — new fields (Sede/Matricola/Data assun
         site_id: siteId,
         assigned_sites: [siteId],
         external_employee_id: 'MAT001',
-        hiring_date: new Date().toISOString().slice(0, 10),
+        hiring_date: todayInTimeZone(),
         manager_id: managerId,
       });
 

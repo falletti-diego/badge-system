@@ -5,6 +5,7 @@
 
 const { z } = require('zod');
 const pino = require('pino');
+const { todayInTimeZone } = require('../utils/date');
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
@@ -475,8 +476,14 @@ const AdminEmployeeSchema = z.object({
       errorMap: () => ({ message: 'role must be employee or manager' }),
     }).default('employee'),
     site_id: z.string().uuid('site_id must be a valid UUID').optional().nullable(),
+    // Niente `.min(1)` qui: per role === 'manager' questo campo è legittimamente
+    // vuoto (i manager non hanno assigned_sites). Il requisito "almeno una sede"
+    // per i dipendenti è applicato dal `.refine()` sotto, condizionato dal ruolo —
+    // un vincolo di campo qui scatterebbe PRIMA di quel refine e bloccherebbe la
+    // creazione di ogni manager, indipendentemente dal ruolo (bug reale: creare
+    // un manager da "Nuovo Dipendente" falliva sempre con "assigned_sites must
+    // contain at least one site").
     assigned_sites: z.array(z.string().uuid('each assigned_site must be a valid UUID'))
-      .min(1, 'assigned_sites must contain at least one site')
       .default([]),
     password: z.string().min(8, 'password must be at least 8 characters').max(100).optional(),
     external_employee_id: z.string()
@@ -486,7 +493,10 @@ const AdminEmployeeSchema = z.object({
     hiring_date: z.string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'hiring_date must be in YYYY-MM-DD format')
       .refine((d) => !isNaN(new Date(`${d}T00:00:00Z`).getTime()), { message: 'hiring_date must be a valid date' })
-      .refine((d) => d >= new Date().toISOString().slice(0, 10), {
+      // Confronto con "oggi" in Europe/Rome, non UTC: hiring_date è una data di
+      // calendario italiana scelta dal date picker, e usare toISOString() (UTC)
+      // la disallineava nella finestra mezzanotte-2am locale.
+      .refine((d) => d >= todayInTimeZone(), {
         message: 'hiring_date cannot be in the past',
       })
       .optional(),

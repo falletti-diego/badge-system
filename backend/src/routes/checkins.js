@@ -17,6 +17,7 @@ const { deleteCacheByPattern } = require('../db/redis');
 const { resolveEmployeeId, resolveSiteId } = require('../utils/resolvers');
 const { buildScopedFilters } = require('../utils/queryScope');
 const { invalidateSignatureIfExists } = require('../utils/timesheetSignature');
+const { todayInTimeZone, dateInTimeZone } = require('../utils/date');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -95,9 +96,14 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
       // (not Date-object) for the same TZ-safety reason as hiring_date's own
       // ::text cast above.
       const { hiring_date: hiringDate } = employeeResult.rows[0];
+      // "Oggi" (nessun occurred_at) va calcolato in Europe/Rome, non UTC:
+      // hiring_date è una data di calendario italiana e usare toISOString()
+      // (UTC) bloccava erroneamente EMPLOYMENT_NOT_STARTED un dipendente
+      // assunto "oggi" durante la finestra mezzanotte-2am locale, quando la
+      // data UTC è ancora "ieri" (bug riprodotto e fixato 2026-08-18).
       const effectiveEventDate = occurred_at
-        ? new Date(occurred_at).toISOString().slice(0, 10)
-        : new Date().toISOString().slice(0, 10);
+        ? dateInTimeZone(new Date(occurred_at))
+        : todayInTimeZone();
       if (hiringDate && hiringDate > effectiveEventDate) {
         throw new EmploymentNotStartedError(hiringDate);
       }

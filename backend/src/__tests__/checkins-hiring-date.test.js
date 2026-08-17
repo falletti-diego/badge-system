@@ -2,6 +2,7 @@
 
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
+const { todayInTimeZone, dateInTimeZone } = require('../utils/date');
 
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
@@ -101,7 +102,7 @@ describe('POST /api/v1/checkins — hiring_date guard', () => {
 
   it('rejects check-in with 403 EMPLOYMENT_NOT_STARTED when hiring_date is in the future', async () => {
     if (!dbAvailable) return;
-    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const tomorrow = dateInTimeZone(new Date(Date.now() + 24 * 60 * 60 * 1000));
     const employeeId = await makeEmployee(clientId, siteId, tomorrow);
     const token = tokenFor({ client_id: clientId, role: 'employee', employee_id: employeeId });
 
@@ -117,7 +118,7 @@ describe('POST /api/v1/checkins — hiring_date guard', () => {
 
   it('allows check-in when hiring_date is today', async () => {
     if (!dbAvailable) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayInTimeZone();
     const employeeId = await makeEmployee(clientId, siteId, today);
     const token = tokenFor({ client_id: clientId, role: 'employee', employee_id: employeeId });
 
@@ -131,11 +132,11 @@ describe('POST /api/v1/checkins — hiring_date guard', () => {
 
   it('rejects backdated offline check-in with 403 EMPLOYMENT_NOT_STARTED when occurred_at is before hiring_date (today)', async () => {
     if (!dbAvailable) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayInTimeZone();
     const employeeId = await makeEmployee(clientId, siteId, today);
     const token = tokenFor({ client_id: clientId, role: 'employee', employee_id: employeeId });
-    // 30h in the past: within the 48h offline window, but its UTC date is
-    // guaranteed to fall before "today" — proves the guard now uses occurred_at
+    // 30h in the past: within the 48h offline window, but its Europe/Rome date
+    // is guaranteed to fall before "today" — proves the guard now uses occurred_at
     // (the effective event date) instead of the server's current date.
     const occurredAt = new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString();
 
