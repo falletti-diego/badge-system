@@ -168,7 +168,12 @@ router.post('/apply', upload.single('file'), async (req, res, next) => {
       // foglio Sedi vengono create per davvero qui (createSites: true), cosa
       // che /preview non fa mai — il diff usato per l'apply deve riflettere
       // le sedi reali appena create, non i placeholder del preview.
-      ({ diff } = await runPreviewDiff(req.file.buffer, clientId, client, { createSites: true }));
+      let errors;
+      ({ errors, diff } = await runPreviewDiff(req.file.buffer, clientId, client, { createSites: true }));
+      if (errors.length > 0) {
+        await client.query('ROLLBACK').catch(() => {});
+        return res.json({ data: { errors, nuovi: [], riattivati: [], rimossi: [], modificati: [], anomalie: [] } });
+      }
       result = await applyDiff(client, diff, { clientId });
       await client.query('COMMIT');
     } catch (txErr) {
