@@ -24,7 +24,7 @@ const FILE_FIELD_BY_DB_FIELD = {
 // per la UI del wizard — senza, l'admin vedeva solo l'email della riga
 // modificata, senza alcuna indicazione di COSA fosse cambiato (bug segnalato
 // testando la Sezione 6 della checklist manuale su staging).
-function computeFieldChanges(dbRow, row, siteId, siteNameById, managerIdByEmail) {
+function computeFieldChanges(dbRow, row, siteId, siteNameById, resolveManagerId) {
   const changes = {};
   const currentSiteId = dbRow.site_id || (dbRow.assigned_sites && dbRow.assigned_sites[0]) || null;
   if (currentSiteId !== siteId) {
@@ -35,7 +35,7 @@ function computeFieldChanges(dbRow, row, siteId, siteNameById, managerIdByEmail)
       toName: siteId ? siteNameById.get(siteId) || null : null,
     };
   }
-  const newManagerId = row.manager_email ? (managerIdByEmail.get(row.manager_email) || null) : null;
+  const newManagerId = resolveManagerId(row, siteId);
   if ((dbRow.manager_id || null) !== newManagerId) {
     changes.manager_id = { from: dbRow.manager_id || null, to: newManagerId };
   }
@@ -54,6 +54,7 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
   const rimossi = [];
   const modificati = [];
   const anomalie = [];
+  const errors = [];
 
   // Inversione di siteIdByName (name->id, già costruita da resolveSiteIdByName
   // su TUTTE le sedi esistenti del cliente, non solo quelle nel foglio Sedi
@@ -66,9 +67,40 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
   // hanno questa garanzia (es. creati via form admin) — senza normalizzare
   // qui, un manager con email mixed-case non verrebbe mai risolto (stesso
   // bug fixato in employeeSync.js per existingManagerEmails, Task 12).
-  const managerIdByEmail = new Map(
-    dbEmployees.filter((e) => e.role === 'manager').map((e) => [e.email.toLowerCase(), e.id])
+  // Mappa a {id, site_id} (non solo id) e SOLO manager ATTIVI: serve site_id
+  // per rifiutare un manager_email che punta a un manager di una sede diversa
+  // da quella del dipendente, e il filtro active replica — anche qui, come
+  // difesa in profondità oltre a existingManagerEmails in employeeSync.js —
+  // la stessa policy della creazione singola in admin/employees.js
+  // (`role = 'manager' AND site_id = $3 AND active = true`). Trovato nel
+  // checkpoint finale (Task 15): il percorso bulk xlsx non aveva alcuna
+  // protezione equivalente a quella del form di creazione singola.
+  const managerByEmail = new Map(
+    dbEmployees
+      .filter((e) => e.role === 'manager' && e.active)
+      .map((e) => [e.email.toLowerCase(), { id: e.id, site_id: e.site_id }])
   );
+
+  // Risolve manager_email → manager_id per una riga, applicando le stesse
+  // regole della creazione singola (manager attivo, stessa sede). Un
+  // manager_email che non risolve a nessun manager attivo qui non dovrebbe
+  // normalmente capitare (già bloccato upstream da validateSyntax via
+  // existingManagerEmails) — in quel caso il manager viene semplicemente
+  // ignorato (manager_id null). Un mismatch di SEDE invece non è rilevabile
+  // in validateSyntax (gira prima che siteIdByName sia risolta), quindi va
+  // segnalato qui come errore di validazione a tutti gli effetti.
+  function resolveManagerId(row, siteId) {
+    if (!row.manager_email) return null;
+    const mgr = managerByEmail.get(row.manager_email);
+    if (!mgr) return null;
+    if (siteId && mgr.site_id && mgr.site_id !== siteId) {
+      errors.push(
+        `Foglio Dipendenti riga ${row._row}: manager_email "${row.manager_email}" appartiene a un manager di una sede diversa da quella del dipendente.`
+      );
+      return null;
+    }
+    return mgr.id;
+  }
 
   // Stessa normalizzazione di managerIdByEmail sopra: row.email (file) è
   // sempre lowercased da normEmail, ma le email dei dipendenti in DB non
@@ -78,7 +110,7 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
   // finirebbe in "nuovi" (duplicato creato, nessun vincolo unique su email)
   // mentre la riga originale, mai marcata "seen", finirebbe in "anomalie"
   // (falso "dipendente uscito"). Terza occorrenza di questo bug in questo
-  // file — vedi anche managerIdByEmail ed existingManagerEmails (Task 12).
+  // file — vedi anche managerByEmail ed existingManagerEmails (Task 12).
   const dbByEmail = new Map(dbEmployees.map((e) => [e.email.toLowerCase(), e]));
   const seenEmails = new Set();
 
@@ -98,7 +130,7 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
           site_id: siteId,
           external_employee_id: row.matricola,
           hiring_date: row.data_assunzione || new Date().toISOString().slice(0, 10),
-          manager_id: row.manager_email ? (managerIdByEmail.get(row.manager_email) || null) : null,
+          manager_id: resolveManagerId(row, siteId),
         });
       }
       continue;
@@ -110,7 +142,7 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
         email: row.email,
         hiring_date: dbRow.hiring_date,
         exit_date: null,
-        changes: computeFieldChanges(dbRow, row, siteId, siteNameById, managerIdByEmail),
+        changes: computeFieldChanges(dbRow, row, siteId, siteNameById, resolveManagerId),
       });
       continue;
     }
@@ -126,7 +158,7 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
 
     if (!dbRow.active && !fileActive) continue;
 
-    const changes = computeFieldChanges(dbRow, row, siteId, siteNameById, managerIdByEmail);
+    const changes = computeFieldChanges(dbRow, row, siteId, siteNameById, resolveManagerId);
     if (Object.keys(changes).length > 0) {
       modificati.push({ id: dbRow.id, email: row.email, changes });
     }
@@ -138,7 +170,7 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
     }
   }
 
-  return { nuovi, riattivati, rimossi, modificati, anomalie };
+  return { nuovi, riattivati, rimossi, modificati, anomalie, errors };
 }
 
 module.exports = { computeDiff };

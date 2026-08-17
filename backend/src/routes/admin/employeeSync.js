@@ -79,8 +79,14 @@ async function runPreviewDiff(buffer, clientId, db = pool, { createSites = false
     'SELECT * FROM employees WHERE client_id = $1::uuid AND role IN (\'employee\', \'manager\')',
     [clientId]
   )).rows;
+  // Solo manager ATTIVI: un manager disattivato deve essere trattato come
+  // "non esistente" dalla validazione, stessa policy già applicata dalla
+  // creazione singola in admin/employees.js (query con `active = true`).
+  // Senza questo filtro, un file con manager_email di un manager disattivato
+  // passava la validazione e gli veniva silenziosamente assegnato un manager
+  // non più operativo (bug trovato nel checkpoint finale, Task 15).
   const existingManagerEmails = new Set(
-    dbEmployees.filter((e) => e.role === 'manager').map((e) => e.email.toLowerCase())
+    dbEmployees.filter((e) => e.role === 'manager' && e.active).map((e) => e.email.toLowerCase())
   );
 
   const errors = validateSyntax(data, { existingManagerEmails });
@@ -89,6 +95,14 @@ async function runPreviewDiff(buffer, clientId, db = pool, { createSites = false
   const siteIdByName = await resolveSiteIdByName(db, data.sedi, clientId, { create: createSites });
 
   const diff = computeDiff(data.dipendenti, dbEmployees, siteIdByName);
+  // computeDiff può a sua volta produrre errori di validazione (es.
+  // manager_email che punta a un manager di una sede diversa da quella del
+  // dipendente) che non erano rilevabili in validateSyntax perché quest'ultima
+  // gira prima che siteIdByName sia risolta. Stesso trattamento degli errori
+  // di sintassi: nessun diff applicabile, si torna al wizard con gli errori.
+  if (diff.errors && diff.errors.length > 0) {
+    return { errors: diff.errors, diff: null, data: null };
+  }
   return { errors: [], diff, data };
 }
 

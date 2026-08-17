@@ -260,6 +260,60 @@ describe('POST /api/v1/admin/employee-sync/preview', () => {
     expect(res.body.data.nuovi).toHaveLength(1);
   });
 
+  it('rejects manager_email pointing to a DEACTIVATED manager, same error channel as an unknown manager_email', async () => {
+    if (!dbAvailable) return;
+
+    const siteId = await makeSite(clientId, 'Torino');
+    const managerEmail = uniqueEmail('admin-employeesync-preview-inactive-manager');
+    await pool.query(
+      `INSERT INTO employees (client_id, email, name, role, site_id, assigned_sites, active)
+       VALUES ($1, $2, 'Manager Disattivato', 'manager', $3, $4, false)`,
+      [clientId, managerEmail, siteId, [siteId]]
+    );
+
+    const buffer = await buildFile([
+      ['Dipendente Con Manager Disattivato', 'con-manager-inattivo-preview-test@x.it', '', 'dipendente', 'Torino', '', 'Attivo', '2026-07-01', '', managerEmail],
+    ]);
+
+    const token = tokenFor({ client_id: clientId, role: 'admin' });
+    const res = await request(app)
+      .post('/api/v1/admin/employee-sync/preview')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', buffer, 'test.xlsx');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.errors.some((e) => e.includes(managerEmail))).toBe(true);
+    expect(res.body.data.nuovi).toEqual([]);
+  });
+
+  it('rejects manager_email pointing to a manager on a DIFFERENT site', async () => {
+    if (!dbAvailable) return;
+
+    await makeSite(clientId, 'Torino');
+    const milanoSiteId = await makeSite(clientId, 'Milano');
+    const managerEmail = uniqueEmail('admin-employeesync-preview-wrongsite-manager');
+    await pool.query(
+      `INSERT INTO employees (client_id, email, name, role, site_id, assigned_sites, active)
+       VALUES ($1, $2, 'Manager Milano', 'manager', $3, $4, true)`,
+      [clientId, managerEmail, milanoSiteId, [milanoSiteId]]
+    );
+
+    const buffer = await buildFile(
+      [['Dipendente Torino Con Manager Milano', 'con-manager-wrongsite-preview-test@x.it', '', 'dipendente', 'Torino', '', 'Attivo', '2026-07-01', '', managerEmail]],
+      [['Torino', '', '', '', ''], ['Milano', '', '', '', '']]
+    );
+
+    const token = tokenFor({ client_id: clientId, role: 'admin' });
+    const res = await request(app)
+      .post('/api/v1/admin/employee-sync/preview')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', buffer, 'test.xlsx');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.errors.some((e) => e.includes(managerEmail))).toBe(true);
+    expect(res.body.data.nuovi).toEqual([]);
+  });
+
   it('handles a file that is not a valid xlsx with a clear error, not a 500 crash', async () => {
     if (!dbAvailable) return;
 

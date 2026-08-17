@@ -150,6 +150,47 @@ describe('computeDiff', () => {
   });
 });
 
+describe('computeDiff — manager_email active/site-match enforcement (Task 15 checkpoint finding)', () => {
+  it('does not resolve manager_id to a DEACTIVATED manager (treated as if the manager did not exist)', () => {
+    const db = [
+      { id: 'mgr-inactive', email: 'capo@x.it', name: 'Capo', phone: null, role: 'manager', site_id: 'site-torino', assigned_sites: [], active: false, hiring_date: null, exit_date: null, external_employee_id: null, manager_id: null },
+    ];
+    const diff = computeDiff(
+      [fileRow({ email: 'nuovo@x.it', nome_completo: 'Nuovo', manager_email: 'capo@x.it' })],
+      db,
+      siteIdByName
+    );
+    expect(diff.nuovi[0].manager_id).toBeNull();
+  });
+
+  it('rejects manager_email pointing to a manager on a different site, with a validation error and no manager_id assigned', () => {
+    const db = [
+      { id: 'mgr-milano', email: 'capo@x.it', name: 'Capo', phone: null, role: 'manager', site_id: 'site-milano', assigned_sites: [], active: true, hiring_date: null, exit_date: null, external_employee_id: null, manager_id: null },
+    ];
+    const diff = computeDiff(
+      [fileRow({ email: 'nuovo@x.it', nome_completo: 'Nuovo', sede: 'Torino', manager_email: 'capo@x.it' })],
+      db,
+      siteIdByName
+    );
+    expect(diff.errors.length).toBeGreaterThan(0);
+    expect(diff.errors[0]).toContain('capo@x.it');
+    expect(diff.nuovi[0].manager_id).toBeNull();
+  });
+
+  it('resolves manager_id normally for an active manager on the same site', () => {
+    const db = [
+      { id: 'mgr-torino', email: 'capo@x.it', name: 'Capo', phone: null, role: 'manager', site_id: 'site-torino', assigned_sites: [], active: true, hiring_date: null, exit_date: null, external_employee_id: null, manager_id: null },
+    ];
+    const diff = computeDiff(
+      [fileRow({ email: 'nuovo@x.it', nome_completo: 'Nuovo', sede: 'Torino', manager_email: 'capo@x.it' })],
+      db,
+      siteIdByName
+    );
+    expect(diff.errors).toEqual([]);
+    expect(diff.nuovi[0].manager_id).toBe('mgr-torino');
+  });
+});
+
 describe('computeDiff — manager_email resolution', () => {
   const dbWithManager = [
     { id: 'mgr-1', email: 'capo@x.it', name: 'Capo', phone: null, role: 'manager', site_id: 'site-torino', assigned_sites: [], active: true, hiring_date: null, exit_date: null, external_employee_id: null, manager_id: null },
