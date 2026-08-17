@@ -1,3 +1,56 @@
+# Badge System — Session 104 Handoff
+
+**Date:** 2026-08-17
+**Session:** 104 — Campi Nuovo Dipendente (Sede/Matricola/Data assunzione/Manager) implementati end-to-end e mergeabili
+**Status:** ✅ **Piano completamente eseguito (15/15 task), su branch/worktree isolato `worktree-new-employee-fields`, non ancora mergeato su `main`.** Prossimo passo per l'utente: revisionare il branch e decidere se/quando fare merge su `main` e push.
+
+---
+
+## Goal (Session 104)
+
+Continuazione diretta di Session 103. L'utente ha segnalato una mancanza reale nel form admin "Nuovo Dipendente" (`badge.dataxiom.it/admin`): mancavano Sede, Data assunzione, Matricola, Manager di riferimento — con la richiesta esplicita che la Data assunzione dovesse **bloccare realmente** lo scan QR prima di quella data (non solo essere informativa). Percorso completo: `/superpowers:brainstorming` → `/grilling` (10 domande chiuse) → `/senior-backend`+`/senior-frontend` (analisi critica) → `/senior-architect` (spec formale) → `/superpowers:writing-plans` (piano 15 task in 3 fasi con checkpoint) → `/superpowers:subagent-driven-development` (esecuzione completa).
+
+## Current Progress
+
+**Piano completato 15/15 task** (`docs/superpowers/plans/2026-08-16-new-employee-fields.md`), su worktree isolato `/.claude/worktrees/new-employee-fields`, branch `worktree-new-employee-fields` (rebasato su `main` all'avvio, mai pushato). ~35 commit totali (implementazione + fix trovati dai checkpoint).
+
+**Fase 1 — Backend core**: migration `040_add_manager_id_to_employees.sql` (self-referencing, `ON DELETE SET NULL`), `EmploymentNotStartedError`/`InvalidManagerAssignmentError`, `AdminEmployeeSchema` esteso (matricola/hiring_date/manager_id), `POST /admin/employees` esteso con validazione server-side del manager, enforcement `hiring_date` reale in `POST /checkins`.
+
+**Fase 2 — Frontend**: 4 nuovi campi nel form "Nuovo Dipendente" (`EmployeesTab.jsx`) — Sede sempre visibile (employee+manager), Matricola con validazione bloccante, Data assunzione (default oggi, min oggi), Manager di riferimento con stato disabled/helper-text a 3 vie.
+
+**Fase 3 — Wizard xlsx**: colonna `manager_email` aggiunta a template/parsing/validazione/risoluzione/persistenza, con guardia self-reference e coerenza active/site con l'endpoint di creazione singola.
+
+**Ogni fase chiusa da un checkpoint dedicato** (code review multi-angolo + `/test-all`) che ha trovato e fixato bug reali prima di proseguire — vedi "What Worked" sotto per il dettaglio dei più importanti.
+
+**Verifica finale**: backend 795/809 (14 skip pre-esistenti, live-token), frontend-web 308/309 (1 skip pre-esistente), build frontend pulita. Un fallimento isolato (`checkins-rbac.test.js`) confermato flaky pre-esistente (verificato: fallisce in parallelo, passa in isolamento e in rerun pulito, file mai toccato da questo branch).
+
+## What Worked
+
+- **I 3 checkpoint dedicati (uno per fase, richiesti esplicitamente dall'utente) hanno trovato bug reali che le review per-task non avevano catturato**, in ordine di severità:
+  - **Checkpoint Fase 1**: il guard `hiring_date` sul check-in confrontava contro la data server "oggi", non contro `occurred_at` (la data effettiva dell'evento) — un check-in offline backdated fino a 48h prima dell'assunzione avrebbe bypassato il blocco. Fixato confrontando contro la data effettiva dell'evento.
+  - **Checkpoint Fase 2**: il dropdown "Manager di riferimento" era popolato dai dati filtrati per il filtro della TABELLA dipendenti (`filterClient`), non dal cliente selezionato nel form di creazione — poteva mostrare manager sbagliati/vuoti se i due filtri divergevano. Fixato con una fetch dedicata, disaccoppiata.
+  - **Checkpoint Fase 3 (finale)**: bug di data-corruption silenziosa — `computeDiff.js` confrontava le email DB non normalizzate (case-sensitive) contro le email del file xlsx (sempre lowercase), causando la creazione di un dipendente **duplicato** (nessun vincolo UNIQUE sulla sola email) più un falso flag "dipendente uscito" per l'originale, ogni volta che un dipendente aveva un'email con maiuscole nel DB. Terza istanza dello stesso bug class già fixato 2 volte nello stesso file per `manager_email` — fixato lowercasando anche `dbByEmail`. Trovato indipendentemente da 3 dei 5 agenti di review paralleli.
+  - Stesso checkpoint finale: il wizard xlsx bulk non applicava gli stessi controlli (`active=true`, stessa sede) che l'endpoint di creazione singola applica al `manager_id` — un manager disattivato o di un'altra sede poteva essere assegnato silenziosamente via upload. Fixato allineando le due strade.
+- **Un implementer ha corretto proattivamente un bug nel piano stesso**: il piano suggeriva un confronto `Date` object per `hiring_date` nel check-in (stessa classe di bug TZ-fragile già fixata nel Task 3 per la validazione Zod) — l'implementer l'ha riconosciuto e ha implementato un confronto string-based TZ-safe invece di seguire il piano alla lettera.
+- **Rifiutare di "aggiustare" il prodotto per far passare un test scritto male**: durante il Task 7, per far passare `toBeDisabled()`/un match esatto sull'etichetta, un primo tentativo aveva tolto `required` dal campo Sede e sostituito il dropdown Manager con un `<select>` nativo (rompendo la coerenza visiva del form). Riconosciuto come "adattare l'implementazione al test" nella direzione sbagliata — revertito, e i TEST sono stati corretti per asserire correttamente (`getByRole('combobox', ...)`, `aria-disabled`) mantenendo il prodotto invariato.
+
+## What Didn't Work / Da tenere a mente
+
+- **5 agenti di review paralleli lanciati per il checkpoint finale sono falliti una volta per limite di sessione** ("hit your session limit, resets 2am Europe/Rome") — risolti rilanciandoli identici dopo il cambio di data (reset naturale). Nessuna perdita di lavoro, solo un ritardo.
+- **Lavorare in un worktree richiede attenzione ai file `.env*` (gitignored)**: non vengono copiati automaticamente da `EnterWorktree` — copiati manualmente da `main` all'inizio sessione. Se si crea un nuovo worktree in futuro, ricordarsene subito o i test integration falliscono con "DATABASE_URL MISSING".
+- **Il worktree era stato creato da `origin/main` (stale) invece che dal `main` locale** (che aveva ~9 commit non pushati, incluso il piano stesso appena scritto) — risolto con `git rebase main` dentro il worktree prima di iniziare l'esecuzione. Da controllare sempre quando si apre un worktree in una sessione con lavoro locale non pushato.
+
+## Next Steps (in ordine di urgenza)
+
+1. **Decidere se/quando mergeare `worktree-new-employee-fields` su `main` e pushare** — il branch è pronto, testato, review-completo, ma non ancora mergeato (nessuna azione automatica presa, in linea con la policy "mai push senza conferma esplicita" di questo progetto). Il worktree stesso può essere rimosso dopo il merge (`ExitWorktree` con `action: remove`, o manualmente).
+2. **Applicare la migration `040` anche in staging/produzione** al momento del deploy (non ancora fatto — resta locale a dev/test in questa sessione).
+3. **Verifica manuale live pre-deploy** (facoltativa nel piano, non eseguita in questa sessione per frizione sandbox — la copertura automatica reale-DB è comunque estesa): creare un manager su una sede, poi un dipendente sulla stessa sede verificando che compaia nel dropdown Manager; provare matricola duplicata; scaricare il template xlsx e verificare la colonna `manager_email`.
+4. Tutto il backlog invariato da Session 103 resta aperto — vedi handoff precedente sotto: istruzione correttiva Cowork mai incollata, primo run reale routine LinkedIn (17/8, oggi — verificare), `CLAUDE.md` payroll stale, piano lista contatti verificata non eseguito, S.27/S.28/S.29 GDPR, ANDROID.1/1b.
+
+**Dettaglio task-by-task completo**: vedi il piano stesso `docs/superpowers/plans/2026-08-16-new-employee-fields.md` (ogni task ha i suoi step spuntati) e lo spec `docs/superpowers/specs/2026-08-16-new-employee-fields-design.md`.
+
+---
+
 # Badge System — Session 103 Handoff
 
 **Date:** 2026-08-15
