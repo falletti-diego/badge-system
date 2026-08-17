@@ -124,6 +124,30 @@ describe('computeDiff', () => {
     const diff = computeDiff([fileRow({ stato: 'attivo' })], db, siteIdByName);
     expect(diff.riattivati[0].changes).toEqual({});
   });
+
+  it('matches an existing DB employee whose email is mixed-case against the always-lowercased file email (dbByEmail keys are lowercased)', () => {
+    // Regression test — Task 15 checkpoint finding: employees created via the
+    // admin form have no lowercase guarantee on email. Before the fix,
+    // dbByEmail used the raw (possibly mixed-case) DB email as its key, so
+    // this row would fail to match: the employee would be duplicated (pushed
+    // into "nuovi") while the real DB row, never marked "seen", would be
+    // flagged as having left ("anomalie") — both wrong for the same person.
+    const db = [dbEmp({ email: 'Mario.Rossi@Azienda.IT' })];
+    const diff = computeDiff([fileRow({ email: 'mario.rossi@azienda.it' })], db, siteIdByName);
+    expect(diff.nuovi).toHaveLength(0);
+    expect(diff.anomalie).toHaveLength(0);
+    expect(diff.modificati).toHaveLength(0);
+    expect(diff.riattivati).toHaveLength(0);
+  });
+
+  it('matches a mixed-case DB email and still surfaces a real field change as "modificato" (not duplicated/anomalia)', () => {
+    const db = [dbEmp({ email: 'Mario.Rossi@Azienda.IT', phone: '111' })];
+    const diff = computeDiff([fileRow({ email: 'mario.rossi@azienda.it', telefono: '222' })], db, siteIdByName);
+    expect(diff.nuovi).toHaveLength(0);
+    expect(diff.anomalie).toHaveLength(0);
+    expect(diff.modificati).toHaveLength(1);
+    expect(diff.modificati[0].changes.phone).toEqual({ from: '111', to: '222' });
+  });
 });
 
 describe('computeDiff — manager_email resolution', () => {

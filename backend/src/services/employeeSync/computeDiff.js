@@ -70,7 +70,16 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
     dbEmployees.filter((e) => e.role === 'manager').map((e) => [e.email.toLowerCase(), e.id])
   );
 
-  const dbByEmail = new Map(dbEmployees.map((e) => [e.email, e]));
+  // Stessa normalizzazione di managerIdByEmail sopra: row.email (file) è
+  // sempre lowercased da normEmail, ma le email dei dipendenti in DB non
+  // hanno questa garanzia (es. creati via form admin, senza .toLowerCase()
+  // nello schema Zod di validation.js). Senza lowercase qui, un dipendente
+  // DB con email mixed-case non verrebbe mai trovato in dbByEmail: la riga
+  // finirebbe in "nuovi" (duplicato creato, nessun vincolo unique su email)
+  // mentre la riga originale, mai marcata "seen", finirebbe in "anomalie"
+  // (falso "dipendente uscito"). Terza occorrenza di questo bug in questo
+  // file — vedi anche managerIdByEmail ed existingManagerEmails (Task 12).
+  const dbByEmail = new Map(dbEmployees.map((e) => [e.email.toLowerCase(), e]));
   const seenEmails = new Set();
 
   for (const row of fileRows) {
@@ -124,7 +133,7 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
   }
 
   for (const dbRow of dbEmployees) {
-    if (dbRow.active && !seenEmails.has(dbRow.email)) {
+    if (dbRow.active && !seenEmails.has(dbRow.email.toLowerCase())) {
       anomalie.push({ id: dbRow.id, email: dbRow.email, name: dbRow.name });
     }
   }
