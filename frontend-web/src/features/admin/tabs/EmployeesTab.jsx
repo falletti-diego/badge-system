@@ -41,7 +41,7 @@ export function EmployeesTab() {
   // compute availableManagers below, so the create-form's manager lookup never depends
   // on what the admin happens to have the employee table filtered to (see Fase 2
   // checkpoint review Finding 1).
-  const { data: allEmployees } = useFetch('/api/v1/admin/employees');
+  const { data: allEmployees, reload: reloadAllEmployees } = useFetch('/api/v1/admin/employees');
   const [filterClient, setFilterClient] = useState('');
   const { data: employees, loading: empLoading, error: empFetchError, reload: reloadEmployees } = useFetch(
     filterClient ? `/api/admin/employees?client_id=${filterClient}` : '/api/v1/admin/employees'
@@ -66,6 +66,7 @@ export function EmployeesTab() {
       await apiClient.delete(`/api/admin/employees/${deleteTarget.id}`);
       setDeleteTarget(null);
       reloadEmployees();
+      reloadAllEmployees();
     } catch (err) {
       setMsg({ type: 'error', text: err.response?.data?.message || err.message });
       setDeleteTarget(null);
@@ -117,6 +118,7 @@ export function EmployeesTab() {
       });
       setForm({ ...form, email: '', name: '', phone: '', site_id: '', password: '', external_employee_id: '', manager_id: '' });
       reloadEmployees();
+      reloadAllEmployees();
     } catch (err) {
       setMsg({ type: 'error', text: extractErrorMessage(err) });
     } finally {
