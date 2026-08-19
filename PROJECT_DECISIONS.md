@@ -6,6 +6,39 @@
 
 ---
 
+## Session 105 — Test manuale Campi Nuovo Dipendente, 3 bug fixati, regola "manager obbligatorio", merge su `main` (18-19 Agosto 2026)
+
+### Contesto
+Continuazione diretta di Session 104 (piano Campi Nuovo Dipendente completato 15/15 task, non ancora mergeato). L'utente ha chiesto un piano di test manuale prima del merge.
+
+### Verifica proattiva prima di far testare l'utente
+Invece di consegnare solo la checklist, ho eseguito io stesso ogni sezione via `curl`/API contro backend+DB locali reali, trovando 2 bug prima ancora che l'utente iniziasse:
+
+1. **Creazione Manager sempre fallita, bug pre-esistente su `main`** (non introdotto da Session 104): `AdminEmployeeSchema.assigned_sites` aveva un vincolo `.min(1)` di campo che scattava prima del `.refine()` condizionato dal ruolo, pensato per esentare i manager — quel refine era codice morto, un manager non ha mai potuto essere creato da "Nuovo Dipendente". Fix mirato: rimosso il vincolo di campo, lasciato solo il refine (stesso pattern già corretto).
+
+2. **Bug di timezone**: sia il guard `EMPLOYMENT_NOT_STARTED` sul check-in sia i default `hiring_date`/`exit_date` del wizard xlsx calcolavano "oggi" con `new Date().toISOString().slice(0,10)` (UTC), mentre `hiring_date` è una data di calendario italiana scelta da un date picker o da un file caricato. Nella finestra mezzanotte–2am ora locale (CET/CEST) — quando la data UTC è ancora "ieri" — un dipendente assunto "oggi" veniva bloccato dal check-in. **Riprodotto dal vivo** (00:17 CEST) e fixato con un helper condiviso `todayInTimeZone()`/`dateInTimeZone()` (Europe/Rome), applicato ai 3 punti coinvolti più ai fixture di test che condividevano lo stesso calcolo UTC (altrimenti sarebbero rimasti intermittenti nella stessa finestra oraria).
+
+### Bug trovati dall'utente in UI
+Dopo i due fix sopra, l'utente ha testato in UI e trovato altri due problemi:
+- **Ambientale, non di codice**: i server dev locali (backend 3000, frontend 5173) giravano da metà luglio dalla cartella **principale** del repo, non dal worktree — per questo i nuovi campi non comparivano. Nessun modo di scoprirlo dal codice; risolto killando quei processi e riavviandoli dal worktree.
+- **Dropdown Manager non si aggiornava senza hard refresh**: in `EmployeesTab.jsx`, la lista `allEmployees` (fonte del dropdown "Manager di riferimento") era un `useFetch` mai ricaricato dopo create/delete, a differenza della tabella dipendenti sottostante. Fix: aggiunto `reloadAllEmployees()` dopo ogni create/delete.
+
+### Nuova regola di business — "manager obbligatorio", via `/grilling`
+Testando, l'utente ha scoperto che un dipendente poteva essere creato con successo su una sede **nuova**, ancora senza alcun manager — giudicato scorretto: un dipendente non dovrebbe poter esistere senza un manager di riferimento. Sessione `/grilling` dedicata (5 domande chiuse, una alla volta, con raccomandazione esplicita per ognuna) ha fissato lo scope prima di toccare codice:
+- Regola universale ma **solo per i nuovi inserimenti** — nessuna retroattività sui dati storici già in produzione (es. "Roma Store", che oggi non ha un manager).
+- Applicata anche al **wizard xlsx**, non solo al form singolo, ma solo alle righe classificate "nuovi" — le righe "modificati"/"riattivati" di dipendenti già esistenti restano invariate.
+- Meccanica: `manager_id` passa da opzionale a **obbligatorio** quando `role === 'employee'`, riusando lo stesso pattern refine condizionato dal ruolo già corretto per `assigned_sites` nello stesso branch.
+- **Disattivare l'ultimo manager di una sede con dipendenti attivi**: esplicitamente giudicato fuori scope per questa sessione (toccherebbe un flusso diverso, `DELETE /admin/employees/:id`) — rimandato come possibile miglioramento futuro.
+
+Implementato su tutti e 3 gli strati (schema Zod, `computeDiff.js` del wizard con guardia anti-doppio-errore quando `resolveManagerId` ha già segnalato un mismatch di sede, UI con campo obbligatorio/bottone disabilitato/helper text). Circa 10 test esistenti in file diversi assumevano un manager opzionale ed è stato necessario aggiornarli — scoperto rilanciando la suite completa dopo ogni round di fix, non correggendo un file alla volta assumendo che bastasse.
+
+### Verifica finale
+`/code-review:code-review` adattato a un commit locale senza PR GitHub (5 agenti paralleli dispatchati sul diff via `git show` invece che su una PR, risultati riportati direttamente invece che commentati su GitHub) — CLAUDE.md compliance ok, nessun bug, nessuna regressione rispetto allo storico del branch, nessun test indebolito per far passare la suite; **1 solo finding reale**, un commento (`resolveManagerId` in `computeDiff.js`) diventato impreciso dopo il cambio — corretto immediatamente. `/test-all`: backend 107/108 suite (800/814 test), frontend 37/37 file (309/310 test), entrambi verdi.
+
+**Stato:** `worktree-new-employee-fields` mergeato su `main` (locale). Push da confermare separatamente con l'utente. Worktree da rimuovere dopo il push. Migration `040` (`manager_id`) ancora da applicare su staging/produzione al momento del deploy.
+
+---
+
 ## Session 103 — Awareness LinkedIn + budget tattico primo cliente + design/piano lista contatti verificata, non eseguito (11-15 Agosto 2026)
 
 ### Contesto

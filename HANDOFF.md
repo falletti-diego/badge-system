@@ -1,3 +1,58 @@
+# Badge System — Session 105 Handoff
+
+**Date:** 2026-08-19
+**Session:** 105 — Test manuale utente del piano Session 104, 3 bug fixati, nuova regola "manager obbligatorio", merge su `main`
+**Status:** ✅ **Branch `worktree-new-employee-fields` mergeato su `main` (locale).** Push da confermare separatamente con l'utente.
+
+---
+
+## Goal (Session 105)
+
+Continuazione diretta di Session 104. L'utente ha chiesto un piano di test manuale prima del merge; prima di farglielo eseguire, ho verificato io stesso l'intera checklist via API/curl contro backend+DB locali reali (non solo lettura del codice), poi l'utente ha ripetuto la verifica in UI dopo ogni fix.
+
+## Current Progress
+
+**3 bug reali trovati e fixati** durante la verifica (mia + dell'utente):
+
+1. **Creazione Manager sempre fallita** (pre-esistente su `main`, non introdotto da Session 104): `AdminEmployeeSchema.assigned_sites` aveva un vincolo `.min(1)` di campo Zod che scattava prima del `.refine()` condizionato dal ruolo pensato per esentare i manager — un manager non ha mai potuto essere creato da "Nuovo Dipendente". Fix: rimosso il vincolo di campo, lasciato solo il refine. Commit `615fcbf`.
+2. **Bug di timezone su `hiring_date`**: `EMPLOYMENT_NOT_STARTED` (check-in) e i default `hiring_date`/`exit_date` (wizard xlsx) calcolavano "oggi" con `new Date().toISOString().slice(0,10)` (UTC), mentre `hiring_date` è una data di calendario italiana scelta da un date picker. Nella finestra mezzanotte–2am locale (CET/CEST), un dipendente assunto "oggi" veniva bloccato dal check-in. Riprodotto live e fixato con `backend/src/utils/date.js` (`todayInTimeZone`/`dateInTimeZone`, Europe/Rome), applicato ovunque si confrontava con "oggi". Commit `615fcbf`.
+3. **Dropdown Manager non si aggiornava senza hard refresh**: in `EmployeesTab.jsx`, `allEmployees` (fonte del dropdown "Manager di riferimento") era un `useFetch` mai ricaricato dopo create/delete, a differenza della tabella dipendenti. Fix: aggiunto `reloadAllEmployees()`. Commit `1d230ef`.
+
+**Bug ambientale (non di codice)**: i server dev locali dell'utente (backend porta 3000, frontend 5173) giravano da metà luglio dalla cartella **principale** del repo (`main`), non dal worktree — per questo i nuovi campi non comparivano in UI. Risolto killando quei processi e riavviandoli dal worktree.
+
+**Nuova regola di business — "manager obbligatorio"** (via `/grilling`, 5 domande chiuse con l'utente): scoperta testando che un dipendente veniva creato con successo su una sede nuova ancora senza alcun manager — l'utente ha giudicato questo scorretto (un dipendente non può esistere senza un manager di riferimento). Decisioni prese via grilling:
+- Applicata universalmente ma solo ai **nuovi** inserimenti (nessuna retroattività sui dati storici già in produzione, es. "Roma Store" senza manager).
+- Applicata anche al wizard xlsx, non solo al form singolo — ma solo alle righe classificate "nuovi", non a "modificati"/"riattivati" di dipendenti già esistenti.
+- Meccanica: `manager_id` passa da opzionale a **obbligatorio** quando `role === 'employee'` (stesso pattern refine condizionato dal ruolo già usato per `assigned_sites`).
+- Disattivare l'ultimo manager di una sede con dipendenti attivi: esplicitamente **fuori scope** per questa sessione (lasciato come miglioramento futuro).
+
+Implementato in `backend/src/middleware/validation.js` (schema), `backend/src/services/employeeSync/computeDiff.js` (wizard, con guardia anti-doppio-errore quando `resolveManagerId` ha già segnalato un mismatch di sede), `frontend-web/.../EmployeesTab.jsx` (campo obbligatorio, bottone disabilitato, helper text). Circa 10 test esistenti aggiornati (le loro fixture assumevano un manager opzionale) + nuovi test per il caso required. Commit `a48f7ea`.
+
+**Verifica finale**: `/code-review:code-review` (5 agenti paralleli, adattato per un commit locale senza PR GitHub) — CLAUDE.md compliance ok, nessun bug, nessuna regressione storica, nessun test indebolito; **1 solo finding reale**: un commento in `computeDiff.js` (`resolveManagerId`) ormai impreciso dopo il cambio — corretto, commit `fefe021`. `/test-all`: backend 107/108 suite (800/814 test), frontend 37/37 file (309/310 test) — entrambi verdi.
+
+**Merge**: `worktree-new-employee-fields` → `main`, locale (nessun push automatico).
+
+## What Worked
+
+- **Verificare io stesso la checklist prima di farla eseguire all'utente** ha trovato 2 bug critici (incluso uno pre-esistente su `main`) prima che l'utente perdesse tempo a scoprirli manualmente — lo stesso schema "verifica reale, non solo lettura del codice" già validato nelle sessioni precedenti.
+- **Riprodurre un bug di timezone aspettando la finestra critica reale** (00:17 CEST) invece di simularlo, poi riverificare il fix esattamente nella stessa finestra — prova diretta, non solo ragionamento sul codice.
+- **`/grilling` per una nuova regola di business scoperta a metà test**: 5 domande chiuse, una alla volta, con raccomandazione esplicita per ognuna — ha chiarito scope (retroattività, wizard sì/no, meccanica esatta, disattivazione manager fuori scope) prima di toccare codice, evitando un'implementazione poi da rifare.
+- **Adattare `/code-review:code-review` a un commit locale senza PR**: la skill assume un PR GitHub (uso di `gh`); adattata dispatchando gli stessi 5 agenti sul diff del commit via `git show`, riportando i risultati direttamente invece di commentare una PR inesistente.
+
+## What Didn't Work / Da tenere a mente
+
+- **I server dev locali dell'utente giravano dalla cartella principale, non dal worktree, da settimane** — nessun modo per accorgersene dal codice; scoperto solo perché l'utente ha riportato "non vedo i nuovi campi". Da controllare (`lsof -i :PORT` + cwd del processo) ogni volta che un utente segnala che una feature nuova "non si vede" nonostante il codice sia corretto.
+- **Le prime versioni dei fix ai test rompevano altri test non toccati direttamente** (es. aggiungere `manager_id` obbligatorio ha rotto ~10 test in file diversi che non lo prevedevano) — risolto sistematicamente rilanciando la suite completa dopo ogni round di fix invece di correggere un file alla volta e assumere che bastasse.
+
+## Next Steps (in ordine di urgenza)
+
+1. **Push su `origin/main`** — non ancora fatto (merge locale eseguito, push da confermare esplicitamente con l'utente, in linea con la policy del progetto).
+2. **Rimuovere il worktree** `new-employee-fields` (branch ormai mergeato) dopo il push.
+3. **Applicare la migration `040`** (colonna `manager_id`) anche in staging/produzione al momento del deploy.
+4. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 104/103 sotto.
+
+---
+
 # Badge System — Session 104 Handoff
 
 **Date:** 2026-08-17
