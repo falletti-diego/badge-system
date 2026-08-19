@@ -51,7 +51,8 @@ router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, re
     // malevolo/bug potrebbe inviare un manager_id arbitrario.
     if (data.manager_id) {
       const managerCheck = await pool.query(
-        `SELECT id FROM employees WHERE id = $1 AND client_id = $2 AND role = 'manager' AND site_id = $3 AND active = true`,
+        `SELECT id FROM employees
+         WHERE id = $1 AND client_id = $2 AND role = 'manager' AND site_id = $3 AND active = true`,
         [data.manager_id, targetClientId, data.site_id || null]
       );
       if (managerCheck.rowCount === 0) {
