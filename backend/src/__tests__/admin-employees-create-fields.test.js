@@ -126,8 +126,9 @@ describe('POST /api/v1/admin/employees — new fields (Sede/Matricola/Data assun
 
   it('rejects a duplicate matricola for the same client with 409 DUPLICATE_MATRICOLA', async () => {
     if (!dbAvailable) return;
+    const managerId = await makeManager(clientId, siteId);
     const token = adminToken(clientId);
-    const shared = { role: 'employee', client_id: clientId, site_id: siteId, assigned_sites: [siteId], external_employee_id: 'DUP001' };
+    const shared = { role: 'employee', client_id: clientId, site_id: siteId, assigned_sites: [siteId], external_employee_id: 'DUP001', manager_id: managerId };
 
     const first = await request(app).post('/api/v1/admin/employees').set('Authorization', `Bearer ${token}`)
       .send({ ...shared, email: uniqueEmail('dup-1'), name: 'Primo' });
@@ -232,7 +233,7 @@ describe('POST /api/v1/admin/employees — new fields (Sede/Matricola/Data assun
     expect(res.body.error).toBe('INVALID_MANAGER_ASSIGNMENT');
   });
 
-  it('creates an employee with no manager_id (optional, site with no manager yet)', async () => {
+  it('rejects an employee with no manager_id when the site has no manager yet', async () => {
     if (!dbAvailable) return;
     const token = adminToken(clientId);
 
@@ -248,7 +249,38 @@ describe('POST /api/v1/admin/employees — new fields (Sede/Matricola/Data assun
         assigned_sites: [siteId],
       });
 
-    expect(res.status).toBe(201);
-    expect(res.body.data.manager_id).toBeNull();
+    expect(res.status).toBe(400);
+  });
+
+  it('creates a manager without a manager_id, then an employee referencing that manager', async () => {
+    if (!dbAvailable) return;
+    const token = adminToken(clientId);
+
+    const managerRes = await request(app)
+      .post('/api/v1/admin/employees')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        email: uniqueEmail('bootstrap-manager'),
+        name: 'Manager Bootstrap',
+        role: 'manager',
+        client_id: clientId,
+        site_id: siteId,
+      });
+    expect(managerRes.status).toBe(201);
+
+    const employeeRes = await request(app)
+      .post('/api/v1/admin/employees')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        email: uniqueEmail('bootstrap-employee'),
+        name: 'Dipendente Bootstrap',
+        role: 'employee',
+        client_id: clientId,
+        site_id: siteId,
+        assigned_sites: [siteId],
+        manager_id: managerRes.body.data.id,
+      });
+    expect(employeeRes.status).toBe(201);
+    expect(employeeRes.body.data.manager_id).toBe(managerRes.body.data.id);
   });
 });

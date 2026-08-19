@@ -91,6 +91,18 @@ describe('POST /api/v1/admin/employee-sync/preview', () => {
     return result.rows[0].count;
   }
 
+  // Dal 2026-08-19 un nuovo dipendente nel wizard richiede manager_email
+  // valorizzato su un manager attivo della stessa sede — vedi computeDiff.js.
+  async function makeManager(clientId, siteId, email) {
+    const result = await pool.query(
+      `INSERT INTO employees (client_id, email, name, role, site_id, assigned_sites)
+       VALUES ($1, $2, 'Manager Preview Test', 'manager', $3, ARRAY[$3]::uuid[])
+       RETURNING id`,
+      [clientId, email, siteId]
+    );
+    return result.rows[0].id;
+  }
+
   let clientId;
 
   beforeEach(async () => {
@@ -106,11 +118,13 @@ describe('POST /api/v1/admin/employee-sync/preview', () => {
   it('returns a diff with nuovi and does not write to the DB', async () => {
     if (!dbAvailable) return;
 
-    await makeSite(clientId, 'Torino');
+    const torinoId = await makeSite(clientId, 'Torino');
+    const managerEmail = uniqueEmail('preview-manager');
+    await makeManager(clientId, torinoId, managerEmail);
     const before = await countEmployees(clientId);
 
     const buffer = await buildFile([
-      ['Nuovo Assunto', 'nuovo-preview-test@x.it', '', 'dipendente', 'Torino', '', 'Attivo', '2026-07-01', ''],
+      ['Nuovo Assunto', 'nuovo-preview-test@x.it', '', 'dipendente', 'Torino', '', 'Attivo', '2026-07-01', '', managerEmail],
     ]);
 
     const token = tokenFor({ client_id: clientId, role: 'admin' });

@@ -83,7 +83,7 @@ describe('employee-sync /apply and /export-history', () => {
   async function buildFile(dipendenti, sedi = [['Torino', '', '', '', '']]) {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Dipendenti');
-    ws.addRow(['nome_completo', 'email', 'telefono', 'ruolo', 'sede', 'matricola', 'stato', 'data_assunzione', 'data_uscita']);
+    ws.addRow(['nome_completo', 'email', 'telefono', 'ruolo', 'sede', 'matricola', 'stato', 'data_assunzione', 'data_uscita', 'manager_email']);
     for (const d of dipendenti) ws.addRow(d);
     const wsSedi = wb.addWorksheet('Sedi');
     wsSedi.addRow(['nome_sede', 'indirizzo', 'latitudine', 'longitudine', 'raggio_geofence_m']);
@@ -94,6 +94,18 @@ describe('employee-sync /apply and /export-history', () => {
   async function countEmployees(clientId) {
     const result = await pool.query('SELECT COUNT(*)::int AS count FROM employees WHERE client_id = $1', [clientId]);
     return result.rows[0].count;
+  }
+
+  // Dal 2026-08-19 un nuovo dipendente nel wizard richiede manager_email
+  // valorizzato su un manager attivo della stessa sede — vedi computeDiff.js.
+  async function makeManager(clientId, siteId, email) {
+    const result = await pool.query(
+      `INSERT INTO employees (client_id, email, name, role, site_id, assigned_sites)
+       VALUES ($1, $2, 'Manager Apply Test', 'manager', $3, ARRAY[$3]::uuid[])
+       RETURNING id`,
+      [clientId, email, siteId]
+    );
+    return result.rows[0].id;
   }
 
   function binaryParser(res, callback) {
@@ -123,11 +135,13 @@ describe('employee-sync /apply and /export-history', () => {
     it('creates a new employee end-to-end', async () => {
       if (!dbAvailable) return;
 
-      await makeSite(clientId, 'Torino');
+      const torinoId = await makeSite(clientId, 'Torino');
+      const managerEmail = uniqueEmail('apply-manager');
+      await makeManager(clientId, torinoId, managerEmail);
       const email = uniqueEmail('nuovo-apply-test');
 
       const buffer = await buildFile([
-        ['Nuovo Assunto', email, '', 'dipendente', 'Torino', '', 'Attivo', '2026-07-01', ''],
+        ['Nuovo Assunto', email, '', 'dipendente', 'Torino', '', 'Attivo', '2026-07-01', '', managerEmail],
       ]);
 
       const token = tokenFor({ client_id: clientId, role: 'admin' });
@@ -155,10 +169,13 @@ describe('employee-sync /apply and /export-history', () => {
     it('creates a site declared only in the Sedi sheet, and assigns the employee to it (not null)', async () => {
       if (!dbAvailable) return;
 
-      // Nessuna sede pre-esistente: "Bologna" esiste SOLO nel foglio Sedi del file.
+      // Nessuna sede pre-esistente: "Bologna" esiste SOLO nel foglio Sedi del
+      // file, quindi non può esisterci già un manager (chicken-and-egg) — ruolo
+      // "responsabile" (manager, esente dal requisito manager_email) per isolare
+      // questo test sulla creazione automatica della sede.
       const email = uniqueEmail('nuova-sede-apply-test');
       const buffer = await buildFile(
-        [['Nuovo Assunto', email, '', 'dipendente', 'Bologna', '', 'Attivo', '2026-07-01', '']],
+        [['Nuovo Assunto', email, '', 'responsabile', 'Bologna', '', 'Attivo', '2026-07-01', '']],
         [['Bologna', 'Via Test 1', '', '', '']]
       );
 
@@ -184,9 +201,12 @@ describe('employee-sync /apply and /export-history', () => {
     it('preview never creates a site, even when the file declares one not yet in the DB', async () => {
       if (!dbAvailable) return;
 
+      // Stesso motivo del test precedente: sede nuova, nessun manager può
+      // già esisterci — ruolo "responsabile" per isolare il comportamento
+      // testato qui (creazione sede) dal requisito manager_email.
       const email = uniqueEmail('nuova-sede-preview-test');
       const buffer = await buildFile(
-        [['Nuovo Assunto', email, '', 'dipendente', 'Bologna', '', 'Attivo', '2026-07-01', '']],
+        [['Nuovo Assunto', email, '', 'responsabile', 'Bologna', '', 'Attivo', '2026-07-01', '']],
         [['Bologna', 'Via Test 1', '', '', '']]
       );
 

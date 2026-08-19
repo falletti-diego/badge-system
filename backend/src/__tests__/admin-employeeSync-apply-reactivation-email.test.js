@@ -94,7 +94,7 @@ describe('POST /api/v1/admin/employee-sync/apply — email di riattivazione', ()
   async function buildFile(dipendenti, sedi = [['Torino', '', '', '', '']]) {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Dipendenti');
-    ws.addRow(['nome_completo', 'email', 'telefono', 'ruolo', 'sede', 'matricola', 'stato', 'data_assunzione', 'data_uscita']);
+    ws.addRow(['nome_completo', 'email', 'telefono', 'ruolo', 'sede', 'matricola', 'stato', 'data_assunzione', 'data_uscita', 'manager_email']);
     for (const d of dipendenti) ws.addRow(d);
     const wsSedi = wb.addWorksheet('Sedi');
     wsSedi.addRow(['nome_sede', 'indirizzo', 'latitudine', 'longitudine', 'raggio_geofence_m']);
@@ -102,17 +102,31 @@ describe('POST /api/v1/admin/employee-sync/apply — email di riattivazione', ()
     return wb.xlsx.writeBuffer();
   }
 
+  // Dal 2026-08-19 un nuovo dipendente nel wizard richiede manager_email
+  // valorizzato su un manager attivo della stessa sede — vedi computeDiff.js.
+  async function makeManager(clientId, siteId, email) {
+    const result = await pool.query(
+      `INSERT INTO employees (client_id, email, name, role, site_id, assigned_sites)
+       VALUES ($1, $2, 'Manager Reactivation Test', 'manager', $3, ARRAY[$3]::uuid[])
+       RETURNING id`,
+      [clientId, email, siteId]
+    );
+    return result.rows[0].id;
+  }
+
   it('sends a "bentornato" email (not the first-time welcome one) when reactivating an employee', async () => {
     if (!dbAvailable) return;
 
     const clientId = await makeClient();
-    await makeSite(clientId, 'Torino');
+    const torinoId = await makeSite(clientId, 'Torino');
+    const managerEmail = uniqueEmail('reactivation-manager');
+    await makeManager(clientId, torinoId, managerEmail);
     const email = uniqueEmail('riattivato-email-test');
     const token = tokenFor({ client_id: clientId, role: 'admin' });
 
     // 1. Crea il dipendente (nuovo -> email di benvenuto "creato").
     const createBuffer = await buildFile([
-      ['Da Riattivare', email, '', 'dipendente', 'Torino', '', 'Attivo', '2026-01-01', ''],
+      ['Da Riattivare', email, '', 'dipendente', 'Torino', '', 'Attivo', '2026-01-01', '', managerEmail],
     ]);
     await request(app).post('/api/v1/admin/employee-sync/apply').set('Authorization', `Bearer ${token}`).attach('file', createBuffer, 'test.xlsx');
     expect(mockSendEmail).toHaveBeenCalledTimes(1);
@@ -128,8 +142,11 @@ describe('POST /api/v1/admin/employee-sync/apply — email di riattivazione', ()
     expect(mockSendEmail).not.toHaveBeenCalled();
 
     // 3. Riattiva lo stesso dipendente -> email "bentornato", non "creato".
+    // manager_email non è obbligatorio qui (dipendente già esistente, ramo
+    // "riattivati" — grandfathered, non "nuovi"), ma lo includiamo comunque
+    // per realismo.
     const reactivateBuffer = await buildFile([
-      ['Da Riattivare', email, '', 'dipendente', 'Torino', '', 'Attivo', '2026-01-01', ''],
+      ['Da Riattivare', email, '', 'dipendente', 'Torino', '', 'Attivo', '2026-01-01', '', managerEmail],
     ]);
     const res = await request(app).post('/api/v1/admin/employee-sync/apply').set('Authorization', `Bearer ${token}`).attach('file', reactivateBuffer, 'test.xlsx');
 

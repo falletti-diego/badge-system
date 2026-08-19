@@ -10,6 +10,10 @@ function validBody(overrides = {}) {
     role: 'employee',
     site_id: '550e8400-e29b-41d4-a716-446655440010',
     assigned_sites: ['550e8400-e29b-41d4-a716-446655440010'],
+    // Dal 2026-08-19 un dipendente deve sempre avere un manager di riferimento —
+    // vedi i test dedicati sotto. Impostato di default qui così i test che
+    // esercitano altri campi non vengono rotti da questo requisito.
+    manager_id: '550e8400-e29b-41d4-a716-446655440099',
     ...overrides,
   };
 }
@@ -60,8 +64,25 @@ describe('AdminEmployeeSchema — new fields', () => {
     expect(result.success).toBe(true);
   });
 
-  test('accepts manager_id as null', () => {
+  test('rejects role employee with manager_id as null', () => {
     const result = AdminEmployeeSchema.safeParse({ body: validBody({ manager_id: null }) });
+    expect(result.success).toBe(false);
+  });
+
+  test('rejects role employee with manager_id omitted', () => {
+    const { manager_id, ...rest } = validBody();
+    const result = AdminEmployeeSchema.safeParse({ body: rest });
+    expect(result.success).toBe(false);
+  });
+
+  test('rejects role employee with manager_id as an empty string', () => {
+    const result = AdminEmployeeSchema.safeParse({ body: validBody({ manager_id: '' }) });
+    expect(result.success).toBe(false);
+  });
+
+  test('accepts role manager without a manager_id', () => {
+    const { manager_id, assigned_sites, ...rest } = validBody();
+    const result = AdminEmployeeSchema.safeParse({ body: { ...rest, role: 'manager' } });
     expect(result.success).toBe(true);
   });
 });

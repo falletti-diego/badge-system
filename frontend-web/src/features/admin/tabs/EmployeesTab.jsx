@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Box, Typography, TextField, Button, Alert, CircularProgress,
   Table, TableBody, TableCell, TableHead, TableRow, TableContainer,
-  Card, CardContent, Select, MenuItem, FormControl, InputLabel,
+  Card, CardContent, Select, MenuItem, FormControl, InputLabel, FormHelperText,
   Chip, Stack, Tooltip, IconButton,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -82,13 +82,20 @@ export function EmployeesTab() {
   );
   const matricolaInvalid = form.external_employee_id !== '' && !/^[A-Za-z0-9]*$/.test(form.external_employee_id);
   const managerFieldDisabled = form.role === 'manager' || !form.site_id;
+  // Un dipendente deve sempre avere un manager di riferimento — la sede scelta
+  // deve già avere un manager attivo prima di poterci aggiungere dipendenti (i
+  // manager restano esenti). Trovato testando manualmente: creare un dipendente
+  // su una sede nuova, ancora senza manager, veniva accettato senza alcun avviso.
+  const managerMissing = form.role === 'employee' && !managerFieldDisabled && !form.manager_id;
   const managerHelperText = form.role === 'manager'
     ? 'I manager non hanno un manager di riferimento'
     : !form.site_id
       ? 'Seleziona prima una sede'
       : availableManagers.length === 0
-        ? 'Nessun manager assegnato a questa sede — puoi comunque creare il dipendente'
-        : undefined;
+        ? 'Nessun manager assegnato a questa sede — crea prima un manager per questa sede'
+        : managerMissing
+          ? 'Seleziona un manager di riferimento'
+          : undefined;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -200,21 +207,20 @@ export function EmployeesTab() {
                   value={form.hiring_date}
                   onChange={(e) => setForm({ ...form, hiring_date: e.target.value })}
                 />
-                <FormControl size="small" sx={{ minWidth: 220 }} disabled={managerFieldDisabled}>
+                <FormControl
+                  size="small" sx={{ minWidth: 220 }}
+                  disabled={managerFieldDisabled} required={form.role === 'employee'} error={managerMissing}
+                >
                   <InputLabel id="new-employee-manager-label">Manager di riferimento</InputLabel>
                   <Select
                     labelId="new-employee-manager-label"
                     label="Manager di riferimento" value={form.manager_id}
                     onChange={(e) => setForm({ ...form, manager_id: e.target.value })}
                   >
-                    <MenuItem value="">— nessuno —</MenuItem>
+                    {form.role !== 'employee' && <MenuItem value="">— nessuno —</MenuItem>}
                     {availableManagers.map((m) => <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>)}
                   </Select>
-                  {managerHelperText && (
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.5 }}>
-                      {managerHelperText}
-                    </Typography>
-                  )}
+                  {managerHelperText && <FormHelperText>{managerHelperText}</FormHelperText>}
                 </FormControl>
               </Stack>
               {msg && (
@@ -236,7 +242,7 @@ export function EmployeesTab() {
               )}
               <Box>
                 <Button type="submit" variant="contained" startIcon={<AddIcon />}
-                  disabled={saving || !form.client_id || matricolaInvalid}>
+                  disabled={saving || !form.client_id || matricolaInvalid || managerMissing}>
                   {saving ? <CircularProgress size={18} /> : 'Crea Dipendente'}
                 </Button>
               </Box>

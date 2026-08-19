@@ -20,7 +20,11 @@ function fileRow(overrides) {
 
 describe('computeDiff', () => {
   it('classifies a brand new employee as "nuovo"', () => {
-    const diff = computeDiff([fileRow({ email: 'nuovo@x.it', nome_completo: 'Nuovo Assunto' })], [], siteIdByName);
+    // ruolo: responsabile — un dipendente "nuovo" richiede un manager_email
+    // valido dal 2026-08-19 (vedi describe dedicato più sotto); qui si
+    // verifica solo la classificazione "nuovo", non quella regola, quindi si
+    // usa un manager (esente) per non introdurre una dipendenza incidentale.
+    const diff = computeDiff([fileRow({ email: 'nuovo@x.it', nome_completo: 'Nuovo Assunto', ruolo: 'responsabile' })], [], siteIdByName);
     expect(diff.nuovi).toHaveLength(1);
     expect(diff.nuovi[0].email).toBe('nuovo@x.it');
   });
@@ -151,7 +155,7 @@ describe('computeDiff', () => {
 });
 
 describe('computeDiff — manager_email active/site-match enforcement (Task 15 checkpoint finding)', () => {
-  it('does not resolve manager_id to a DEACTIVATED manager (treated as if the manager did not exist)', () => {
+  it('does not resolve manager_id to a DEACTIVATED manager, and blocks the new employee row entirely (manager required since 2026-08-19)', () => {
     const db = [
       { id: 'mgr-inactive', email: 'capo@x.it', name: 'Capo', phone: null, role: 'manager', site_id: 'site-torino', assigned_sites: [], active: false, hiring_date: null, exit_date: null, external_employee_id: null, manager_id: null },
     ];
@@ -160,10 +164,11 @@ describe('computeDiff — manager_email active/site-match enforcement (Task 15 c
       db,
       siteIdByName
     );
-    expect(diff.nuovi[0].manager_id).toBeNull();
+    expect(diff.nuovi).toHaveLength(0);
+    expect(diff.errors.length).toBeGreaterThan(0);
   });
 
-  it('rejects manager_email pointing to a manager on a different site, with a validation error and no manager_id assigned', () => {
+  it('rejects manager_email pointing to a manager on a different site, with a validation error and the row excluded from "nuovi"', () => {
     const db = [
       { id: 'mgr-milano', email: 'capo@x.it', name: 'Capo', phone: null, role: 'manager', site_id: 'site-milano', assigned_sites: [], active: true, hiring_date: null, exit_date: null, external_employee_id: null, manager_id: null },
     ];
@@ -174,7 +179,7 @@ describe('computeDiff — manager_email active/site-match enforcement (Task 15 c
     );
     expect(diff.errors.length).toBeGreaterThan(0);
     expect(diff.errors[0]).toContain('capo@x.it');
-    expect(diff.nuovi[0].manager_id).toBeNull();
+    expect(diff.nuovi).toHaveLength(0);
   });
 
   it('resolves manager_id normally for an active manager on the same site', () => {
@@ -205,13 +210,23 @@ describe('computeDiff — manager_email resolution', () => {
     expect(diff.nuovi[0].manager_id).toBe('mgr-1');
   });
 
-  it('leaves manager_id null when manager_email is empty', () => {
+  it('leaves manager_id null when manager_email is empty for a new MANAGER (exempt from the manager_id requirement)', () => {
+    const diff = computeDiff(
+      [fileRow({ email: 'nuovo@x.it', nome_completo: 'Nuovo', ruolo: 'responsabile', manager_email: null })],
+      dbWithManager,
+      siteIdByName
+    );
+    expect(diff.nuovi[0].manager_id).toBeNull();
+  });
+
+  it('blocks a new EMPLOYEE row (not exempt) when manager_email is empty, since 2026-08-19', () => {
     const diff = computeDiff(
       [fileRow({ email: 'nuovo@x.it', nome_completo: 'Nuovo', manager_email: null })],
       dbWithManager,
       siteIdByName
     );
-    expect(diff.nuovi[0].manager_id).toBeNull();
+    expect(diff.nuovi).toHaveLength(0);
+    expect(diff.errors.length).toBeGreaterThan(0);
   });
 
   it('detects a manager change as "modificato"', () => {

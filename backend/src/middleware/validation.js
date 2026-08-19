@@ -504,6 +504,15 @@ const AdminEmployeeSchema = z.object({
   }).refine(
     (data) => data.role === 'manager' || data.assigned_sites.length > 0,
     { message: 'employees must have at least one assigned site', path: ['assigned_sites'] }
+  ).refine(
+    // Un dipendente non può esistere senza un manager di riferimento — la sede a
+    // cui viene assegnato deve già avere un manager attivo prima che un admin
+    // possa aggiungere dipendenti (i manager restano esenti, non hanno un proprio
+    // manager). Trovato testando manualmente questo branch: creare un dipendente
+    // su una sede appena creata, ancora senza manager, veniva accettato senza
+    // alcun avviso.
+    (data) => data.role === 'manager' || !!data.manager_id,
+    { message: 'employees must have a manager_id — create a manager for this site first', path: ['manager_id'] }
   ),
 });
 

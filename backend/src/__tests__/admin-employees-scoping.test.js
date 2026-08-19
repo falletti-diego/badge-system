@@ -67,6 +67,19 @@ describe('RBAC scoping: /api/v1/admin/employees', () => {
     return result.rows[0].id;
   }
 
+  // Dal 2026-08-19 un dipendente deve avere un manager di riferimento — questi
+  // test riguardano lo scoping multi-tenant, non la logica del manager, quindi
+  // creano un manager "di comodo" via insert diretto invece di passare per l'API.
+  async function makeManager(clientId, siteId) {
+    const result = await pool.query(
+      `INSERT INTO employees (client_id, email, name, role, site_id, assigned_sites)
+       VALUES ($1, $2, 'Manager Scoping Test', 'manager', $3, ARRAY[$3]::uuid[])
+       RETURNING id`,
+      [clientId, uniqueEmail('employees-scoping-manager'), siteId]
+    );
+    return result.rows[0].id;
+  }
+
   function tokenFor({ client_id, role }) {
     const privateKey = process.env.JWT_PRIVATE_KEY.replace(/\\n/g, '\n');
     return jwt.sign({ user_id: 'test-user', client_id, role, name: 'Test' }, privateKey, {
@@ -91,6 +104,7 @@ describe('RBAC scoping: /api/v1/admin/employees', () => {
 
   it('POST /admin/employees: admin creating with a foreign client_id is silently forced to their own tenant', async () => {
     if (!dbAvailable) return;
+    const managerId = await makeManager(clientA, siteA);
     const token = tokenFor({ client_id: clientA, role: 'admin' });
     const res = await request(app)
       .post('/api/v1/admin/employees')
@@ -100,7 +114,9 @@ describe('RBAC scoping: /api/v1/admin/employees', () => {
         email: uniqueEmail('injected-employee'),
         name: 'Injected Employee',
         role: 'employee',
+        site_id: siteA, // manager_id validation matches on site_id, not assigned_sites
         assigned_sites: [siteA],
+        manager_id: managerId,
       });
     expect(res.status).toBe(201);
     expect(res.body.data.client_id).toBe(clientA);
@@ -109,6 +125,7 @@ describe('RBAC scoping: /api/v1/admin/employees', () => {
 
   it('POST /admin/employees: admin without client_id in body creates employee in own tenant (201)', async () => {
     if (!dbAvailable) return;
+    const managerId = await makeManager(clientA, siteA);
     const token = tokenFor({ client_id: clientA, role: 'admin' });
     const res = await request(app)
       .post('/api/v1/admin/employees')
@@ -118,7 +135,9 @@ describe('RBAC scoping: /api/v1/admin/employees', () => {
         email: uniqueEmail('no-client-id-employee'),
         name: 'No Client Id Employee',
         role: 'employee',
+        site_id: siteA, // manager_id validation matches on site_id, not assigned_sites
         assigned_sites: [siteA],
+        manager_id: managerId,
       });
     expect(res.status).toBe(201);
     expect(res.body.data.client_id).toBe(clientA);
@@ -136,6 +155,11 @@ describe('RBAC scoping: /api/v1/admin/employees', () => {
         name: 'Superadmin No Client Id',
         role: 'employee',
         assigned_sites: [siteA],
+        // Non serve un manager reale: la richiesta deve fallire su
+        // resolveTenantScope (client_id mancante) PRIMA di arrivare al
+        // controllo DB del manager_id — questo valore serve solo a superare
+        // la validazione Zod "manager_id required for employees".
+        manager_id: '550e8400-e29b-41d4-a716-446655440099',
       });
     expect(res.status).toBe(400);
     expect(res.body.details?.code).toBe('CLIENT_ID_REQUIRED');

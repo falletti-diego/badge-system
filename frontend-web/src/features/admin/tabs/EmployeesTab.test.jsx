@@ -104,6 +104,27 @@ describe('EmployeesTab', () => {
     expect(screen.getByRole('option', { name: 'Manager Torino' })).toBeInTheDocument();
   });
 
+  it('disables the submit button for role employee until a Manager di riferimento is chosen, even when managers are available', async () => {
+    const user = userEvent.setup();
+    render(<EmployeesTab />);
+
+    await user.click(screen.getByLabelText(/cliente/i));
+    await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
+    await user.click(screen.getByRole('combobox', { name: /sede/i }));
+    await user.click(screen.getByRole('option', { name: 'Sede Torino' })); // has a manager (mgr-1)
+    await user.type(screen.getByRole('textbox', { name: /^nome/i }), 'Mario Rossi');
+    await user.type(screen.getByRole('textbox', { name: /^email/i }), 'mario.rossi@example.com');
+
+    const submitButton = screen.getByRole('button', { name: /crea dipendente/i });
+    expect(submitButton).toBeDisabled();
+    expect(screen.getByText(/seleziona un manager di riferimento/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('combobox', { name: /manager di riferimento/i }));
+    await user.click(screen.getByRole('option', { name: 'Manager Torino' }));
+
+    expect(submitButton).toBeEnabled();
+  });
+
   it('does not submit a stale manager_id when switching Ruolo to Manager after picking one as employee', async () => {
     apiClient.post.mockResolvedValue({ data: { data: { name: 'Mario Rossi' }, temp_password: null } });
     const user = userEvent.setup();
@@ -199,6 +220,8 @@ describe('EmployeesTab', () => {
     await user.click(screen.getByRole('option', { name: 'Sede Torino' }));
     await user.type(screen.getByRole('textbox', { name: /^nome/i }), 'Mario Rossi');
     await user.type(screen.getByRole('textbox', { name: /^email/i }), 'mario.rossi@example.com');
+    await user.click(screen.getByRole('combobox', { name: /manager di riferimento/i }));
+    await user.click(screen.getByRole('option', { name: 'Manager Torino' }));
 
     await user.click(screen.getByRole('button', { name: /crea dipendente/i }));
 

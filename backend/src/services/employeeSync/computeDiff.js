@@ -123,18 +123,38 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
 
     if (!dbRow) {
       if (fileActive) {
+        const role = ROLE_MAP[row.ruolo];
+        const errorCountBeforeManagerResolve = errors.length;
+        const managerId = resolveManagerId(row, siteId);
+        // Stessa regola del form di creazione singola (validation.js,
+        // AdminEmployeeSchema): un NUOVO dipendente (non manager) non può
+        // essere inserito senza un manager di riferimento — la sede deve già
+        // avere un manager attivo. Applicata solo ai nuovi inserimenti, non
+        // retroattivamente ai dipendenti già esistenti (righe "modificati"/
+        // "riattivati" più sotto), che possono restare senza manager per
+        // compatibilità con i dati storici già in produzione.
+        if (role === 'employee' && !managerId) {
+          // resolveManagerId può aver già pushato un proprio errore più
+          // specifico (es. manager di sede diversa) — evita di duplicarlo.
+          if (errors.length === errorCountBeforeManagerResolve) {
+            errors.push(
+              `Foglio Dipendenti riga ${row._row}: manager_email obbligatorio per i nuovi dipendenti — crea prima un manager per questa sede.`
+            );
+          }
+          continue;
+        }
         nuovi.push({
           email: row.email,
           name: row.nome_completo,
           phone: row.telefono,
-          role: ROLE_MAP[row.ruolo],
+          role,
           site_id: siteId,
           external_employee_id: row.matricola,
           // "Oggi" in Europe/Rome, non UTC — stessa correzione applicata a
           // checkins.js e validation.js (hiring_date è una data di calendario
           // italiana, non un istante UTC).
           hiring_date: row.data_assunzione || todayInTimeZone(),
-          manager_id: resolveManagerId(row, siteId),
+          manager_id: managerId,
         });
       }
       continue;
