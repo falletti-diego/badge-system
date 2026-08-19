@@ -86,10 +86,16 @@ function computeDiff(fileRows, dbEmployees, siteIdByName) {
   // regole della creazione singola (manager attivo, stessa sede). Un
   // manager_email che non risolve a nessun manager attivo qui non dovrebbe
   // normalmente capitare (già bloccato upstream da validateSyntax via
-  // existingManagerEmails) — in quel caso il manager viene semplicemente
-  // ignorato (manager_id null). Un mismatch di SEDE invece non è rilevabile
-  // in validateSyntax (gira prima che siteIdByName sia risolta), quindi va
-  // segnalato qui come errore di validazione a tutti gli effetti.
+  // existingManagerEmails) — in quel caso questa funzione ritorna semplicemente
+  // manager_id null, senza pushare un proprio errore. Un mismatch di SEDE invece
+  // non è rilevabile in validateSyntax (gira prima che siteIdByName sia risolta),
+  // quindi va segnalato qui come errore di validazione a tutti gli effetti.
+  // NOTA (dal 2026-08-19): il chiamante nel ramo "nuovo dipendente" qui sotto
+  // NON ignora più silenziosamente un manager_id null per role === 'employee' —
+  // lo tratta come riga bloccata (errore "manager_email obbligatorio"). Questa
+  // funzione resta invariata (ignora e ritorna null); è il chiamante a decidere
+  // se un null è accettabile (manager/riattivazione/modifica) o va rifiutato
+  // (nuovo dipendente).
   function resolveManagerId(row, siteId) {
     if (!row.manager_email) return null;
     const mgr = managerByEmail.get(row.manager_email);
