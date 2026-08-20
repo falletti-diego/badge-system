@@ -37,6 +37,7 @@ describe('GET /api/v1/presences/my-summary', () => {
         { id: 'c1', employee_id: EMPLOYEE_ID, timestamp: '2026-07-01T08:00:00Z', type: 'IN' },
         { id: 'c2', employee_id: EMPLOYEE_ID, timestamp: '2026-07-01T17:00:00Z', type: 'OUT' },
       ] }) // check-ins query
+      .mockResolvedValueOnce({ rows: [] }) // approved events query
       .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: 6 }] }) // client meal voucher config
       .mockResolvedValueOnce({ rows: [] }); // signature lookup: nessuna firma
 
@@ -54,7 +55,8 @@ describe('GET /api/v1/presences/my-summary', () => {
     const token = makeToken({ user_id: EMPLOYEE_ID, employee_id: EMPLOYEE_ID, client_id: CLIENT_ID, role: 'employee' });
 
     pool.query
-      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] }) // check-ins query
+      .mockResolvedValueOnce({ rows: [] }) // approved events query
       .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: 6 }] })
       .mockResolvedValueOnce({ rows: [{ status: 'signed', signed_at: '2026-08-02T09:14:00Z' }] });
 

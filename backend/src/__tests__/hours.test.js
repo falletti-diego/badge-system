@@ -1,6 +1,6 @@
 'use strict';
 
-const { calculateDailyHours, aggregateMonthly } = require('../utils/hours');
+const { calculateDailyHours, aggregateMonthly, buildEventDailyEntries } = require('../utils/hours');
 
 const EMP_A = '550e8400-e29b-41d4-a716-446655440001';
 const EMP_B = '550e8400-e29b-41d4-a716-446655440002';
@@ -151,5 +151,30 @@ describe('aggregateMonthly', () => {
     expect(e.ore_straordinarie).toBe(1);
     expect(e.buoni_pasto).toBe(3);
     expect(e.giorni_presenti).toBe(3);
+  });
+});
+
+describe('buildEventDailyEntries', () => {
+  it('returns [] for empty input', () => {
+    expect(buildEventDailyEntries([])).toEqual([]);
+    expect(buildEventDailyEntries(null)).toEqual([]);
+  });
+
+  it('converts a single approved event into a daily entry with correct minutes', () => {
+    const input = [{ employee_id: EMP_A, event_date: '2026-06-15', start_time: '08:00:00', end_time: '18:00:00' }];
+    const result = buildEventDailyEntries(input);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ employee_id: EMP_A, date: '2026-06-15', minutes: 600, presenza_aperta: false });
+  });
+
+  it('handles multiple events for different employees independently', () => {
+    const input = [
+      { employee_id: EMP_A, event_date: '2026-06-15', start_time: '08:00:00', end_time: '12:00:00' },
+      { employee_id: EMP_B, event_date: '2026-06-16', start_time: '09:30:00', end_time: '17:30:00' },
+    ];
+    const result = buildEventDailyEntries(input);
+    expect(result).toHaveLength(2);
+    expect(result[0].minutes).toBe(240);
+    expect(result[1].minutes).toBe(480);
   });
 });

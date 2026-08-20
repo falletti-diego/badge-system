@@ -92,6 +92,7 @@ describe('GET /api/presences/summary', () => {
   it('admin gets summary → 200 with employee data', async () => {
     pool.query
       .mockResolvedValueOnce({ rows: makeCheckins() }) // check-ins query
+      .mockResolvedValueOnce({ rows: [] }) // approved events query
       .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] }) // clients query
       .mockResolvedValueOnce({ rows: [{ id: EMP_ID, name: 'Mario Rossi', matricola: '001' }] }); // all employees query
 
@@ -115,6 +116,7 @@ describe('GET /api/presences/summary', () => {
   it('include lo stato della firma per ogni dipendente (finding firma digitale)', async () => {
     pool.query
       .mockResolvedValueOnce({ rows: makeCheckins() }) // check-ins query
+      .mockResolvedValueOnce({ rows: [] }) // approved events query
       .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] }) // clients query
       .mockResolvedValueOnce({ rows: [{ id: EMP_ID, name: 'Mario Rossi', matricola: '001' }] }) // all employees query
       .mockResolvedValueOnce({ rows: [{ employee_id: EMP_ID, status: 'signed', signed_at: '2026-07-02T09:00:00Z' }] }); // firme del periodo
@@ -131,6 +133,7 @@ describe('GET /api/presences/summary', () => {
   it('signature_status è null quando il dipendente non ha mai firmato', async () => {
     pool.query
       .mockResolvedValueOnce({ rows: makeCheckins() })
+      .mockResolvedValueOnce({ rows: [] }) // approved events query
       .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] })
       .mockResolvedValueOnce({ rows: [{ id: EMP_ID, name: 'Mario Rossi', matricola: '001' }] })
       .mockResolvedValueOnce({ rows: [] }); // nessuna firma
@@ -146,6 +149,7 @@ describe('GET /api/presences/summary', () => {
   it('viewer gets summary → 200', async () => {
     pool.query
       .mockResolvedValueOnce({ rows: makeCheckins() })
+      .mockResolvedValueOnce({ rows: [] }) // approved events query
       .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] })
       .mockResolvedValueOnce({ rows: [{ id: EMP_ID, name: 'Mario Rossi', matricola: '001' }] });
 
@@ -159,6 +163,7 @@ describe('GET /api/presences/summary', () => {
   it('manager gets summary → 200 (site-scoped)', async () => {
     pool.query
       .mockResolvedValueOnce({ rows: makeCheckins() })
+      .mockResolvedValueOnce({ rows: [] }) // approved events query
       .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] });
 
     const res = await request(app)
@@ -174,6 +179,7 @@ describe('GET /api/presences/summary', () => {
   it('month with no checkins → empty employees list', async () => {
     pool.query
       .mockResolvedValueOnce({ rows: [] }) // no check-ins
+      .mockResolvedValueOnce({ rows: [] }) // approved events query
       .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] })
       .mockResolvedValueOnce({ rows: [] }); // no employees
 
@@ -194,6 +200,7 @@ describe('GET /api/presences/summary', () => {
     ];
     pool.query
       .mockResolvedValueOnce({ rows: checkins })
+      .mockResolvedValueOnce({ rows: [] }) // approved events query
       .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] })
       .mockResolvedValueOnce({ rows: [{ id: EMP_ID, name: 'Mario', matricola: null }] });
 
@@ -212,6 +219,7 @@ describe('GET /api/presences/summary', () => {
     ];
     pool.query
       .mockResolvedValueOnce({ rows: checkins })
+      .mockResolvedValueOnce({ rows: [] }) // approved events query
       .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] })
       .mockResolvedValueOnce({ rows: [{ id: EMP_ID, name: 'Mario', matricola: null }] });
 
@@ -229,6 +237,7 @@ describe('GET /api/presences/summary', () => {
   it('defaults to current month/year when params omitted', async () => {
     pool.query
       .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] }) // approved events query
       .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] })
       .mockResolvedValueOnce({ rows: [] });
 

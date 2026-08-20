@@ -10,7 +10,7 @@ const { pool } = require('../db/pool');
 const { createValidationMiddleware, GetPresencesSummarySchema, GetMySummarySchema, GetPresencesTrendSchema } = require('../middleware/validation');
 const { requireAuth } = require('../middleware/auth');
 const { ForbiddenError } = require('../utils/errors');
-const { calculateDailyHours, aggregateMonthly, toUtcDateString } = require('../utils/hours');
+const { calculateDailyHours, aggregateMonthly, toUtcDateString, buildEventDailyEntries } = require('../utils/hours');
 const { resolveSiteId } = require('../utils/resolvers');
 const { buildTrendDays } = require('../utils/trendStats');
 
@@ -64,6 +64,23 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
       params
     );
 
+    // Approved events (Eventi/Training) in the period — merged into the same
+    // daily-hours pipeline as checkins (query-time join, same pattern as
+    // leave_requests/illnesses used in /trend below).
+    let eventsQuery = `
+      SELECT er.user_id AS employee_id, er.event_date::text AS event_date, er.start_time, er.end_time
+      FROM event_requests er
+      JOIN employees e ON e.id = er.user_id AND e.active = true
+      WHERE er.client_id = $1::uuid AND er.status = 'APPROVED'
+        AND er.event_date >= $2::date AND er.event_date < $3::date
+    `;
+    const eventsParams = [client_id, toUtcDateString(dateFrom), toUtcDateString(dateTo)];
+    if (role === 'manager') {
+      eventsParams.push(managerSiteId);
+      eventsQuery += ` AND e.site_id = $${eventsParams.length}::uuid`;
+    }
+    const eventsResult = await pool.query(eventsQuery, eventsParams);
+
     // Fetch meal_voucher_hours for this client
     const clientResult = await pool.query(
       'SELECT meal_voucher_hours FROM clients WHERE id = $1::uuid LIMIT 1',
@@ -93,8 +110,11 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
       }
     }
 
-    // Compute daily hours
-    const dailyEntries = calculateDailyHours(checkinsResult.rows);
+    // Compute daily hours (checkins + approved events)
+    const dailyEntries = [
+      ...calculateDailyHours(checkinsResult.rows),
+      ...buildEventDailyEntries(eventsResult.rows),
+    ];
     const monthlyAgg = aggregateMonthly(dailyEntries, Number(mealVoucherHours));
 
     // Build response — include all employees (even those with 0 hours) for admin/viewer
@@ -213,13 +233,24 @@ router.get('/my-summary', requireAuth, createValidationMiddleware(GetMySummarySc
       [client_id, employee_id, dateFrom.toISOString(), dateTo.toISOString()]
     );
 
+    const eventsResult = await pool.query(
+      `SELECT user_id AS employee_id, event_date::text AS event_date, start_time, end_time
+       FROM event_requests
+       WHERE client_id = $1::uuid AND user_id = $2::uuid AND status = 'APPROVED'
+         AND event_date >= $3::date AND event_date < $4::date`,
+      [client_id, employee_id, toUtcDateString(dateFrom), toUtcDateString(dateTo)]
+    );
+
     const clientResult = await pool.query(
       'SELECT meal_voucher_hours FROM clients WHERE id = $1::uuid LIMIT 1',
       [client_id]
     );
     const mealVoucherHours = clientResult.rows[0]?.meal_voucher_hours ?? 5.0;
 
-    const dailyEntries = calculateDailyHours(checkinsResult.rows);
+    const dailyEntries = [
+      ...calculateDailyHours(checkinsResult.rows),
+      ...buildEventDailyEntries(eventsResult.rows),
+    ];
     const monthlyAgg = aggregateMonthly(dailyEntries, Number(mealVoucherHours));
     const agg = monthlyAgg.get(employee_id) || {
       ore_totali: 0, ore_ordinarie: 0, ore_straordinarie: 0, buoni_pasto: 0, giorni_presenti: 0, presenze_aperte: 0,
