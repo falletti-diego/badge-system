@@ -41,4 +41,15 @@ function today() {
   return d;
 }
 
-module.exports = { toISO, formatDateIT, today };
+/**
+ * Formats a Date to 'HH:MM' using LOCAL time (for event start/end time pickers).
+ * @param {Date} d
+ * @returns {string}
+ */
+function toTimeHHMM(d) {
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+module.exports = { toISO, formatDateIT, today, toTimeHHMM };

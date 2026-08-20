@@ -1,4 +1,4 @@
-const { toISO, formatDateIT, today } = require('../utils/dateUtils');
+const { toISO, formatDateIT, today, toTimeHHMM } = require('../utils/dateUtils');
 
 describe('toISO', () => {
   test('returns YYYY-MM-DD format', () => {
@@ -91,5 +91,22 @@ describe('today', () => {
     // Each call creates a NEW Date object (not a cached module-level constant)
     expect(a).not.toBe(b);
     expect(toISO(a)).toBe(toISO(b));
+  });
+});
+
+describe('toTimeHHMM', () => {
+  test('formats a Date to HH:MM using local time', () => {
+    const d = new Date(2026, 5, 21, 8, 0, 0);
+    expect(toTimeHHMM(d)).toBe('08:00');
+  });
+
+  test('pads single-digit hours and minutes', () => {
+    const d = new Date(2026, 5, 21, 9, 5, 0);
+    expect(toTimeHHMM(d)).toBe('09:05');
+  });
+
+  test('handles late evening times', () => {
+    const d = new Date(2026, 5, 21, 23, 45, 0);
+    expect(toTimeHHMM(d)).toBe('23:45');
   });
 });
