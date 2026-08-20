@@ -23,6 +23,8 @@ jest.mock('../screens/schedule/ManagerScheduleScreen', () => () => null);
 jest.mock('../screens/presences/PresenzaTabScreen', () => () => null);
 jest.mock('../screens/leave/LeaveRequestScreen', () => () => null);
 jest.mock('../screens/leave/ManagerLeaveApprovalScreen', () => () => null);
+jest.mock('../screens/events/EventRequestScreen', () => () => null);
+jest.mock('../screens/events/ManagerEventApprovalScreen', () => () => null);
 jest.mock('../screens/illness/IllnessReportScreen', () => () => null);
 jest.mock('../screens/settings/SettingsScreen', () => () => null);
 jest.mock('../screens/settings/ChangePasswordScreen', () => () => null);
