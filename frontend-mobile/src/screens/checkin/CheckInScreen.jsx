@@ -13,6 +13,7 @@ import { COLORS, FONTS } from '../../config/theme';
 
 export default function CheckInScreen({ navigation }) {
   const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
   const [time, setTime] = useState(new Date());
   const [faceIdAvailable, setFaceIdAvailable] = useState(false);
@@ -21,7 +22,7 @@ export default function CheckInScreen({ navigation }) {
   useEffect(() => {
     setLoading(true);
     authService.getUser()
-      .then(setUser)
+      .then((u) => { setUser(u); setRole(u?.role ?? null); })
       .finally(() => setLoading(false));
 
     LocalAuthentication.hasHardwareAsync().then(setFaceIdAvailable);
@@ -93,6 +94,16 @@ export default function CheckInScreen({ navigation }) {
           <Text style={styles.smartWorkingSubtext}>Autogiustifica la giornata odierna</Text>
         </TouchableOpacity>
 
+        {role !== 'manager' && (
+          <TouchableOpacity
+            style={styles.eventButton}
+            onPress={() => navigation.navigate('Eventi')}
+          >
+            <Text style={styles.eventButtonText}>Eventi/Training</Text>
+            <Text style={styles.eventSubtext}>Richiedi autorizzazione per un evento fuori sede</Text>
+          </TouchableOpacity>
+        )}
+
         {pendingCount > 0 && (
           <Text style={styles.pendingQueueText}>
             🕓 {pendingCount} timbratura{pendingCount > 1 ? 'e' : ''} in attesa di sincronizzazione
@@ -134,6 +145,12 @@ const styles = StyleSheet.create({
   },
   smartWorkingButtonText: { fontFamily: FONTS.bodySemiBold, color: COLORS.navy500, fontSize: 15 },
   smartWorkingSubtext: { fontFamily: FONTS.body, color: COLORS.stone, fontSize: 12, marginTop: 4 },
+  eventButton: {
+    backgroundColor: COLORS.white, borderRadius: 16, padding: 20, alignItems: 'center',
+    borderWidth: 1.5, borderColor: COLORS.navy200,
+  },
+  eventButtonText: { fontFamily: FONTS.bodySemiBold, color: COLORS.navy500, fontSize: 15 },
+  eventSubtext: { fontFamily: FONTS.body, color: COLORS.stone, fontSize: 12, marginTop: 4 },
   pendingQueueText: {
     fontFamily: FONTS.body, color: COLORS.stone, fontSize: 13, textAlign: 'center',
   },
