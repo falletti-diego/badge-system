@@ -378,7 +378,7 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
       expect(mockPool.query).toHaveBeenCalledTimes(6);
       const invalidateCallSql = mockPool.query.mock.calls[2][0];
       expect(invalidateCallSql).toContain('timesheet_signatures');
-      expect(invalidateCallSql).toContain("status = 'invalidated'");
+      expect(invalidateCallSql).toContain('status = \'invalidated\'');
       expect(mockPool.query.mock.calls[2][1]).toEqual([TEST_EMPLOYEE_ID, expect.any(Number), expect.any(Number)]);
     });
 
