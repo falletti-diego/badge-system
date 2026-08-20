@@ -13,6 +13,7 @@ const { createValidationMiddleware, PostEventRequestSchema, ApproveEventRequestS
 const { logAudit } = require('../middleware/audit');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
+const { invalidateSignatureIfExists } = require('../utils/timesheetSignature');
 const { NotFoundError, ValidationError, ForbiddenError, ConflictError } = require('../utils/errors');
 const logger = require('../utils/logger');
 
@@ -219,6 +220,31 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveEventR
       }
 
       const updatedEvent = updateResult.rows[0];
+
+      // Approving an event changes ore_totali/buoni_pasto for that month
+      // exactly like a checkin correction does (see buildEventDailyEntries
+      // in presences.js) — invalidate any already-signed timesheet for that
+      // month so it doesn't silently go stale, same as checkins.js does for
+      // corrections. Unconditional + only on APPROVED: rejecting a request
+      // never changes computed hours, and the call is a safe no-op if
+      // nothing is signed for that month.
+      if (status === 'APPROVED') {
+        // updatedEvent.event_date (a DATE column) is parsed by pg into a JS
+        // Date at LOCAL midnight of that calendar day, not UTC midnight —
+        // invalidateSignatureIfExists does UTC-based month/year math, so
+        // reading it back with UTC getters would misattribute the 1st of a
+        // month to the previous month under any non-UTC server timezone
+        // (verified: Europe/Rome parses '2026-06-01' to 2026-05-31T22:00Z).
+        // Local getters correctly invert the local-midnight construction
+        // regardless of server timezone — same fix as presences.js already
+        // applies via an explicit ::text cast in SQL, done here in JS since
+        // this value only needs to be re-threaded through invalidateSignatureIfExists.
+        const ed = updatedEvent.event_date;
+        const eventDateText = ed instanceof Date
+          ? `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`
+          : String(ed).slice(0, 10);
+        await invalidateSignatureIfExists(client, updatedEvent.user_id, eventDateText);
+      }
 
       await logAudit(client, {
         action: 'event_request_approved',

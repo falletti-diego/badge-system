@@ -300,5 +300,132 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
       expect(mockPool.query).toHaveBeenCalledTimes(2);
       expect(mockPool.query.mock.calls[1][0]).toContain('WHERE id = $4::uuid AND status = \'PENDING\'');
     });
+
+    it('invalidates an already-signed timesheet for that month when the request is APPROVED (hours changed, same as a checkin correction)', async () => {
+      const adminToken = makeToken();
+      mockPool.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: TEST_EVENT_ID,
+            client_id: TEST_CLIENT_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            event_date: todayISO(),
+            start_time: '08:00:00',
+            end_time: '18:00:00',
+            status: 'PENDING',
+          }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: TEST_EVENT_ID,
+            client_id: TEST_CLIENT_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            event_date: todayISO(),
+            start_time: '08:00:00',
+            end_time: '18:00:00',
+            status: 'APPROVED',
+          }],
+        }) // UPDATE succeeds
+        .mockResolvedValueOnce({ rows: [] }) // invalidateSignatureIfExists UPDATE
+        .mockResolvedValueOnce({ rows: [] }) // logAudit: SAVEPOINT
+        .mockResolvedValueOnce({ rows: [] }) // logAudit: INSERT INTO audit_log
+        .mockResolvedValueOnce({ rows: [] }); // logAudit: RELEASE SAVEPOINT
+
+      const res = await request(app)
+        .put(`/api/v1/events/${TEST_EVENT_ID}/approve`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'APPROVED' });
+
+      expect(res.status).toBe(200);
+      expect(mockPool.query).toHaveBeenCalledTimes(6);
+      const invalidateCallSql = mockPool.query.mock.calls[2][0];
+      expect(invalidateCallSql).toContain('timesheet_signatures');
+      expect(invalidateCallSql).toContain("status = 'invalidated'");
+      expect(mockPool.query.mock.calls[2][1]).toEqual([TEST_EMPLOYEE_ID, expect.any(Number), expect.any(Number)]);
+    });
+
+    it('derives the correct month/year for a 1st-of-month event_date regardless of server timezone (regression: pg DATE columns parse to local-midnight, not UTC-midnight)', async () => {
+      const adminToken = makeToken();
+      // Mirrors exactly what node-postgres returns for a DATE column: a JS
+      // Date built via new Date(year, monthIndex, day), i.e. LOCAL midnight —
+      // NOT an ISO string, and NOT UTC midnight. Under a negative-UTC-offset
+      // timezone (e.g. anything west of Greenwich, or Europe with certain
+      // DST states), naively reading this with UTC getters shifts the 1st
+      // of the month back into the previous month.
+      const juneFirstAsPgWouldReturnIt = new Date(2026, 5, 1); // June 1 2026, local midnight
+
+      mockPool.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: TEST_EVENT_ID,
+            client_id: TEST_CLIENT_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            event_date: juneFirstAsPgWouldReturnIt,
+            start_time: '08:00:00',
+            end_time: '18:00:00',
+            status: 'PENDING',
+          }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: TEST_EVENT_ID,
+            client_id: TEST_CLIENT_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            event_date: juneFirstAsPgWouldReturnIt,
+            status: 'APPROVED',
+          }],
+        }) // UPDATE succeeds
+        .mockResolvedValueOnce({ rows: [] }) // invalidateSignatureIfExists UPDATE
+        .mockResolvedValueOnce({ rows: [] }) // logAudit: SAVEPOINT
+        .mockResolvedValueOnce({ rows: [] }) // logAudit: INSERT INTO audit_log
+        .mockResolvedValueOnce({ rows: [] }); // logAudit: RELEASE SAVEPOINT
+
+      const res = await request(app)
+        .put(`/api/v1/events/${TEST_EVENT_ID}/approve`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'APPROVED' });
+
+      expect(res.status).toBe(200);
+      // month=6 (June), year=2026 — must NOT resolve to month=5 (May)
+      expect(mockPool.query.mock.calls[2][1]).toEqual([TEST_EMPLOYEE_ID, 6, 2026]);
+    });
+
+    it('does NOT touch timesheet_signatures when the request is REJECTED (rejecting never changes computed hours)', async () => {
+      const adminToken = makeToken();
+      mockPool.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: TEST_EVENT_ID,
+            client_id: TEST_CLIENT_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            event_date: todayISO(),
+            start_time: '08:00:00',
+            end_time: '18:00:00',
+            status: 'PENDING',
+          }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: TEST_EVENT_ID,
+            client_id: TEST_CLIENT_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            event_date: todayISO(),
+            status: 'REJECTED',
+          }],
+        }) // UPDATE succeeds
+        .mockResolvedValueOnce({ rows: [] }) // logAudit: SAVEPOINT
+        .mockResolvedValueOnce({ rows: [] }) // logAudit: INSERT INTO audit_log
+        .mockResolvedValueOnce({ rows: [] }); // logAudit: RELEASE SAVEPOINT
+
+      const res = await request(app)
+        .put(`/api/v1/events/${TEST_EVENT_ID}/approve`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'REJECTED' });
+
+      expect(res.status).toBe(200);
+      // Only SELECT + UPDATE + audit log (SAVEPOINT/INSERT/RELEASE) — no timesheet_signatures call in between
+      expect(mockPool.query).toHaveBeenCalledTimes(5);
+      expect(mockPool.query.mock.calls.some((call) => call[0].includes('timesheet_signatures'))).toBe(false);
+    });
   });
 });
