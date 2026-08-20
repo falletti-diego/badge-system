@@ -19,6 +19,7 @@ import { CorrectionsPage } from './features/corrections/pages/CorrectionsPage';
 import { SitesPage } from './features/sites/pages/SitesPage';
 import { AdminPage } from './features/admin/pages/AdminPage';
 import { EmployeeLeaveRequest } from './features/leave/pages/EmployeeLeaveRequest';
+import { EmployeeEventRequest } from './features/events/pages/EmployeeEventRequest';
 import { ManagerLeaveRequest } from './features/leave/pages/ManagerLeaveRequest';
 import { AdminLeaveManagement } from './features/leave/pages/AdminLeaveManagement';
 import { EmployeeIllnessReport } from './features/illness/pages/EmployeeIllnessReport';
@@ -192,6 +193,16 @@ function AppRouter() {
             element={
               <ProtectedRoute requiredRole="employee">
                 <EmployeeLeaveRequest />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Event/Training Request Route */}
+          <Route
+            path="/events/request"
+            element={
+              <ProtectedRoute requiredRole="employee">
+                <EmployeeEventRequest />
               </ProtectedRoute>
             }
           />
