@@ -233,7 +233,7 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
       expect(mockPool.query).toHaveBeenCalledWith(
-        expect.stringContaining('e.site_id = $2::uuid'),
+        expect.stringContaining('$2::uuid = ANY(e.assigned_sites)'),
         [TEST_CLIENT_ID, TEST_SITE_ID]
       );
     });
@@ -299,6 +299,44 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
       expect(res.body.message).toBe('Event request has already been processed');
       expect(mockPool.query).toHaveBeenCalledTimes(2);
       expect(mockPool.query.mock.calls[1][0]).toContain('WHERE id = $4::uuid AND status = \'PENDING\'');
+    });
+
+    it('lets a manager approve a request for an employee assigned to their site via assigned_sites, even when the employee has no primary site_id set (regression: manager authorization previously checked employees.site_id, which is unset for regular employee rows and caused a false 403)', async () => {
+      const managerToken = makeToken({ role: 'manager', site_id: TEST_SITE_ID, user_id: TEST_MANAGER_ID });
+      mockPool.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: TEST_EVENT_ID,
+            client_id: TEST_CLIENT_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            event_date: todayISO(),
+            start_time: '08:00:00',
+            end_time: '18:00:00',
+            status: 'PENDING',
+          }],
+        })
+        .mockResolvedValueOnce({ rows: [{ assigned_sites: [TEST_SITE_ID] }] })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: TEST_EVENT_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            event_date: todayISO(),
+            status: 'APPROVED',
+            approved_at: new Date().toISOString(),
+          }],
+        })
+        .mockResolvedValueOnce({ rows: [] }) // invalidateSignatureIfExists
+        .mockResolvedValueOnce({ rows: [] }) // SAVEPOINT
+        .mockResolvedValueOnce({ rows: [] }) // INSERT audit_log
+        .mockResolvedValueOnce({ rows: [] }); // RELEASE SAVEPOINT
+
+      const res = await request(app)
+        .put(`/api/v1/events/${TEST_EVENT_ID}/approve`)
+        .set('Authorization', `Bearer ${managerToken}`)
+        .send({ status: 'APPROVED' });
+
+      expect(res.status).toBe(200);
+      expect(mockPool.query.mock.calls[1][0]).toContain('SELECT assigned_sites FROM employees');
     });
 
     it('invalidates an already-signed timesheet for that month when the request is APPROVED (hours changed, same as a checkin correction)', async () => {

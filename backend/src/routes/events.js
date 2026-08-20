@@ -130,7 +130,7 @@ router.get('/pending', requireAuth, async (req, res, next) => {
     if (role === 'admin') {
       // No additional filter.
     } else if (role === 'manager' && siteId) {
-      query += ' AND e.site_id = $2::uuid';
+      query += ' AND $2::uuid = ANY(e.assigned_sites)';
       params.push(siteId);
     } else {
       throw new ForbiddenError('You do not have permission to view pending event requests', 'FORBIDDEN');
@@ -184,7 +184,7 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveEventR
 
       if (role === 'manager') {
         const employeeResult = await client.query(
-          'SELECT site_id FROM employees WHERE id = $1::uuid LIMIT 1',
+          'SELECT assigned_sites FROM employees WHERE id = $1::uuid LIMIT 1',
           [eventRequest.user_id]
         );
 
@@ -192,12 +192,13 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveEventR
           throw new NotFoundError('Employee not found', 'EMPLOYEE_NOT_FOUND');
         }
 
-        if (employeeResult.rows[0].site_id !== siteId) {
+        const employeeAssignedSites = employeeResult.rows[0].assigned_sites || [];
+        if (!employeeAssignedSites.includes(siteId)) {
           logger.warn({
             action: 'event_approval_unauthorized',
             approver_id: userId,
             approver_site: siteId,
-            employee_site: employeeResult.rows[0].site_id,
+            employee_assigned_sites: employeeAssignedSites,
           });
           throw new ForbiddenError('You can only approve requests for employees in your store', 'FORBIDDEN');
         }

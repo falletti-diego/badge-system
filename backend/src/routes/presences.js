@@ -77,7 +77,7 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
     const eventsParams = [client_id, toUtcDateString(dateFrom), toUtcDateString(dateTo)];
     if (role === 'manager') {
       eventsParams.push(managerSiteId);
-      eventsQuery += ` AND e.site_id = $${eventsParams.length}::uuid`;
+      eventsQuery += ` AND $${eventsParams.length}::uuid = ANY(e.assigned_sites)`;
     }
     const eventsResult = await pool.query(eventsQuery, eventsParams);
 
