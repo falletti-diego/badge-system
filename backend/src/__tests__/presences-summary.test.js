@@ -234,6 +234,57 @@ describe('GET /api/presences/summary', () => {
     expect(emp.ore_straordinarie).toBe(1);
   });
 
+  it('an approved event on the same date as a real checkin does not double-count hours (checkin wins)', async () => {
+    const checkins = [
+      { employee_id: EMP_ID, timestamp: new Date('2026-06-01T08:00:00Z'), type: 'IN',  employee_name: 'Mario', matricola: null },
+      { employee_id: EMP_ID, timestamp: new Date('2026-06-01T16:00:00Z'), type: 'OUT', employee_name: 'Mario', matricola: null },
+      // 8h worked via real checkins on 2026-06-01
+    ];
+    const events = [
+      // Approved event for the SAME date — should be dropped in favor of the checkin
+      { employee_id: EMP_ID, event_date: '2026-06-01', start_time: '08:00:00', end_time: '18:00:00' }, // would be 10h if counted
+    ];
+    pool.query
+      .mockResolvedValueOnce({ rows: checkins })
+      .mockResolvedValueOnce({ rows: events }) // approved events query — colliding date
+      .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] })
+      .mockResolvedValueOnce({ rows: [{ id: EMP_ID, name: 'Mario', matricola: null }] });
+
+    const res = await request(app)
+      .get('/api/v1/presences/summary?month=6&year=2026')
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`);
+
+    expect(res.status).toBe(200);
+    const emp = res.body.data.employees[0];
+    // Only the checkin's 8h should count, not 8h + 10h
+    expect(emp.ore_totali).toBe(8);
+    expect(emp.giorni_presenti).toBe(1);
+  });
+
+  it('an approved event on a different date from any checkin is still counted', async () => {
+    const checkins = [
+      { employee_id: EMP_ID, timestamp: new Date('2026-06-01T08:00:00Z'), type: 'IN',  employee_name: 'Mario', matricola: null },
+      { employee_id: EMP_ID, timestamp: new Date('2026-06-01T16:00:00Z'), type: 'OUT', employee_name: 'Mario', matricola: null },
+    ];
+    const events = [
+      { employee_id: EMP_ID, event_date: '2026-06-02', start_time: '09:00:00', end_time: '13:00:00' }, // 4h, different date
+    ];
+    pool.query
+      .mockResolvedValueOnce({ rows: checkins })
+      .mockResolvedValueOnce({ rows: events })
+      .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] })
+      .mockResolvedValueOnce({ rows: [{ id: EMP_ID, name: 'Mario', matricola: null }] });
+
+    const res = await request(app)
+      .get('/api/v1/presences/summary?month=6&year=2026')
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`);
+
+    expect(res.status).toBe(200);
+    const emp = res.body.data.employees[0];
+    expect(emp.ore_totali).toBe(12); // 8h checkin + 4h event
+    expect(emp.giorni_presenti).toBe(2);
+  });
+
   it('defaults to current month/year when params omitted', async () => {
     pool.query
       .mockResolvedValueOnce({ rows: [] })

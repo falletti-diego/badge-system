@@ -168,9 +168,15 @@ function timeStringToMinutes(t) {
  *
  * Converts approved event_requests rows into the same daily-entry shape
  * calculateDailyHours() produces, so they can be concatenated and fed into
- * aggregateMonthly() together with real checkin-derived entries. Safe to
- * concatenate: the conflict check in routes/events.js guarantees an
- * employee never has both a checkin and an approved event on the same date.
+ * aggregateMonthly() together with real checkin-derived entries.
+ *
+ * NOT safe to concatenate blindly: routes/events.js only checks for a
+ * checkin/event conflict at POST /request time. A checkin can still be
+ * recorded for the same (employee_id, date) later, before the event request
+ * is approved, which would otherwise double-count hours. Callers MUST dedupe
+ * — checkins should win — before merging this output with
+ * calculateDailyHours() output (see presences.js's /summary and
+ * /my-summary handlers).
  *
  * @param {Array<{ employee_id: string, event_date: string, start_time: string, end_time: string }>} eventRows
  * @returns {Array<{ employee_id: string, date: string, minutes: number, presenza_aperta: boolean }>}

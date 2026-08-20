@@ -110,11 +110,16 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
       }
     }
 
-    // Compute daily hours (checkins + approved events)
-    const dailyEntries = [
-      ...calculateDailyHours(checkinsResult.rows),
-      ...buildEventDailyEntries(eventsResult.rows),
-    ];
+    // Compute daily hours (checkins + approved events).
+    // A checkin can be recorded for the same (employee_id, date) after an
+    // event request was submitted but before it was approved (routes/events.js
+    // only checks for this conflict at POST /request time) — checkins are
+    // ground truth, so drop any event-derived entry that collides with one.
+    const checkinDailyEntries = calculateDailyHours(checkinsResult.rows);
+    const checkinDayKeys = new Set(checkinDailyEntries.map((e) => `${e.employee_id}|${e.date}`));
+    const eventDailyEntries = buildEventDailyEntries(eventsResult.rows)
+      .filter((e) => !checkinDayKeys.has(`${e.employee_id}|${e.date}`));
+    const dailyEntries = [...checkinDailyEntries, ...eventDailyEntries];
     const monthlyAgg = aggregateMonthly(dailyEntries, Number(mealVoucherHours));
 
     // Build response — include all employees (even those with 0 hours) for admin/viewer
@@ -247,10 +252,14 @@ router.get('/my-summary', requireAuth, createValidationMiddleware(GetMySummarySc
     );
     const mealVoucherHours = clientResult.rows[0]?.meal_voucher_hours ?? 5.0;
 
-    const dailyEntries = [
-      ...calculateDailyHours(checkinsResult.rows),
-      ...buildEventDailyEntries(eventsResult.rows),
-    ];
+    // Checkins are ground truth — drop any event-derived entry for a
+    // (employee_id, date) that already has a checkin-derived entry (see
+    // /summary above for why this collision is possible).
+    const checkinDailyEntries = calculateDailyHours(checkinsResult.rows);
+    const checkinDayKeys = new Set(checkinDailyEntries.map((e) => `${e.employee_id}|${e.date}`));
+    const eventDailyEntries = buildEventDailyEntries(eventsResult.rows)
+      .filter((e) => !checkinDayKeys.has(`${e.employee_id}|${e.date}`));
+    const dailyEntries = [...checkinDailyEntries, ...eventDailyEntries];
     const monthlyAgg = aggregateMonthly(dailyEntries, Number(mealVoucherHours));
     const agg = monthlyAgg.get(employee_id) || {
       ore_totali: 0, ore_ordinarie: 0, ore_straordinarie: 0, buoni_pasto: 0, giorni_presenti: 0, presenze_aperte: 0,
