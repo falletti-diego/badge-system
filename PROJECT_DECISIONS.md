@@ -6,6 +6,40 @@
 
 ---
 
+## Session 106 — Feature Eventi/Training, code review con 1 bug fixato, QA manuale, merge su `main` (20 Agosto 2026)
+
+### Contesto
+Continuazione di una sessione precedente: feature "Eventi/Training" (richiesta di autorizzazione per una giornata di evento/congresso/formazione esterna, approvata dal manager come le Ferie, conteggiata in ore lavorate/buoni pasto) già implementata full-stack (backend/mobile/web, 15 task TDD) e piano di test già scritto ed eseguito lato API. Questa sessione copre: analisi critica finale, `/code-review:code-review` su PR GitHub, QA manuale, merge.
+
+### Analisi critica pre-merge (su richiesta esplicita dell'utente)
+Due fix aggiuntivi trovati con un'indagine mirata (rate limiting, firma cartellino, GDPR export, audit log):
+1. **Gap preesistente, non introdotto da questa feature**: il roster `/summary` del manager perdeva i dipendenti a zero timbrature nel mese non appena un collega della stessa sede aveva almeno una timbratura — rilevante perché un mese interamente coperto da un evento approvato è ora uno scenario reale.
+2. **Gap introdotto da questa feature**: approvare un evento cambiava le ore calcolate del mese ma non invalidava un cartellino già firmato (a differenza delle correzioni di check-in). Nel fixare questo, un reviewer ha trovato un **bug di timezone**: la colonna `event_date` (tipo `DATE` di Postgres) viene parsata da `pg` a mezzanotte **locale**, non UTC — un evento del 1° del mese poteva essere attribuito al mese sbagliato su un server non-UTC. Corretto e verificato con mutation-testing su timezone estreme (UTC+14, UTC-12).
+
+### Link di navigazione mancante e config ESLint
+- Aggiunto il link "🎓 Eventi/Training" mancante nella navbar web (`/frontend-design`, con analisi della UI esistente per coerenza — la navbar usa `Button`+emoji, non icone MUI, quindi il nuovo link segue lo stesso pattern anziché introdurne uno diverso).
+- `frontend-web` non aveva alcuna config ESLint (`npm run lint` falliva sempre) — creata da zero rispecchiando quella del backend. `eslint-plugin-react-hooks` era referenziato da commenti `eslint-disable-line` nel codice ma mai installato; la v7 (ultima) introduce le nuove regole "React Compiler" troppo aggressive per codice mai lintato (26 errori sparsi non pertinenti) — fissata la v4, coerente con quanto il codice già presupponeva. `eslint --fix` ha sistemato ~250 problemi di indentazione preesistenti (nessuna modifica logica).
+
+### `/code-review:code-review` su PR #6 — 1 bug reale trovato e fixato
+Nessuna PR esisteva ancora per questo branch (mai pushato) — pushato e creata PR #6 prima di lanciare la skill (skill richiede una PR GitHub reale, non lavora su branch locali). 5 agenti paralleli (CLAUDE.md compliance, bug scan, storia git, commenti PR precedenti, coerenza commenti nel codice) + scoring di confidenza (soglia 80) su 4 candidati:
+- **Confermato (score 95)**: `events.js` (`GET /pending`, `PUT /:id/approve`) e il nuovo join eventi in `presences.js` (`GET /summary`) filtravano la visibilità del manager con `employees.site_id` invece del pattern consolidato `ANY(assigned_sites)` già usato altrove nello stesso file. `site_id` è documentato come "solo per i manager" (migration 006) e la migration 038 documenta **due incidenti di produzione già causati esattamente da questo pattern** per i check-in. Effetto pratico: un manager non vedeva le richieste evento pendenti dei propri dipendenti, non poteva approvarle (403), e gli eventi approvati sparivano dal riepilogo mensile — per qualsiasi dipendente con `site_id` NULL (il caso comune). Fixato nei 3 punti, con test di regressione dedicato (manager approva un evento di un dipendente raggiungibile solo via `assigned_sites`).
+- **Scartati sotto soglia**: race condition su approvazioni evento concorrenti (70 — pattern architetturale identico a `leave_requests`, non una nuova regressione), TASKS.md/HANDOFF.md non aggiornati (30 — guidance di processo, non criterio di code-review), piano di test disallineato dopo l'aggiunta del link nav (68 — solo documentale).
+
+### QA manuale web — 2 problemi ambientali risolti in corsa
+- Porta 3000 (backend) e 5173 (frontend) occupate da **altri worktree attivi** dell'utente (main checkout e `worktree-new-employee-fields`) — mai toccati, avviato questo worktree su 3099/5174 invece.
+- `Not Found` su "Invia Richiesta": `apiClient.js` non passa dal proxy Vite per le chiamate API, usa `window.API_CONFIG?.API_URL` (letto da `public/config.js`, hardcodato a `localhost:3000` per qualsiasi hostname locale) con priorità su `VITE_API_URL` — la variabile d'ambiente veniva quindi ignorata. Modificata temporaneamente la porta in `config.js` per il test, **ripristinata a fine QA, mai committata**.
+- Walkthrough dipendente (crea richiesta) → manager (approva) → test negativo cross-sede (manager di un'altra sede non vede la richiesta — verifica diretta della fix `assigned_sites`) completato con successo. Mobile saltato su scelta esplicita dell'utente.
+
+### Fix lint CI-blocking
+Un errore di lint preesistente (virgolette singole, in `events.test.js`, non introdotto da questa feature) bloccava la pipeline CI — corretto anche se fuori scope, perché impediva il merge.
+
+### Verifica finale e merge
+Backend 823/838 (14 skip, 1 test flaky pre-esistente non correlato — `demo-switch-role.test.js`, verde in isolamento), frontend-web 324/324. CI verde su tutti i check. **Squash-merge su `main`** (commit `13f04e3`), branch remoto `worktree-eventi-training` eliminato.
+
+**Stato:** Feature Eventi/Training ✅ LIVE su `main` (locale — deploy in produzione da confermare separatamente, non eseguito in questa sessione).
+
+---
+
 ## Session 105 — Test manuale Campi Nuovo Dipendente, 3 bug fixati, regola "manager obbligatorio", merge su `main` (18-19 Agosto 2026)
 
 ### Contesto

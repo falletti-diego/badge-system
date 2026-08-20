@@ -1,3 +1,51 @@
+# Badge System — Session 106 Handoff
+
+**Date:** 2026-08-20
+**Session:** 106 — Feature Eventi/Training: code review con 1 bug fixato, QA manuale web, merge su `main`
+**Status:** ✅ **Mergeata su `main` (`13f04e3`), branch remoto eliminato.** Deploy in produzione NON ancora eseguito — da fare separatamente. Build mobile nativa: verificata NON necessaria (solo file JS/JSX toccati, nessuna dipendenza nativa nuova) — aggiornamento previsto via EAS Update OTA, non ancora eseguito.
+
+---
+
+## Goal (Session 106)
+
+Continuazione di una sessione precedente in cui la feature "Eventi/Training" era già implementata full-stack (15 task TDD) con piano di test scritto ed eseguito lato API. Questa sessione: analisi critica finale, code review su PR reale, QA manuale, merge, e verifica se serva una nuova build mobile.
+
+## Current Progress
+
+**2 fix pre-merge** (analisi critica su richiesta utente): gap preesistente nel roster `/summary` manager (dipendenti a zero timbrature invisibili), e mancata invalidazione firma cartellino all'approvazione evento (con bug di timezone scoperto e corretto durante la review, `DATE` Postgres parsato a mezzanotte locale non UTC).
+
+**Link nav + lint**: aggiunto link mancante a `/events/request` in dashboard web (pattern Button+emoji esistente, non icone MUI). Creata da zero la config ESLint mancante in `frontend-web` (gap preesistente), con `eslint-plugin-react-hooks` fissato a v4 (la v7 introduce regole "React Compiler" troppo aggressive per codice mai lintato).
+
+**`/code-review:code-review` su PR #6** (nessuna PR esisteva — pushato branch e creata la PR prima di lanciare la skill): 5 agenti paralleli + scoring a soglia 80 su 4 candidati. **1 bug reale confermato e fixato (score 95)**: `events.js`/`presences.js` filtravano la visibilità manager con `employees.site_id` (non popolato per dipendenti normali, migration 038 documenta 2 incidenti di produzione già causati da questo stesso pattern) invece di `ANY(assigned_sites)` — un manager non vedeva/non poteva approvare richieste dei propri dipendenti. Fixato in 3 punti + test di regressione, pushato, commentato sulla PR.
+
+**QA manuale web**: 2 problemi ambientali (porte 3000/5173 occupate da altri worktree attivi, mai toccati; `apiClient` che ignorava `VITE_API_URL` per via di `window.API_CONFIG` hardcoded in `public/config.js` — modifica locale temporanea, ripristinata a fine test). Walkthrough dipendente→manager→test cross-sede completato con successo. Mobile non testato (scelta esplicita utente).
+
+**Fix lint CI-blocking aggiuntivo** (virgolette in un test preesistente, non introdotto da questa feature).
+
+**Merge**: CI verde su tutti i check, squash-merge su `main` (`13f04e3`), branch remoto eliminato.
+
+**Domanda post-merge dell'utente — serve una nuova build mobile?** Verificato via diff (`git diff <base>..<merge> -- frontend-mobile/`): la feature tocca solo `RootNavigator.jsx`, `CheckInScreen.jsx`, 2 nuove screen, config endpoint, utility date — **nessuna modifica a `package.json` o `app.json`, nessuna dipendenza nativa nuova**. Il progetto ha già EAS Update configurato (`eas.json`, canali dev/preview/production) → aggiornamento possibile via OTA (`eas update`), nessuna nuova build/submission store necessaria. Utente ha chiesto di testare prima in locale/staging prima di procedere con l'update — **in corso, vedi sessione successiva o continuazione di questa**.
+
+## What Worked
+
+- **Verificare `git diff` sui file mobile toccati prima di rispondere "serve una build?"** invece di assumere — ha permesso una risposta netta (no, solo OTA) con evidenza concreta invece di una supposizione.
+- **Diagnosticare i problemi ambientali (porte occupate, config.js hardcoded) con `lsof`+cwd invece di assumere un bug nel codice della feature** — entrambi risolti in minuti, nessuno era una regressione della PR.
+- **Fix del bug `site_id`→`assigned_sites` verificato leggendo direttamente le migration storiche** (038 documenta 2 incidenti reali con lo stesso pattern) prima di accettare il finding dell'agente di review — non solo fidarsi del punteggio di confidenza.
+
+## What Didn't Work / Da tenere a mente
+
+- **`apiClient.js` ha DUE meccanismi di configurazione API che si sovrappongono** (`window.API_CONFIG` da `public/config.js`, hardcoded per hostname, con priorità su `VITE_API_URL`) — per testare in locale contro un backend su porta non-standard bisogna editare `public/config.js`, non basta la env var Vite. Utile saperlo per il prossimo giro di QA locale.
+- **Porte di sviluppo standard (3000/5173) sono quasi sempre occupate da altri worktree attivi dell'utente** — controllare sempre `lsof -ti:PORT` + cwd del processo prima di assumere sia libera, e usare porte alternative (3099/5174 in questa sessione) senza mai killare processi di altri worktree.
+
+## Next Steps (in ordine di urgenza)
+
+1. **Testare la build mobile in locale/staging** (richiesta esplicita utente, in corso).
+2. **Se il test locale è ok, pubblicare l'aggiornamento via `eas update`** (canale da confermare con l'utente — production/preview).
+3. **Deploy backend/web in produzione** — non ancora eseguito in questa sessione, il merge su `main` è solo locale rispetto al deploy.
+4. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 105/104 sotto.
+
+---
+
 # Badge System — Session 105 Handoff
 
 **Date:** 2026-08-19
