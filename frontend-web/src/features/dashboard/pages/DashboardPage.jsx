@@ -197,6 +197,17 @@ const DashboardPage = () => {
           </Button>
         )}
 
+        {/* Employee Event/Training Request Link - Show for employees */}
+        {userRole === 'employee' && (
+          <Button
+            color="inherit"
+            onClick={() => navigate('/events/request')}
+            sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+          >
+            🎓 Eventi/Training
+          </Button>
+        )}
+
         {/* Employee Illness Report - Show for employees */}
         {userRole === 'employee' && (
           <Button
