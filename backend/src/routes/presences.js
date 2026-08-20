@@ -96,9 +96,16 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
       }
     }
 
-    // If manager with no check-ins yet but has employees at the site,
-    // we still need to list them (fetch separately)
-    if (role === 'manager' && checkinsResult.rows.length === 0) {
+    // Always fetch every employee assigned to the manager's site, not only
+    // when checkinsResult is entirely empty — an employee with zero checkins
+    // this month (e.g. fully covered by an approved event/leave/illness) was
+    // previously invisible in a manager's summary whenever at least one OTHER
+    // employee at the site had a checkin, since employeeMeta was built purely
+    // from checkinsResult.rows in that case (pre-existing gap, unrelated to
+    // Eventi/Training but surfaced by it — an event-only month is now a real
+    // scenario). Mirrors the admin/viewer branch below, which already always
+    // fetches the full roster regardless of checkin activity.
+    if (role === 'manager') {
       const empResult = await pool.query(
         `SELECT id, name, external_employee_id AS matricola FROM employees
          WHERE client_id = $1::uuid AND $2::uuid = ANY(assigned_sites) AND role = 'employee' AND active = true
@@ -106,7 +113,9 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
         [client_id, managerSiteId]
       );
       for (const row of empResult.rows) {
-        employeeMeta.set(row.id, { name: row.name, matricola: row.matricola });
+        if (!employeeMeta.has(row.id)) {
+          employeeMeta.set(row.id, { name: row.name, matricola: row.matricola });
+        }
       }
     }
 

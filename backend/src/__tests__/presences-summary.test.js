@@ -164,7 +164,8 @@ describe('GET /api/presences/summary', () => {
     pool.query
       .mockResolvedValueOnce({ rows: makeCheckins() })
       .mockResolvedValueOnce({ rows: [] }) // approved events query
-      .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] });
+      .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] })
+      .mockResolvedValueOnce({ rows: [{ id: EMP_ID, name: 'Mario Rossi', matricola: '001' }] }); // site roster query
 
     const res = await request(app)
       .get('/api/v1/presences/summary?month=6&year=2026')
@@ -174,6 +175,30 @@ describe('GET /api/presences/summary', () => {
     // Check that site_id was included in query params
     const checkinsCallArgs = pool.query.mock.calls[0][1];
     expect(checkinsCallArgs).toContain(SITE_ID);
+  });
+
+  it('manager summary includes an employee with zero checkins this month, even when another employee at the site has checkins (regression: previously invisible whenever checkinsResult was non-empty)', async () => {
+    const ZERO_CHECKIN_EMP_ID = '550e8400-e29b-41d4-a716-446655440101';
+    pool.query
+      .mockResolvedValueOnce({ rows: makeCheckins() }) // checkins — only for EMP_ID, nothing for ZERO_CHECKIN_EMP_ID
+      .mockResolvedValueOnce({ rows: [] }) // approved events query
+      .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] })
+      .mockResolvedValueOnce({ rows: [
+        { id: EMP_ID, name: 'Mario Rossi', matricola: '001' },
+        { id: ZERO_CHECKIN_EMP_ID, name: 'Anna Verdi', matricola: '002' },
+      ] }); // site roster query — includes both employees regardless of checkin activity
+
+    const res = await request(app)
+      .get('/api/v1/presences/summary?month=6&year=2026')
+      .set('Authorization', `Bearer ${MANAGER_TOKEN}`);
+
+    expect(res.status).toBe(200);
+    const ids = res.body.data.employees.map((e) => e.id);
+    expect(ids).toContain(EMP_ID);
+    expect(ids).toContain(ZERO_CHECKIN_EMP_ID);
+    const anna = res.body.data.employees.find((e) => e.id === ZERO_CHECKIN_EMP_ID);
+    expect(anna.giorni_presenti).toBe(0);
+    expect(anna.ore_totali).toBe(0);
   });
 
   it('month with no checkins → empty employees list', async () => {
