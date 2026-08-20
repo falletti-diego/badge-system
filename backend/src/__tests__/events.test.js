@@ -41,6 +41,7 @@ const { pool: mockPool } = require('../db/pool');
 const TEST_CLIENT_ID = '550e8400-e29b-41d4-a716-446655440001';
 const TEST_SITE_ID = '550e8400-e29b-41d4-a716-446655440010';
 const TEST_EMPLOYEE_ID = '550e8400-e29b-41d4-a716-446655440100';
+const TEST_MANAGER_ID = '550e8400-e29b-41d4-a716-446655440101';
 const TEST_ADMIN_ID = '550e8400-e29b-41d4-a716-446655440102';
 const TEST_EVENT_ID = '550e8400-e29b-41d4-a716-446655440200';
 
@@ -208,6 +209,34 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
       expect(res.body.error).toBe('FORBIDDEN');
       expect(mockPool.query).not.toHaveBeenCalled();
     });
+
+    it('should return manager scoped pending requests (own store employees)', async () => {
+      const managerToken = makeToken({
+        role: 'manager',
+        site_id: TEST_SITE_ID,
+        user_id: TEST_MANAGER_ID,
+      });
+
+      mockPool.query.mockResolvedValueOnce({
+        rows: [{
+          id: TEST_EVENT_ID,
+          user_id: TEST_EMPLOYEE_ID,
+          status: 'PENDING',
+          employee_name: 'Maria Rossi',
+        }],
+      });
+
+      const res = await request(app)
+        .get('/api/v1/events/pending')
+        .set('Authorization', `Bearer ${managerToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(mockPool.query).toHaveBeenCalledWith(
+        expect.stringContaining('e.site_id = $2::uuid'),
+        [TEST_CLIENT_ID, TEST_SITE_ID]
+      );
+    });
   });
 
   describe('PUT /api/v1/events/:id/approve', () => {
@@ -242,6 +271,34 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
       expect(res.body.error).toBe('VALIDATION_ERROR');
       expect(res.body.message).toBe('Event request has already been processed');
       expect(mockPool.query).toHaveBeenCalledTimes(1);
+    });
+
+    it('should reject stale concurrent approvals when atomic PENDING update affects no rows', async () => {
+      const adminToken = makeToken();
+      mockPool.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: TEST_EVENT_ID,
+            client_id: TEST_CLIENT_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            event_date: todayISO(),
+            start_time: '08:00:00',
+            end_time: '18:00:00',
+            status: 'PENDING',
+          }],
+        })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const res = await request(app)
+        .put(`/api/v1/events/${TEST_EVENT_ID}/approve`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'APPROVED' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('VALIDATION_ERROR');
+      expect(res.body.message).toBe('Event request has already been processed');
+      expect(mockPool.query).toHaveBeenCalledTimes(2);
+      expect(mockPool.query.mock.calls[1][0]).toContain('WHERE id = $4::uuid AND status = \'PENDING\'');
     });
   });
 });
