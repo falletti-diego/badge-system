@@ -34,6 +34,12 @@ export const ENDPOINTS = {
   // Leaves (ferie) — manager
   LEAVES_PENDING: '/api/v1/leave/pending',
 
+  // Events (eventi/training) — employee
+  EVENTS_LIST: '/api/v1/events/my-requests',
+  EVENTS_CREATE: '/api/v1/events/request',
+  // Events (eventi/training) — manager
+  EVENTS_PENDING: '/api/v1/events/pending',
+
   // Illnesses (malattia)
   ILLNESS_REPORT: '/api/v1/illnesses/report',
   ILLNESS_LIST: '/api/v1/illnesses/by-date-range',

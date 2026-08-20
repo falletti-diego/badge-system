@@ -624,6 +624,52 @@ const ApproveLeaveSchema = z.object({
   }),
 });
 
+// =====================================================
+// EVENT REQUESTS (Eventi/Training) — POST /api/v1/events/request
+// =====================================================
+
+const EVENT_TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const PostEventRequestSchema = z.object({
+  body: z.object({
+    event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'event_date must be in YYYY-MM-DD format'),
+    start_time: z.string().regex(EVENT_TIME_REGEX, 'start_time must be in HH:MM format'),
+    end_time: z.string().regex(EVENT_TIME_REGEX, 'end_time must be in HH:MM format'),
+    description: z.string()
+      .min(10, 'description must be at least 10 characters')
+      .max(500, 'description must be at most 500 characters'),
+  })
+    .refine(
+      (data) => data.end_time > data.start_time,
+      { message: 'end_time must be after start_time', path: ['end_time'] }
+    )
+    .refine(
+      (data) => {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setUTCDate(sevenDaysAgo.getUTCDate() - 7);
+        sevenDaysAgo.setUTCHours(0, 0, 0, 0);
+        return new Date(`${data.event_date}T00:00:00.000Z`) >= sevenDaysAgo;
+      },
+      { message: 'event_date is outside the 7-day retroactive window', path: ['event_date'] }
+    ),
+});
+
+// =====================================================
+// EVENT REQUESTS — PUT /api/v1/events/:id/approve
+// =====================================================
+
+const ApproveEventRequestSchema = z.object({
+  params: z.object({
+    id: z.string().uuid('Invalid event request ID: must be valid UUID'),
+  }),
+  body: z.object({
+    status: z.enum(['APPROVED', 'REJECTED'], {
+      errorMap: () => ({ message: 'status must be either APPROVED or REJECTED' }),
+    }),
+    rejection_reason: z.string().max(500, 'rejection_reason must be at most 500 characters').optional().nullable(),
+  }),
+});
+
 module.exports = {
   LoginSchema,
   DemoStartSchema,
@@ -651,5 +697,7 @@ module.exports = {
   UpdateSiteGeofenceSchema,
   PostLeaveRequestSchema,
   ApproveLeaveSchema,
+  PostEventRequestSchema,
+  ApproveEventRequestSchema,
   createValidationMiddleware,
 };

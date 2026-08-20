@@ -16,6 +16,10 @@ import secureAuthStorage from '../services/secureAuthStorage';
 // ManagerLeaveApprovalScreen updates this via context after every load.
 export const PendingLeaveContext = createContext({ setPendingCount: () => {} });
 
+// Single source of truth for manager pending-event badge count.
+// ManagerEventApprovalScreen updates this via context after every load.
+export const PendingEventContext = createContext({ setPendingCount: () => {} });
+
 import LoginScreen from '../screens/auth/LoginScreen';
 import CheckInScreen from '../screens/checkin/CheckInScreen';
 import FaceIDScreen from '../screens/checkin/FaceIDScreen';
@@ -27,6 +31,8 @@ import ManagerScheduleScreen from '../screens/schedule/ManagerScheduleScreen';
 import PresenzaTabScreen from '../screens/presences/PresenzaTabScreen';
 import LeaveRequestScreen from '../screens/leave/LeaveRequestScreen';
 import ManagerLeaveApprovalScreen from '../screens/leave/ManagerLeaveApprovalScreen';
+import EventRequestScreen from '../screens/events/EventRequestScreen';
+import ManagerEventApprovalScreen from '../screens/events/ManagerEventApprovalScreen';
 import IllnessReportScreen from '../screens/illness/IllnessReportScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import ChangePasswordScreen from '../screens/settings/ChangePasswordScreen';
@@ -63,6 +69,8 @@ const TAB_ICONS = {
   Badge: 'qr-code-outline',
   Ferie: 'calendar-outline',
   Approvazioni: 'checkmark-circle-outline',
+  Eventi: 'briefcase-outline',
+  'Approva Eventi': 'checkmark-done-outline',
   Malattia: 'medical-outline',
   Turni: 'time-outline',
   Presenze: 'people-outline',
@@ -74,6 +82,7 @@ const TAB_ICONS = {
 function MainTabs() {
   const [role, setRole] = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingEventCount, setPendingEventCount] = useState(0);
 
   useEffect(() => {
     secureAuthStorage.getUser()
@@ -95,6 +104,14 @@ function MainTabs() {
     }
   }, [role]);
 
+  useEffect(() => {
+    if (role === 'manager') {
+      apiClient.get(ENDPOINTS.EVENTS_PENDING)
+        .then(res => setPendingEventCount((res.data.data || []).length))
+        .catch(() => {});
+    }
+  }, [role]);
+
   if (role === null) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1E3A5F' }}>
@@ -107,6 +124,7 @@ function MainTabs() {
 
   return (
     <PendingLeaveContext.Provider value={{ setPendingCount }}>
+    <PendingEventContext.Provider value={{ setPendingCount: setPendingEventCount }}>
     <Tab.Navigator
       key={role}
       screenOptions={({ route }) => ({
@@ -131,6 +149,15 @@ function MainTabs() {
         : <Tab.Screen name="Ferie" component={LeaveRequestScreen} />
       }
 
+      {isManager
+        ? <Tab.Screen
+            name="Approva Eventi"
+            component={ManagerEventApprovalScreen}
+            options={{ tabBarBadge: pendingEventCount > 0 ? pendingEventCount : undefined }}
+          />
+        : <Tab.Screen name="Eventi" component={EventRequestScreen} />
+      }
+
       <Tab.Screen name="Malattia" component={IllnessReportScreen} />
 
       <Tab.Screen
@@ -142,6 +169,7 @@ function MainTabs() {
 
       <Tab.Screen name="Profilo" component={SettingsStackNavigator} />
     </Tab.Navigator>
+    </PendingEventContext.Provider>
     </PendingLeaveContext.Provider>
   );
 }

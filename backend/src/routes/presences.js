@@ -10,7 +10,7 @@ const { pool } = require('../db/pool');
 const { createValidationMiddleware, GetPresencesSummarySchema, GetMySummarySchema, GetPresencesTrendSchema } = require('../middleware/validation');
 const { requireAuth } = require('../middleware/auth');
 const { ForbiddenError } = require('../utils/errors');
-const { calculateDailyHours, aggregateMonthly, toUtcDateString } = require('../utils/hours');
+const { calculateDailyHours, aggregateMonthly, toUtcDateString, buildEventDailyEntries } = require('../utils/hours');
 const { resolveSiteId } = require('../utils/resolvers');
 const { buildTrendDays } = require('../utils/trendStats');
 
@@ -64,6 +64,23 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
       params
     );
 
+    // Approved events (Eventi/Training) in the period — merged into the same
+    // daily-hours pipeline as checkins (query-time join, same pattern as
+    // leave_requests/illnesses used in /trend below).
+    let eventsQuery = `
+      SELECT er.user_id AS employee_id, er.event_date::text AS event_date, er.start_time, er.end_time
+      FROM event_requests er
+      JOIN employees e ON e.id = er.user_id AND e.active = true
+      WHERE er.client_id = $1::uuid AND er.status = 'APPROVED'
+        AND er.event_date >= $2::date AND er.event_date < $3::date
+    `;
+    const eventsParams = [client_id, toUtcDateString(dateFrom), toUtcDateString(dateTo)];
+    if (role === 'manager') {
+      eventsParams.push(managerSiteId);
+      eventsQuery += ` AND $${eventsParams.length}::uuid = ANY(e.assigned_sites)`;
+    }
+    const eventsResult = await pool.query(eventsQuery, eventsParams);
+
     // Fetch meal_voucher_hours for this client
     const clientResult = await pool.query(
       'SELECT meal_voucher_hours FROM clients WHERE id = $1::uuid LIMIT 1',
@@ -79,9 +96,16 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
       }
     }
 
-    // If manager with no check-ins yet but has employees at the site,
-    // we still need to list them (fetch separately)
-    if (role === 'manager' && checkinsResult.rows.length === 0) {
+    // Always fetch every employee assigned to the manager's site, not only
+    // when checkinsResult is entirely empty — an employee with zero checkins
+    // this month (e.g. fully covered by an approved event/leave/illness) was
+    // previously invisible in a manager's summary whenever at least one OTHER
+    // employee at the site had a checkin, since employeeMeta was built purely
+    // from checkinsResult.rows in that case (pre-existing gap, unrelated to
+    // Eventi/Training but surfaced by it — an event-only month is now a real
+    // scenario). Mirrors the admin/viewer branch below, which already always
+    // fetches the full roster regardless of checkin activity.
+    if (role === 'manager') {
       const empResult = await pool.query(
         `SELECT id, name, external_employee_id AS matricola FROM employees
          WHERE client_id = $1::uuid AND $2::uuid = ANY(assigned_sites) AND role = 'employee' AND active = true
@@ -89,12 +113,22 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
         [client_id, managerSiteId]
       );
       for (const row of empResult.rows) {
-        employeeMeta.set(row.id, { name: row.name, matricola: row.matricola });
+        if (!employeeMeta.has(row.id)) {
+          employeeMeta.set(row.id, { name: row.name, matricola: row.matricola });
+        }
       }
     }
 
-    // Compute daily hours
-    const dailyEntries = calculateDailyHours(checkinsResult.rows);
+    // Compute daily hours (checkins + approved events).
+    // A checkin can be recorded for the same (employee_id, date) after an
+    // event request was submitted but before it was approved (routes/events.js
+    // only checks for this conflict at POST /request time) — checkins are
+    // ground truth, so drop any event-derived entry that collides with one.
+    const checkinDailyEntries = calculateDailyHours(checkinsResult.rows);
+    const checkinDayKeys = new Set(checkinDailyEntries.map((e) => `${e.employee_id}|${e.date}`));
+    const eventDailyEntries = buildEventDailyEntries(eventsResult.rows)
+      .filter((e) => !checkinDayKeys.has(`${e.employee_id}|${e.date}`));
+    const dailyEntries = [...checkinDailyEntries, ...eventDailyEntries];
     const monthlyAgg = aggregateMonthly(dailyEntries, Number(mealVoucherHours));
 
     // Build response — include all employees (even those with 0 hours) for admin/viewer
@@ -213,13 +247,28 @@ router.get('/my-summary', requireAuth, createValidationMiddleware(GetMySummarySc
       [client_id, employee_id, dateFrom.toISOString(), dateTo.toISOString()]
     );
 
+    const eventsResult = await pool.query(
+      `SELECT user_id AS employee_id, event_date::text AS event_date, start_time, end_time
+       FROM event_requests
+       WHERE client_id = $1::uuid AND user_id = $2::uuid AND status = 'APPROVED'
+         AND event_date >= $3::date AND event_date < $4::date`,
+      [client_id, employee_id, toUtcDateString(dateFrom), toUtcDateString(dateTo)]
+    );
+
     const clientResult = await pool.query(
       'SELECT meal_voucher_hours FROM clients WHERE id = $1::uuid LIMIT 1',
       [client_id]
     );
     const mealVoucherHours = clientResult.rows[0]?.meal_voucher_hours ?? 5.0;
 
-    const dailyEntries = calculateDailyHours(checkinsResult.rows);
+    // Checkins are ground truth — drop any event-derived entry for a
+    // (employee_id, date) that already has a checkin-derived entry (see
+    // /summary above for why this collision is possible).
+    const checkinDailyEntries = calculateDailyHours(checkinsResult.rows);
+    const checkinDayKeys = new Set(checkinDailyEntries.map((e) => `${e.employee_id}|${e.date}`));
+    const eventDailyEntries = buildEventDailyEntries(eventsResult.rows)
+      .filter((e) => !checkinDayKeys.has(`${e.employee_id}|${e.date}`));
+    const dailyEntries = [...checkinDailyEntries, ...eventDailyEntries];
     const monthlyAgg = aggregateMonthly(dailyEntries, Number(mealVoucherHours));
     const agg = monthlyAgg.get(employee_id) || {
       ore_totali: 0, ore_ordinarie: 0, ore_straordinarie: 0, buoni_pasto: 0, giorni_presenti: 0, presenze_aperte: 0,

@@ -155,4 +155,41 @@ function round2(n) {
   return Math.round(n * 100) / 100;
 }
 
-module.exports = { calculateDailyHours, aggregateMonthly, toUtcDateString };
+/**
+ * timeStringToMinutes('08:30:00') -> 510
+ */
+function timeStringToMinutes(t) {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+/**
+ * buildEventDailyEntries(eventRows)
+ *
+ * Converts approved event_requests rows into the same daily-entry shape
+ * calculateDailyHours() produces, so they can be concatenated and fed into
+ * aggregateMonthly() together with real checkin-derived entries.
+ *
+ * NOT safe to concatenate blindly: routes/events.js only checks for a
+ * checkin/event conflict at POST /request time. A checkin can still be
+ * recorded for the same (employee_id, date) later, before the event request
+ * is approved, which would otherwise double-count hours. Callers MUST dedupe
+ * — checkins should win — before merging this output with
+ * calculateDailyHours() output (see presences.js's /summary and
+ * /my-summary handlers).
+ *
+ * @param {Array<{ employee_id: string, event_date: string, start_time: string, end_time: string }>} eventRows
+ * @returns {Array<{ employee_id: string, date: string, minutes: number, presenza_aperta: boolean }>}
+ */
+function buildEventDailyEntries(eventRows) {
+  if (!eventRows || eventRows.length === 0) return [];
+
+  return eventRows.map((row) => ({
+    employee_id: row.employee_id,
+    date: row.event_date,
+    minutes: timeStringToMinutes(row.end_time) - timeStringToMinutes(row.start_time),
+    presenza_aperta: false,
+  }));
+}
+
+module.exports = { calculateDailyHours, aggregateMonthly, toUtcDateString, buildEventDailyEntries };

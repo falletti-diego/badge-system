@@ -15,6 +15,7 @@ import FilterBar from '../components/FilterBar';
 import PresencesTable from '../components/PresencesTable';
 import ExportButton from '../components/ExportButton';
 import { ManagerLeaveApprovalPanel } from '../../leave/components/ManagerLeaveApprovalPanel';
+import { ManagerEventApprovalPanel } from '../../events/components/ManagerEventApprovalPanel';
 import authService from '../../../services/authService';
 import { NavBar } from '../../../components/NavBar';
 import DemoTour from '../../../components/DemoTour';
@@ -196,6 +197,17 @@ const DashboardPage = () => {
           </Button>
         )}
 
+        {/* Employee Event/Training Request Link - Show for employees */}
+        {userRole === 'employee' && (
+          <Button
+            color="inherit"
+            onClick={() => navigate('/events/request')}
+            sx={{ textTransform: 'none', fontSize: '14px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+          >
+            🎓 Eventi/Training
+          </Button>
+        )}
+
         {/* Employee Illness Report - Show for employees */}
         {userRole === 'employee' && (
           <Button
@@ -264,6 +276,13 @@ const DashboardPage = () => {
         {userRole === 'manager' && (
           <Box sx={{ marginBottom: '24px', marginTop: '24px' }}>
             <ManagerLeaveApprovalPanel />
+          </Box>
+        )}
+
+        {/* Manager Event Approval Panel - Show for managers only */}
+        {userRole === 'manager' && (
+          <Box sx={{ marginBottom: '24px' }}>
+            <ManagerEventApprovalPanel />
           </Box>
         )}
 

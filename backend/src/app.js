@@ -60,6 +60,7 @@ const consentRouter = require('./routes/consent');
 const leavesRouter = require('./routes/leaves');
 const illnessesRouter = require('./routes/illnesses');
 const smartWorkingRouter = require('./routes/smartWorking');
+const eventsRouter = require('./routes/events');
 
 // Initialize logger (singleton shared across all modules)
 const logger = require('./utils/logger');
@@ -204,6 +205,7 @@ v1Router.use('/consent', consentRouter);
 v1Router.use('/leave', leavesRouter);
 v1Router.use('/illnesses', illnessesRouter);
 v1Router.use('/smart-working', smartWorkingRouter);
+v1Router.use('/events', eventsRouter);
 app.use('/api/v1', v1Router);
 
 // Deprecated /api/ aliases — kept for backwards compatibility with mobile clients

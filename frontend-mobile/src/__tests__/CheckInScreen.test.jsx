@@ -85,4 +85,32 @@ describe('CheckInScreen', () => {
 
     await waitFor(() => expect(navigation.navigate).toHaveBeenCalledWith('FaceID'));
   });
+
+  test('employee sees the Eventi/Training button, and tapping it navigates to the Eventi tab', async () => {
+    LocalAuthentication.hasHardwareAsync.mockResolvedValue(false);
+    AsyncStorage.getItem.mockResolvedValue(null);
+    authService.getUser.mockResolvedValue({ name: 'Maria Rossi', employee_id: 'emp-1', role: 'employee' });
+
+    const { getByText, navigation } = await renderScreen();
+
+    await waitFor(() => expect(getByText('Eventi/Training')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(getByText('Eventi/Training'));
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('Eventi');
+  });
+
+  test('manager does NOT see the Eventi/Training button (no request screen for managers)', async () => {
+    LocalAuthentication.hasHardwareAsync.mockResolvedValue(false);
+    AsyncStorage.getItem.mockResolvedValue(null);
+    authService.getUser.mockResolvedValue({ name: 'Pino Bianchi', employee_id: 'mgr-1', role: 'manager' });
+
+    const { queryByText } = await renderScreen();
+
+    await waitFor(() => expect(authService.getUser).toHaveBeenCalled());
+
+    expect(queryByText('Eventi/Training')).toBeNull();
+  });
 });
