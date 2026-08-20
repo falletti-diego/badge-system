@@ -134,7 +134,7 @@ export function ClientsTab() {
       <ConfirmDeleteDialog
         open={!!deleteTarget}
         title={`Elimina cliente "${deleteTarget?.name}"?`}
-        description={`Questa azione eliminerà anche tutte le sedi, i dipendenti e i check-in associati. L'operazione è irreversibile.`}
+        description={'Questa azione eliminerà anche tutte le sedi, i dipendenti e i check-in associati. L\'operazione è irreversibile.'}
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
         loading={deleting}

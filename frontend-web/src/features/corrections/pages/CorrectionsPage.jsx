@@ -303,7 +303,7 @@ export const CorrectionsPage = () => {
                               </Typography>
                               {row.correction_note && (
                                 <Typography variant="caption" display="block" sx={{ color: '#9CA3AF', fontSize: '11px', fontStyle: 'italic', maxWidth: '200px' }}>
-                                  "{row.correction_note}"
+                                  &quot;{row.correction_note}&quot;
                                 </Typography>
                               )}
                             </Box>

@@ -732,7 +732,7 @@ export const PlanningPage = () => {
           <DialogTitle>📋 Copia Settimana</DialogTitle>
           <DialogContent>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-              Copia i turni da una settimana a un'altra. I giorni vengono abbinati per giorno della settimana (Lunedì→Lunedì, ecc.). I giorni non presenti nella settimana destinazione vengono ignorati.
+              Copia i turni da una settimana a un&apos;altra. I giorni vengono abbinati per giorno della settimana (Lunedì→Lunedì, ecc.). I giorni non presenti nella settimana destinazione vengono ignorati.
             </Typography>
             <Stack spacing={2.5}>
               <Box>

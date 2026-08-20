@@ -106,7 +106,7 @@ export function DpaTab() {
       <Box>
         <Typography variant="h6" gutterBottom>Registra Firma DPA</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Inserisci il nome e titolo della persona che ha firmato il DPA per conto del cliente (es. "Mario Rossi - Direttore HR").
+          Inserisci il nome e titolo della persona che ha firmato il DPA per conto del cliente (es. &quot;Mario Rossi - Direttore HR&quot;).
         </Typography>
 
         {msg && (

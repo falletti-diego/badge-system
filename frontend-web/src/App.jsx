@@ -141,181 +141,181 @@ function AppRouter() {
             ProtectedRoute too (same principle as /login) */}
         <Route path="/accetta-invito" element={<AcceptInvitePage />} />
 
-          {/* Protected Routes */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
-          />
+        {/* Protected Routes */}
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Planning Routes */}
-          <Route
-            path="/planning"
-            element={
-              <ProtectedRoute requiredRoles={['manager', 'admin']}>
-                <PlanningPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/planning/my-schedule"
-            element={
-              <ProtectedRoute requiredRole="employee">
-                <EmployeeShiftsPage />
-              </ProtectedRoute>
-            }
-          />
+        {/* Planning Routes */}
+        <Route
+          path="/planning"
+          element={
+            <ProtectedRoute requiredRoles={['manager', 'admin']}>
+              <PlanningPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/planning/my-schedule"
+          element={
+            <ProtectedRoute requiredRole="employee">
+              <EmployeeShiftsPage />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Corrections Route */}
-          <Route
-            path="/corrections"
-            element={
-              <ProtectedRoute requiredRoles={['manager', 'admin']}>
-                <CorrectionsPage />
-              </ProtectedRoute>
-            }
-          />
+        {/* Corrections Route */}
+        <Route
+          path="/corrections"
+          element={
+            <ProtectedRoute requiredRoles={['manager', 'admin']}>
+              <CorrectionsPage />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Leave Request Route */}
-          <Route
-            path="/leave/request"
-            element={
-              <ProtectedRoute requiredRole="employee">
-                <EmployeeLeaveRequest />
-              </ProtectedRoute>
-            }
-          />
+        {/* Leave Request Route */}
+        <Route
+          path="/leave/request"
+          element={
+            <ProtectedRoute requiredRole="employee">
+              <EmployeeLeaveRequest />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Event/Training Request Route */}
-          <Route
-            path="/events/request"
-            element={
-              <ProtectedRoute requiredRole="employee">
-                <EmployeeEventRequest />
-              </ProtectedRoute>
-            }
-          />
+        {/* Event/Training Request Route */}
+        <Route
+          path="/events/request"
+          element={
+            <ProtectedRoute requiredRole="employee">
+              <EmployeeEventRequest />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Manager Leave Request Route */}
-          <Route
-            path="/leave/my-request"
-            element={
-              <ProtectedRoute requiredRole="manager">
-                <ManagerLeaveRequest />
-              </ProtectedRoute>
-            }
-          />
+        {/* Manager Leave Request Route */}
+        <Route
+          path="/leave/my-request"
+          element={
+            <ProtectedRoute requiredRole="manager">
+              <ManagerLeaveRequest />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Admin: Sites & QR Code management */}
-          <Route
-            path="/admin/sites"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <SitesPage />
-              </ProtectedRoute>
-            }
-          />
+        {/* Admin: Sites & QR Code management */}
+        <Route
+          path="/admin/sites"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <SitesPage />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Admin panel: onboarding clienti/sedi/dipendenti */}
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <AdminPage />
-              </ProtectedRoute>
-            }
-          />
+        {/* Admin panel: onboarding clienti/sedi/dipendenti */}
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <AdminPage />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Admin: wizard onboarding self-service (upload Excel sedi/dipendenti/saldi) */}
-          <Route
-            path="/admin/onboarding"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <OnboardingWizardPage />
-              </ProtectedRoute>
-            }
-          />
+        {/* Admin: wizard onboarding self-service (upload Excel sedi/dipendenti/saldi) */}
+        <Route
+          path="/admin/onboarding"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <OnboardingWizardPage />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Admin: Leave Management */}
-          <Route
-            path="/admin/leave"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <AdminLeaveManagement />
-              </ProtectedRoute>
-            }
-          />
+        {/* Admin: Leave Management */}
+        <Route
+          path="/admin/leave"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <AdminLeaveManagement />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Manager: Report Illness */}
-          <Route
-            path="/illnesses/manager-report"
-            element={
-              <ProtectedRoute requiredRole="manager">
-                <ManagerIllnessReport />
-              </ProtectedRoute>
-            }
-          />
+        {/* Manager: Report Illness */}
+        <Route
+          path="/illnesses/manager-report"
+          element={
+            <ProtectedRoute requiredRole="manager">
+              <ManagerIllnessReport />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Employee: Report Illness */}
-          <Route
-            path="/illnesses/report"
-            element={
-              <ProtectedRoute requiredRole="employee">
-                <EmployeeIllnessReport />
-              </ProtectedRoute>
-            }
-          />
+        {/* Employee: Report Illness */}
+        <Route
+          path="/illnesses/report"
+          element={
+            <ProtectedRoute requiredRole="employee">
+              <EmployeeIllnessReport />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Admin: Illness Management */}
-          <Route
-            path="/admin/illnesses"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <AdminIllnessManagement />
-              </ProtectedRoute>
-            }
-          />
+        {/* Admin: Illness Management */}
+        <Route
+          path="/admin/illnesses"
+          element={
+            <ProtectedRoute requiredRole="admin">
+              <AdminIllnessManagement />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Monthly summary: admin, manager, viewer */}
-          <Route
-            path="/summary"
-            element={
-              <ProtectedRoute requiredRoles={['admin', 'manager', 'viewer']}>
-                <SummaryPage />
-              </ProtectedRoute>
-            }
-          />
+        {/* Monthly summary: admin, manager, viewer */}
+        <Route
+          path="/summary"
+          element={
+            <ProtectedRoute requiredRoles={['admin', 'manager', 'viewer']}>
+              <SummaryPage />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Employee: Il Mio Cartellino (firma digitale) */}
-          <Route
-            path="/my-summary"
-            element={
-              <ProtectedRoute requiredRole="employee">
-                <MySummaryPage />
-              </ProtectedRoute>
-            }
-          />
+        {/* Employee: Il Mio Cartellino (firma digitale) */}
+        <Route
+          path="/my-summary"
+          element={
+            <ProtectedRoute requiredRole="employee">
+              <MySummaryPage />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Help/FAQ: tutti i ruoli, il filtro è sul contenuto */}
-          <Route
-            path="/help"
-            element={
-              <ProtectedRoute requiredRoles={['admin', 'manager', 'employee', 'viewer']}>
-                <HelpPage />
-              </ProtectedRoute>
-            }
-          />
+        {/* Help/FAQ: tutti i ruoli, il filtro è sul contenuto */}
+        <Route
+          path="/help"
+          element={
+            <ProtectedRoute requiredRoles={['admin', 'manager', 'employee', 'viewer']}>
+              <HelpPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Redirect unknown routes to dashboard */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
