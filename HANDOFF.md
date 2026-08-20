@@ -1,8 +1,8 @@
 # Badge System — Session 106 Handoff
 
 **Date:** 2026-08-20
-**Session:** 106 — Feature Eventi/Training: code review con 1 bug fixato, QA manuale web, merge su `main`
-**Status:** ✅ **Mergeata su `main` (`13f04e3`), branch remoto eliminato.** Deploy in produzione NON ancora eseguito — da fare separatamente. Build mobile nativa: verificata NON necessaria (solo file JS/JSX toccati, nessuna dipendenza nativa nuova) — aggiornamento previsto via EAS Update OTA, non ancora eseguito.
+**Session:** 106 — Feature Eventi/Training: code review, QA manuale web, merge su `main`, build mobile 37 in TestFlight testata OK
+**Status:** ✅ **Mergeata su `main` (`13f04e3` → `3e694cf` con handoff docs), branch remoto eliminato. Build 37 iOS pubblicata su TestFlight e testata con successo dall'utente su iPhone reale.** Deploy backend/web in produzione NON ancora eseguito (solo `main` locale al repo, non deployato su `api.dataxiom.it`/`badge.dataxiom.it`) — da fare separatamente. **🔴 Nuovo problema aperto per domani**: dopo l'approvazione manager, giorno e durata dell'evento non compaiono correttamente nella sezione Presenze della dashboard — non ancora investigato, l'utente ha chiesto esplicitamente di rimandare a domani.
 
 ---
 
@@ -24,25 +24,35 @@ Continuazione di una sessione precedente in cui la feature "Eventi/Training" era
 
 **Merge**: CI verde su tutti i check, squash-merge su `main` (`13f04e3`), branch remoto eliminato.
 
-**Domanda post-merge dell'utente — serve una nuova build mobile?** Verificato via diff (`git diff <base>..<merge> -- frontend-mobile/`): la feature tocca solo `RootNavigator.jsx`, `CheckInScreen.jsx`, 2 nuove screen, config endpoint, utility date — **nessuna modifica a `package.json` o `app.json`, nessuna dipendenza nativa nuova**. Il progetto ha già EAS Update configurato (`eas.json`, canali dev/preview/production) → aggiornamento possibile via OTA (`eas update`), nessuna nuova build/submission store necessaria. Utente ha chiesto di testare prima in locale/staging prima di procedere con l'update — **in corso, vedi sessione successiva o continuazione di questa**.
+**Domanda post-merge dell'utente — serve una nuova build mobile?** Prima risposta (sbagliata): verificato via `git diff` che la feature tocca solo file JS/JSX (nessuna dipendenza nativa nuova) → "basta un OTA". Pubblicato `eas update --channel production` con successo (primo OTA mai fatto per questo progetto — canale non esisteva). **Testato dal vivo sull'iPhone dell'utente (login `maria@badge.local`): il pulsante non compariva**, nemmeno dopo force-quit e riapertura.
+
+**Root cause reale** (trovata leggendo la storia git dei commit, non assunta): il build 16 — l'unico in App Store, giugno 2026 — è stato compilato dal commit `5733adf`, **precedente** al commit che ha introdotto `expo-updates` in `app.json` (`02a888c`). Il binario installato sul device dell'utente non ha alcun meccanismo di check/apply OTA — non poteva mai ricevere l'update pubblicato. Confermato anche in positivo: simulata una richiesta manifest da "device reale" (header `expo-runtime-version`/`expo-channel-name`) contro l'endpoint EAS Update, verificando che l'infrastruttura OTA funzionava correttamente — il problema era solo nel binario non predisposto, non nella pubblicazione.
+
+**Correzione applicata**: `eas build --platform ios --profile production` → build **37** (il contatore EAS era più avanti del previsto — inizialmente comunicato all'utente come "build 17" per errore, poi corretto) → `eas submit` → App Store Connect → TestFlight (~5-10 min processing automatico Apple, nessuna review umana per TestFlight — chiarito anche il malinteso opposto: la "review Apple di 1-2 giorni" si applica solo alla pubblicazione pubblica sull'App Store, mai triggerata qui). L'utente ha chiesto se sarebbe stato più semplice usare la pipeline `codemagic.yaml` già presente nel repo (workflow `badge-ios-testflight`, build+submit-a-TestFlight in un solo passaggio) — spiegato che è funzionalmente equivalente (entrambi caricano su App Store Connect, Apple processa per TestFlight allo stesso modo), non usata perché l'IPA EAS era già pronta e ripartire da zero non aveva senso.
+
+**✅ Build 37 installata e testata con successo dall'utente su iPhone reale — confermato funzionante.**
+
+**Nuovo problema scoperto durante questo stesso test** (utente: *"non indirizziamolo ora, ci pensiamo domani"*): dopo l'approvazione manager, il giorno e la durata dell'evento non compaiono correttamente tra le presenze nella sezione Presenze della dashboard. **Non ancora investigato** — nelle sessioni precedenti l'integrazione ore/buoni pasto era stata verificata solo via API/curl (`buildEventDailyEntries` in `hours.js`, dedup checkin-vince-su-evento), mai la resa effettiva in UI dashboard.
 
 ## What Worked
 
-- **Verificare `git diff` sui file mobile toccati prima di rispondere "serve una build?"** invece di assumere — ha permesso una risposta netta (no, solo OTA) con evidenza concreta invece di una supposizione.
-- **Diagnosticare i problemi ambientali (porte occupate, config.js hardcoded) con `lsof`+cwd invece di assumere un bug nel codice della feature** — entrambi risolti in minuti, nessuno era una regressione della PR.
+- **Verificare `git diff` sui file mobile toccati prima di rispondere "serve una build?"** — ha dato una prima risposta con evidenza concreta invece di una supposizione, anche se poi rivelatasi incompleta (vedi sotto).
+- **Diagnosticare i problemi ambientali (porte occupate, config.js hardcoded) con `lsof`+cwd invece di assumere un bug nel codice della feature** — risolti in minuti, nessuno era una regressione della PR.
 - **Fix del bug `site_id`→`assigned_sites` verificato leggendo direttamente le migration storiche** (038 documenta 2 incidenti reali con lo stesso pattern) prima di accettare il finding dell'agente di review — non solo fidarsi del punteggio di confidenza.
+- **Quando l'OTA non ha funzionato, indagare la storia git dei commit invece di ripetere il tentativo o assumere un problema di rete/cache** — ha trovato la vera causa (build precedente all'introduzione di `expo-updates`) in pochi minuti, evitando cicli di "prova a riaprire l'app" inutili.
 
 ## What Didn't Work / Da tenere a mente
 
-- **`apiClient.js` ha DUE meccanismi di configurazione API che si sovrappongono** (`window.API_CONFIG` da `public/config.js`, hardcoded per hostname, con priorità su `VITE_API_URL`) — per testare in locale contro un backend su porta non-standard bisogna editare `public/config.js`, non basta la env var Vite. Utile saperlo per il prossimo giro di QA locale.
-- **Porte di sviluppo standard (3000/5173) sono quasi sempre occupate da altri worktree attivi dell'utente** — controllare sempre `lsof -ti:PORT` + cwd del processo prima di assumere sia libera, e usare porte alternative (3099/5174 in questa sessione) senza mai killare processi di altri worktree.
+- **"Nessuna dipendenza nativa nuova" NON implica "basta un OTA"** — bisogna anche verificare che il build attualmente installato dagli utenti reali abbia `expo-updates` configurato fin dall'inizio (controllare il commit di build via `eas build:view` contro la storia di `app.json`). Lezione da riapplicare ad ogni futura richiesta "serve una build?".
+- **`apiClient.js` ha DUE meccanismi di configurazione API che si sovrappongono** (`window.API_CONFIG` da `public/config.js`, hardcoded per hostname, con priorità su `VITE_API_URL`) — per testare in locale contro un backend su porta non-standard bisogna editare `public/config.js`, non basta la env var Vite.
+- **Porte di sviluppo standard (3000/5173/8081) sono quasi sempre occupate da altri worktree attivi dell'utente** — controllare sempre `lsof -ti:PORT` + cwd del processo prima di assumere sia libera, mai killare processi di altri worktree.
+- **Build native locali (Xcode/simulatore) falliscono in questo repo** per un bug di `expo-constants` (`get-app-config-ios.sh`, variabile `$PROJECT_DIR` non quotata) combinato con il path del progetto che contiene spazi e `&` — build cloud (EAS/Codemagic) bypassano il problema perché girano su un path diverso, quindi restano l'unica via per test nativi reali finché il repo resta in questo path.
 
 ## Next Steps (in ordine di urgenza)
 
-1. **Testare la build mobile in locale/staging** (richiesta esplicita utente, in corso).
-2. **Se il test locale è ok, pubblicare l'aggiornamento via `eas update`** (canale da confermare con l'utente — production/preview).
-3. **Deploy backend/web in produzione** — non ancora eseguito in questa sessione, il merge su `main` è solo locale rispetto al deploy.
-4. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 105/104 sotto.
+1. **🔴 PRIMA COSA DOMANI**: investigare perché giorno/durata evento non compaiono nelle Presenze dopo l'approvazione manager — root cause non nota, partire da `presences.js` (`buildEventDailyEntries`, dedup checkin/evento) e dalla resa UI della dashboard (`DashboardPage.jsx`/componente presenze), non solo dall'API.
+2. **Deploy backend/web in produzione** — non ancora eseguito, il merge su `main` è solo locale al repo rispetto al deploy reale su `api.dataxiom.it`/`badge.dataxiom.it`.
+3. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 105/104 sotto.
 
 ---
 

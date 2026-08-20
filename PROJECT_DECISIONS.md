@@ -36,7 +36,18 @@ Un errore di lint preesistente (virgolette singole, in `events.test.js`, non int
 ### Verifica finale e merge
 Backend 823/838 (14 skip, 1 test flaky pre-esistente non correlato — `demo-switch-role.test.js`, verde in isolamento), frontend-web 324/324. CI verde su tutti i check. **Squash-merge su `main`** (commit `13f04e3`), branch remoto `worktree-eventi-training` eliminato.
 
-**Stato:** Feature Eventi/Training ✅ LIVE su `main` (locale — deploy in produzione da confermare separatamente, non eseguito in questa sessione).
+### Build mobile — dall'ipotesi "basta un OTA" alla build nativa reale
+Dopo il merge, l'utente ha chiesto se servisse una nuova build mobile. Prima risposta (sbagliata): verificato via `git diff` che la feature tocca solo file JS/JSX (nessuna dipendenza nativa nuova) → conclusione "basta un `eas update` OTA". Pubblicato su `production` con successo (primo OTA mai fatto per questo progetto — il canale non esisteva ancora). **Testato dal vivo sull'iPhone dell'utente: il pulsante non compariva**, nonostante force-quit e riapertura.
+
+**Root cause reale** (trovata leggendo la storia git, non assunta): il build 16 — l'unico presente in App Store, di giugno 2026 — è stato compilato dal commit `5733adf`, **precedente** al commit che ha introdotto `expo-updates` in `app.json` (`02a888c`). Il binario installato sul device dell'utente non ha alcun meccanismo di check/apply OTA — non poteva ricevere l'update pubblicato, a prescindere da quante volte veniva riaperta l'app. Verificato concretamente simulando una richiesta manifest da device reale (header `expo-runtime-version`/`expo-channel-name`) contro l'endpoint EAS Update, confermando che l'infrastruttura OTA di per sé funzionava correttamente — il problema era esclusivamente nel binario non predisposto.
+
+**Correzione**: `eas build --platform ios --profile production` (build **37** — il contatore EAS era più avanti del previsto, non 17 come inizialmente assunto dal numero di build precedente) → `eas submit` → App Store Connect → TestFlight (~5-10 min di processing automatico Apple, nessuna review umana per TestFlight — chiarito anche il malinteso opposto, cioè che la "review Apple di 1-2 giorni" si applica solo alla pubblicazione pubblica sull'App Store, un passo manuale separato che non è mai stato triggerato). L'utente ha chiesto se sarebbe stato più semplice usare la pipeline `codemagic.yaml` già presente nel repo (build+submit-a-TestFlight in un solo workflow) — spiegato che è funzionalmente equivalente a `eas build`+`eas submit` (entrambi caricano su App Store Connect, Apple elabora per TestFlight allo stesso modo), non riutilizzata perché l'IPA EAS era già pronta.
+
+**✅ Build 37 installata e testata con successo dall'utente su iPhone reale** — confermato funzionante.
+
+**Nuovo problema aperto** (utente: "non indirizziamolo ora, ci pensiamo domani"): dopo l'approvazione manager, il giorno e la durata dell'evento non compaiono correttamente nella sezione Presenze della dashboard. Root cause non ancora indagata — nelle sessioni precedenti la corretta integrazione ore/buoni pasto era stata verificata solo via API/curl, mai la resa effettiva in UI.
+
+**Stato:** Feature Eventi/Training ✅ LIVE su `main` (deploy backend/web in produzione da confermare separatamente — non eseguito in questa sessione) + ✅ LIVE su TestFlight (build 37, mobile). **Da fixare domani**: bug di visualizzazione presenze post-approvazione.
 
 ---
 
