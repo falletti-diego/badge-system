@@ -1,4 +1,4 @@
-const { pairCheckins, mergeWithSmartWorking, formatDuration } = require('../utils/presenceUtils');
+const { pairCheckins, mergeWithSmartWorking, mergeWithEvents, formatDuration } = require('../utils/presenceUtils');
 
 describe('pairCheckins', () => {
   test('pairs a simple IN/OUT day and computes duration', () => {
@@ -83,6 +83,53 @@ describe('mergeWithSmartWorking', () => {
   test('handles empty inputs gracefully', () => {
     expect(mergeWithSmartWorking([], [])).toEqual([]);
     expect(mergeWithSmartWorking(null, null)).toEqual([]);
+  });
+});
+
+describe('mergeWithEvents', () => {
+  test('adds an APPROVED event as a day entry with its duration, inside the requested range', () => {
+    const entries = [
+      { date: '2026-08-20', kind: 'checkin', firstIn: new Date(), lastOut: new Date(), totalMinutes: 480, openPresence: false, siteName: 'Milano' },
+    ];
+    const eventRows = [
+      {
+        status: 'APPROVED',
+        event_date: '2026-08-25T00:00:00.000Z',
+        start_time: '08:00:00',
+        end_time: '13:00:00',
+        description: 'Congresso di settore',
+      },
+    ];
+    const merged = mergeWithEvents(entries, eventRows, '2026-08-01', '2026-08-31');
+    expect(merged).toHaveLength(2);
+    const eventEntry = merged.find((e) => e.kind === 'event');
+    expect(eventEntry.date).toBe('2026-08-25');
+    expect(eventEntry.totalMinutes).toBe(5 * 60);
+    expect(eventEntry.description).toBe('Congresso di settore');
+    expect(eventEntry.startTime).toBe('08:00:00');
+    expect(eventEntry.endTime).toBe('13:00:00');
+  });
+
+  test('excludes PENDING and REJECTED requests — only APPROVED is a real presence', () => {
+    const eventRows = [
+      { status: 'PENDING', event_date: '2026-08-25T00:00:00.000Z', start_time: '08:00:00', end_time: '13:00:00', description: 'x' },
+      { status: 'REJECTED', event_date: '2026-08-26T00:00:00.000Z', start_time: '08:00:00', end_time: '13:00:00', description: 'x' },
+    ];
+    const merged = mergeWithEvents([], eventRows, '2026-08-01', '2026-08-31');
+    expect(merged).toEqual([]);
+  });
+
+  test('excludes an APPROVED event outside the requested date range (endpoint has no server-side date filter)', () => {
+    const eventRows = [
+      { status: 'APPROVED', event_date: '2026-07-15T00:00:00.000Z', start_time: '08:00:00', end_time: '13:00:00', description: 'x' },
+    ];
+    const merged = mergeWithEvents([], eventRows, '2026-08-01', '2026-08-31');
+    expect(merged).toEqual([]);
+  });
+
+  test('handles empty inputs gracefully', () => {
+    expect(mergeWithEvents([], [], '2026-08-01', '2026-08-31')).toEqual([]);
+    expect(mergeWithEvents(null, null, '2026-08-01', '2026-08-31')).toEqual([]);
   });
 });
 

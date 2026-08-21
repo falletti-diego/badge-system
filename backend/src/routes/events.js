@@ -70,7 +70,8 @@ router.post('/request', requireAuth, createValidationMiddleware(PostEventRequest
         `INSERT INTO event_requests
          (id, client_id, user_id, event_date, start_time, end_time, description, status, created_at, updated_at)
          VALUES ($1::uuid, $2::uuid, $3::uuid, $4::date, $5::time, $6::time, $7, 'PENDING', NOW(), NOW())
-         RETURNING *`,
+         RETURNING id, client_id, user_id, event_date::text AS event_date, start_time, end_time,
+                   description, status, approved_by, approved_at, rejection_reason, created_at, updated_at`,
         [requestId, clientId, userId, event_date, start_time, end_time, description]
       );
 
@@ -116,7 +117,7 @@ router.get('/pending', requireAuth, async (req, res, next) => {
   try {
     let query = `
       SELECT
-        r.id, r.client_id, r.user_id, r.event_date, r.start_time, r.end_time,
+        r.id, r.client_id, r.user_id, r.event_date::text AS event_date, r.start_time, r.end_time,
         r.description, r.status, r.approved_by, r.approved_at, r.rejection_reason,
         r.created_at, r.updated_at,
         e.name as employee_name, e.email as employee_email
@@ -172,7 +173,9 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveEventR
 
     const result = await withTransaction(async (client) => {
       const eventResult = await client.query(
-        'SELECT * FROM event_requests WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1',
+        `SELECT id, client_id, user_id, event_date::text AS event_date, start_time, end_time,
+                description, status, approved_by, approved_at, rejection_reason, created_at, updated_at
+         FROM event_requests WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1`,
         [id, clientId]
       );
 
@@ -212,7 +215,8 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveEventR
         `UPDATE event_requests
          SET status = $1, approved_by = $2::uuid, approved_at = NOW(), rejection_reason = $3, updated_at = NOW()
          WHERE id = $4::uuid AND status = 'PENDING'
-         RETURNING *`,
+         RETURNING id, client_id, user_id, event_date::text AS event_date, start_time, end_time,
+                   description, status, approved_by, approved_at, rejection_reason, created_at, updated_at`,
         [status, userId, rejection_reason || null, id]
       );
 
@@ -288,7 +292,8 @@ router.get('/my-requests', requireAuth, async (req, res, next) => {
 
   try {
     const result = await pool.query(
-      `SELECT *
+      `SELECT id, client_id, user_id, event_date::text AS event_date, start_time, end_time,
+              description, status, approved_by, approved_at, rejection_reason, created_at, updated_at
        FROM event_requests
        WHERE user_id = $1::uuid AND client_id = $2::uuid
        ORDER BY created_at DESC LIMIT 100`,

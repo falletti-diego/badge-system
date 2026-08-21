@@ -45,7 +45,7 @@ describe('MyPresencesScreen', () => {
 
   test('fetch riuscito: renderizza le entries e scrive su AsyncStorage', async () => {
     apiClient.get.mockImplementation((url) => {
-      if (url.includes('smart-working')) {
+      if (url.includes('smart-working') || url.includes('events')) {
         return Promise.resolve({ data: { data: [] } });
       }
       return Promise.resolve({
@@ -70,6 +70,38 @@ describe('MyPresencesScreen', () => {
     const saved = JSON.parse(savedRaw);
     expect(saved.filterIndex).toBe(0);
     expect(saved.entries).toHaveLength(1);
+  });
+
+  test('un evento APPROVED nel periodo compare come riga con orario, descrizione e durata (regression: prima invisibile)', async () => {
+    apiClient.get.mockImplementation((url) => {
+      if (url.includes('smart-working')) {
+        return Promise.resolve({ data: { data: [] } });
+      }
+      if (url.includes('events')) {
+        return Promise.resolve({
+          data: {
+            data: [
+              {
+                status: 'APPROVED',
+                event_date: new Date().toISOString(),
+                start_time: '08:00:00',
+                end_time: '13:00:00',
+                description: 'Congresso di settore',
+              },
+            ],
+          },
+        });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    const { getByText, getAllByText } = await renderScreen();
+
+    await waitFor(() => expect(getByText('Congresso di settore')).toBeTruthy());
+    expect(getByText('08:00 — 13:00')).toBeTruthy();
+    // Appears twice: once as the row's own duration, once as the period total
+    // (the single event is the only entry, so both durations match: 5h 00m).
+    expect(getAllByText('5h 00m')).toHaveLength(2);
   });
 
   test('errore di rete con cache corrispondente: mostra banner offline e non crasha (Date revival regression guard)', async () => {

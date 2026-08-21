@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/apiClient';
 import { ENDPOINTS, STORAGE_KEYS } from '../../config/endpoints';
 import SkeletonLoader from '../../components/SkeletonLoader';
-import { pairCheckins, mergeWithSmartWorking, formatDuration } from '../../utils/presenceUtils';
+import { pairCheckins, mergeWithSmartWorking, mergeWithEvents, formatDuration } from '../../utils/presenceUtils';
 import { COLORS, FONTS } from '../../config/theme';
 
 /** Parses a 'YYYY-MM-DD' key into a local Date (no UTC-parsing ambiguity). */
@@ -88,15 +88,17 @@ export default function MyPresencesScreen() {
 
     try {
       const { date_from, date_to } = FILTERS[filterIndex].range();
-      const [checkinsRes, smartWorkingRes] = await Promise.all([
+      const [checkinsRes, smartWorkingRes, eventsRes] = await Promise.all([
         apiClient.get(ENDPOINTS.CHECKINS_LIST, { params: { date_from, date_to, limit: 200 }, signal: controller.signal }),
         apiClient.get(ENDPOINTS.SMART_WORKING_HISTORY, { params: { date_from, date_to }, signal: controller.signal }),
+        apiClient.get(ENDPOINTS.EVENTS_LIST, { signal: controller.signal }),
       ]);
 
       if (controller.signal.aborted) return;
 
       const dailyEntries = pairCheckins(checkinsRes.data.data ?? []);
-      const merged = mergeWithSmartWorking(dailyEntries, smartWorkingRes.data.data ?? []);
+      const withSmartWorking = mergeWithSmartWorking(dailyEntries, smartWorkingRes.data.data ?? []);
+      const merged = mergeWithEvents(withSmartWorking, eventsRes.data.data ?? [], date_from, date_to);
       setEntries(merged);
       AsyncStorage.setItem(
         STORAGE_KEYS.CACHE_PRESENCES,
@@ -141,8 +143,11 @@ export default function MyPresencesScreen() {
     }, [activeFilter, fetchData]),
   );
 
+  // Approved events count toward the period total the same way checkins do
+  // (mirrors aggregateMonthly() in backend/src/utils/hours.js) — smart working
+  // days have no totalMinutes and are naturally excluded.
   const totalMinutes = entries
-    .filter((e) => e.kind === 'checkin')
+    .filter((e) => e.kind === 'checkin' || e.kind === 'event')
     .reduce((sum, e) => sum + (e.totalMinutes || 0), 0);
 
   // Precompute month-divider markers into the flat list data (rather than mutating
@@ -222,6 +227,10 @@ export default function MyPresencesScreen() {
                   <View style={styles.rowInfo}>
                     {item.kind === 'smart_working' ? (
                       <Text style={styles.rowTimesSmartWorking}>Smart Working</Text>
+                    ) : item.kind === 'event' ? (
+                      <Text style={styles.rowTimesEvent}>
+                        {item.startTime.slice(0, 5)} — {item.endTime.slice(0, 5)}
+                      </Text>
                     ) : (
                       <Text style={styles.rowTimes}>
                         {item.firstIn.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
@@ -234,8 +243,11 @@ export default function MyPresencesScreen() {
                     {item.kind === 'checkin' && item.siteName && (
                       <Text style={styles.rowSite}>{item.siteName}</Text>
                     )}
+                    {item.kind === 'event' && item.description && (
+                      <Text style={styles.rowSite}>{item.description}</Text>
+                    )}
                   </View>
-                  {item.kind === 'checkin' && (
+                  {(item.kind === 'checkin' || item.kind === 'event') && (
                     <Text style={styles.duration}>{formatDuration(item.totalMinutes)}</Text>
                   )}
                 </View>
@@ -284,6 +296,7 @@ const styles = StyleSheet.create({
   rowInfo: { flex: 1 },
   rowTimes: { fontFamily: FONTS.bodyMedium, fontSize: 15, color: COLORS.ink },
   rowTimesSmartWorking: { fontFamily: FONTS.bodyMedium, fontSize: 15, color: COLORS.navy500 },
+  rowTimesEvent: { fontFamily: FONTS.bodyMedium, fontSize: 15, color: COLORS.navy500 },
   rowSite: { fontFamily: FONTS.body, fontSize: 12, color: COLORS.stone, marginTop: 2 },
   duration: { fontFamily: FONTS.display, fontSize: 18, color: COLORS.navy500 },
 

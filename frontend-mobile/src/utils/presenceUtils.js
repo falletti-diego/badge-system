@@ -100,6 +100,54 @@ function mergeWithSmartWorking(dailyEntries, smartWorkingDays) {
   return [...checkinRows, ...swRows].sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
+/** 'HH:MM:SS' -> minutes since midnight. Mirrors timeStringToMinutes() in
+ *  backend/src/utils/hours.js — same input shape (event_requests.start_time/end_time). */
+function timeStringToMinutes(t) {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+/**
+ * Merges an already-merged checkin/smart-working list with APPROVED Eventi/Training
+ * requests into one chronological list for display.
+ *
+ * Only APPROVED requests are a real presence (PENDING/REJECTED are excluded).
+ * GET /events/my-requests has no server-side date filter (returns the 100 most
+ * recent by created_at) — callers must pass the same date_from/date_to used for
+ * the checkin/smart-working fetches, filtered here.
+ *
+ * event_date comes back from the API as a Date-serialized ISO string (the DATE
+ * column is parsed by pg at LOCAL midnight, then JSON-serialized as UTC) — same
+ * shape as smart-working's `date` field, so it's read back with the same
+ * utcDateKey() used by mergeWithSmartWorking() above.
+ *
+ * The event's duration counts toward the period total the same way a checkin's
+ * does, mirroring buildEventDailyEntries() in backend/src/utils/hours.js (approved
+ * events count as worked hours server-side too).
+ *
+ * @param {Array} entries  Output of mergeWithSmartWorking()
+ * @param {Array<{ status: string, event_date: string, start_time: string, end_time: string, description: string }>} eventRows
+ *   Raw rows from GET /events/my-requests.
+ * @param {string} dateFrom  'YYYY-MM-DD', inclusive
+ * @param {string} dateTo  'YYYY-MM-DD', inclusive
+ * @returns {Array<{ date: string, kind: 'checkin'|'smart_working'|'event', ...fields }>}
+ */
+function mergeWithEvents(entries, eventRows, dateFrom, dateTo) {
+  const eventEntries = (eventRows || [])
+    .filter((e) => e.status === 'APPROVED')
+    .map((e) => ({
+      kind: 'event',
+      date: utcDateKey(new Date(e.event_date)),
+      startTime: e.start_time,
+      endTime: e.end_time,
+      description: e.description,
+      totalMinutes: timeStringToMinutes(e.end_time) - timeStringToMinutes(e.start_time),
+    }))
+    .filter((e) => e.date >= dateFrom && e.date <= dateTo);
+
+  return [...(entries || []), ...eventEntries].sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
 /** Formats total minutes as "8h 28m" (or "—" for null/zero). */
 function formatDuration(minutes) {
   if (!minutes || minutes <= 0) return '—';
@@ -108,4 +156,4 @@ function formatDuration(minutes) {
   return `${h}h ${String(m).padStart(2, '0')}m`;
 }
 
-module.exports = { pairCheckins, mergeWithSmartWorking, formatDuration };
+module.exports = { pairCheckins, mergeWithSmartWorking, mergeWithEvents, formatDuration };
