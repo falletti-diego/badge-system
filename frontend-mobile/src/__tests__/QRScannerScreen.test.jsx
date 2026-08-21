@@ -25,6 +25,7 @@ jest.mock('expo-crypto', () => ({
 
 jest.mock('../services/apiClient', () => ({
   post: jest.fn(),
+  get: jest.fn(),
 }));
 
 jest.mock('../services/authService', () => ({
@@ -128,6 +129,7 @@ describe('QRScannerScreen', () => {
     useCameraPermissions.mockReturnValue([{ granted: true, canAskAgain: true }, jest.fn()]);
     Crypto.randomUUID.mockReturnValue('generated-uuid-1234');
     authService.getUser.mockResolvedValue({ employee_id: 'emp-1' });
+    apiClient.get.mockResolvedValue({ data: { data: [] } });
   });
 
   test('regression guard: network error (no response) enqueues a payload with the correct site_id and navigates with the correct siteId, not undefined', async () => {
@@ -496,6 +498,67 @@ describe('QRScannerScreen', () => {
     await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith('Success', expect.objectContaining({ checkIn: { id: 'checkin-3' } })));
     AsyncStorage.setItem.mockRestore();
   });
+
+  describe('event pre-check', () => {
+    test('shows a loading spinner while the pre-check request is in flight, not the camera', async () => {
+      let resolveGet;
+      apiClient.get.mockReturnValue(new Promise((resolve) => { resolveGet = resolve; }));
+
+      const { queryByTestId } = await renderScreen();
+
+      expect(queryByTestId('camera-view')).toBeNull();
+
+      await act(async () => { resolveGet({ data: { data: [] } }); });
+    });
+
+    test('blocks the camera and shows event details when a PENDING event exists for today', async () => {
+      apiClient.get.mockResolvedValue({
+        data: { data: [{ id: 'evt-1', status: 'PENDING', description: 'Corso di formazione', start_time: '08:00:00', end_time: '18:00:00' }] },
+      });
+
+      const { queryByTestId, findByText } = await renderScreen();
+
+      await findByText(/Corso di formazione/);
+      expect(queryByTestId('camera-view')).toBeNull();
+    });
+
+    test('blocks the camera when an APPROVED event exists for today', async () => {
+      apiClient.get.mockResolvedValue({
+        data: { data: [{ id: 'evt-1', status: 'APPROVED', description: 'Congresso a Torino', start_time: '08:00:00', end_time: '18:00:00' }] },
+      });
+
+      const { queryByTestId, findByText } = await renderScreen();
+
+      await findByText(/Congresso a Torino/);
+      expect(queryByTestId('camera-view')).toBeNull();
+    });
+
+    test('does not block when the only event for today is REJECTED', async () => {
+      apiClient.get.mockResolvedValue({
+        data: { data: [{ id: 'evt-1', status: 'REJECTED', description: 'Corso', start_time: '08:00:00', end_time: '18:00:00' }] },
+      });
+
+      const { findByTestId } = await renderScreen();
+
+      await findByTestId('camera-view');
+    });
+
+    test('fail-open: opens the camera when the pre-check request fails (network error)', async () => {
+      apiClient.get.mockRejectedValue(new Error('Network Error'));
+
+      const { findByTestId } = await renderScreen();
+
+      await findByTestId('camera-view');
+    });
+
+    test('does not block when no event exists for today (no regression)', async () => {
+      apiClient.get.mockResolvedValue({ data: { data: [] } });
+
+      const { findByTestId } = await renderScreen();
+
+      await findByTestId('camera-view');
+    });
+  });
 });
 
 describe('QRScannerScreen — low-end device animations', () => {
@@ -504,6 +567,7 @@ describe('QRScannerScreen — low-end device animations', () => {
     __resetLatestCameraProps();
     useCameraPermissions.mockReturnValue([{ granted: true, canAskAgain: true }, jest.fn()]);
     authService.getUser.mockResolvedValue({ employee_id: 'emp-1' });
+    apiClient.get.mockResolvedValue({ data: { data: [] } });
   });
 
   it('starts only the scan-line loop on a low-end device, skipping the decorative status dot', async () => {

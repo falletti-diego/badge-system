@@ -9,6 +9,7 @@ import apiClient from '../../services/apiClient';
 import authService from '../../services/authService';
 import { enqueueCheckin } from '../../services/offlineQueue';
 import { ENDPOINTS, OFFLINE_CONFIG, STORAGE_KEYS } from '../../config/endpoints';
+import { today, toISO } from '../../utils/dateUtils';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import StepIndicator from '../../components/StepIndicator';
 import GPSConsentDialog from '../../components/GPSConsentDialog';
@@ -71,6 +72,28 @@ export default function QRScannerScreen({ navigation, route }) {
   // Conserva payload/siteId tra il primo tentativo (fallito) e il retry con GPS —
   // stesso client_uuid riusato (idempotenza, ON CONFLICT DO NOTHING lato backend).
   const pendingRetryRef = useRef(null);
+
+  // Pre-check: un evento PENDING/APPROVED per oggi blocca lo scan QR (mutua
+  // esclusione evento↔check-in). undefined = in corso, null = nessun conflitto,
+  // object = evento in conflitto. Fail-open su errore di rete: il controllo
+  // lato server in checkins.js resta comunque l'autorità finale.
+  const [todayEvent, setTodayEvent] = useState(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    const todayStr = toISO(today());
+    apiClient.get(ENDPOINTS.EVENTS_LIST, { params: { date_from: todayStr, date_to: todayStr } })
+      .then((response) => {
+        if (cancelled) return;
+        const rows = response.data?.data || [];
+        const conflict = rows.find((r) => r.status === 'PENDING' || r.status === 'APPROVED');
+        setTodayEvent(conflict || null);
+      })
+      .catch(() => {
+        if (!cancelled) setTodayEvent(null); // fail-open
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const scanLineAnim = useRef(new Animated.Value(0)).current;
   const successAnim = useRef(new Animated.Value(0)).current;
@@ -379,6 +402,29 @@ export default function QRScannerScreen({ navigation, route }) {
             <Text style={styles.buttonText}>Apri Impostazioni</Text>
           </TouchableOpacity>
         )}
+        <TouchableOpacity style={[styles.button, { marginTop: 12, backgroundColor: COLORS.stone }]} onPress={() => navigation.goBack()}>
+          <Text style={styles.buttonText}>Torna indietro</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  if (todayEvent === undefined) {
+    return (
+      <View style={styles.centered}>
+        <LoadingSpinner color={COLORS.navy500} />
+        <Text style={styles.text}>Verifica eventi in corso...</Text>
+      </View>
+    );
+  }
+
+  if (todayEvent) {
+    return (
+      <SafeAreaView style={styles.centered}>
+        <Text style={styles.errorText}>Check-in non disponibile oggi</Text>
+        <Text style={styles.text}>
+          Hai un evento programmato: {todayEvent.description} ({todayEvent.start_time?.slice(0, 5)}–{todayEvent.end_time?.slice(0, 5)}).
+        </Text>
         <TouchableOpacity style={[styles.button, { marginTop: 12, backgroundColor: COLORS.stone }]} onPress={() => navigation.goBack()}>
           <Text style={styles.buttonText}>Torna indietro</Text>
         </TouchableOpacity>
