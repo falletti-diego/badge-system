@@ -491,7 +491,7 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
       expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0].event_date).toBe('2026-08-21');
       const [sql, params] = mockPool.query.mock.calls[0];
-      expect(sql).toContain("status = 'APPROVED'");
+      expect(sql).toContain('status = \'APPROVED\'');
       expect(sql).toContain('er.user_id = $2::uuid');
       expect(params).toContain(TEST_EMPLOYEE_ID);
     });
@@ -574,7 +574,7 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
         .get('/api/v1/events/approved')
         .set('Authorization', `Bearer ${adminToken}`);
 
-      expect(mockPool.query.mock.calls[0][0]).toContain("er.status = 'APPROVED'");
+      expect(mockPool.query.mock.calls[0][0]).toContain('er.status = \'APPROVED\'');
     });
 
     it('fails closed for an unrecognized role', async () => {
