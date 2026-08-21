@@ -116,6 +116,17 @@ describe('Error Classes', () => {
       expect(err.statusCode).toBe(409);
       expect(err.code).toBe('CONFLICT');
     });
+
+    test('defaults details to null', () => {
+      const err = new ConflictError('Duplicate entry');
+      expect(err.details).toBeNull();
+    });
+
+    test('attaches details when provided', () => {
+      const details = { conflicting_checkin_id: 'ci-1' };
+      const err = new ConflictError('Duplicate entry', 'MY_CODE', details);
+      expect(err.details).toEqual(details);
+    });
   });
 
   describe('RateLimitError', () => {

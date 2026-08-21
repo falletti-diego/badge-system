@@ -43,9 +43,10 @@ class ForbiddenError extends ApiError {
 }
 
 class ConflictError extends ApiError {
-  constructor(message, code = 'CONFLICT') {
+  constructor(message, code = 'CONFLICT', details = null) {
     super(code, message, 409);
     this.name = 'ConflictError';
+    this.details = details;
   }
 }
 
