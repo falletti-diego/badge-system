@@ -213,6 +213,22 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveEventR
         throw new ValidationError('Event request has already been processed', { code: 'ALREADY_PROCESSED' });
       }
 
+      if (status === 'APPROVED') {
+        await lockEventConflictScope(client, { clientId, employeeId: eventRequest.user_id, date: eventRequest.event_date });
+        const conflictingCheckin = await findConflictingCheckin(client, { clientId, employeeId: eventRequest.user_id, date: eventRequest.event_date });
+        if (conflictingCheckin) {
+          throw new ConflictError(
+            'Impossibile approvare: esiste già un check-in registrato per questa data',
+            'EVENT_DATE_CONFLICT',
+            {
+              conflicting_checkin_id: conflictingCheckin.id,
+              conflicting_checkin_timestamp: conflictingCheckin.timestamp,
+              conflicting_checkin_type: conflictingCheckin.type,
+            }
+          );
+        }
+      }
+
       const updateResult = await client.query(
         `UPDATE event_requests
          SET status = $1, approved_by = $2::uuid, approved_at = NOW(), rejection_reason = $3, updated_at = NOW()

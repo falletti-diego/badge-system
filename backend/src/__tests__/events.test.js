@@ -291,7 +291,10 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
             status: 'PENDING',
           }],
         })
-        .mockResolvedValueOnce({ rows: [] });
+        .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
+        .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
+        .mockResolvedValueOnce({ rows: [] }) // findConflictingCheckin — no conflict
+        .mockResolvedValueOnce({ rows: [] }); // UPDATE affects no rows (race)
 
       const res = await request(app)
         .put(`/api/v1/events/${TEST_EVENT_ID}/approve`)
@@ -301,8 +304,8 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('VALIDATION_ERROR');
       expect(res.body.message).toBe('Event request has already been processed');
-      expect(mockPool.query).toHaveBeenCalledTimes(2);
-      expect(mockPool.query.mock.calls[1][0]).toContain('WHERE id = $4::uuid AND status = \'PENDING\'');
+      expect(mockPool.query).toHaveBeenCalledTimes(5);
+      expect(mockPool.query.mock.calls[4][0]).toContain('WHERE id = $4::uuid AND status = \'PENDING\'');
     });
 
     it('lets a manager approve a request for an employee assigned to their site via assigned_sites, even when the employee has no primary site_id set (regression: manager authorization previously checked employees.site_id, which is unset for regular employee rows and caused a false 403)', async () => {
@@ -320,6 +323,9 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
           }],
         })
         .mockResolvedValueOnce({ rows: [{ assigned_sites: [TEST_SITE_ID] }] })
+        .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
+        .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
+        .mockResolvedValueOnce({ rows: [] }) // findConflictingCheckin — no conflict
         .mockResolvedValueOnce({
           rows: [{
             id: TEST_EVENT_ID,
@@ -357,6 +363,9 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
             status: 'PENDING',
           }],
         })
+        .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
+        .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
+        .mockResolvedValueOnce({ rows: [] }) // findConflictingCheckin — no conflict
         .mockResolvedValueOnce({
           rows: [{
             id: TEST_EVENT_ID,
@@ -379,11 +388,11 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
         .send({ status: 'APPROVED' });
 
       expect(res.status).toBe(200);
-      expect(mockPool.query).toHaveBeenCalledTimes(6);
-      const invalidateCallSql = mockPool.query.mock.calls[2][0];
+      expect(mockPool.query).toHaveBeenCalledTimes(9);
+      const invalidateCallSql = mockPool.query.mock.calls[5][0];
       expect(invalidateCallSql).toContain('timesheet_signatures');
       expect(invalidateCallSql).toContain('status = \'invalidated\'');
-      expect(mockPool.query.mock.calls[2][1]).toEqual([TEST_EMPLOYEE_ID, expect.any(Number), expect.any(Number)]);
+      expect(mockPool.query.mock.calls[5][1]).toEqual([TEST_EMPLOYEE_ID, expect.any(Number), expect.any(Number)]);
     });
 
     it('derives the correct month/year for a 1st-of-month event_date regardless of server timezone (regression: event_date must reach invalidateSignatureIfExists as a ::text-cast date string, not a raw pg Date)', async () => {
@@ -409,6 +418,9 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
             status: 'PENDING',
           }],
         })
+        .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
+        .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
+        .mockResolvedValueOnce({ rows: [] }) // findConflictingCheckin — no conflict
         .mockResolvedValueOnce({
           rows: [{
             id: TEST_EVENT_ID,
@@ -430,7 +442,7 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
 
       expect(res.status).toBe(200);
       // month=6 (June), year=2026 — must NOT resolve to month=5 (May)
-      expect(mockPool.query.mock.calls[2][1]).toEqual([TEST_EMPLOYEE_ID, 6, 2026]);
+      expect(mockPool.query.mock.calls[5][1]).toEqual([TEST_EMPLOYEE_ID, 6, 2026]);
     });
 
     it('does NOT touch timesheet_signatures when the request is REJECTED (rejecting never changes computed hours)', async () => {
@@ -469,6 +481,70 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
       // Only SELECT + UPDATE + audit log (SAVEPOINT/INSERT/RELEASE) — no timesheet_signatures call in between
       expect(mockPool.query).toHaveBeenCalledTimes(5);
       expect(mockPool.query.mock.calls.some((call) => call[0].includes('timesheet_signatures'))).toBe(false);
+    });
+
+    it('rejects approval with 409 EVENT_DATE_CONFLICT when a checkin already exists for the event date', async () => {
+      const adminToken = makeToken();
+      mockPool.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: TEST_EVENT_ID,
+            client_id: TEST_CLIENT_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            event_date: todayISO(),
+            start_time: '08:00:00',
+            end_time: '18:00:00',
+            status: 'PENDING',
+          }],
+        })
+        .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
+        .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
+        .mockResolvedValueOnce({ rows: [{ id: 'checkin-1', timestamp: todayISO(), type: 'IN' }] }); // conflicting checkin found
+
+      const res = await request(app)
+        .put(`/api/v1/events/${TEST_EVENT_ID}/approve`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'APPROVED' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('EVENT_DATE_CONFLICT');
+      expect(res.body.details.conflicting_checkin_id).toBe('checkin-1');
+    });
+
+    it('does not check for a conflicting checkin when REJECTING (only APPROVED needs the check)', async () => {
+      const adminToken = makeToken();
+      mockPool.query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: TEST_EVENT_ID,
+            client_id: TEST_CLIENT_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            event_date: todayISO(),
+            start_time: '08:00:00',
+            end_time: '18:00:00',
+            status: 'PENDING',
+          }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{
+            id: TEST_EVENT_ID,
+            client_id: TEST_CLIENT_ID,
+            user_id: TEST_EMPLOYEE_ID,
+            event_date: todayISO(),
+            status: 'REJECTED',
+          }],
+        })
+        .mockResolvedValueOnce({ rows: [] }) // logAudit: SAVEPOINT
+        .mockResolvedValueOnce({ rows: [] }) // logAudit: INSERT INTO audit_log
+        .mockResolvedValueOnce({ rows: [] }); // logAudit: RELEASE SAVEPOINT
+
+      const res = await request(app)
+        .put(`/api/v1/events/${TEST_EVENT_ID}/approve`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'REJECTED' });
+
+      expect(res.status).toBe(200);
+      expect(mockPool.query).toHaveBeenCalledTimes(5);
     });
   });
 
