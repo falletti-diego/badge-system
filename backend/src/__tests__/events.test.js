@@ -382,15 +382,16 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
       expect(mockPool.query.mock.calls[2][1]).toEqual([TEST_EMPLOYEE_ID, expect.any(Number), expect.any(Number)]);
     });
 
-    it('derives the correct month/year for a 1st-of-month event_date regardless of server timezone (regression: pg DATE columns parse to local-midnight, not UTC-midnight)', async () => {
+    it('derives the correct month/year for a 1st-of-month event_date regardless of server timezone (regression: event_date must reach invalidateSignatureIfExists as a ::text-cast date string, not a raw pg Date)', async () => {
       const adminToken = makeToken();
-      // Mirrors exactly what node-postgres returns for a DATE column: a JS
-      // Date built via new Date(year, monthIndex, day), i.e. LOCAL midnight —
-      // NOT an ISO string, and NOT UTC midnight. Under a negative-UTC-offset
-      // timezone (e.g. anything west of Greenwich, or Europe with certain
-      // DST states), naively reading this with UTC getters shifts the 1st
-      // of the month back into the previous month.
-      const juneFirstAsPgWouldReturnIt = new Date(2026, 5, 1); // June 1 2026, local midnight
+      // Mirrors exactly what the route's ::text-cast SQL returns for a DATE
+      // column: a plain 'YYYY-MM-DD' string. A date-only string is always
+      // parsed as UTC midnight per the Date constructor's spec, so reading
+      // it back with UTC getters is correct regardless of server timezone —
+      // this guarantee only holds if the SQL cast is actually applied; a raw
+      // pg-parsed Date (LOCAL midnight) would misattribute the 1st of the
+      // month to the previous month under a negative-UTC-offset timezone.
+      const juneFirstAsPgWouldReturnIt = '2026-06-01';
 
       mockPool.query
         .mockResolvedValueOnce({

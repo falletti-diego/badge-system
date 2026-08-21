@@ -234,21 +234,11 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveEventR
       // never changes computed hours, and the call is a safe no-op if
       // nothing is signed for that month.
       if (status === 'APPROVED') {
-        // updatedEvent.event_date (a DATE column) is parsed by pg into a JS
-        // Date at LOCAL midnight of that calendar day, not UTC midnight —
-        // invalidateSignatureIfExists does UTC-based month/year math, so
-        // reading it back with UTC getters would misattribute the 1st of a
-        // month to the previous month under any non-UTC server timezone
-        // (verified: Europe/Rome parses '2026-06-01' to 2026-05-31T22:00Z).
-        // Local getters correctly invert the local-midnight construction
-        // regardless of server timezone — same fix as presences.js already
-        // applies via an explicit ::text cast in SQL, done here in JS since
-        // this value only needs to be re-threaded through invalidateSignatureIfExists.
-        const ed = updatedEvent.event_date;
-        const eventDateText = ed instanceof Date
-          ? `${ed.getFullYear()}-${String(ed.getMonth() + 1).padStart(2, '0')}-${String(ed.getDate()).padStart(2, '0')}`
-          : String(ed).slice(0, 10);
-        await invalidateSignatureIfExists(client, updatedEvent.user_id, eventDateText);
+        // updatedEvent.event_date is ::text-cast in the RETURNING clause above
+        // (a plain 'YYYY-MM-DD' string), so it's already safe to pass straight
+        // through to invalidateSignatureIfExists's UTC-based month/year math —
+        // no local-vs-UTC ambiguity, same convention presences.js already uses.
+        await invalidateSignatureIfExists(client, updatedEvent.user_id, updatedEvent.event_date);
       }
 
       await logAudit(client, {

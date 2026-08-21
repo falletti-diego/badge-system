@@ -116,10 +116,10 @@ function timeStringToMinutes(t) {
  * recent by created_at) — callers must pass the same date_from/date_to used for
  * the checkin/smart-working fetches, filtered here.
  *
- * event_date comes back from the API as a Date-serialized ISO string (the DATE
- * column is parsed by pg at LOCAL midnight, then JSON-serialized as UTC) — same
- * shape as smart-working's `date` field, so it's read back with the same
- * utcDateKey() used by mergeWithSmartWorking() above.
+ * event_date comes back from the API as a plain ::text-cast 'YYYY-MM-DD' string
+ * (same convention as smart-working's `date` field) — a date-only string is
+ * always parsed as UTC midnight per the Date constructor's spec, so it's read
+ * back with the same utcDateKey() used by mergeWithSmartWorking() above.
  *
  * The event's duration counts toward the period total the same way a checkin's
  * does, mirroring buildEventDailyEntries() in backend/src/utils/hours.js (approved
