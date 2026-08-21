@@ -193,6 +193,28 @@ describe('Event Request API Endpoints — Response Structure', () => {
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.data)).toBe(true);
     });
+
+    it('accepts date_from/date_to and adds them as ::date filters', async () => {
+      mockPool.query.mockResolvedValueOnce({ rows: [] });
+
+      const res = await request(app)
+        .get('/api/v1/events/my-requests')
+        .query({ date_from: '2026-08-21', date_to: '2026-08-21' });
+
+      expect(res.status).toBe(200);
+      const [sql, params] = mockPool.query.mock.calls[0];
+      expect(sql).toContain('event_date >= $');
+      expect(sql).toContain('event_date <= $');
+      expect(params).toEqual(expect.arrayContaining(['2026-08-21']));
+    });
+
+    it('rejects an invalid date_from format with 400', async () => {
+      const res = await request(app)
+        .get('/api/v1/events/my-requests')
+        .query({ date_from: 'not-a-date' });
+
+      expect(res.status).toBe(400);
+    });
   });
 });
 
