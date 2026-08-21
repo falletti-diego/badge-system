@@ -15,6 +15,7 @@ const { NotFoundError, ValidationError, ForbiddenError, GeofenceError, ConflictE
 const { haversineDistance } = require('../utils/geo');
 const { deleteCacheByPattern } = require('../db/redis');
 const { resolveEmployeeId, resolveSiteId } = require('../utils/resolvers');
+const { lockEventConflictScope, findConflictingEvent } = require('../utils/eventConflict');
 const { buildScopedFilters } = require('../utils/queryScope');
 const { invalidateSignatureIfExists } = require('../utils/timesheetSignature');
 const { todayInTimeZone, dateInTimeZone } = require('../utils/date');
@@ -145,6 +146,19 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
       if (qr_content != null && qr_content !== site.qr_code_content) {
         logger.warn({ action: 'qr_code_invalid_attempt', site_id, employee_id });
         throw new ForbiddenError('QR code does not match this site', 'QR_CODE_INVALID');
+      }
+
+      // 3.45 Event conflict check (mutua esclusione evento↔check-in) — un evento
+      // PENDING o APPROVED per questa data blocca il check-in, per tutti i chiamanti
+      // incluso l'admin. Va prima del geofence (più costoso, richiede GPS) per non
+      // forzare un consenso GPS inutile su un check-in che verrà comunque rifiutato.
+      await lockEventConflictScope(client, { clientId, employeeId: employee_id, date: effectiveEventDate });
+      const conflictingEvent = await findConflictingEvent(client, { clientId, employeeId: employee_id, date: effectiveEventDate });
+      if (conflictingEvent) {
+        throw new ConflictError(
+          `Esiste già un evento (${conflictingEvent.description}) programmato per questa data per questo dipendente`,
+          'EVENT_DATE_CONFLICT'
+        );
       }
 
       // 3.5 Geofence check (Fase C, 2026-08-09) — controllato interamente dai toggle
