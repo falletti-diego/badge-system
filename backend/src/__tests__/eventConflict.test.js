@@ -83,7 +83,7 @@ describe('eventConflict utility', () => {
 
       expect(result).toEqual({ id: 'evt-1', description: 'Corso' });
       expect(client.query.mock.calls[0][0]).toContain('event_requests');
-      expect(client.query.mock.calls[0][0]).toContain("IN ('PENDING', 'APPROVED')");
+      expect(client.query.mock.calls[0][0]).toContain('IN (\'PENDING\', \'APPROVED\')');
       expect(client.query.mock.calls[0][1]).toEqual(['c1', 'e1', '2026-09-01']);
     });
 

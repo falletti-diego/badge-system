@@ -25,7 +25,7 @@ async function lockEventConflictScope(client, { clientId, employeeId, date }) {
   // lock_timeout scoped to this transaction only (reset automatically at
   // COMMIT/ROLLBACK) — without it, a stuck peer transaction would block this
   // one indefinitely.
-  await client.query("SET LOCAL lock_timeout = '3s'");
+  await client.query('SET LOCAL lock_timeout = \'3s\'');
   try {
     await client.query('SELECT pg_advisory_xact_lock($1)', [lockKey]);
   } catch (err) {
