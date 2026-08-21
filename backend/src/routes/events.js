@@ -9,7 +9,7 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../db/pool');
-const { createValidationMiddleware, PostEventRequestSchema, ApproveEventRequestSchema } = require('../middleware/validation');
+const { createValidationMiddleware, PostEventRequestSchema, ApproveEventRequestSchema, GetApprovedEventsSchema } = require('../middleware/validation');
 const { logAudit } = require('../middleware/audit');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
@@ -295,6 +295,87 @@ router.get('/my-requests', requireAuth, async (req, res, next) => {
       user_id: userId,
       count: result.rows.length,
     });
+
+    res.status(200).json({ data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// =====================================================
+// GET /api/v1/events/approved — Approved events for the dashboard presences view
+// Employee is self-scoped like presences.js's /my-summary (not /summary,
+// which forbids the employee role outright). Manager scoping mirrors
+// /summary's own events sub-query: employees assigned to their site
+// (assigned_sites, not employees.site_id — see the assigned_sites fix
+// elsewhere in this file for why site_id alone is unreliable). Admin/viewer
+// see everything client-wide, with optional site_id/employee_id filters.
+// =====================================================
+
+router.get('/approved', requireAuth, createValidationMiddleware(GetApprovedEventsSchema), async (req, res, next) => {
+  const { site_id, employee_id, date_from, date_to } = req.validated.query;
+  const clientId = req.user.client_id;
+  const role = req.user.role;
+  const userSiteId = req.user.site_id;
+  const userEmployeeId = req.user.employee_id;
+
+  try {
+    const params = [clientId];
+    let query = `
+      SELECT er.id, er.user_id, er.event_date::text AS event_date, er.start_time, er.end_time,
+             er.description, e.name AS employee_name
+      FROM event_requests er
+      JOIN employees e ON e.id = er.user_id AND e.active = true
+      WHERE er.client_id = $1::uuid AND er.status = 'APPROVED'
+    `;
+
+    if (role === 'employee') {
+      if (!userEmployeeId) {
+        throw new ForbiddenError('Your account has no employee profile — cannot access this endpoint', 'NO_EMPLOYEE_PROFILE');
+      }
+      if (employee_id && employee_id !== userEmployeeId) {
+        throw new ForbiddenError('You can only access your own data', 'FORBIDDEN_EMPLOYEE');
+      }
+      params.push(userEmployeeId);
+      query += ` AND er.user_id = $${params.length}::uuid`;
+    } else if (role === 'manager') {
+      if (!userSiteId) {
+        throw new ForbiddenError('Manager has no assigned site', 'NO_SITE_ASSIGNED');
+      }
+      if (site_id && site_id !== userSiteId) {
+        throw new ForbiddenError('You can only access data for your assigned site', 'FORBIDDEN_SITE');
+      }
+      params.push(userSiteId);
+      query += ` AND $${params.length}::uuid = ANY(e.assigned_sites)`;
+      if (employee_id) {
+        params.push(employee_id);
+        query += ` AND er.user_id = $${params.length}::uuid`;
+      }
+    } else if (role === 'admin' || role === 'viewer') {
+      if (site_id) {
+        params.push(site_id);
+        query += ` AND $${params.length}::uuid = ANY(e.assigned_sites)`;
+      }
+      if (employee_id) {
+        params.push(employee_id);
+        query += ` AND er.user_id = $${params.length}::uuid`;
+      }
+    } else {
+      throw new ForbiddenError(`Unauthorized role: ${role}`, 'UNAUTHORIZED_ROLE');
+    }
+
+    if (date_from) {
+      params.push(date_from);
+      query += ` AND er.event_date >= $${params.length}::date`;
+    }
+    if (date_to) {
+      params.push(date_to);
+      query += ` AND er.event_date <= $${params.length}::date`;
+    }
+
+    query += ' ORDER BY er.event_date DESC LIMIT 500';
+
+    const result = await pool.query(query, params);
 
     res.status(200).json({ data: result.rows });
   } catch (error) {

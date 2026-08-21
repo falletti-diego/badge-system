@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import apiClient from '../../../services/apiClient';
+import { mergeCheckinsWithEvents } from '../utils/presenceEvents';
 
 export const usePresences = (filters = {}) => {
   const [data, setData] = useState({ rows: [], total: 0 });
@@ -25,10 +26,28 @@ export const usePresences = (filters = {}) => {
       setLoading(true);
       setError(null);
 
-      const response = await apiClient.get('/api/v1/checkins', { params: filters });
+      const checkinsPromise = apiClient.get('/api/v1/checkins', { params: filters });
+      // Approved events aren't paginated server-side (a client only ever has a
+      // handful per period) — merging them in on every page would duplicate
+      // rows and desync the checkins pagination total, so they're only shown
+      // alongside page 1.
+      const isFirstPage = !filters.offset || filters.offset === 0;
+      const eventsPromise = isFirstPage
+        ? apiClient.get('/api/v1/events/approved', {
+          params: {
+            site_id: filters.site_id,
+            employee_id: filters.employee_id,
+            date_from: filters.date_from,
+            date_to: filters.date_to,
+          },
+        })
+        : Promise.resolve({ data: { data: [] } });
+
+      const [checkinsRes, eventsRes] = await Promise.all([checkinsPromise, eventsPromise]);
+
       setData({
-        rows: response.data.data || [],
-        total: response.data.pagination?.total || 0,
+        rows: mergeCheckinsWithEvents(checkinsRes.data.data || [], eventsRes.data.data || []),
+        total: checkinsRes.data.pagination?.total || 0,
       });
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to fetch presences');

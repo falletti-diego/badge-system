@@ -185,16 +185,18 @@ const PresencesTable = ({ data = { rows: [], total: 0 }, loading = false, curren
                       borderRadius: '4px',
                       fontSize: '0.875rem',
                       fontWeight: 500,
-                      backgroundColor: row.type === 'IN' ? '#EEF6F1' : '#FEF6EC',
-                      color: row.type === 'IN' ? '#2D7049' : '#B45309',
+                      backgroundColor: row.is_event ? '#EAE6FB' : row.type === 'IN' ? '#EEF6F1' : '#FEF6EC',
+                      color: row.is_event ? '#5B3FA0' : row.type === 'IN' ? '#2D7049' : '#B45309',
                       display: 'inline-block',
                     }}
                   >
-                    {row.type || '—'}
+                    {row.is_event ? 'Evento' : (row.type || '—')}
                   </Box>
                 </TableCell>
                 <TableCell sx={{ color: '#6B625A', fontSize: '0.85rem' }}>
-                  {row.type === 'OUT' ? (oreMap.get(row.id) ?? 'N/D (verifica pagina precedente)') : '—'}
+                  {row.is_event
+                    ? row.ore_label
+                    : row.type === 'OUT' ? (oreMap.get(row.id) ?? 'N/D (verifica pagina precedente)') : '—'}
                 </TableCell>
                 <TableCell sx={{ color: '#999999', display: { xs: 'none', md: 'table-cell' } }}>
                   {row.modified_at ? new Date(row.modified_at).toLocaleString() : '—'}

@@ -22,7 +22,8 @@ describe('usePresences — pollStats error visibility (finding #9)', () => {
   });
 
   it('imposta error quando il poll in background fallisce', async () => {
-    apiClient.get.mockResolvedValueOnce({ data: { data: [], pagination: { total: 0 } } }); // fetchPresences iniziale
+    apiClient.get.mockResolvedValueOnce({ data: { data: [], pagination: { total: 0 } } }); // fetchPresences: checkins
+    apiClient.get.mockResolvedValueOnce({ data: { data: [] } }); // fetchPresences: approved events (page 1)
     apiClient.get.mockResolvedValueOnce({ data: { data: {} } }); // fetchStats iniziale
     apiClient.get.mockRejectedValueOnce(new Error('Network Error')); // pollStats dopo 30s
 
@@ -44,7 +45,8 @@ describe('usePresences — pollStats error visibility (finding #9)', () => {
   });
 
   it('auto-guarisce: un poll riuscito dopo un poll fallito ripulisce error', async () => {
-    apiClient.get.mockResolvedValueOnce({ data: { data: [], pagination: { total: 0 } } }); // fetchPresences iniziale
+    apiClient.get.mockResolvedValueOnce({ data: { data: [], pagination: { total: 0 } } }); // fetchPresences: checkins
+    apiClient.get.mockResolvedValueOnce({ data: { data: [] } }); // fetchPresences: approved events (page 1)
     apiClient.get.mockResolvedValueOnce({ data: { data: {} } }); // fetchStats iniziale
     apiClient.get.mockRejectedValueOnce(new Error('Network Error')); // pollStats #1 (30s) fallisce
     apiClient.get.mockResolvedValueOnce({ data: { data: {} } }); // pollStats #2 (60s) riesce

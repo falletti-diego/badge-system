@@ -467,4 +467,125 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
       expect(mockPool.query.mock.calls.some((call) => call[0].includes('timesheet_signatures'))).toBe(false);
     });
   });
+
+  describe('GET /api/v1/events/approved', () => {
+    it('employee sees only their own approved events, scoped by employee_id even without a filter', async () => {
+      const employeeToken = makeToken({ role: 'employee', user_id: TEST_EMPLOYEE_ID, employee_id: TEST_EMPLOYEE_ID, site_id: null });
+      mockPool.query.mockResolvedValueOnce({
+        rows: [{
+          id: TEST_EVENT_ID,
+          user_id: TEST_EMPLOYEE_ID,
+          event_date: '2026-08-21',
+          start_time: '08:00:00',
+          end_time: '18:00:00',
+          description: 'Congresso a Torino',
+          employee_name: 'Maria Rossi',
+        }],
+      });
+
+      const res = await request(app)
+        .get('/api/v1/events/approved')
+        .set('Authorization', `Bearer ${employeeToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0].event_date).toBe('2026-08-21');
+      const [sql, params] = mockPool.query.mock.calls[0];
+      expect(sql).toContain("status = 'APPROVED'");
+      expect(sql).toContain('er.user_id = $2::uuid');
+      expect(params).toContain(TEST_EMPLOYEE_ID);
+    });
+
+    it('employee requesting a different employee_id is rejected with 403 (cannot see others)', async () => {
+      const employeeToken = makeToken({ role: 'employee', user_id: TEST_EMPLOYEE_ID, employee_id: TEST_EMPLOYEE_ID, site_id: null });
+
+      const res = await request(app)
+        .get('/api/v1/events/approved')
+        .query({ employee_id: '550e8400-e29b-41d4-a716-446655440199' })
+        .set('Authorization', `Bearer ${employeeToken}`);
+
+      expect(res.status).toBe(403);
+      expect(mockPool.query).not.toHaveBeenCalled();
+    });
+
+    it('manager sees approved events only for employees assigned to their site (assigned_sites, not site_id)', async () => {
+      const managerToken = makeToken({ role: 'manager', site_id: TEST_SITE_ID, user_id: TEST_MANAGER_ID });
+      mockPool.query.mockResolvedValueOnce({ rows: [] });
+
+      const res = await request(app)
+        .get('/api/v1/events/approved')
+        .set('Authorization', `Bearer ${managerToken}`);
+
+      expect(res.status).toBe(200);
+      const [sql, params] = mockPool.query.mock.calls[0];
+      expect(sql).toContain('$2::uuid = ANY(e.assigned_sites)');
+      expect(params).toContain(TEST_SITE_ID);
+    });
+
+    it('manager filtering by a specific employee_id narrows results to that employee (regression: was silently dropped, showing every employee at the site)', async () => {
+      const managerToken = makeToken({ role: 'manager', site_id: TEST_SITE_ID, user_id: TEST_MANAGER_ID });
+      mockPool.query.mockResolvedValueOnce({ rows: [] });
+
+      const res = await request(app)
+        .get('/api/v1/events/approved')
+        .query({ employee_id: TEST_EMPLOYEE_ID })
+        .set('Authorization', `Bearer ${managerToken}`);
+
+      expect(res.status).toBe(200);
+      const [sql, params] = mockPool.query.mock.calls[0];
+      expect(sql).toContain('$2::uuid = ANY(e.assigned_sites)');
+      expect(sql).toContain('er.user_id = $3::uuid');
+      expect(params).toEqual([TEST_CLIENT_ID, TEST_SITE_ID, TEST_EMPLOYEE_ID]);
+    });
+
+    it('manager requesting a different site_id is rejected with 403', async () => {
+      const managerToken = makeToken({ role: 'manager', site_id: TEST_SITE_ID, user_id: TEST_MANAGER_ID });
+
+      const res = await request(app)
+        .get('/api/v1/events/approved')
+        .query({ site_id: '550e8400-e29b-41d4-a716-446655440199' })
+        .set('Authorization', `Bearer ${managerToken}`);
+
+      expect(res.status).toBe(403);
+      expect(mockPool.query).not.toHaveBeenCalled();
+    });
+
+    it('admin sees all approved events client-wide with no mandatory scope filter', async () => {
+      const adminToken = makeToken();
+      mockPool.query.mockResolvedValueOnce({ rows: [] });
+
+      const res = await request(app)
+        .get('/api/v1/events/approved')
+        .query({ date_from: '2026-08-01', date_to: '2026-08-31' })
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      const [sql, params] = mockPool.query.mock.calls[0];
+      expect(sql).toContain('er.event_date >= $2::date');
+      expect(sql).toContain('er.event_date <= $3::date');
+      expect(params).toEqual([TEST_CLIENT_ID, '2026-08-01', '2026-08-31']);
+    });
+
+    it('only returns APPROVED requests, never PENDING/REJECTED (enforced in SQL)', async () => {
+      const adminToken = makeToken();
+      mockPool.query.mockResolvedValueOnce({ rows: [] });
+
+      await request(app)
+        .get('/api/v1/events/approved')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(mockPool.query.mock.calls[0][0]).toContain("er.status = 'APPROVED'");
+    });
+
+    it('fails closed for an unrecognized role', async () => {
+      const viewerToken = makeToken({ role: 'weird-role' });
+
+      const res = await request(app)
+        .get('/api/v1/events/approved')
+        .set('Authorization', `Bearer ${viewerToken}`);
+
+      expect(res.status).toBe(403);
+      expect(mockPool.query).not.toHaveBeenCalled();
+    });
+  });
 });
