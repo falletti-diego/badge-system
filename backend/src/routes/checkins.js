@@ -487,6 +487,21 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
         throw new NotFoundError('Check-in not found or not assigned to your organization', 'CHECKIN_NOT_FOUND');
       }
 
+      // Event conflict check — solo se la correzione sposta la data del check-in;
+      // una correzione solo di type/note non cambia event_date, nessun controllo
+      // necessario. Vale per tutti i chiamanti (manager/admin), nessun bypass.
+      if (newTimestamp !== undefined) {
+        const correctedDate = dateInTimeZone(new Date(newTimestamp));
+        await lockEventConflictScope(client, { clientId, employeeId: checkin.employee_id, date: correctedDate });
+        const conflictingEvent = await findConflictingEvent(client, { clientId, employeeId: checkin.employee_id, date: correctedDate });
+        if (conflictingEvent) {
+          throw new ConflictError(
+            `Esiste già un evento (${conflictingEvent.description}) programmato per questa data per questo dipendente`,
+            'EVENT_DATE_CONFLICT'
+          );
+        }
+      }
+
       // 2. Verify within 7-day correction window
       const now = new Date();
       const checkinDate = new Date(checkin.timestamp);
