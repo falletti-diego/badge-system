@@ -14,6 +14,7 @@ const { logAudit } = require('../middleware/audit');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
 const { invalidateSignatureIfExists } = require('../utils/timesheetSignature');
+const { lockEventConflictScope, findConflictingCheckin } = require('../utils/eventConflict');
 const { NotFoundError, ValidationError, ForbiddenError, ConflictError } = require('../utils/errors');
 const logger = require('../utils/logger');
 
@@ -43,6 +44,7 @@ router.post('/request', requireAuth, createValidationMiddleware(PostEventRequest
       // 2. Conflict check: block if the employee already has any presence/absence
       // record for this date (checkin, pending/approved leave, active illness,
       // smart-working day, or another pending/approved event request).
+      await lockEventConflictScope(client, { clientId, employeeId: userId, date: event_date });
       const conflictResult = await client.query(
         `SELECT 1 FROM checkins WHERE employee_id = $1::uuid AND timestamp::date = $2::date
          UNION ALL

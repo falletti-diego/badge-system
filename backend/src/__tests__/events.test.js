@@ -135,6 +135,8 @@ describe('Event Request API Endpoints — Conflict Detection', () => {
 
     mockPool.query
       .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] }) // employee lookup
+      .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
+      .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
       .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }); // conflict found
 
     const res = await request(app)
@@ -151,6 +153,8 @@ describe('Event Request API Endpoints — Conflict Detection', () => {
 
     mockPool.query
       .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] }) // employee lookup
+      .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
+      .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
       .mockResolvedValueOnce({ rows: [] }) // no conflict
       .mockResolvedValueOnce({ rows: [{ id: TEST_EVENT_ID, status: 'PENDING' }] }); // insert
 
