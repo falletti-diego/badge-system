@@ -24,6 +24,7 @@ Questa libreria viene usata in **4 punti**, coprendo tutti i percorsi che posson
 
 ```js
 const crypto = require('crypto');
+const { ConflictError } = require('./errors');
 
 /**
  * Serializes any conflict-check-then-write for a given (client, employee, date)
@@ -35,10 +36,26 @@ const crypto = require('crypto');
 async function lockEventConflictScope(client, { clientId, employeeId, date }) {
   const key = `${clientId}:${employeeId}:${date}`;
   const hash = crypto.createHash('sha256').update(key).digest();
-  // hashtext-style 32-bit signed int from the first 4 bytes of a stable hash,
-  // avoids relying on Postgres's own hashtext() (undocumented algorithm).
-  const lockKey = hash.readInt32BE(0);
-  await client.query('SELECT pg_advisory_xact_lock($1)', [lockKey]);
+  // Full 64-bit signed int (pg_advisory_xact_lock(bigint)'s native width) from a
+  // stable hash, avoiding both Postgres's undocumented hashtext() and the much
+  // higher collision rate a 32-bit truncation would have under concurrent load
+  // (birthday-paradox collisions become non-negligible past ~65k distinct keys
+  // at 32 bits; at 64 bits that threshold moves to billions).
+  const lockKey = hash.readBigInt64BE(0).toString(); // pg driver expects a string/number for bigint params, not a raw JS BigInt
+  // lock_timeout scoped to this transaction only (reset automatically at
+  // COMMIT/ROLLBACK) — without it, a stuck peer transaction would block this
+  // one indefinitely, risking the kind of pool exhaustion this project has
+  // hit before (see backend_stability_crisis memory). 3s is generous for a
+  // single-row lookup + lock acquisition.
+  await client.query("SET LOCAL lock_timeout = '3s'");
+  try {
+    await client.query('SELECT pg_advisory_xact_lock($1)', [lockKey]);
+  } catch (err) {
+    if (err.code === '55P03') { // lock_not_available
+      throw new ConflictError('Un\'altra operazione è in corso per questo dipendente e questa data, riprova tra qualche secondo', 'EVENT_CONFLICT_LOCK_BUSY');
+    }
+    throw err;
+  }
 }
 
 /** Returns the conflicting event_requests row (PENDING/APPROVED) for a checkin's date, or null. */
@@ -70,11 +87,13 @@ async function findConflictingCheckin(client, { clientId, employeeId, date }) {
 module.exports = { lockEventConflictScope, findConflictingEvent, findConflictingCheckin };
 ```
 
-Design note: `hashtext()` di Postgres non è documentato come stabile tra versioni maggiori; si usa invece un hash SHA-256 calcolato lato Node e troncato a 32 bit con segno, deterministico e stabile per definizione.
+Design note: `hashtext()` di Postgres non è documentato come stabile tra versioni maggiori; si usa invece un hash SHA-256 calcolato lato Node, deterministico e stabile per definizione, letto come intero a 64 bit con segno (stessa ampiezza nativa di `pg_advisory_xact_lock(bigint)`).
+
+Nota sulla portata del lock: questa funzione protegge solo la race tra `event_requests` e `checkins` (i due lati toccati da questa feature). Il conflitto più ampio già controllato dalla query `UNION ALL` di `events.js POST /request` (che include anche `leave_requests`, `illnesses`, `smart_working_days`) resta esposto alla stessa razza di prima per quelle altre tre tabelle — non peggiorato, ma nemmeno risolto da questo lock. Fuori scope per questa feature.
 
 ### 2. `checkins.js POST /` — blocco in creazione
 
-Nella transazione esistente (`withTransaction`, dentro `checkins.js:62-244`), subito dopo il lookup employee/site (circa riga 123, **prima** del controllo geofence per evitare inutili dialoghi GPS su un check-in che verrà comunque rifiutato):
+Nella transazione esistente (`withTransaction`, dentro `checkins.js:62-244`), tra la riga 148 (fine del controllo QR content) e la riga 150 (inizio del controllo geofence) — **dopo** tutte le validazioni economiche già presenti (ownership, employee attivo, sede, assegnazione, QR content) e **prima** del geofence, che è l'unico controllo costoso/dipendente da GPS in questo handler, per non forzare inutilmente un dialogo di consenso GPS su un check-in che verrà comunque rifiutato:
 
 ```js
 const effectiveDate = dateInTimeZone(occurredAt); // riusa l'util già in uso in questo file
@@ -82,11 +101,13 @@ await lockEventConflictScope(client, { clientId, employeeId: employee.id, date: 
 const conflictingEvent = await findConflictingEvent(client, { clientId, employeeId: employee.id, date: effectiveDate });
 if (conflictingEvent) {
   throw new ConflictError(
-    `Hai un evento (${conflictingEvent.description}) programmato per questa data`,
+    `Esiste già un evento (${conflictingEvent.description}) programmato per questa data per questo dipendente`,
     'EVENT_DATE_CONFLICT'
   );
 }
 ```
+
+(Messaggio in terza persona, non "Hai un evento...": questo stesso path viene attraversato anche quando è un admin a inserire un check-in per conto di un altro dipendente, dove la prima persona sarebbe grammaticalmente sbagliata.)
 
 ### 3. `checkins.js PUT /:id` — blocco in correzione
 
@@ -100,22 +121,31 @@ Nella transazione esistente, prima di eseguire l'`UPDATE ... SET status = 'APPRO
 await lockEventConflictScope(client, { clientId, employeeId: event.user_id, date: event.event_date });
 const conflictingCheckin = await findConflictingCheckin(client, { clientId, employeeId: event.user_id, date: event.event_date });
 if (conflictingCheckin) {
-  const err = new ConflictError(
+  throw new ConflictError(
     'Impossibile approvare: esiste già un check-in registrato per questa data',
-    'EVENT_DATE_CONFLICT'
+    'EVENT_DATE_CONFLICT',
+    {
+      conflicting_checkin_id: conflictingCheckin.id,
+      conflicting_checkin_timestamp: conflictingCheckin.timestamp,
+      conflicting_checkin_type: conflictingCheckin.type,
+    }
   );
-  err.details = {
-    conflicting_checkin_id: conflictingCheckin.id,
-    conflicting_checkin_timestamp: conflictingCheckin.timestamp,
-    conflicting_checkin_type: conflictingCheckin.type,
-  };
-  throw err;
 }
 ```
 
-`ConflictError` non ha oggi un parametro `details` nel costruttore (a differenza di `ValidationError`); si assegna `.details` direttamente sull'istanza — il middleware d'errore (`app.js:260-263`) lo serializza già genericamente per qualunque classe di errore, nessuna modifica lì necessaria. (In alternativa più pulita: estendere il costruttore di `ConflictError` con un 3° parametro opzionale `details = null`, stesso pattern di `ValidationError`. Scelta implementativa lasciata al piano.)
+`ConflictError` (`backend/src/utils/errors.js:45-50`) va esteso con un 3° parametro opzionale `details = null`, stesso pattern già usato da `ValidationError` (`errors.js:16-22`):
 
-Questo espone all'admin/manager, nel body dell'errore 409, il check-in esatto da correggere — chiude il vicolo cieco UX identificato in fase di analisi.
+```js
+class ConflictError extends ApiError {
+  constructor(message, code = 'CONFLICT', details = null) {
+    super(code, message, 409);
+    this.name = 'ConflictError';
+    this.details = details;
+  }
+}
+```
+
+Modifica additiva e retrocompatibile (parametro opzionale in coda, tutte le chiamate esistenti a 2 argomenti restano valide). Il middleware d'errore (`app.js:260-263`) serializza già genericamente `err.details` per qualunque classe, nessuna modifica lì necessaria. Questo espone all'admin/manager, nel body dell'errore 409, il check-in esatto da correggere — chiude il vicolo cieco UX identificato in fase di analisi.
 
 ### 5. `events.js POST /request` — solo aggiunta del lock
 
@@ -127,7 +157,11 @@ Aggiungere `date_from`/`date_to` opzionali alla query esistente (stesso pattern 
 
 ### 7. Mobile — `QRScannerScreen.jsx`
 
-Su mount/focus, chiamata a `GET /events/my-requests?date_from=<oggi>&date_to=<oggi>`; se una riga ha `status` `PENDING` o `APPROVED`, sostituire la vista `<CameraView>` con una schermata di blocco (stesso pattern già usato per il permesso fotocamera negato) che mostra descrizione/orario dell'evento e impedisce lo scan. Il controllo lato server (punto 2) resta comunque come difesa in profondità per eventuali race tra apertura schermata e scan.
+Su mount/focus, chiamata a `GET /events/my-requests?date_from=<oggi>&date_to=<oggi>`. Tre stati espliciti, in aggiunta a quello già esistente per il permesso fotocamera:
+
+- **In corso**: spinner (stesso stile di `LoadingSpinner.jsx` già in uso altrove nell'app) al posto della camera, per evitare un flash camera→blocco mentre la risposta è in transito.
+- **Risposta con un evento `PENDING`/`APPROVED` per oggi**: sostituire `<CameraView>` con una schermata di blocco (stesso pattern del permesso fotocamera negato) che mostra descrizione/orario dell'evento e impedisce lo scan.
+- **Errore di rete/timeout sulla chiamata**: **fail-open** — la fotocamera si apre normalmente, senza messaggio di blocco. Il controllo lato server (punto 2) resta l'autorità finale e blocca comunque con 409 in caso di vero conflitto; non ha senso impedire il check-in, funzione più critica, per un problema di rete su una verifica preventiva secondaria. Lo stesso principio vale per l'eventuale race tra apertura schermata e scan (l'evento potrebbe essere approvato nel frattempo): il 409 del server è sempre la difesa in profondità finale.
 
 ### 8. Web
 
@@ -137,11 +171,13 @@ Nessuna UI dedicata: l'errore 409 viene mostrato con il pattern generico già es
 
 ## Error handling
 
-Tutti i conflitti usano lo stesso error code `EVENT_DATE_CONFLICT`, HTTP 409, coerente con quello già esistente in `events.js POST /request` — è sempre la stessa classe di conflitto vista da lati diversi. `REJECTED` non blocca mai (filtro `status IN ('PENDING', 'APPROVED')` esplicito in tutte le query).
+Tutti i conflitti usano lo stesso error code `EVENT_DATE_CONFLICT`, HTTP 409, coerente con quello già esistente in `events.js POST /request` — è sempre la stessa classe di conflitto vista da lati diversi. Un `lock_timeout` scaduto usa invece il codice distinto `EVENT_CONFLICT_LOCK_BUSY` (409), per non confonderlo con un vero conflitto di dati — il client può ritentare, un vero `EVENT_DATE_CONFLICT` invece no finché la condizione non cambia. `REJECTED` non blocca mai (filtro `status IN ('PENDING', 'APPROVED')` esplicito in tutte le query).
 
 ## Testing
 
-TDD per ciascuno dei 4 punti (2, 3, 4, 5): test che crea un evento PENDING/APPROVED poi tenta un'azione conflittuale → 409 `EVENT_DATE_CONFLICT`; test che verifica che `REJECTED` non blocca; test sul filtro `date_from`/`date_to` di `/my-requests`; test RN per lo stato di blocco in `QRScannerScreen`. Un check-in `IN` aperto già esistente non viene mai toccato automaticamente da nessuno di questi cambi (confermato in fase di analisi) — resta responsabilità del manager/admin gestirlo manualmente se vuole sbloccare un'approvazione.
+TDD per ciascuno dei 4 punti (2, 3, 4, 5): test che crea un evento PENDING/APPROVED poi tenta un'azione conflittuale → 409 `EVENT_DATE_CONFLICT`; test che verifica che `REJECTED` non blocca; test sul filtro `date_from`/`date_to` di `/my-requests`; test RN per i tre stati (loading / bloccato / fail-open su errore rete) in `QRScannerScreen`. Un check-in `IN` aperto già esistente non viene mai toccato automaticamente da nessuno di questi cambi (confermato in fase di analisi) — resta responsabilità del manager/admin gestirlo manualmente se vuole sbloccare un'approvazione.
+
+**Test di concorrenza (obbligatorio, non opzionale):** i test TDD sopra sono sequenziali e non verificano la garanzia principale della Soluzione A — la protezione dalla race condition. Serve almeno un test di integrazione che apra due connessioni/transazioni reali distinte dal pool (non un solo client) per la stessa coppia (employee, date): una che crea un check-in, una che approva un evento in parallelo, verificando che la seconda attenda la prima (o fallisca con `EVENT_CONFLICT_LOCK_BUSY` se il `lock_timeout` di test è molto basso) invece di procedere entrambe senza conflitto rilevato. Senza questo test, il codice "sembra corretto" a un normale code review ma la garanzia di atomicità resta interamente non verificata.
 
 ## Known gap fuori scope (non affrontato in questa iterazione)
 
