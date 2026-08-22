@@ -52,13 +52,25 @@ async function findConflictingEvent(client, { clientId, employeeId, date }) {
   return result.rows[0] || null;
 }
 
-/** Returns the conflicting checkins row for an event's date, or null. */
+/**
+ * Returns the conflicting checkins row for an event's date, or null.
+ *
+ * c.timestamp is TIMESTAMPTZ; casting it to ::date directly would evaluate in
+ * the DB session's timezone (UTC on AWS RDS by default, never set explicitly
+ * anywhere in this codebase), while `date` is always a JS-computed Europe/Rome
+ * calendar date (dateInTimeZone/todayInTimeZone). A raw ::date cast silently
+ * misses conflicts during the ~00:00-02:00 Europe/Rome window, the same bug
+ * class already fixed once for hiring_date (commit 615fcbf, 2026-08-18, see
+ * checkins.js:66-70) — `AT TIME ZONE 'Europe/Rome'` makes the cast agree with
+ * the JS-side calendar date regardless of the session's own timezone.
+ */
 async function findConflictingCheckin(client, { clientId, employeeId, date }) {
   const result = await client.query(
     `SELECT c.id, c.timestamp, c.type
      FROM checkins c
      JOIN employees e ON e.id = c.employee_id
-     WHERE e.client_id = $1::uuid AND c.employee_id = $2::uuid AND c.timestamp::date = $3::date
+     WHERE e.client_id = $1::uuid AND c.employee_id = $2::uuid
+       AND (c.timestamp AT TIME ZONE 'Europe/Rome')::date = $3::date
      LIMIT 1`,
     [clientId, employeeId, date]
   );
