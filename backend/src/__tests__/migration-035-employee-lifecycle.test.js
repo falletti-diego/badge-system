@@ -52,11 +52,89 @@ describe('migration 035 — employee lifecycle columns', () => {
     expect(byName.exit_date.data_type).toBe('date');
   });
 
-  it('backfills hiring_date for existing employees', async () => {
+  // The previous version of this test asserted a GLOBAL invariant — "no
+  // active employee anywhere in the shared test DB has a NULL hiring_date"
+  // — which was never actually true as an ongoing invariant: hiring_date has
+  // no NOT NULL/DB-level constraint (migration 035 only backfilled it once,
+  // for rows that existed at that moment), and application code explicitly
+  // treats a NULL hiring_date as valid for legacy employees (see the
+  // "hiring_date NULL ... never blocks" comment in checkins.js). The
+  // assertion only ever passed by coincidence, when no other concurrently-
+  // running test file happened to have an in-flight active+NULL-hiring_date
+  // employee at that exact instant — and broke for real the first time a
+  // test left one behind (or two real-DB test files raced under Jest's
+  // default parallel workers, both hitting the shared DB at once). Rewritten
+  // to test the actual backfill SQL in isolation, scoped to rows this test
+  // itself creates and cleans up — asserting what migration 035 actually
+  // guarantees (the UPDATE statement's own behavior), not a permanent
+  // property of a live, continuously-written-to shared table.
+  it('backfill UPDATE sets hiring_date to created_at::date for a row with hiring_date IS NULL', async () => {
     if (!dbAvailable) return;
-    const res = await pool.query(
-      'SELECT COUNT(*) FROM employees WHERE active = true AND hiring_date IS NULL'
-    );
-    expect(Number(res.rows[0].count)).toBe(0);
+    const clientId = await makeClient(pool);
+    try {
+      const employeeId = await makeEmployeeWithHiringDate(pool, clientId, null);
+
+      // Exact statement from migrations/035_employee_lifecycle.sql, scoped to
+      // this test's own client so it can never touch another test's data.
+      await pool.query(
+        `UPDATE employees SET hiring_date = created_at::date
+         WHERE hiring_date IS NULL AND client_id = $1`,
+        [clientId]
+      );
+
+      const res = await pool.query(
+        'SELECT hiring_date, created_at::date AS created_date FROM employees WHERE id = $1',
+        [employeeId]
+      );
+      expect(res.rows[0].hiring_date).not.toBeNull();
+      expect(res.rows[0].hiring_date).toEqual(res.rows[0].created_date);
+    } finally {
+      await pool.query('DELETE FROM clients WHERE id = $1', [clientId]);
+    }
+  });
+
+  it('backfill UPDATE never overwrites an already-set hiring_date (idempotent, matches the WHERE hiring_date IS NULL guard)', async () => {
+    if (!dbAvailable) return;
+    const clientId = await makeClient(pool);
+    try {
+      const explicitHiringDate = '2020-01-15';
+      const employeeId = await makeEmployeeWithHiringDate(pool, clientId, explicitHiringDate);
+
+      await pool.query(
+        `UPDATE employees SET hiring_date = created_at::date
+         WHERE hiring_date IS NULL AND client_id = $1`,
+        [clientId]
+      );
+
+      const res = await pool.query(
+        'SELECT hiring_date::text AS hiring_date FROM employees WHERE id = $1',
+        [employeeId]
+      );
+      expect(res.rows[0].hiring_date).toBe(explicitHiringDate);
+    } finally {
+      await pool.query('DELETE FROM clients WHERE id = $1', [clientId]);
+    }
   });
 });
+
+async function makeClient(pool) {
+  const email = `migration-035-${Date.now()}-${Math.random().toString(36).slice(2)}@example.invalid`;
+  const result = await pool.query(
+    `INSERT INTO clients (id, name, email, plan, is_demo)
+     VALUES (uuid_generate_v4(), 'Migration 035 Regression Co', $1, 'starter', false)
+     RETURNING id`,
+    [email]
+  );
+  return result.rows[0].id;
+}
+
+async function makeEmployeeWithHiringDate(pool, clientId, hiringDate) {
+  const email = `migration-035-employee-${Date.now()}-${Math.random().toString(36).slice(2)}@example.invalid`;
+  const result = await pool.query(
+    `INSERT INTO employees (client_id, email, name, role, active, hiring_date)
+     VALUES ($1, $2, 'Migration 035 Regression Employee', 'employee', true, $3)
+     RETURNING id`,
+    [clientId, email, hiringDate]
+  );
+  return result.rows[0].id;
+}
