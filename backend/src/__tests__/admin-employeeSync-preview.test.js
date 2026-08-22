@@ -62,7 +62,7 @@ describe('POST /api/v1/admin/employee-sync/preview', () => {
       `INSERT INTO sites (client_id, name, location, qr_code_content)
        VALUES ($1, $2, 'Via Test 1', $3)
        RETURNING id`,
-      [clientId, name, `QR_${name}_${Date.now()}`]
+      [clientId, name, `QR_${name}_${Date.now()}_${Math.random().toString(36).slice(2)}`]
     );
     return result.rows[0].id;
   }

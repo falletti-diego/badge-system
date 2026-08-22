@@ -68,14 +68,14 @@ describe('migration 038 — invariante site_id ⊆ assigned_sites', () => {
         `INSERT INTO clients (id, name, email, plan, is_demo)
          VALUES (uuid_generate_v4(), 'Trigger Test Co', $1, 'starter', false)
          RETURNING id`,
-        [`trigger-test-${Date.now()}@example.invalid`]
+        [`trigger-test-${Date.now()}-${Math.random().toString(36).slice(2)}@example.invalid`]
       );
       const clientId = clientRow.rows[0].id;
       const siteRow = await client.query(
         `INSERT INTO sites (id, client_id, name, qr_code_content)
          VALUES (uuid_generate_v4(), $1, 'Trigger Test Site', $2)
          RETURNING id`,
-        [clientId, `badge://trigger-test-${Date.now()}`]
+        [clientId, `badge://trigger-test-${Date.now()}-${Math.random().toString(36).slice(2)}`]
       );
       const siteId = siteRow.rows[0].id;
 
@@ -83,7 +83,7 @@ describe('migration 038 — invariante site_id ⊆ assigned_sites', () => {
         `INSERT INTO employees (client_id, email, name, role, site_id, assigned_sites)
          VALUES ($1, $2, 'Trigger Test Employee', 'employee', $3, ARRAY[]::uuid[])
          RETURNING assigned_sites`,
-        [clientId, `trigger-test-emp-${Date.now()}@example.invalid`, siteId]
+        [clientId, `trigger-test-emp-${Date.now()}-${Math.random().toString(36).slice(2)}@example.invalid`, siteId]
       );
 
       expect(empRow.rows[0].assigned_sites).toEqual([siteId]);
@@ -102,23 +102,23 @@ describe('migration 038 — invariante site_id ⊆ assigned_sites', () => {
         `INSERT INTO clients (id, name, email, plan, is_demo)
          VALUES (uuid_generate_v4(), 'Trigger Test Co 2', $1, 'starter', false)
          RETURNING id`,
-        [`trigger-test-2-${Date.now()}@example.invalid`]
+        [`trigger-test-2-${Date.now()}-${Math.random().toString(36).slice(2)}@example.invalid`]
       );
       const clientId = clientRow.rows[0].id;
       const site1 = await client.query(
         `INSERT INTO sites (id, client_id, name, qr_code_content)
          VALUES (uuid_generate_v4(), $1, 'Site Roma', $2) RETURNING id`,
-        [clientId, `badge://trigger-test-roma-${Date.now()}`]
+        [clientId, `badge://trigger-test-roma-${Date.now()}-${Math.random().toString(36).slice(2)}`]
       );
       const site2 = await client.query(
         `INSERT INTO sites (id, client_id, name, qr_code_content)
          VALUES (uuid_generate_v4(), $1, 'Site Milano', $2) RETURNING id`,
-        [clientId, `badge://trigger-test-milano-${Date.now()}`]
+        [clientId, `badge://trigger-test-milano-${Date.now()}-${Math.random().toString(36).slice(2)}`]
       );
       const site3 = await client.query(
         `INSERT INTO sites (id, client_id, name, qr_code_content)
          VALUES (uuid_generate_v4(), $1, 'Site Torino', $2) RETURNING id`,
-        [clientId, `badge://trigger-test-torino-${Date.now()}`]
+        [clientId, `badge://trigger-test-torino-${Date.now()}-${Math.random().toString(36).slice(2)}`]
       );
       const roma = site1.rows[0].id, milano = site2.rows[0].id, torino = site3.rows[0].id;
 
@@ -126,7 +126,7 @@ describe('migration 038 — invariante site_id ⊆ assigned_sites', () => {
         `INSERT INTO employees (client_id, email, name, role, site_id, assigned_sites)
          VALUES ($1, $2, 'Multi Site Employee', 'manager', $3, ARRAY[$3, $4]::uuid[])
          RETURNING id`,
-        [clientId, `multi-site-${Date.now()}@example.invalid`, roma, milano]
+        [clientId, `multi-site-${Date.now()}-${Math.random().toString(36).slice(2)}@example.invalid`, roma, milano]
       );
       const empId = empRow.rows[0].id;
 
@@ -155,7 +155,7 @@ describe('migration 038 — invariante site_id ⊆ assigned_sites', () => {
         `INSERT INTO clients (id, name, email, plan, is_demo)
          VALUES (uuid_generate_v4(), 'Trigger Test Co 3', $1, 'starter', false)
          RETURNING id`,
-        [`trigger-test-3-${Date.now()}@example.invalid`]
+        [`trigger-test-3-${Date.now()}-${Math.random().toString(36).slice(2)}@example.invalid`]
       );
       const clientId = clientRow.rows[0].id;
 
@@ -163,7 +163,7 @@ describe('migration 038 — invariante site_id ⊆ assigned_sites', () => {
         `INSERT INTO employees (client_id, email, name, role, site_id, assigned_sites)
          VALUES ($1, $2, 'Admin No Site', 'admin', NULL, ARRAY[]::uuid[])
          RETURNING site_id, assigned_sites`,
-        [clientId, `admin-no-site-${Date.now()}@example.invalid`]
+        [clientId, `admin-no-site-${Date.now()}-${Math.random().toString(36).slice(2)}@example.invalid`]
       );
 
       expect(empRow.rows[0].site_id).toBeNull();
@@ -187,14 +187,14 @@ describe('migration 038 — invariante site_id ⊆ assigned_sites', () => {
         `INSERT INTO clients (id, name, email, plan, is_demo)
          VALUES (uuid_generate_v4(), 'Trigger Test Co 4', $1, 'starter', false)
          RETURNING id`,
-        [`trigger-test-4-${Date.now()}@example.invalid`]
+        [`trigger-test-4-${Date.now()}-${Math.random().toString(36).slice(2)}@example.invalid`]
       );
       const clientId = clientRow.rows[0].id;
       const siteRow = await client.query(
         `INSERT INTO sites (id, client_id, name, qr_code_content)
          VALUES (uuid_generate_v4(), $1, 'Trigger Test Site 4', $2)
          RETURNING id`,
-        [clientId, `badge://trigger-test-4-${Date.now()}`]
+        [clientId, `badge://trigger-test-4-${Date.now()}-${Math.random().toString(36).slice(2)}`]
       );
       const siteId = siteRow.rows[0].id;
 
@@ -202,7 +202,7 @@ describe('migration 038 — invariante site_id ⊆ assigned_sites', () => {
         `INSERT INTO employees (client_id, email, name, role, site_id, assigned_sites)
          VALUES ($1, $2, 'Null Assigned Sites Employee', 'employee', $3, NULL)
          RETURNING assigned_sites`,
-        [clientId, `null-assigned-sites-${Date.now()}@example.invalid`, siteId]
+        [clientId, `null-assigned-sites-${Date.now()}-${Math.random().toString(36).slice(2)}@example.invalid`, siteId]
       );
 
       expect(empRow.rows[0].assigned_sites).toEqual([siteId]);
