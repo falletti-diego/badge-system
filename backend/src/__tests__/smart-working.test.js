@@ -19,6 +19,7 @@ jest.mock('../middleware/auth', () => ({
 const { pool } = require('../db/pool');
 const { withTransaction } = require('../middleware/db-transaction');
 const smartWorkingRouter = require('../routes/smartWorking');
+const { todayInTimeZone } = require('../utils/date');
 
 const TEST_CLIENT_ID = '550e8400-e29b-41d4-a716-446655440001';
 const TEST_EMPLOYEE_ID = '84ab2a73-aedd-4514-b9d4-4496a968e409';
@@ -58,13 +59,17 @@ describe('Smart Working API', () => {
       const mockRow = {
         id: uuidv4(),
         employee_id: TEST_EMPLOYEE_ID,
-        date: '2026-07-12',
+        date: todayInTimeZone(),
         created_at: new Date(),
       };
 
       withTransaction.mockImplementation(async (callback) => {
         const mockClient = {
-          query: jest.fn().mockResolvedValueOnce({ rows: [mockRow] }),
+          query: jest.fn()
+            .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
+            .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
+            .mockResolvedValueOnce({ rows: [] }) // findConflictingEvent — no conflict
+            .mockResolvedValueOnce({ rows: [mockRow] }), // INSERT
         };
         return callback(mockClient);
       });
@@ -78,13 +83,54 @@ describe('Smart Working API', () => {
       expect(res.body.message).toMatch(/Smart Working/);
     });
 
+    test('rejects with 409 EVENT_DATE_CONFLICT when a PENDING event exists for today', async () => {
+      withTransaction.mockImplementation(async (callback) => {
+        const mockClient = {
+          query: jest.fn()
+            .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
+            .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
+            .mockResolvedValueOnce({ rows: [{ id: 'evt-1', description: 'Corso di formazione', status: 'PENDING' }] }), // findConflictingEvent — conflict
+        };
+        return callback(mockClient);
+      });
+
+      const app = createApp();
+      const res = await request(app).post('/api/v1/smart-working').send({});
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('EVENT_DATE_CONFLICT');
+      expect(res.body.message).toMatch(/Corso di formazione/);
+    });
+
+    test('rejects with 409 EVENT_DATE_CONFLICT when an APPROVED event exists for today', async () => {
+      withTransaction.mockImplementation(async (callback) => {
+        const mockClient = {
+          query: jest.fn()
+            .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
+            .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
+            .mockResolvedValueOnce({ rows: [{ id: 'evt-1', description: 'Congresso a Torino', status: 'APPROVED' }] }), // findConflictingEvent — conflict
+        };
+        return callback(mockClient);
+      });
+
+      const app = createApp();
+      const res = await request(app).post('/api/v1/smart-working').send({});
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('EVENT_DATE_CONFLICT');
+    });
+
     test('rejects a duplicate declaration for the same day with a clean 409, not a 500', async () => {
       const uniqueViolation = new Error('duplicate key value violates unique constraint');
       uniqueViolation.code = '23505';
 
       withTransaction.mockImplementation(async (callback) => {
         const mockClient = {
-          query: jest.fn().mockRejectedValueOnce(uniqueViolation),
+          query: jest.fn()
+            .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
+            .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
+            .mockResolvedValueOnce({ rows: [] }) // findConflictingEvent — no conflict
+            .mockRejectedValueOnce(uniqueViolation), // INSERT
         };
         return callback(mockClient);
       });
@@ -110,19 +156,21 @@ describe('Smart Working API', () => {
       const mockRow = {
         id: uuidv4(),
         employee_id: TEST_EMPLOYEE_ID,
-        date: '2026-07-12',
+        date: todayInTimeZone(),
         created_at: new Date(),
       };
-      let capturedQuery;
-      let capturedParams;
+      let insertParams;
 
       withTransaction.mockImplementation(async (callback) => {
         const mockClient = {
-          query: jest.fn().mockImplementationOnce((query, params) => {
-            capturedQuery = query;
-            capturedParams = params;
-            return Promise.resolve({ rows: [mockRow] });
-          }),
+          query: jest.fn()
+            .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
+            .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
+            .mockResolvedValueOnce({ rows: [] }) // findConflictingEvent — no conflict
+            .mockImplementationOnce((query, params) => {
+              insertParams = params;
+              return Promise.resolve({ rows: [mockRow] });
+            }),
         };
         return callback(mockClient);
       });
@@ -132,10 +180,11 @@ describe('Smart Working API', () => {
         .post('/api/v1/smart-working')
         .send({ date: '2020-01-01', employee_id: 'some-other-uuid' });
 
-      // The INSERT must use CURRENT_DATE server-side and the authenticated employee_id only —
-      // the attacker-supplied date/employee_id in the body must never reach the query.
-      expect(capturedQuery).toMatch(/CURRENT_DATE/);
-      expect(capturedParams).toEqual([TEST_CLIENT_ID, TEST_EMPLOYEE_ID]);
+      // The INSERT's date param must be the server-computed Europe/Rome "today",
+      // and the employee_id must be the authenticated one — the attacker-supplied
+      // date/employee_id in the body must never reach the query.
+      expect(insertParams).toEqual([TEST_CLIENT_ID, TEST_EMPLOYEE_ID, todayInTimeZone()]);
+      expect(insertParams[2]).not.toBe('2020-01-01');
     });
   });
 
