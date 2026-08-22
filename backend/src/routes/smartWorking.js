@@ -5,8 +5,9 @@
  *
  * Auto-confirmed (no manager approval), same pattern as illnesses (Malattia).
  * Unlike checkins, there is no site verification — smart working is by definition remote.
- * The date is always computed server-side (NOW()), never accepted from the client,
- * so a device with a manipulated clock/timezone cannot declare a different day.
+ * The date is always computed server-side (todayInTimeZone, Europe/Rome), never
+ * accepted from the client, so a device with a manipulated clock/timezone cannot
+ * declare a different day.
  */
 
 const express = require('express');
