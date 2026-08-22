@@ -6,6 +6,41 @@
 
 ---
 
+## Session 107 — PR #7 code review, fix timezone, indagine e fix di 5 root cause di flakiness pre-esistente, merge su `main` (22 Agosto 2026)
+
+### Contesto
+Continuazione della feature "Mutua esclusione Eventi/Training vs QR check-in" (PR #7, già implementata e pushata in una sessione precedente). Questa sessione copre: `/code-review:code-review`, fix del bug trovato, indagine approfondita richiesta esplicitamente dall'utente sulla flakiness pre-esistente della suite, merge, e un miglioramento della checklist di code review.
+
+### `/code-review:code-review` su PR #7 — bug timezone confermato e fixato
+5 agenti paralleli, 1 finding reale (score 85): `eventConflict.js`/`findConflictingCheckin` filtrava con `c.timestamp::date = $3::date` — cast valutato nel timezone di **sessione DB** (UTC su AWS RDS, mai esplicitamente settato Europe/Rome da nessuna parte nel codebase) invece che nel timezone applicativo. Seconda occorrenza esatta della stessa classe di bug già fixata in `checkins.js` (commit `615fcbf`, Session 105). Fix: `(c.timestamp AT TIME ZONE 'Europe/Rome')::date`, con test di regressione (`eventConflict-timezone.test.js`) che forza esplicitamente `SET timezone = 'UTC'` sulla connessione — necessario perché il Postgres locale gira per coincidenza già in Europe/Rome, quindi senza quel `SET` il test sarebbe passato anche col bug presente. Commit `89986b3`.
+
+### Indagine approfondita sulla flakiness pre-esistente — via `/grilling`, "Soluzione B"
+Richiesta esplicita dell'utente: analisi critica, tabella problema/criticità/soluzione, soluzioni "efficienti e irreversibili". Root cause strutturale: 40+ file di test condividono un solo Postgres (`badge_system_test`), eseguiti in parallelo dai worker Jest di default — asserzioni non scoped alle righe create dal test dipendono da cosa fanno ALTRI file test in quell'istante. Tre opzioni presentate via `/grilling` (A: solo fix puntuali, B: fix mirati + split Jest a due batch, C: isolamento DB completo per-worker) — **scelta B**, motivata come compromesso tra costo di implementazione e robustezza strutturale, senza il costo/complessità di un DB-per-worker.
+
+Interventi:
+- `migration-035-employee-lifecycle.test.js` riscritto — il test asseriva un invariante globale (`hiring_date` mai NULL per attivi) **mai realmente garantito** da schema o app, passava solo per coincidenza storica dei dati esistenti. Riscritto per testare la SQL della migration in isolamento su dati auto-creati.
+- `backend/scripts/run-tests.js` (nuovo): due batch — parallelo (file scoped) + serializzato `--runInBand` (7 file a stato genuinamente globale per design, es. cap demo cross-tenant, non scopeabile).
+- Documentato come **Pattern 5** in `CLAUDE.md`. Commit `76aea8e`.
+
+### Round finale — stesso rigore sul residuo `shifts.test.js`, 3 root cause aggiuntive trovate
+Richiesta esplicita: "indaga anche quello ora... svolgi tutti i run che reputi necessari". Decine di run, inclusi stress-test con doppia invocazione concorrente di `npm test` in background. `shifts.test.js` **non si è mai più riprodotto** in nessun run successivo, ma lo stress ha fatto emergere 3 bug reali distinti (mai correlati a `shifts.test.js`):
+1. **Fixture UNIQUE non abbastanza uniche**: 6 file/13+ occorrenze generavano valori per colonne UNIQUE con solo `Date.now()` (nessun suffisso random) — collisione se due INSERT cadono nello stesso millisecondo.
+2. **`auth-refresh-first-use.test.js`**: email hardcoded non uniche su 3 `describe` block, più mutazione in-place della riga demo condivisa "Pippo" senza cleanup di `used_tokens`/`revoked_tokens` — si rompeva anche rieseguendo lo stesso file due volte di fila **senza alcuna concorrenza reale**. Un advisory lock di sessione (`pg_advisory_lock`/`pg_advisory_unlock`) aggiunto per la mutazione non bastava da solo — verificato con debug instrumentation temporanea (PID+timestamp) che il lock serializzava correttamente, prima di scoprire che il vero bug era il cleanup mancante dei token derivati.
+3. **`jest.globalSetup.js`**: cancellava incondizionatamente `revoked_tokens`/`used_tokens` a ogni invocazione — poteva cancellare lo stato di una seconda invocazione `npm test` genuinamente concorrente sullo stesso DB locale. Reso age-scoped (soglia 6 minuti, sopra il TTL di 5 minuti del blocco di revoca temporaneo in `routes/auth.js:389-390`).
+
+Tutti e 3 fixati con verifica TDD dove applicabile. Commit `ae909cd`.
+
+**Residuo non risolto, riportato esplicitamente**: 2 fallimenti singoli non riproducibili emersi a fine stress-test (`admin-employeeSync-template.test.js`, `onboarding-invite.test.js`) — sempre verdi in isolamento, mai ricomparsi in run successivi. Valutati come artefatti di un regime di stress-test artificialmente avversario (decine di suite complete a raffica sulla stessa macchina in poco tempo), strutturalmente impossibile in CI reale (ogni job GitHub Actions ha un container Postgres effimero dedicato, mai condiviso tra run). Lasciati aperti con motivazione esplicita, non dichiarati falsamente risolti.
+
+### Merge e checklist di code review migliorata
+`/superpowers:finishing-a-development-branch`: 2 run completi `npm test` puliti prima del merge. **Squash-merge su `main`** via `gh pr merge --squash` (commit `ca89fb95`), seguendo la convenzione `merge: ...` già in uso nel repo (verificata sui merge commit delle PR precedenti prima di scegliere squash vs merge-commit vero).
+
+Checklist di code review migliorata su richiesta esplicita: aggiunto **Pattern 6** (timezone-naive `::date` su TIMESTAMPTZ — seconda occorrenza reale della stessa classe di bug, con grep di prevenzione) e ristrutturata la sezione "Code Review Checklist" da un'unica checklist scoped solo ad Auth & Config in **3 checklist per trigger**: Auth & Config Changes (esistente), Timestamp/Date Comparisons (nuova), Real-Postgres Test Files (nuova, richiama esplicitamente Pattern 5).
+
+**Stato:** PR #7 ✅ mergeata su `main` (deploy backend/web in produzione ancora da fare, non eseguito in questa sessione). Bug Session 106 (durata evento non visibile nelle Presenze) ancora aperto.
+
+---
+
 ## Session 106 — Feature Eventi/Training, code review con 1 bug fixato, QA manuale, merge su `main` (20 Agosto 2026)
 
 ### Contesto
