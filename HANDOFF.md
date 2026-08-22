@@ -1,3 +1,68 @@
+# Badge System — Session 108 Handoff
+
+**Date:** 2026-08-22
+**Session:** 108 — OTA di produzione pubblicato per la mutua esclusione Eventi/Training vs QR check-in, verificato end-to-end senza nuova build nativa
+**Status:** ✅ **OTA pubblicato e verificato crittograficamente** (canale `production`, runtime `1.0.0`, commit `a06d8bb`). Verifica visiva finale su device reale (force-quit + riapertura) resta da fare dall'utente.
+
+---
+
+## Goal (Session 108)
+
+L'utente ha chiesto conferma se la mobile app avesse recepito la feature "Eventi/Training" e la mutua esclusione QR↔evento (PR #7), e se servisse una nuova build. Dopo aver confermato che il codice era mergiato ma non ancora distribuito, l'utente ha chiesto di pubblicare l'OTA con verifica rigorosa, essendo la prima volta per questo tipo di cambio.
+
+## Current Progress
+
+**Verifica preliminare**: letto direttamente `main` (non assunto) — `frontend-mobile/src/screens/checkin/QRScannerScreen.jsx` contiene il pre-check evento della mutua esclusione, introdotto nello squash-merge `ca89fb9` di PR #7 (22/08). Confrontando le date: **build 37** (TestFlight, testata con successo in Session 106) risale al **20/08**, prima che PR #7 esistesse — non copre la mutua esclusione.
+
+**Analisi "serve build nativa o basta OTA?"**: `git show ca89fb9 --stat` mostra che lato mobile il diff tocca **solo** `QRScannerScreen.jsx` (46 righe) — nessun file nativo (`app.json`, `package.json`, config iOS/Android). E build 37 ha già `expo-updates` configurato correttamente (verificato in Session 106, a differenza del problema del build 16). Condizioni per un OTA sicuro soddisfatte.
+
+**Problema trovato prima di pubblicare**: il checkout locale di `main` era indietro di 10 commit rispetto a `origin/main` E aveva 1 commit locale mai pushato — pubblicare da lì avrebbe spedito codice stale (senza la mutua esclusione) o rischiato di perdere quel commit locale. Risolto creando un **worktree temporaneo** puntato direttamente su `origin/main`, isolato dal checkout principale.
+
+**Verifica pre-pubblicazione**: suite di test mobile completa nel worktree pulito — **20/20 suite, 157/157 test verdi**, inclusa la sezione "event pre-check" (6/6).
+
+**Pubblicazione**: `eas update --branch production --message "..."` dal worktree pulito.
+```
+Branch             production
+Runtime version    1.0.0
+iOS update ID      01a0292e-52f6-7899-ac9f-a0568bb9af0f
+Android update ID  01a0292e-52f6-7141-bd87-c647e845dd8d
+Commit             a06d8bb63c3e6cf17661be0e4a24dc88898db0df
+```
+
+**Verifica end-to-end in 3 passi** (richiesta esplicita dell'utente, prima volta per questo tipo di verifica):
+1. **Manifest come device reale**: `curl` su `u.expo.dev` con gli header esatti di un client Expo Updates (`expo-platform: ios`, `expo-runtime-version: 1.0.0` — la stessa di build 37, `expo-channel-name: production`) → risposta `expo-update-id: 01a0292e-52f6-7899-ac9f-a0568bb9af0f`, esattamente l'update appena pubblicato.
+2. **Hash crittografico**: calcolato lo SHA-256 (base64url) del bundle JS locale compilato durante il publish e confrontato byte-per-byte con l'hash `launchAsset` nel manifest — **match esatto** su iOS (`Li_satdwFNofjEg_zFeAWkqAV5uDsbQg-vy-WCXCEd0`) e Android (`A6w8BA1BrgcU-wKynGGM5SjZgchL3r71UuZe8pwDWNM`).
+3. **Contenuto**: grep sul bundle compilato (bytecode Hermes, non testo semplice — ma le stringhe letterali restano leggibili) per le stringhe UI distintive della mutua esclusione (`"Hai un evento programmato"`, `"Verifica eventi in corso"`) — **presenti in entrambe le piattaforme**.
+
+Catena chiusa: un device reale sull'app installata (build 37, runtime 1.0.0, canale production) che chiede un manifest riceve esattamente questo bundle, e quel bundle contiene il codice della mutua esclusione — non solo "il comando `eas update` è andato a buon fine" ma prova diretta sul contenuto specifico.
+
+**Problema collaterale trovato e recuperato**: il checkout locale di `main` aveva un commit di documentazione mai pushato (Session 105 closeout — dettagli produzione/migration/CI mai arrivati su `origin/main`). Content genuinamente non presente altrove (verificato confrontando con le sezioni Session 105 già su `origin/main`) — recuperato e applicato manualmente sul branch di sync insieme a questo aggiornamento, per non perdere quell'informazione.
+
+**Worktree temporaneo rimosso** a fine lavoro (`git worktree remove --force` + `git worktree prune`).
+
+## What Worked
+
+- **Non fidarsi del solo "Published!" della CLI**: la stessa lezione di Session 106 (un OTA sembrava pubblicato correttamente ma non arrivava sul device reale, causa binario senza `expo-updates`) ha motivato la verifica in 3 passi invece di dichiarare fatto dopo il solo comando di publish.
+- **Hash crittografico invece di solo ID**: l'update ID nel manifest da solo prova che il manifest giusto viene servito, ma l'hash del bundle prova che il CONTENUTO specifico (comprese le stringhe della feature) è esattamente quello appena compilato — due livelli di prova indipendenti.
+- **Worktree temporaneo per pubblicare da stato certo**: invece di rischiare di pubblicare da un checkout locale stale/divergente, un worktree pulito puntato su `origin/main` ha garantito che il codice pubblicato fosse esattamente quello mergiato, senza toccare lo stato del checkout principale.
+- **Notare e recuperare il commit doc mai pushato** invece di scartarlo silenziosamente durante il sync — conteneva informazioni di produzione reali (migration, fix CI, health check) non presenti altrove.
+
+## What Didn't Work / Da tenere a mente
+
+- **Gli strumenti CLI locali di `expo`/`eas` che invocano `expo config --json`** (`eas build:list`, `eas update:list`) falliscono silenziosamente (nessun output, exit 1) in questo repo per lo stesso bug già documentato in `CLAUDE.md` (path del progetto con spazi e `&`) — solo `eas whoami` e `eas update` (che non passano dallo stesso path di risoluzione config) funzionano. Non ho potuto interrogare direttamente la cronologia build/update, ho dovuto ricostruirla da `git log` + pubblicazione diretta.
+- **`curl` diretto sugli asset URL del manifest restituisce "Unauthorized asset request"** anche con gli stessi header del manifest request — gli asset richiedono un token legato alla sessione del client reale, non replicabile con un semplice `curl`. Bypassato verificando l'hash sul bundle locale invece di scaricare l'asset remoto.
+- **Il checkout locale di `main` può divergere silenziosamente da `origin/main`** dopo che una worktree isolata fa squash-merge via `gh pr merge` — il checkout principale non si aggiorna automaticamente. Da controllare (`git fetch` + `git status`) prima di qualunque operazione che pubblica/deploya da `main` in locale.
+
+## Next Steps (in ordine di urgenza)
+
+1. **Verifica visiva finale sul device reale**: force-quit + riapertura app per confermare che l'OTA si applica e il pulsante/comportamento di mutua esclusione compare — la verifica fatta finora è tecnica (manifest/hash/contenuto), non ancora una conferma visiva dell'utente.
+2. **🔴 Ancora aperto da Session 106**: durata/giorno evento non compare correttamente nelle Presenze dopo l'approvazione manager.
+3. **Deploy backend/web in produzione** — PR #7 mergeata su `main` ma non ancora deployata su `api.dataxiom.it`/`badge.dataxiom.it`.
+4. Se `admin-employeeSync-template.test.js` o `onboarding-invite.test.js` falliscono di nuovo in CI reale, investigare seriamente.
+5. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 107/106 sotto.
+
+---
+
 # Badge System — Session 107 Handoff
 
 **Date:** 2026-08-22
@@ -113,8 +178,8 @@ Continuazione di una sessione precedente in cui la feature "Eventi/Training" era
 # Badge System — Session 105 Handoff
 
 **Date:** 2026-08-19
-**Session:** 105 — Test manuale utente del piano Session 104, 3 bug fixati, nuova regola "manager obbligatorio", merge su `main`
-**Status:** ✅ **Branch `worktree-new-employee-fields` mergeato su `main` (locale).** Push da confermare separatamente con l'utente.
+**Session:** 105 — Test manuale utente del piano Session 104, 3 bug fixati, nuova regola "manager obbligatorio", merge+push su `main`, live in produzione
+**Status:** ✅ **Sessione chiusa. Feature interamente live in produzione**, verificata (`api.dataxiom.it/health` → `database: connected`, `badge.dataxiom.it` → `200`).
 
 ---
 
@@ -142,7 +207,11 @@ Implementato in `backend/src/middleware/validation.js` (schema), `backend/src/se
 
 **Verifica finale**: `/code-review:code-review` (5 agenti paralleli, adattato per un commit locale senza PR GitHub) — CLAUDE.md compliance ok, nessun bug, nessuna regressione storica, nessun test indebolito; **1 solo finding reale**: un commento in `computeDiff.js` (`resolveManagerId`) ormai impreciso dopo il cambio — corretto, commit `fefe021`. `/test-all`: backend 107/108 suite (800/814 test), frontend 37/37 file (309/310 test) — entrambi verdi.
 
-**Merge**: `worktree-new-employee-fields` → `main`, locale (nessun push automatico).
+**Merge**: `worktree-new-employee-fields` → `main`, fast-forward `00809b2`→`f0d3072`, worktree e branch rimossi (`git worktree unlock`+`remove`, `git branch -d`).
+
+**Migration in produzione**: `040_add_manager_id_to_employees.sql` applicata via SSH su EC2 prima del push, perché `deploy-to-ec2.yml` non esegue migration automaticamente (solo pull immagine + restart container) — deployare prima della migration avrebbe causato 500 su ogni endpoint employee/check-in.
+
+**Push su `origin/main`**: primo tentativo (`f0d3072`) fallito su `CI/CD Pipeline` e `Build & Push Backend to ECR`, stesso errore ESLint reale e pre-esistente in `backend/src/routes/admin/employees.js:54` (template literal a riga singola senza interpolazione — mai emerso prima perché il branch aveva ~35 commit mai passati da CI e `/test-all` non include il lint). Diagnosticato via `gh run view --log-failed`, fixato riformattando la query multi-riga, verificato in locale (`npm run lint` pulito), committato (`1695de4`), ripushato. Secondo giro: **CI/CD Pipeline ✅, Build & Push Backend to ECR ✅, Deploy to EC2 ✅**. Verifica finale in produzione: `api.dataxiom.it/health` → `{"status":"ok","database":"connected"}`, `badge.dataxiom.it` → `200`.
 
 ## What Worked
 
@@ -158,10 +227,7 @@ Implementato in `backend/src/middleware/validation.js` (schema), `backend/src/se
 
 ## Next Steps (in ordine di urgenza)
 
-1. **Push su `origin/main`** — non ancora fatto (merge locale eseguito, push da confermare esplicitamente con l'utente, in linea con la policy del progetto).
-2. **Rimuovere il worktree** `new-employee-fields` (branch ormai mergeato) dopo il push.
-3. **Applicare la migration `040`** (colonna `manager_id`) anche in staging/produzione al momento del deploy.
-4. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 104/103 sotto.
+Nessuna azione residua per questa feature — merge, migration, push e deploy tutti completati e verificati live. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 104/103 sotto (in particolare: istruzione correttiva Cowork mai incollata, `CLAUDE.md` payroll stale, piano lista contatti verificata non eseguito, S.27/S.28/S.29 GDPR, ANDROID.1/1b).
 
 ---
 
