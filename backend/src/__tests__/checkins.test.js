@@ -109,6 +109,9 @@ describe('POST /api/checkins — success', () => {
       .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] }) // employee
       .mockResolvedValueOnce({ rows: [{ id: TEST_SITE_ID, name: 'Milano Centro' }] }) // site
       .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }) // assignment
+      .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
+      .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingEvent — no conflict
       .mockResolvedValueOnce({
         rows: [{
           id: TEST_CHECKIN_ID,
@@ -146,6 +149,9 @@ describe('POST /api/checkins — success', () => {
       .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] }) // employee
       .mockResolvedValueOnce({ rows: [{ id: TEST_SITE_ID, name: 'Milano Centro' }] }) // site
       .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }) // assignment
+      .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
+      .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingEvent — no conflict
       .mockResolvedValueOnce({
         rows: [{
           id: TEST_CHECKIN_ID,

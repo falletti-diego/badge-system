@@ -85,7 +85,7 @@ describe('POST /api/v1/checkins — employee inserito con site_id ma assigned_si
       `INSERT INTO sites (id, client_id, name, qr_code_content)
        VALUES (uuid_generate_v4(), $1, 'Backfill E2E Site', $2)
        RETURNING id`,
-      [clientId, `badge://backfill-e2e-${Date.now()}`]
+      [clientId, `badge://backfill-e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`]
     );
     const siteId = siteRow.rows[0].id;
 

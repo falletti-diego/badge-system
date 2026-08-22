@@ -29,6 +29,19 @@ const pool = new Pool({
 let dbAvailable = true;
 let app;
 
+// This file previously used hardcoded, non-unique TEST_EMAIL constants per
+// describe block. If a prior run of this exact file didn't clean up (killed
+// mid-run, crashed before its own afterAll, or — as reproduced while
+// investigating sporadic CI flakiness — two invocations of the suite
+// overlapping), the leftover row collides with the next run's INSERT on
+// clients_email_key, throwing "duplicate key value violates unique
+// constraint" instead of a real test failure. Same class of bug as
+// CLAUDE.md's Pattern 5 (global/unscoped real-DB test state), fixed the same
+// way the rest of this codebase's real-DB tests already do it.
+function uniqueEmail(label) {
+  return `${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.invalid`;
+}
+
 beforeAll(async () => {
   try {
     await pool.query('SELECT 1');
@@ -46,7 +59,7 @@ afterAll(async () => {
 });
 
 describe('POST /auth/refresh — first-use regression (real DB, real login, real employee)', () => {
-  const TEST_EMAIL = 'auth-refresh-first-use-regression@example.test';
+  const TEST_EMAIL = uniqueEmail('auth-refresh-first-use-regression');
   let clientId;
   let employeeId;
   const PASSWORD = 'RegressionTest123!';
@@ -158,7 +171,7 @@ describe('POST /auth/refresh — first-use regression (real DB, real login, real
  * real seeded Maria/Pippo data.
  */
 describe('POST /auth/refresh — id-collision-with-DEMO_USERS regression (real DB)', () => {
-  const TEST_EMAIL = 'auth-refresh-id-collision-regression@example.test';
+  const TEST_EMAIL = uniqueEmail('auth-refresh-id-collision-regression');
   // Pippo's employees row already exists (seeded by migrations/018), with
   // id matching the DEMO_USERS fixture entry exactly -- reusing it in place
   // (instead of inserting a new row) reproduces the real collision
@@ -167,11 +180,31 @@ describe('POST /auth/refresh — id-collision-with-DEMO_USERS regression (real D
   // shared with other test files.
   const PIPPO_DEMO_USER_ID = '550e8400-e29b-41d4-a716-446655440010';
   const PASSWORD = 'RegressionTest123!';
+  // Arbitrary but fixed advisory-lock key, scoped to "mutating Pippo's shared
+  // seed row for this specific regression" — not a parameterized/shared lock
+  // namespace like eventConflict.js's (this only ever means one thing).
+  // Session-level (pg_advisory_lock/unlock, not the xact-scoped variant) because
+  // the mutate → test → restore sequence spans multiple separate round trips
+  // across beforeAll/it/afterAll, not one transaction. Held on its own
+  // dedicated connection for the lifetime of this describe block.
+  const PIPPO_ROW_LOCK_KEY = 910035010;
   let originalEmail;
   let originalPasswordHash;
+  let lockClient;
 
   beforeAll(async () => {
     if (!dbAvailable) return;
+    // Serializes against any other invocation (e.g. this exact suite file
+    // running twice concurrently — reproduced while investigating sporadic
+    // CI flakiness) that also mutates this SHARED, real seeded row. Unlike
+    // the other describe blocks in this file, this one can't just create its
+    // own isolated row: the whole point is reproducing an id collision with
+    // a real DEMO_USERS fixture entry, which requires reusing that entry's
+    // actual employees row rather than inserting a new one (that would
+    // violate the primary key).
+    lockClient = await pool.connect();
+    await lockClient.query('SELECT pg_advisory_lock($1)', [PIPPO_ROW_LOCK_KEY]);
+
     const { hashPassword } = require('../auth/password');
     const passwordHash = await hashPassword(PASSWORD);
 
@@ -197,6 +230,22 @@ describe('POST /auth/refresh — id-collision-with-DEMO_USERS regression (real D
       'UPDATE employees SET email = $1, password_hash = $2 WHERE id = $3',
       [originalEmail, originalPasswordHash, PIPPO_DEMO_USER_ID]
     );
+    // This describe block's own it() logs in and refreshes as Pippo's shared
+    // row, which leaves behind used_tokens/revoked_tokens rows keyed by his
+    // real user_id — unlike the OTHER describe blocks in this file, which
+    // create and tear down their own throwaway client (whose employees row,
+    // and anything FK'd to it, is gone the moment the client is deleted).
+    // Reproduced directly: running this file twice in a row (no concurrency
+    // needed at all) failed the second run, because the first run's leftover
+    // used_tokens/revoked_tokens rows for Pippo's shared id were still
+    // present and made the second run's fresh login+refresh look like a
+    // replay of a session that was never actually its own. Must clean these
+    // up explicitly since jest.globalSetup.js only wipes rows older than 6
+    // minutes (see that file's own comment for why), not on every run.
+    await pool.query('DELETE FROM used_tokens WHERE user_id = $1', [PIPPO_DEMO_USER_ID]);
+    await pool.query('DELETE FROM revoked_tokens WHERE user_id = $1', [PIPPO_DEMO_USER_ID]);
+    await lockClient.query('SELECT pg_advisory_unlock($1)', [PIPPO_ROW_LOCK_KEY]);
+    lockClient.release();
   });
 
   it('still enforces replay detection on a second use of an already-consumed token', async () => {
@@ -238,7 +287,7 @@ describe('POST /auth/refresh — id-collision-with-DEMO_USERS regression (real D
  * the revoked user regain access 5 minutes later, by accident.
  */
 describe('POST /auth/refresh — permanent revoke must not be downgraded by the replay check (real DB)', () => {
-  const TEST_EMAIL = 'auth-refresh-revoke-downgrade-regression@example.test';
+  const TEST_EMAIL = uniqueEmail('auth-refresh-revoke-downgrade-regression');
   const PASSWORD = 'RegressionTest123!';
   let clientId;
   let employeeId;

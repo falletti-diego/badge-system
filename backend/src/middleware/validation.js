@@ -683,6 +683,17 @@ const GetApprovedEventsSchema = z.object({
   }),
 });
 
+// =====================================================
+// EVENT REQUESTS — GET /api/v1/events/my-requests
+// =====================================================
+
+const GetMyEventRequestsSchema = z.object({
+  query: z.object({
+    date_from: z.preprocess(val => val === '' ? undefined : val, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_from must be YYYY-MM-DD').optional()),
+    date_to: z.preprocess(val => val === '' ? undefined : val, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_to must be YYYY-MM-DD').optional()),
+  }),
+});
+
 module.exports = {
   LoginSchema,
   DemoStartSchema,
@@ -713,5 +724,6 @@ module.exports = {
   PostEventRequestSchema,
   ApproveEventRequestSchema,
   GetApprovedEventsSchema,
+  GetMyEventRequestsSchema,
   createValidationMiddleware,
 };

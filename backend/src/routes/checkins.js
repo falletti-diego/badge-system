@@ -15,6 +15,7 @@ const { NotFoundError, ValidationError, ForbiddenError, GeofenceError, ConflictE
 const { haversineDistance } = require('../utils/geo');
 const { deleteCacheByPattern } = require('../db/redis');
 const { resolveEmployeeId, resolveSiteId } = require('../utils/resolvers');
+const { lockEventConflictScope, findConflictingEvent } = require('../utils/eventConflict');
 const { buildScopedFilters } = require('../utils/queryScope');
 const { invalidateSignatureIfExists } = require('../utils/timesheetSignature');
 const { todayInTimeZone, dateInTimeZone } = require('../utils/date');
@@ -145,6 +146,19 @@ router.post('/', requireAuth, createValidationMiddleware(PostCheckinSchema), asy
       if (qr_content != null && qr_content !== site.qr_code_content) {
         logger.warn({ action: 'qr_code_invalid_attempt', site_id, employee_id });
         throw new ForbiddenError('QR code does not match this site', 'QR_CODE_INVALID');
+      }
+
+      // 3.45 Event conflict check (mutua esclusione evento↔check-in) — un evento
+      // PENDING o APPROVED per questa data blocca il check-in, per tutti i chiamanti
+      // incluso l'admin. Va prima del geofence (più costoso, richiede GPS) per non
+      // forzare un consenso GPS inutile su un check-in che verrà comunque rifiutato.
+      await lockEventConflictScope(client, { clientId, employeeId: employee_id, date: effectiveEventDate });
+      const conflictingEvent = await findConflictingEvent(client, { clientId, employeeId: employee_id, date: effectiveEventDate });
+      if (conflictingEvent) {
+        throw new ConflictError(
+          `Esiste già un evento (${conflictingEvent.description}) programmato per questa data per questo dipendente`,
+          'EVENT_DATE_CONFLICT'
+        );
       }
 
       // 3.5 Geofence check (Fase C, 2026-08-09) — controllato interamente dai toggle
@@ -471,6 +485,21 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
       const userSiteId = req.user.site_id;
       if (req.user.role === 'manager' && userSiteId && checkin.site_id !== userSiteId) {
         throw new NotFoundError('Check-in not found or not assigned to your organization', 'CHECKIN_NOT_FOUND');
+      }
+
+      // Event conflict check — solo se la correzione sposta la data del check-in;
+      // una correzione solo di type/note non cambia event_date, nessun controllo
+      // necessario. Vale per tutti i chiamanti (manager/admin), nessun bypass.
+      if (newTimestamp !== undefined) {
+        const correctedDate = dateInTimeZone(new Date(newTimestamp));
+        await lockEventConflictScope(client, { clientId, employeeId: checkin.employee_id, date: correctedDate });
+        const conflictingEvent = await findConflictingEvent(client, { clientId, employeeId: checkin.employee_id, date: correctedDate });
+        if (conflictingEvent) {
+          throw new ConflictError(
+            `Esiste già un evento (${conflictingEvent.description}) programmato per questa data per questo dipendente`,
+            'EVENT_DATE_CONFLICT'
+          );
+        }
       }
 
       // 2. Verify within 7-day correction window

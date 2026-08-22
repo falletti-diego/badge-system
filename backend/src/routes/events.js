@@ -9,11 +9,12 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { pool } = require('../db/pool');
-const { createValidationMiddleware, PostEventRequestSchema, ApproveEventRequestSchema, GetApprovedEventsSchema } = require('../middleware/validation');
+const { createValidationMiddleware, PostEventRequestSchema, ApproveEventRequestSchema, GetApprovedEventsSchema, GetMyEventRequestsSchema } = require('../middleware/validation');
 const { logAudit } = require('../middleware/audit');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
 const { invalidateSignatureIfExists } = require('../utils/timesheetSignature');
+const { lockEventConflictScope, findConflictingCheckin } = require('../utils/eventConflict');
 const { NotFoundError, ValidationError, ForbiddenError, ConflictError } = require('../utils/errors');
 const logger = require('../utils/logger');
 
@@ -43,6 +44,7 @@ router.post('/request', requireAuth, createValidationMiddleware(PostEventRequest
       // 2. Conflict check: block if the employee already has any presence/absence
       // record for this date (checkin, pending/approved leave, active illness,
       // smart-working day, or another pending/approved event request).
+      await lockEventConflictScope(client, { clientId, employeeId: userId, date: event_date });
       const conflictResult = await client.query(
         `SELECT 1 FROM checkins WHERE employee_id = $1::uuid AND timestamp::date = $2::date
          UNION ALL
@@ -211,6 +213,22 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveEventR
         throw new ValidationError('Event request has already been processed', { code: 'ALREADY_PROCESSED' });
       }
 
+      if (status === 'APPROVED') {
+        await lockEventConflictScope(client, { clientId, employeeId: eventRequest.user_id, date: eventRequest.event_date });
+        const conflictingCheckin = await findConflictingCheckin(client, { clientId, employeeId: eventRequest.user_id, date: eventRequest.event_date });
+        if (conflictingCheckin) {
+          throw new ConflictError(
+            'Impossibile approvare: esiste già un check-in registrato per questa data',
+            'EVENT_DATE_CONFLICT',
+            {
+              conflicting_checkin_id: conflictingCheckin.id,
+              conflicting_checkin_timestamp: conflictingCheckin.timestamp,
+              conflicting_checkin_type: conflictingCheckin.type,
+            }
+          );
+        }
+      }
+
       const updateResult = await client.query(
         `UPDATE event_requests
          SET status = $1, approved_by = $2::uuid, approved_at = NOW(), rejection_reason = $3, updated_at = NOW()
@@ -276,19 +294,30 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveEventR
 // GET /api/v1/events/my-requests — Get employee's own event requests
 // =====================================================
 
-router.get('/my-requests', requireAuth, async (req, res, next) => {
+router.get('/my-requests', requireAuth, createValidationMiddleware(GetMyEventRequestsSchema), async (req, res, next) => {
+  const { date_from, date_to } = req.validated.query;
   const userId = req.user.user_id;
   const clientId = req.user.client_id;
 
   try {
-    const result = await pool.query(
-      `SELECT id, client_id, user_id, event_date::text AS event_date, start_time, end_time,
+    const params = [userId, clientId];
+    let query = `SELECT id, client_id, user_id, event_date::text AS event_date, start_time, end_time,
               description, status, approved_by, approved_at, rejection_reason, created_at, updated_at
        FROM event_requests
-       WHERE user_id = $1::uuid AND client_id = $2::uuid
-       ORDER BY created_at DESC LIMIT 100`,
-      [userId, clientId]
-    );
+       WHERE user_id = $1::uuid AND client_id = $2::uuid`;
+
+    if (date_from) {
+      params.push(date_from);
+      query += ` AND event_date >= $${params.length}::date`;
+    }
+    if (date_to) {
+      params.push(date_to);
+      query += ` AND event_date <= $${params.length}::date`;
+    }
+
+    query += ' ORDER BY created_at DESC LIMIT 100';
+
+    const result = await pool.query(query, params);
 
     logger.info({
       action: 'my_events_viewed',

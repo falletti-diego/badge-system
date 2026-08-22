@@ -373,6 +373,19 @@ req.user = {
 
 ---
 
+### Pattern 5: Global (Unscoped) Assertions in Real-Postgres Tests
+**Files:** `backend/src/__tests__/*.test.js` (any file using `new Pool(dbConfig)` against the shared `badge_system_test` database), `backend/scripts/run-tests.js`
+
+**Risk:** 40+ test files share ONE Postgres database, run concurrently by Jest's default parallel workers. A test that asserts on an UNSCOPED query — `SELECT COUNT(*) FROM <table> WHERE <condition not tied to an id this test created>` — passes or fails depending on what OTHER test files happen to have in-flight in the shared DB at that exact instant. This produced real, repeated flakes (`migration-035-employee-lifecycle.test.js`'s old global `hiring_date IS NULL` count; the active-demo-cap tests in `demo-start.test.js`), non-deterministic and often unrelated to whatever change actually triggered the CI run.
+
+**Prevention Checklist (writing a new real-Postgres test):**
+- [ ] Every assertion is scoped to rows this test itself created (filter by a `client_id`/`employee_id`/etc. this test generated), OR
+- [ ] The feature under test is genuinely global by design (e.g. a tenant-wide cap) — in that case it CANNOT be scoped away; add the file to `GLOBAL_STATE_TEST_FILES` in `backend/scripts/run-tests.js` instead, so it runs serialized against the other global-state files (see that file's own header comment for the exact decision rule and full rationale)
+- [ ] Cleanup (`DELETE FROM clients WHERE id = $1`, cascades) runs in a `finally` block, not after the test's last assertion — otherwise a failing assertion skips cleanup and leaves orphaned rows that can pollute the NEXT run's global-looking queries (this exact bug happened while fixing Pattern 5 itself)
+- [ ] Never assume `npm test`'s two-batch split (see `run-tests.js`) is optional — running `npx jest` directly bypasses it and can reintroduce cross-file races locally, even though CI always goes through `npm test`
+
+---
+
 ## 🔍 Code Review Checklist (Auth & Config Changes)
 
 Before submitting PR that modifies:
