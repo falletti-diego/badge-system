@@ -77,4 +77,16 @@ async function findConflictingCheckin(client, { clientId, employeeId, date }) {
   return result.rows[0] || null;
 }
 
-module.exports = { lockEventConflictScope, findConflictingEvent, findConflictingCheckin };
+/** Returns the conflicting smart_working_days row for a date, or null. */
+async function findConflictingSmartWorking(client, { clientId, employeeId, date }) {
+  const result = await client.query(
+    `SELECT id, date::text AS date
+     FROM smart_working_days
+     WHERE client_id = $1::uuid AND employee_id = $2::uuid AND date = $3::date
+     LIMIT 1`,
+    [clientId, employeeId, date]
+  );
+  return result.rows[0] || null;
+}
+
+module.exports = { lockEventConflictScope, findConflictingEvent, findConflictingCheckin, findConflictingSmartWorking };
