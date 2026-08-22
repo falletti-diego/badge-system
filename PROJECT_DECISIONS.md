@@ -6,6 +6,32 @@
 
 ---
 
+## Session 108 — OTA di produzione per la mutua esclusione Eventi/Training, verificato end-to-end (22 Agosto 2026)
+
+### Contesto
+L'utente ha chiesto conferma se la mobile app avesse recepito la feature "Eventi/Training" e la mutua esclusione QR↔evento (PR #7, Session 107), e se servisse una nuova build. Confermato che il codice era mergiato su `main` ma build 37 (TestFlight, Session 106) è precedente a PR #7 — nessuna distribuzione copriva ancora il cambio. Su richiesta dell'utente, pubblicato un OTA con verifica rigorosa (prima volta per questo tipo specifico di cambio).
+
+### Analisi "OTA sufficiente o serve build nativa?"
+`git show ca89fb9 --stat` conferma che lato mobile il diff tocca solo `frontend-mobile/src/screens/checkin/QRScannerScreen.jsx` (46 righe) — nessun file nativo (`app.json`, `package.json`, config iOS/Android). Build 37 ha già `expo-updates` configurato correttamente (verificato in Session 106) — condizioni per un OTA sicuro soddisfatte, a differenza del problema del build 16 (Session 106: OTA pubblicato ma il binario installato non aveva alcun meccanismo di ricezione).
+
+### Sync da uno stato certo, non dal checkout locale stale
+Il checkout locale di `main` era indietro di 10 commit rispetto a `origin/main` (le squash-merge di PR #7/#9 fatte in Session 107 via `gh pr merge` non avevano aggiornato il checkout principale) e aveva anche 1 commit locale mai pushato. Pubblicare da lì avrebbe rischiato di spedire codice senza la mutua esclusione. Creato un worktree temporaneo puntato su `origin/main`, isolato dal checkout principale — suite di test mobile completa verde lì (20/20 suite, 157/157 test) prima di pubblicare.
+
+### Pubblicazione e verifica end-to-end in 3 passi
+`eas update --branch production` (iOS update ID `01a0292e-52f6-7899-ac9f-a0568bb9af0f`, runtime `1.0.0`, commit `a06d8bb`). Verifica esplicitamente richiesta dall'utente, in 3 passi indipendenti — non fidandosi del solo esito positivo del comando CLI (stessa lezione di Session 106, dove un OTA "pubblicato con successo" non arrivava sul device reale):
+1. Richiesta manifest simulando un device reale (header `expo-platform`/`expo-runtime-version`/`expo-channel-name` uguali a build 37) → `expo-update-id` nella risposta combacia esattamente con l'update appena pubblicato.
+2. SHA-256 (base64url) del bundle JS locale confrontato byte-per-byte con l'hash `launchAsset` del manifest → match esatto su iOS e Android.
+3. Grep sul bundle compilato (bytecode Hermes) per le stringhe UI distintive della mutua esclusione (`"Hai un evento programmato"`, `"Verifica eventi in corso"`) → presenti su entrambe le piattaforme.
+
+Prova diretta e non solo inferita: un device reale sul canale production con lo stesso runtime di build 37 riceve esattamente questo bundle, e quel bundle contiene il codice della feature.
+
+### Problema collaterale trovato e recuperato
+Il checkout locale di `main` aveva un commit di documentazione mai pushato (Session 105 closeout: dettagli produzione/migration/CI mai arrivati su `origin/main` — verificato confrontando col contenuto già presente lì, non era superato). Recuperato e applicato manualmente sul branch di sync insieme a questo aggiornamento, invece di scartarlo silenziosamente durante la risoluzione della divergenza.
+
+**Stato:** OTA pubblicato e verificato crittograficamente/contenutisticamente. Resta da fare solo la conferma visiva sul device reale (force-quit + riapertura), non ancora eseguita in questa sessione.
+
+---
+
 ## Session 107 — PR #7 code review, fix timezone, indagine e fix di 5 root cause di flakiness pre-esistente, merge su `main` (22 Agosto 2026)
 
 ### Contesto
@@ -115,7 +141,13 @@ Implementato su tutti e 3 gli strati (schema Zod, `computeDiff.js` del wizard co
 ### Verifica finale
 `/code-review:code-review` adattato a un commit locale senza PR GitHub (5 agenti paralleli dispatchati sul diff via `git show` invece che su una PR, risultati riportati direttamente invece che commentati su GitHub) — CLAUDE.md compliance ok, nessun bug, nessuna regressione rispetto allo storico del branch, nessun test indebolito per far passare la suite; **1 solo finding reale**, un commento (`resolveManagerId` in `computeDiff.js`) diventato impreciso dopo il cambio — corretto immediatamente. `/test-all`: backend 107/108 suite (800/814 test), frontend 37/37 file (309/310 test), entrambi verdi.
 
-**Stato:** `worktree-new-employee-fields` mergeato su `main` (locale). Push da confermare separatamente con l'utente. Worktree da rimuovere dopo il push. Migration `040` (`manager_id`) ancora da applicare su staging/produzione al momento del deploy.
+**Stato:** `worktree-new-employee-fields` mergeato su `main` (fast-forward `00809b2`→`f0d3072`), worktree e branch rimossi. Migration `040` (`manager_id`) applicata in produzione via SSH su EC2 prima del push, per rispettare l'ordine deploy-dopo-migration (`deploy-to-ec2.yml` non esegue migration automaticamente, solo pull immagine + restart container).
+
+### Push e deploy in produzione
+
+Primo push (`f0d3072`) fallito su entrambi `CI/CD Pipeline` e `Build & Push Backend to ECR`, allo stesso passo lint: `backend/src/routes/admin/employees.js:54` — `Strings must use singlequote quotes` su un template literal a riga singola senza interpolazione (la query di lookup del manager). Bug reale e pre-esistente al lavoro di questa sessione, mai emerso prima perché questo branch aveva ~35 commit accumulati localmente senza mai passare da CI, e `/test-all` non include il lint. Diagnosticato leggendo `gh run view --log-failed` di entrambi i workflow (stessa causa identica), fixato riformattando la query su più righe (stessa convenzione già usata altrove nel file), verificato con `npm run lint` locale (0 errori), committato (`1695de4`) e ripushato.
+
+Secondo giro: `CI/CD Pipeline` ✅, `Build & Push Backend to ECR` ✅, `Deploy to EC2` ✅ — tutti verdi. Verifica diretta in produzione dopo il deploy: `curl https://api.dataxiom.it/health` → `{"status":"ok","database":"connected","db_query_time_ms":3}`, `curl -o /dev/null -w "%{http_code}" https://badge.dataxiom.it/` → `200`. La feature "Campi Nuovo Dipendente" (incluso il vincolo `manager_id` obbligatorio) è interamente live.
 
 ---
 
