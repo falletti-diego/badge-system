@@ -5,8 +5,9 @@
  *
  * Auto-confirmed (no manager approval), same pattern as illnesses (Malattia).
  * Unlike checkins, there is no site verification — smart working is by definition remote.
- * The date is always computed server-side (NOW()), never accepted from the client,
- * so a device with a manipulated clock/timezone cannot declare a different day.
+ * The date is always computed server-side (todayInTimeZone, Europe/Rome), never
+ * accepted from the client, so a device with a manipulated clock/timezone cannot
+ * declare a different day.
  */
 
 const express = require('express');
@@ -14,6 +15,8 @@ const { pool } = require('../db/pool');
 const { logAudit } = require('../middleware/audit');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
+const { lockEventConflictScope, findConflictingEvent } = require('../utils/eventConflict');
+const { todayInTimeZone } = require('../utils/date');
 const { ForbiddenError, ConflictError } = require('../utils/errors');
 const logger = require('../utils/logger');
 
@@ -39,14 +42,25 @@ router.post('/', requireAuth, async (req, res, next) => {
       );
     }
 
+    const today = todayInTimeZone();
+
     const result = await withTransaction(async (client) => {
+      await lockEventConflictScope(client, { clientId, employeeId, date: today });
+      const conflictingEvent = await findConflictingEvent(client, { clientId, employeeId, date: today });
+      if (conflictingEvent) {
+        throw new ConflictError(
+          `Esiste già un evento (${conflictingEvent.description}) programmato per oggi — impossibile dichiarare Smart Working`,
+          'EVENT_DATE_CONFLICT'
+        );
+      }
+
       let insertResult;
       try {
         insertResult = await client.query(
           `INSERT INTO smart_working_days (client_id, employee_id, date, created_by)
-           VALUES ($1::uuid, $2::uuid, CURRENT_DATE, $2::uuid)
+           VALUES ($1::uuid, $2::uuid, $3::date, $2::uuid)
            RETURNING id, employee_id, date::text AS date, created_at`,
-          [clientId, employeeId]
+          [clientId, employeeId, today]
         );
       } catch (err) {
         // Postgres unique_violation — employee already declared smart working today
