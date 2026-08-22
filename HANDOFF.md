@@ -1,3 +1,57 @@
+# Badge System — Session 107 Handoff
+
+**Date:** 2026-08-22
+**Session:** 107 — Code review + fix timezone su PR #7, indagine approfondita e fix di 5 root cause distinte di flakiness pre-esistente nella suite, merge su `main`, checklist code review migliorata
+**Status:** ✅ **PR #7 mergeata su `main` (squash `ca89fb95`).** Restano aperti: il bug Session 106 sulla visualizzazione durata evento nelle Presenze, e 2 fallimenti singoli non riproducibili trovati durante lo stress-test (vedi sotto).
+
+---
+
+## Goal (Session 107)
+
+Continuazione diretta della feature "Mutua esclusione Eventi/Training vs QR check-in" (PR #7, già implementata e pushata in una sessione precedente compattata): code review, fix del bug trovato, poi indagine approfondita — su richiesta esplicita dell'utente — dei fallimenti sporadici pre-esistenti della suite di test reale-Postgres, non legati al diff della PR.
+
+## Current Progress
+
+**`/code-review:code-review` su PR #7**: 5 agenti paralleli, 1 bug reale confermato (score 85) — `eventConflict.js`, `findConflictingCheckin` filtrava con `c.timestamp::date = $3::date`, un cast valutato nel timezone di **sessione DB** (UTC su AWS RDS) invece che in Europe/Rome. Stessa identica classe di bug già fixata una volta in `checkins.js` (commit `615fcbf`, Session 105). Fix: `(c.timestamp AT TIME ZONE 'Europe/Rome')::date`, con test di regressione dedicato che forza esplicitamente `SET timezone = 'UTC'` sulla connessione di test (`eventConflict-timezone.test.js`) — necessario perché il Postgres locale gira per coincidenza già in `Europe/Rome`, quindi senza quel `SET` il test sarebbe passato per caso anche col bug presente. Commit `89986b3`.
+
+**Indagine approfondita sulla flakiness pre-esistente** (richiesta esplicita: "analisi critica ed accurata... soluzioni efficienti e irreversibili... usa `/grilling` se hai domande"): la suite condivide **un solo database Postgres** (`badge_system_test`) tra 40+ file di test eseguiti in parallelo dai worker di default di Jest. Root cause principale: asserzioni non scoped alle righe create dal test stesso, che quindi dipendono da cosa fanno ALTRI file di test in quel preciso istante. Via `/grilling`, scelta la **"Soluzione B"** (fix mirati + split Jest a due batch — scartata sia l'opzione minima "solo fix puntuali" sia quella massimale "isolamento DB per-worker completo"):
+- `migration-035-employee-lifecycle.test.js` riscritto: il test originale asseriva un invariante globale (`hiring_date` mai NULL per dipendenti attivi) **mai realmente garantito** né dallo schema né dall'app — passava solo per coincidenza. Riscritto per testare la SQL della migration in isolamento su dati auto-creati/auto-puliti.
+- `backend/scripts/run-tests.js` creato: due batch — parallelo (tutti i file scoped) + serializzato (`--runInBand`, i 7 file che testano feature genuinamente globali per design, es. cap demo cross-tenant, non scopeable).
+- Documentato come **Pattern 5** in `CLAUDE.md`. Commit `76aea8e`.
+
+**Round finale, sullo stesso livello di rigore, sul residuo `shifts.test.js`** (richiesta esplicita: "indaga anche quello ora... svolgi tutti i run che reputi necessari"): decine di run, inclusi stress-test con doppia invocazione concorrente di `npm test` in background. **`shifts.test.js` stesso non si è mai più riprodotto** — ma lo stress ha fatto emergere **3 bug reali e distinti, diversi da quello originariamente segnalato**:
+1. 6 file/13+ occorrenze di fixture per colonne UNIQUE generate solo con `Date.now()` (nessun suffisso random) → collisione se due INSERT cadono nello stesso millisecondo.
+2. `auth-refresh-first-use.test.js`: email hardcoded non uniche su 3 `describe`, più una riga demo condivisa ("Pippo") mutata in-place senza cleanup di `used_tokens`/`revoked_tokens` — si rompeva anche rieseguendo lo stesso file due volte di fila **senza alcuna concorrenza**. Un advisory lock di sessione aggiunto per la mutazione non bastava da solo (provato con debug logging PID+timestamp che il lock funzionava perfettamente) — il vero bug era il cleanup mancante.
+3. `jest.globalSetup.js` cancellava incondizionatamente `revoked_tokens`/`used_tokens` a ogni invocazione — poteva cancellare lo stato di una seconda invocazione `npm test` genuinamente concorrente. Reso age-scoped (6 minuti, sopra il TTL di 5 minuti del blocco di revoca temporaneo in `routes/auth.js:389-390`).
+
+Tutti e 3 fixati, verificati con TDD dove applicabile. Commit `ae909cd`.
+
+**Merge**: `/superpowers:finishing-a-development-branch` — 2 run completi `npm test` puliti, squash-merge su `main` via `gh pr merge --squash` (commit `ca89fb95`), messaggio nel formato `merge: ...` già usato nel repo.
+
+**Checklist di code review migliorata** (su richiesta esplicita): aggiunto **Pattern 6** in `CLAUDE.md` (timezone-naive `::date` su TIMESTAMPTZ — seconda occorrenza della stessa classe di bug, ora con grep di prevenzione), e ristrutturata la sezione "Code Review Checklist" in **3 checklist per trigger** invece di una sola scoped solo ad Auth & Config: Auth & Config Changes (esistente), Timestamp/Date Comparisons (nuova), Real-Postgres Test Files (nuova, richiama esplicitamente il Pattern 5).
+
+## What Worked
+
+- **Debug reproduction empirica invece di solo ragionamento statico**: doppie invocazioni concorrenti di `npm test` in background hanno fatto emergere race reali in pochi round, molto più efficace che ragionare a tavolino sul codice.
+- **Instrumentation temporanea (PID+timestamp) per verificare un'ipotesi PRIMA di scartarla**: ha dimostrato che l'advisory lock funzionava perfettamente, evitando di "fixare" qualcosa che non era rotto e portando a trovare il vero bug (cleanup mancante).
+- **`/grilling` per chiudere lo scope della soluzione (A/B/C) prima di scrivere codice** — ha evitato di implementare l'opzione sbagliata (troppo minimale o troppo pesante).
+- **Riportare onestamente i residui non riprodotti** (`shifts.test.js` mai riprodotto indipendentemente; 2 nuovi fallimenti singoli non riproducibili) invece di dichiarare vittoria totale — coerente con lo standard di trasparenza già richiesto dall'utente in sessioni precedenti.
+
+## What Didn't Work / Da tenere a mente
+
+- **Un lock advisory da solo non basta a impedire un self-collision** — se il test muta una riga condivisa e produce righe derivate (token, record di stato), serve ANCHE il cleanup esplicito di quelle righe derivate, non solo la serializzazione dell'accesso alla riga principale.
+- **`Date.now()` da solo non è mai sufficientemente unico** per un vincolo UNIQUE Postgres — serve sempre il suffisso random (`Math.random().toString(36).slice(2)`), pattern ora esplicitamente in Pattern 5/checklist.
+- **I 2 nuovi fallimenti singoli non riproducibili** (`admin-employeeSync-template.test.js`, `onboarding-invite.test.js`) non sono stati inseguiti oltre — passano sempre in isolamento e non sono più ricomparsi in run successivi. Valutati come artefatti di un regime di stress-test artificialmente avversario (decine di suite complete a raffica sulla stessa macchina), strutturalmente impossibile in CI reale (Postgres effimero per job). Se ricompaiono in CI reale, sono un segnale che NON sono resource-contention.
+
+## Next Steps (in ordine di urgenza)
+
+1. **🔴 Ancora aperto da Session 106**: durata/giorno evento non compare correttamente nelle Presenze dopo l'approvazione manager — root cause non ancora nota.
+2. **Deploy backend/web in produzione** — la PR #7 è mergeata su `main` ma non ancora deployata su `api.dataxiom.it`/`badge.dataxiom.it`.
+3. Se `admin-employeeSync-template.test.js` o `onboarding-invite.test.js` falliscono di nuovo in CI reale (non in stress-test locale), investigare seriamente — sarebbe la prova che non sono resource-contention.
+4. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 106/105 sotto.
+
+---
+
 # Badge System — Session 106 Handoff
 
 **Date:** 2026-08-20
