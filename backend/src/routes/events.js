@@ -14,7 +14,7 @@ const { logAudit } = require('../middleware/audit');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
 const { invalidateSignatureIfExists } = require('../utils/timesheetSignature');
-const { lockEventConflictScope, findConflictingCheckin } = require('../utils/eventConflict');
+const { lockEventConflictScope, findConflictingCheckin, findConflictingSmartWorking } = require('../utils/eventConflict');
 const { NotFoundError, ValidationError, ForbiddenError, ConflictError } = require('../utils/errors');
 const logger = require('../utils/logger');
 
@@ -225,6 +225,15 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveEventR
               conflicting_checkin_timestamp: conflictingCheckin.timestamp,
               conflicting_checkin_type: conflictingCheckin.type,
             }
+          );
+        }
+
+        const conflictingSmartWorking = await findConflictingSmartWorking(client, { clientId, employeeId: eventRequest.user_id, date: eventRequest.event_date });
+        if (conflictingSmartWorking) {
+          throw new ConflictError(
+            'Impossibile approvare: il dipendente ha già dichiarato Smart Working per questa data',
+            'EVENT_DATE_CONFLICT',
+            { conflicting_smart_working_id: conflictingSmartWorking.id }
           );
         }
       }
