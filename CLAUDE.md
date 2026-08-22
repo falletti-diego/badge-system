@@ -386,7 +386,21 @@ req.user = {
 
 ---
 
-## 🔍 Code Review Checklist (Auth & Config Changes)
+### Pattern 6: Timezone-Naive `::date` Casts on TIMESTAMPTZ Columns
+**Files:** any SQL comparing a `TIMESTAMPTZ` column against a calendar date (`checkins.timestamp`, `events.event_date`-adjacent joins, etc.)
+
+**Risk:** `some_timestamptz_column::date` (or any bare date cast) evaluates in the DB session's timezone — UTC by default on AWS RDS, but coincidentally `Europe/Rome` on most developers' local Postgres (inherited from OS default), which **masks the bug in local testing**. During the ~00:00–02:00 Europe/Rome window, the UTC calendar date and the Europe/Rome calendar date differ, so the raw cast silently matches/misses the wrong day. This exact bug class has now shipped twice: `checkins.js` (fixed in commit `615fcbf`, 2026-08-18) and `eventConflict.js` (fixed in commit `89986b3`, 2026-08-22, found via `/code-review:code-review` on PR #7).
+
+**Prevention Checklist:**
+- [ ] Any new `::date` cast (or `DATE()`/`date_trunc('day', ...)`) on a TIMESTAMPTZ column uses `(column AT TIME ZONE 'Europe/Rome')::date`, matching the JS-side `dateInTimeZone()`/`todayInTimeZone()` helpers (`backend/src/utils/date.js`)
+- [ ] Grep check before merging: `grep -rn '::date' backend/src/**/*.js` — every match either isn't a TIMESTAMPTZ column or has an adjacent `AT TIME ZONE 'Europe/Rome'`
+- [ ] If the fix touches query logic, add a regression test that explicitly runs `SET timezone = 'UTC'` on the test connection before asserting (see `backend/src/__tests__/eventConflict-timezone.test.js`) — otherwise the test passes by the same local-timezone coincidence that hid the bug in the first place
+
+---
+
+## 🔍 Code Review Checklists
+
+### Auth & Config Changes
 
 Before submitting PR that modifies:
 - `middleware/auth.js`
@@ -401,6 +415,20 @@ Before submitting PR that modifies:
 - [ ] Browser test: Login → Dashboard loads without INTERNAL_ERROR
 - [ ] Grep check: `grep -rn "(client_id|site_id|employee_id): '[^{]'" backend/src/` returns 0 matches
 - [ ] Middleware logs all error paths (not silent failures)
+
+### Timestamp / Date Comparisons
+
+Before submitting a PR that adds or edits any SQL comparing a `TIMESTAMPTZ` column to a calendar date:
+- [ ] See [[Pattern 6]] above — `AT TIME ZONE 'Europe/Rome'`, not a bare `::date`
+- [ ] Regression test forces `SET timezone = 'UTC'` on its own connection, not relying on the tester's local machine default
+
+### Real-Postgres Test Files (`backend/src/__tests__/*.test.js` using `new Pool(dbConfig)`)
+
+Before submitting a PR that adds or edits a test file querying the shared `badge_system_test` database:
+- [ ] See [[Pattern 5]] above — every assertion scoped to self-created rows, or the file added to `GLOBAL_STATE_TEST_FILES`
+- [ ] Fixture values feeding a UNIQUE column use `${Date.now()}-${Math.random().toString(36).slice(2)}`, never `${Date.now()}` alone
+- [ ] Cleanup runs in `finally`/`afterEach`/`afterAll`, not only after the last assertion
+- [ ] If the test mutates a shared fixture row (e.g. a `DEMO_USERS` seed row) instead of creating its own, it takes a session-scoped `pg_advisory_lock`/`pg_advisory_unlock` around the mutation AND cleans up any derived rows (`used_tokens`, `revoked_tokens`, etc.) in `afterAll` — a lock alone does not prevent self-collision when the same file runs twice in a row
 
 ---
 
