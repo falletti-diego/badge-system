@@ -6,6 +6,40 @@
 
 ---
 
+## Session 109 — Mutua esclusione Smart Working ↔ Eventi/Training, PR #11 aperta, merge posticipato (22 Agosto 2026)
+
+### Contesto
+L'utente ha confermato visivamente sul device reale che la mutua esclusione Eventi/Training ↔ QR check-in (PR #7, Session 106-108) funziona, ma ha segnalato un gap parallelo testando con l'utenza Maria: un dipendente poteva ancora dichiarare Smart Working per un giorno con un evento già approvato, mentre il check-in QR era già correttamente bloccato in quello scenario. Richiesta esplicita di usare `/superpowers:brainstorming` (con `/grilling` per le domande) per progettare la stessa mutua esclusione anche verso Smart Working.
+
+### Design — 4 decisioni via `/grilling`
+Tutte risolte sull'opzione raccomandata:
+1. Stati evento bloccanti per Smart Working: PENDING e APPROVED (non solo APPROVED) — coerente con la logica già esistente in `events.js POST /request`, che blocca un nuovo evento se Smart Working esiste, usando la stessa soglia.
+2. Approvare un evento deve fallire se il dipendente ha già dichiarato Smart Working per quella data (non solo il percorso inverso).
+3. UX mobile: mirror esatto del pattern pre-check già in `QRScannerScreen.jsx`, non un pattern nuovo.
+4. Riuso di `lockEventConflictScope` esistente (nessun nuovo lock advisory) — entrambi i nuovi controlli si trovano già dentro un percorso di codice che acquisisce quel lock per lo stesso scope `(clientId, employeeId, date)`.
+
+Spec: `docs/superpowers/specs/2026-08-22-smart-working-event-conflict-design.md`. Piano: `docs/superpowers/plans/2026-08-22-smart-working-event-conflict.md` (6 task).
+
+### Implementazione — `/superpowers:subagent-driven-development` in worktree isolato
+- **Task 1**: nuova `findConflictingSmartWorking(client, {clientId, employeeId, date})` in `backend/src/utils/eventConflict.js` — query su `smart_working_days` (colonna `DATE` semplice, nessun rischio di timezone come le colonne `TIMESTAMPTZ`).
+- **Task 2**: `smartWorking.js POST` riscritto per acquisire il lock, controllare `findConflictingEvent`, e solo poi inserire. **Fix collaterale trovato durante l'implementazione**: la route calcolava "oggi" con `CURRENT_DATE` di Postgres (timezone di sessione, UTC su AWS RDS) invece di `todayInTimeZone()` (Europe/Rome) — stessa classe di bug già documentata come **Pattern 6** in `CLAUDE.md` (trovata e fixata due volte in precedenza in `checkins.js` e `eventConflict.js`). Allineato.
+- **Task 3**: `events.js PUT /:id/approve` esteso con il controllo `findConflictingSmartWorking` dentro il blocco `if (status === 'APPROVED')` esistente, riusando il lock già acquisito per il controllo checkin.
+- **Task 4**: test real-Postgres dedicati `smartWorking-event-conflict.test.js` (6 test), stessa struttura di `checkins-event-conflict.test.js`. Deviazione dal piano: aggiunto un helper `makeAdminEmployee` perché `event_requests.approved_by` referenzia `employees(id)` (migration 041) — verificata come fix necessario e comportamentalmente inerte (l'approvazione è gated solo dal ruolo JWT, non da un lookup DB dell'approvatore).
+- **Task 5**: pre-check mobile in `SmartWorkingScreen.jsx`, mirror esatto di `QRScannerScreen.jsx` (stesso pattern `cancelled` flag, stesso stile schermata di blocco).
+- **Task 6**: review finale olistica sull'intera feature — nessun difetto critico/importante residuo.
+
+Ogni task ha avuto spec-review e code-quality-review indipendenti dedicati (tutti "Ready to merge: Yes"). Un code-quality-reviewer del Task 5 è stato interrotto da un limite di sessione API a metà lavoro — completato manualmente invece di ri-dispatchare un nuovo subagent, per non rischiare di colpire di nuovo lo stesso limite.
+
+### Verifica finale e PR
+`/code-review:code-review` adattato al diff locale (nessuna PR ancora esistente al momento del lancio) — 5 agenti paralleli, 2 candidati (score 45 e 25, entrambi sotto la soglia 80) → nessun problema riportato. `/test-all`: backend (entrambi i batch), frontend-web (330/330, un timeout confermato flaky e non correlato in `EmployeesTab.test.jsx`), mobile (163/163 già verificato). Push + **PR #11** creata (https://github.com/falletti-diego/badge-system/pull/11) — CI verde su tutti i check (Backend - Lint & Test, Mobile - Test, Security Check), stato `MERGEABLE`.
+
+### Merge posticipato — decisione esplicita dell'utente
+L'utente ha segnalato che il proprio account AWS non è al momento raggiungibile e ha chiesto di attendere prima del merge. Chiarito che il merge su `main` è un'operazione solo GitHub, indipendente da AWS — ma lo step successivo della pipeline CI/CD (`git push main` → build Docker → push ECR → SSH EC2 per il deploy) fallirebbe senza accesso AWS. **Decisione: attendere.** PR #11 resta aperta, verde, pronta al merge quando l'utente lo richiederà.
+
+**Stato:** PR #11 aperta e mergeable, merge non ancora eseguito su richiesta esplicita dell'utente (AWS non disponibile). Nessuna azione ulteriore in corso.
+
+---
+
 ## Session 108 — OTA di produzione per la mutua esclusione Eventi/Training, verificato end-to-end (22 Agosto 2026)
 
 ### Contesto

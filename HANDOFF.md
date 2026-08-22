@@ -1,3 +1,57 @@
+# Badge System — Session 109 Handoff
+
+**Date:** 2026-08-22
+**Session:** 109 — Mutua esclusione Smart Working ↔ Eventi/Training implementata end-to-end, PR #11 aperta e verde, merge posticipato
+**Status:** ✅ **Feature implementata, testata e review-completa. PR #11 aperta e mergeable (CI verde).** ⏸️ **Merge posticipato su richiesta esplicita dell'utente**: account AWS temporaneamente non disponibile — il merge GitHub in sé non ne dipende, ma il deploy automatico post-merge (ECR/EC2) fallirebbe.
+
+---
+
+## Goal (Session 109)
+
+L'utente ha confermato che la conferma visiva sul device reale della mutua esclusione Eventi/Training↔QR check-in (PR #7) funziona, ma testando con l'utenza Maria ha trovato un gap parallelo: un dipendente poteva ancora dichiarare Smart Working per un giorno con un evento già approvato — cosa che il check-in QR già impediva correttamente. Richiesta di implementare la stessa mutua esclusione anche verso Smart Working, con `/superpowers:brainstorming`+`/grilling` per il design, poi l'intera pipeline fino a push+PR.
+
+## Current Progress
+
+**Design (`/grilling`, 4 decisioni, tutte risolte sulla raccomandazione)**: stati bloccanti PENDING+APPROVED (coerente con la logica già esistente in `events.js POST /request`); blocco anche in fase di approvazione evento se Smart Working già dichiarato (non solo il verso opposto); UX mobile mirror esatto di `QRScannerScreen.jsx`; riuso di `lockEventConflictScope` esistente (nessun nuovo lock). Spec: `docs/superpowers/specs/2026-08-22-smart-working-event-conflict-design.md`. Piano 6 task: `docs/superpowers/plans/2026-08-22-smart-working-event-conflict.md`.
+
+**Implementazione (`/superpowers:subagent-driven-development`, worktree isolato, 6 task, ognuno con spec-review + code-quality-review indipendenti)**:
+1. Nuova `findConflictingSmartWorking()` in `backend/src/utils/eventConflict.js`.
+2. `smartWorking.js POST` riscritto: lock → `findConflictingEvent` → insert. **Fix collaterale trovato**: la route usava `CURRENT_DATE` Postgres (timezone di sessione) invece di `todayInTimeZone()` Europe/Rome — stessa classe già documentata come **Pattern 6** in `CLAUDE.md`, corretta.
+3. `events.js PUT /:id/approve` esteso con `findConflictingSmartWorking`, riusando il lock già acquisito per il controllo checkin esistente.
+4. Test real-Postgres dedicati `smartWorking-event-conflict.test.js` (6 test). Deviazione dal piano (verificata necessaria e inerte): aggiunto `makeAdminEmployee` perché `event_requests.approved_by` referenzia `employees(id)`.
+5. Pre-check mobile in `SmartWorkingScreen.jsx`, mirror di `QRScannerScreen.jsx`.
+6. Review finale olistica: nessun difetto critico/importante residuo.
+
+Un code-quality-reviewer del Task 5 è stato interrotto a metà da un limite di sessione API — completato manualmente (non ri-dispatchato, per evitare di ricolpire lo stesso limite).
+
+**Verifica finale**: `/code-review:code-review` adattato al diff locale (nessuna PR esisteva ancora) — 5 agenti paralleli, 2 candidati sotto soglia 80 (score 45 e 25) → nessun problema riportato. `/test-all`: backend verde (entrambi i batch), frontend-web 330/330 (1 timeout confermato flaky/non correlato in `EmployeesTab.test.jsx`), mobile 163/163 già verificato in sessione precedente.
+
+**Push + PR**: `git push -u origin worktree-smart-working-event-conflict` → **PR #11** creata (https://github.com/falletti-diego/badge-system/pull/11). CI verde su tutti i check (Backend - Lint & Test ✅, Mobile - Test ✅, Security Check ✅), stato `MERGEABLE`.
+
+**Merge posticipato**: l'utente ha segnalato che il proprio account AWS non è al momento raggiungibile e ha chiesto di attendere. Chiarito che il merge GitHub è indipendente da AWS, ma la pipeline CI/CD successiva al push su `main` (build Docker→ECR→SSH EC2) fallirebbe senza accesso AWS — decisione: **attendere**, PR resta aperta.
+
+## What Worked
+
+- **`/grilling` per chiudere le 4 decisioni di design prima di scrivere codice** — nessuna ambiguità residua durante l'implementazione, tutte le decisioni già prese in anticipo.
+- **Riuso deliberato dell'infrastruttura esistente** (`lockEventConflictScope`, `findConflictingEvent`, pattern UI di `QRScannerScreen.jsx`) invece di reinventare — la feature è quasi interamente composizione di pezzi già testati.
+- **Riconoscere lo stesso Pattern 6 (timezone) al terzo incontro** e fixarlo immediatamente invece di introdurlo di nuovo per la terza volta — la checklist in `CLAUDE.md` ha funzionato come previsto.
+- **Completare manualmente una review interrotta da un limite API invece di ri-dispatchare** un subagent identico — evitato un secondo fallimento prevedibile.
+- **Chiarire esplicitamente la dipendenza reale da AWS prima di agire**: il merge GitHub e il deploy automatico sono due operazioni distinte — permesso di procedere in modo granulare invece di bloccare tutto per precauzione.
+
+## What Didn't Work / Da tenere a mente
+
+- Nessun problema di processo nuovo in questa sessione — la pipeline design→piano→subagent-driven-development→code-review→test-all→PR ha funzionato end-to-end senza intoppi degni di nota, a parte l'interruzione per limite di sessione già gestita.
+
+## Next Steps (in ordine di urgenza)
+
+1. **Merge PR #11** appena l'account AWS torna disponibile (o comunque appena l'utente lo richiede esplicitamente) — poi verificare che la pipeline di deploy (ECR/EC2) vada a buon fine.
+2. **Deploy backend/web in produzione**: sia questa feature sia PR #7 (mutua esclusione Eventi/Training↔QR, mergeata Session 107) risultano ancora **non deployate** su `api.dataxiom.it`/`badge.dataxiom.it` — solo mergeate su `main` a livello di repo. Da fare nello stesso giro di deploy.
+3. **Raccomandazione operativa dalla PR #11, non ancora eseguita**: audit sui dati di produzione esistenti per individuare eventuali PENDING/APPROVED già in conflitto con uno Smart Working già dichiarato sulla stessa data, da fare prima o subito dopo il deploy.
+4. **🔴 Ancora aperto da Session 106**: durata/giorno evento non compare correttamente nelle Presenze dopo l'approvazione manager.
+5. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 108/107 sotto.
+
+---
+
 # Badge System — Session 108 Handoff
 
 **Date:** 2026-08-22
