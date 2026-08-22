@@ -5,11 +5,36 @@ import Svg, { Rect, Line, Path } from 'react-native-svg';
 import apiClient from '../../services/apiClient';
 import authService from '../../services/authService';
 import { ENDPOINTS } from '../../config/endpoints';
+import { today, toISO } from '../../utils/dateUtils';
+import LoadingSpinner from '../../components/LoadingSpinner';
 import { COLORS, FONTS } from '../../config/theme';
 
 export default function SmartWorkingScreen({ navigation }) {
   const [user, setUser] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Pre-check: un evento PENDING/APPROVED per oggi blocca Smart Working (mutua
+  // esclusione evento↔Smart Working, stesso pattern di QRScannerScreen).
+  // undefined = in corso, null = nessun conflitto, object = evento in conflitto.
+  // Fail-open su errore di rete: il controllo lato server in smartWorking.js
+  // resta comunque l'autorità finale.
+  const [todayEvent, setTodayEvent] = useState(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    const todayStr = toISO(today());
+    apiClient.get(ENDPOINTS.EVENTS_LIST, { params: { date_from: todayStr, date_to: todayStr } })
+      .then((response) => {
+        if (cancelled) return;
+        const rows = response.data?.data || [];
+        const conflict = rows.find((r) => r.status === 'PENDING' || r.status === 'APPROVED');
+        setTodayEvent(conflict || null);
+      })
+      .catch(() => {
+        if (!cancelled) setTodayEvent(null); // fail-open
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     authService.getUser().then(setUser);
@@ -40,6 +65,29 @@ export default function SmartWorkingScreen({ navigation }) {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
   const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+
+  if (todayEvent === undefined) {
+    return (
+      <View style={styles.centered}>
+        <LoadingSpinner color={COLORS.navy500} />
+        <Text style={styles.text}>Verifica eventi in corso...</Text>
+      </View>
+    );
+  }
+
+  if (todayEvent) {
+    return (
+      <SafeAreaView style={styles.centered}>
+        <Text style={styles.errorText}>Smart Working non disponibile oggi</Text>
+        <Text style={styles.text}>
+          Hai un evento programmato: {todayEvent.description} ({todayEvent.start_time?.slice(0, 5)}–{todayEvent.end_time?.slice(0, 5)}).
+        </Text>
+        <TouchableOpacity style={[styles.button, { marginTop: 12, backgroundColor: COLORS.stone }]} onPress={() => navigation.goBack()}>
+          <Text style={styles.buttonText}>Torna indietro</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -143,4 +191,9 @@ const styles = StyleSheet.create({
   confirmButtonText: { fontFamily: FONTS.bodyMedium, fontSize: 15, color: COLORS.white },
   cancelButton: { height: 48, alignItems: 'center', justifyContent: 'center' },
   cancelButtonText: { fontFamily: FONTS.bodyMedium, fontSize: 14, color: COLORS.stone },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, backgroundColor: COLORS.linen },
+  text: { fontFamily: FONTS.body, color: COLORS.stone, fontSize: 15, textAlign: 'center', marginTop: 12 },
+  errorText: { fontFamily: FONTS.bodySemiBold, color: COLORS.error, fontSize: 18, marginBottom: 8 },
+  button: { backgroundColor: COLORS.navy500, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12, marginTop: 24 },
+  buttonText: { fontFamily: FONTS.bodyMedium, color: COLORS.white, fontSize: 16 },
 });
