@@ -12,21 +12,33 @@
 
 ---
 
+## Execution status (2026-08-23)
+
+**Tasks 1-8 executed and verified. Task 9 (nameserver cutover) deliberately PAUSED by the user — not cancelled, not failed.**
+
+While filling in the Register.it "Cambio DNS" panel for Task 9, it displayed a warning not anticipated in the spec: *"L'impostazione dei DNS esterni comporterà la disattivazione di tutti i servizi aggiuntivi legati al dominio."* The user has a real, actively-used mailbox `diego@dataxiom.it` hosted at Register.it. It's unclear whether this warning refers only to DNS-managed Register.it add-ons or extends to the mail hosting service itself independent of the MX record (which Route53 already replicates correctly). Given the real risk of losing a working business mailbox against the comparatively marginal benefit (the original DNS/IP incident is already fixed independently by Task 6's Elastic IP), the user chose to keep the nameservers on Register.it and seek explicit confirmation from Register.it support before reconsidering the cutover.
+
+**Current state:** the Route53 hosted zone (`/hostedzone/Z00306752S9SW691DED12`, 4 name servers under `awsdns-*`) exists and is fully populated and verified (Task 8 passed), but is NOT live — `dataxiom.it` still resolves via `ns1/ns2.register.it`. It costs ~$0.50/month while it sits unused; left in place deliberately so Task 9 can resume without redoing Task 7 if/when the email question is resolved favorably.
+
+**Task 9, 10, 11 (docs) are not executed as originally scoped** — Task 11 (docs) is instead being done now to reflect this paused state, not a completed migration.
+
+---
+
 ### Task 1: Stop RDS staging
 
 **Resources:** `badge-system-db-staging` (RDS instance)
 
-- [ ] **Step 1: Confirm current state**
+- [x] **Step 1: Confirm current state**
 
 Run: `aws rds describe-db-instances --db-instance-identifier badge-system-db-staging --query "DBInstances[0].DBInstanceStatus" --output text`
 Expected: `available`
 
-- [ ] **Step 2: Stop the instance**
+- [x] **Step 2: Stop the instance**
 
 Run: `aws rds stop-db-instance --db-instance-identifier badge-system-db-staging`
 Expected: JSON output with `"DBInstanceStatus": "stopping"`
 
-- [ ] **Step 3: Verify it reaches `stopped`**
+- [x] **Step 3: Verify it reaches `stopped`**
 
 Run: `aws rds describe-db-instances --db-instance-identifier badge-system-db-staging --query "DBInstances[0].DBInstanceStatus" --output text`
 Expected: `stopped` (may take 2-5 minutes; re-run until it stops showing `stopping`)
@@ -39,22 +51,22 @@ Expected: `stopped` (may take 2-5 minutes; re-run until it stops showing `stoppi
 
 **Resources:** `badge-backup-test-20260608`, `badge-system-db-snapshot` (manual RDS snapshots, 20GB each, both from June, never referenced since)
 
-- [ ] **Step 1: Confirm they're not needed — list all snapshots one more time**
+- [x] **Step 1: Confirm they're not needed — list all snapshots one more time**
 
 Run: `aws rds describe-db-snapshots --query "DBSnapshots[?SnapshotType=='manual'].{ID:DBSnapshotIdentifier,Created:SnapshotCreateTime}" --output table`
 Expected: only the two snapshots above listed as manual (automated ones are separate and untouched by this task)
 
-- [ ] **Step 2: Delete `badge-backup-test-20260608`**
+- [x] **Step 2: Delete `badge-backup-test-20260608`**
 
 Run: `aws rds delete-db-snapshot --db-snapshot-identifier badge-backup-test-20260608`
 Expected: JSON output confirming deletion request, `Status: deleting`
 
-- [ ] **Step 3: Delete `badge-system-db-snapshot`**
+- [x] **Step 3: Delete `badge-system-db-snapshot`**
 
 Run: `aws rds delete-db-snapshot --db-snapshot-identifier badge-system-db-snapshot`
 Expected: JSON output confirming deletion request, `Status: deleting`
 
-- [ ] **Step 4: Verify both are gone**
+- [x] **Step 4: Verify both are gone**
 
 Run: `aws rds describe-db-snapshots --query "DBSnapshots[?SnapshotType=='manual'].DBSnapshotIdentifier" --output text`
 Expected: empty output
@@ -65,12 +77,12 @@ Expected: empty output
 
 **Resources:** `badge-system-backend` (ECR repository, currently 181 images / ~33GB, no lifecycle policy)
 
-- [ ] **Step 1: Confirm no policy exists yet**
+- [x] **Step 1: Confirm no policy exists yet**
 
 Run: `aws ecr get-lifecycle-policy --repository-name badge-system-backend`
 Expected: error `LifecyclePolicyNotFoundException` (confirms the gap found during diagnosis)
 
-- [ ] **Step 2: Write the policy file**
+- [x] **Step 2: Write the policy file**
 
 Create `/tmp/ecr-lifecycle-policy.json`:
 ```json
@@ -92,17 +104,17 @@ Create `/tmp/ecr-lifecycle-policy.json`:
 }
 ```
 
-- [ ] **Step 3: Apply it**
+- [x] **Step 3: Apply it**
 
 Run: `aws ecr put-lifecycle-policy --repository-name badge-system-backend --lifecycle-policy-text file:///tmp/ecr-lifecycle-policy.json`
 Expected: JSON output echoing back the policy text, no error
 
-- [ ] **Step 4: Verify it's active**
+- [x] **Step 4: Verify it's active**
 
 Run: `aws ecr get-lifecycle-policy --repository-name badge-system-backend --query "lifecyclePolicyText" --output text`
 Expected: the JSON policy text from Step 2, not an error
 
-- [ ] **Step 5: Trigger an evaluation and confirm old images start expiring**
+- [x] **Step 5: Trigger an evaluation and confirm old images start expiring**
 
 Run: `aws ecr start-lifecycle-policy-preview --repository-name badge-system-backend`
 Wait ~10s, then run: `aws ecr get-lifecycle-policy-preview --repository-name badge-system-backend --query "summary"`
@@ -114,17 +126,17 @@ Expected: `expiringImageTotalCount` around 166 (181 current images − 15 kept),
 
 **Resources:** `/badge/api-staging` (CloudWatch log group, currently retention `None` — never expires)
 
-- [ ] **Step 1: Confirm current retention is unset**
+- [x] **Step 1: Confirm current retention is unset**
 
 Run: `aws logs describe-log-groups --log-group-name-prefix /badge/api-staging --query "logGroups[0].retentionInDays"`
 Expected: `null`
 
-- [ ] **Step 2: Set retention to 30 days (matching production's `/badge/api`)**
+- [x] **Step 2: Set retention to 30 days (matching production's `/badge/api`)**
 
 Run: `aws logs put-retention-policy --log-group-name /badge/api-staging --retention-in-days 30`
 Expected: no output (success is silent for this command)
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Run: `aws logs describe-log-groups --log-group-name-prefix /badge/api-staging --query "logGroups[0].retentionInDays"`
 Expected: `30`
@@ -137,17 +149,17 @@ Expected: `30`
 
 **Why this task, not just a cost item:** with the first paying customer onboarding within ~1 month, a 1-day backup window is too thin for a rollback scenario on real customer data.
 
-- [ ] **Step 1: Confirm current value**
+- [x] **Step 1: Confirm current value**
 
 Run: `aws rds describe-db-instances --db-instance-identifier badge-system-db --query "DBInstances[0].BackupRetentionPeriod"`
 Expected: `1`
 
-- [ ] **Step 2: Apply the change**
+- [x] **Step 2: Apply the change**
 
 Run: `aws rds modify-db-instance --db-instance-identifier badge-system-db --backup-retention-period 7 --apply-immediately`
 Expected: JSON output showing `PendingModifiedValues.BackupRetentionPeriod: 7` (applies immediately, no restart/downtime required for this specific parameter)
 
-- [ ] **Step 3: Verify it took effect**
+- [x] **Step 3: Verify it took effect**
 
 Run: `aws rds describe-db-instances --db-instance-identifier badge-system-db --query "DBInstances[0].BackupRetentionPeriod"`
 Expected: `7` (may take a minute to reflect; re-run if still `1`)
@@ -158,31 +170,31 @@ Expected: `7` (may take a minute to reflect; re-run if still `1`)
 
 **Resources:** `badge-system-api` (EC2 instance `i-033bb0cc6ad03f88f`), currently has only an ephemeral public IP (`52.210.168.149` as of this session) — root cause of today's `api.dataxiom.it` outage after restart.
 
-- [ ] **Step 1: Allocate a new Elastic IP**
+- [x] **Step 1: Allocate a new Elastic IP**
 
 Run: `aws ec2 allocate-address --domain vpc --query "{AllocationId:AllocationId,PublicIp:PublicIp}" --output json`
 Expected: JSON with a new `AllocationId` (starts `eipalloc-`) and a new `PublicIp`. **Record both values — they're used in every step below and in Task 7.**
 
-- [ ] **Step 2: Associate it with the production instance**
+- [x] **Step 2: Associate it with the production instance**
 
 Run (replace `<ALLOCATION_ID>` with the value from Step 1): `aws ec2 associate-address --instance-id i-033bb0cc6ad03f88f --allocation-id <ALLOCATION_ID>`
 Expected: JSON output with an `AssociationId`
 
-- [ ] **Step 3: Verify the instance now reports the new static IP**
+- [x] **Step 3: Verify the instance now reports the new static IP**
 
 Run: `aws ec2 describe-instances --instance-ids i-033bb0cc6ad03f88f --query "Reservations[0].Instances[0].PublicIpAddress" --output text`
 Expected: matches the `PublicIp` from Step 1
 
-- [ ] **Step 4: Confirm the API is reachable on the new IP directly (before any DNS change)**
+- [x] **Step 4: Confirm the API is reachable on the new IP directly (before any DNS change)**
 
 Run: `curl -s -m 10 http://<NEW_PUBLIC_IP>:3000/health`
 Expected: `{"status":"ok",...,"database":"connected",...}`
 
-- [ ] **Step 5: Update the existing DNS A record for `api.dataxiom.it` at Register.it to point to the new Elastic IP**
+- [x] **Step 5: Update the existing DNS A record for `api.dataxiom.it` at Register.it to point to the new Elastic IP**
 
 **USER ACTION REQUIRED** (Register.it has no API accessible from here): log into the Register.it control panel → DNS management for `dataxiom.it` → edit the `api` A record → change the value from the old ephemeral IP to the new Elastic IP from Step 1.
 
-- [ ] **Step 6: Verify DNS propagation and end-to-end health**
+- [x] **Step 6: Verify DNS propagation and end-to-end health**
 
 Run: `dig +short api.dataxiom.it` — expect it to eventually return the new Elastic IP (may take a few minutes to a few hours depending on the record's current TTL)
 Then run: `curl -s -m 10 https://api.dataxiom.it/health` — expect `{"status":"ok",...}`
@@ -213,12 +225,12 @@ The 3 DKIM CNAMEs are what keeps SES sending-domain verification (`dataxiom.it`,
 
 **No SPF or DMARC record exists today** (confirmed via `dig TXT` and `dig TXT _dmarc.dataxiom.it`, both came back empty aside from the Google verification TXT) — do not add one, replicate the current state exactly, adding new record types is out of scope for this migration.
 
-- [ ] **Step 1: Create the hosted zone**
+- [x] **Step 1: Create the hosted zone**
 
 Run: `aws route53 create-hosted-zone --name dataxiom.it --caller-reference "badge-system-dns-migration-$(date +%s)" --query "{ZoneId:HostedZone.Id,NameServers:DelegationSet.NameServers}"`
 Expected: JSON with a new `ZoneId` (format `/hostedzone/XXXX`) and a list of 4 AWS name servers. **Record both — used in every remaining step of this task and in Task 8.**
 
-- [ ] **Step 2: Write the record-set change batch**
+- [x] **Step 2: Write the record-set change batch**
 
 Create `/tmp/route53-records.json` (replace `<ZONE_ID>` is not needed in this file, only in the apply command; replace `<ELASTIC_IP>` with the value from Task 6 Step 1):
 
@@ -239,12 +251,12 @@ Create `/tmp/route53-records.json` (replace `<ZONE_ID>` is not needed in this fi
 }
 ```
 
-- [ ] **Step 3: Apply the record batch**
+- [x] **Step 3: Apply the record batch**
 
 Run: `aws route53 change-resource-record-sets --hosted-zone-id <ZONE_ID> --change-batch file:///tmp/route53-records.json --query "ChangeInfo.{Id:Id,Status:Status}"`
 Expected: JSON with `Status: PENDING`. **Record the `Id`.**
 
-- [ ] **Step 4: Wait for the change to propagate to Route53's own servers**
+- [x] **Step 4: Wait for the change to propagate to Route53's own servers**
 
 Run: `aws route53 wait resource-record-sets-changed --id <CHANGE_ID>`
 Expected: no output, command returns once `Status` becomes `INSYNC` (typically under a minute)
@@ -255,12 +267,12 @@ Expected: no output, command returns once `Status` becomes `INSYNC` (typically u
 
 **This task must pass in full before Task 9 — it's the safety gate for the cutover.**
 
-- [ ] **Step 1: Query each record directly against the new Route53 name servers (not the public resolver, which still points to Register.it)**
+- [x] **Step 1: Query each record directly against the new Route53 name servers (not the public resolver, which still points to Register.it)**
 
 For each of the 4 name servers returned in Task 7 Step 1, run: `dig @<ROUTE53_NAMESERVER> dataxiom.it A +short`
 Expected: `75.2.60.5`
 
-- [ ] **Step 2: Repeat for the other records**
+- [x] **Step 2: Repeat for the other records**
 
 Run: `dig @<ROUTE53_NAMESERVER> api.dataxiom.it A +short` → expect the Elastic IP
 Run: `dig @<ROUTE53_NAMESERVER> www.dataxiom.it CNAME +short` → expect `dataxiom.netlify.app.`

@@ -6,6 +6,54 @@
 
 ---
 
+## Session 110 — AWS cost optimization eseguito, migrazione DNS a Route53 pausata per rischio email (23 Agosto 2026)
+
+### Contesto
+L'utente ha segnalato una spesa AWS insostenibile: budget configurato a $20/mese, spesa reale del mese $68.42, previsione $102.81. Richiesto `/superpowers:brainstorming` per una spending review accurata.
+
+### Diagnosi reale (non stimata) via inventario AWS CLI
+- **RDS staging (`db.t3.micro`) 24/7, non coperto da Free Tier** (~$15-16/mese) — il Free Tier copre solo 750h/mese cumulative nell'intero account, già saturate dall'istanza di produzione.
+- **EC2 produzione `t3.small` 24/7** — CPU media reale 7gg: 1.07%, picco 32.6%, sovradimensionato.
+- **2 snapshot RDS manuali dimenticati** da giugno (~$3.8/mese) — a differenza degli automatici (retention 1gg), non scadono mai da soli.
+- **ECR senza lifecycle policy**: 181 immagini/~33GB accumulate, crescita illimitata a ogni push.
+- **Log CloudWatch staging senza retention** (crescita illimitata, a differenza di prod che ha 30gg).
+- Nota positiva: gli alert di budget (soglie 85%/100%) erano già configurati correttamente e in stato ALARM — non un gap di alerting, solo non notati in tempo.
+
+### Revisione esplicita rispetto all'attivazione del cliente pilota (~1 mese)
+Su richiesta dell'utente, il piano è stato rivalutato per non rischiare instabilità durante l'onboarding:
+- **Downgrade EC2 prod (`t3.small`→`t3.micro`) deferito**, non eseguito — la CPU lo giustificherebbe ma la memoria (2GB→1GB) è un rischio concreto data una crisi di stabilità pregressa da pool exhaustion/OOM già documentata (`backend_stability_crisis_resolved.md`). Trigger per rivalutarlo: cliente pilota stabile da 2-4 settimane, più l'installazione di un CloudWatch Agent per dati di memoria reali (oggi assenti).
+- **Nuovo item di readiness**: `BackupRetentionPeriod` RDS produzione alzato da 1 a 7 giorni — 1 giorno era troppo corto per un rollback realistico su dati di un cliente pagante.
+- Nessun blocker di attivazione cliente non legato al costo trovato — l'onboarding self-service è già verificato end-to-end (Gate finale, Session 89).
+
+### Migrazione DNS `dataxiom.it` — Soluzione A scelta, poi verificata via AWS CLI
+`dataxiom.it` è registrato **e** gestito interamente da Register.it (nameserver `ns1/ns2.register.it`). Confermato via `aws route53domains`: il TLD `.it` è supportato da Route53 per il trasferimento di registrazione, ma scartato (Soluzione B) per il rischio di una procedura Nic.it a tempistiche non garantite a ridosso del lancio. Scelta la delega DNS via nameserver (Soluzione A): hosted zone Route53, registrazione invariata su Register.it.
+
+Inventario record reale catturato via `dig`/`aws sesv2`: A/CNAME per root/www/api/badge, **MX `10 mail.register.it`** (caselle email reali ospitate a Register.it, non solo SES), TXT google-site-verification, **3 CNAME DKIM SES** (`aws sesv2 get-email-identity` — necessari per non rompere la verifica del dominio SES).
+
+### Esecuzione — `/superpowers:subagent-driven-development` adattato a task infrastrutturali
+Nessun codice da revisionare per stile in questo piano — adattamento: un subagent "executor" per task che esegue i comandi esatti del piano e riporta l'output reale, verifica diretta del controller (query `describe`/`get` di sola lettura) al posto della code-quality-review, dato che non c'è giudizio di qualità del codice da fare su comandi AWS CLI letterali.
+
+**Eseguiti e verificati (Task 1-8/11):**
+1. RDS staging fermato.
+2. 2 snapshot manuali cancellati — un subagent ha sollevato un falso allarme di sicurezza ("unica risorsa di backup dell'account"), verificato e smentito controllando che i 6 snapshot automatici (il vero meccanismo di backup) fossero intatti.
+3. Lifecycle policy ECR applicata (mantiene le 15 immagini più recenti, 166 marcate per scadenza).
+4. Retention log staging impostata a 30gg.
+5. Backup retention RDS prod alzata a 7gg.
+6. **Elastic IP `52.19.238.50` allocato e associato** a `badge-system-api` — chiude alla radice l'incidente che ha aperto questa sessione (IP EC2 effimero, DNS rimasto stale dopo un riavvio), indipendentemente dalla sorte della migrazione Route53. Record A `api.dataxiom.it` aggiornato manualmente su Register.it dall'utente.
+7. Hosted zone Route53 creata e popolata con tutti e 9 i record reali.
+8. Verifica pre-cutover superata — tutti i record confermati corretti via `aws route53 list-resource-record-sets` (query diretta al control plane, non soggetta a cache DNS).
+
+**Scoperta collaterale, non correlata al piano**: il resolver DNS locale del sandbox restituiva risposte stantie indipendentemente dal server `@` specificato in `dig` — ha causato falsi allarmi di "propagazione lenta" su Register.it che in realtà era già avvenuta. Diagnosticato e risolto verificando con query DoH dirette (Cloudflare, bypassa il resolver locale) e con l'API Route53 direttamente — entrambe affidabili indipendentemente dal problema locale. Lezione: non fidarsi di `dig` locale per verifiche DNS critiche in questo ambiente, preferire DoH o query dirette al control plane del provider.
+
+### Task 9 (cutover nameserver) fermato dall'utente — rischio email non chiarito
+Nel pannello "Cambio DNS" di Register.it è comparso un avviso non previsto nella spec: *"L'impostazione dei DNS esterni comporterà la disattivazione di tutti i servizi aggiuntivi legati al dominio."* L'utente ha una casella email reale e attiva **`diego@dataxiom.it`** ospitata a Register.it. Non è possibile determinare dagli strumenti disponibili se l'avviso riguardi solo componenti di pannello Register.it o disattivi il servizio email stesso, indipendentemente dal record MX (già replicato correttamente in Route53).
+
+**Decisione**: dato che il problema originale (IP EC2 effimero) è già risolto autonomamente dal Task 6, il beneficio residuo della migrazione Route53 (gestione DNS via API) è stato giudicato insufficiente a giustificare il rischio concreto di perdere una casella email di lavoro attiva, senza prima una conferma esplicita dal supporto Register.it. **Il cutover è pausato, non abbandonato** — la hosted zone Route53 resta creata e verificata, pronta a riprendere dal Task 9 senza rifare il Task 7.
+
+**Stato:** Task 1-8/11 completati e verificati. Target di risparmio (~€20-30/mese) già raggiunto dai Task 1-5, indipendentemente dall'esito della migrazione DNS. Task 9-10 in attesa di conferma Register.it sul servizio email. Task 11 (questo aggiornamento documentale) in corso.
+
+---
+
 ## Session 109 — Mutua esclusione Smart Working ↔ Eventi/Training, PR #11 aperta, merge posticipato (22 Agosto 2026)
 
 ### Contesto

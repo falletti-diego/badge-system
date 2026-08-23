@@ -1,3 +1,63 @@
+# Badge System — Session 110 Handoff
+
+**Date:** 2026-08-23
+**Session:** 110 — AWS cost optimization eseguito (8/11 task), migrazione DNS a Route53 pausata: rischio non chiarito per l'email `diego@dataxiom.it`
+**Status:** ✅ **Target di risparmio raggiunto** (Task 1-5). ✅ **Incidente DNS/IP di apertura sessione risolto** (Task 6, Elastic IP). ⏸️ **Task 9 (cutover nameserver Route53) fermato dall'utente** — hosted zone creata e verificata (Task 7-8) ma non attivata, in attesa di conferma dal supporto Register.it sul servizio email.
+
+---
+
+## Goal (Session 110)
+
+La sessione è iniziata verificando se AWS fosse "attivo e funzionante" — trovato l'EC2 di produzione `stopped` (causa ignota, verosimilmente un riavvio precedente), riavviato, poi scoperto che `api.dataxiom.it` restava comunque irraggiungibile: l'IP pubblico dell'istanza era cambiato (nessun Elastic IP), e il DNS su Register.it puntava ancora al vecchio IP. Prima di fixare quell'incidente, l'utente ha chiesto una spending review completa (AWS a ~$100/mese contro un budget di $20) via `/superpowers:brainstorming`, poi ha esteso l'analisi a due fronti: readiness per l'attivazione di un cliente entro 1 mese, e fattibilità di migrare la gestione DNS di `dataxiom.it` da Register.it a Route53.
+
+## Current Progress
+
+**Diagnosi reale** (via inventario `aws ec2`/`rds`/`ecr`/`logs`/`budgets`, non stime): RDS staging 24/7 non coperto da Free Tier (~$15-16/mese), EC2 prod `t3.small` sovradimensionato (CPU media 1.07%), 2 snapshot RDS manuali dimenticati di giugno (~$3.8/mese), ECR senza lifecycle policy (181 immagini/33GB in crescita illimitata), log staging senza retention.
+
+**Revisione esplicita per readiness cliente (~1 mese)**: downgrade EC2 prod deferito (rischio memoria/OOM, storico di crisi pool-exhaustion già documentato); backup retention RDS prod alzata da 1 a 7gg invece (readiness, non risparmio).
+
+**DNS**: confermato via `aws route53domains` che `.it` è supportato da Route53 per il trasferimento di registrazione, ma scelta la Soluzione A (solo delega DNS via nameserver, registrazione invariata su Register.it) per il rischio del trasferimento completo a ridosso del lancio. Inventario record reale catturato (A/CNAME/MX/TXT/3×DKIM SES).
+
+**Spec** (`docs/superpowers/specs/2026-08-23-aws-cost-optimization-design.md`) → **piano 11 task** (`docs/superpowers/plans/2026-08-23-aws-cost-optimization.md`) → `/superpowers:subagent-driven-development`, adattato: subagent "executor" per task (nessuna code-quality-review, non c'è codice — verifica diretta del controller sull'output reale).
+
+**Eseguiti e verificati (Task 1-8/11):**
+1. RDS staging fermato.
+2. 2 snapshot manuali cancellati (un subagent ha sollevato un falso allarme di sicurezza "unica risorsa di backup" — verificato e smentito: i 6 snapshot automatici, il vero backup, restano intatti).
+3. Lifecycle policy ECR applicata (166 immagini marcate per scadenza, 15 mantenute).
+4. Retention log staging → 30gg.
+5. Backup retention RDS prod → 7gg.
+6. **Elastic IP `52.19.238.50` allocato e associato** a `badge-system-api` — chiude l'incidente di apertura sessione indipendentemente da Route53. Record A `api.dataxiom.it` aggiornato su Register.it dall'utente.
+7. Hosted zone Route53 creata e popolata con tutti e 9 i record reali (incluso MX e 3× DKIM SES).
+8. Verifica pre-cutover superata (tutti i record confermati via `aws route53 list-resource-record-sets`).
+
+**Scoperta collaterale non correlata**: il resolver DNS locale del sandbox restituiva risposte stantie indipendentemente dal server `@` specificato in `dig` — ha causato falsi allarmi di "propagazione lenta" su Register.it già in realtà avvenuta. Risolto verificando con query DoH dirette (Cloudflare) e con l'API Route53 direttamente.
+
+**Task 9 (cutover nameserver) fermato dall'utente**: nel pannello "Cambio DNS" di Register.it è comparso un avviso non previsto — *"L'impostazione dei DNS esterni comporterà la disattivazione di tutti i servizi aggiuntivi legati al dominio"*. L'utente ha una casella email reale e attiva `diego@dataxiom.it` ospitata lì. Non determinabile dagli strumenti disponibili se l'avviso riguardi solo componenti Register.it o disattivi il servizio email stesso, a prescindere dal record MX (già replicato correttamente). Dato che il problema originale è già risolto dal Task 6, il beneficio residuo di Route53 non giustifica il rischio senza conferma esplicita dal supporto Register.it.
+
+## What Worked
+
+- **Diagnosi bottom-up da inventario reale invece che da stime** — Cost Explorer si è confermato inaffidabile (dati vicini a zero, coerente con quanto già annotato in sessioni precedenti), ma `aws budgets describe-budgets` ha dato numeri reali e verificabili (spesa attuale, previsione, storico alert).
+- **Rivalutare esplicitamente il piano di risparmio rispetto al rischio di attivazione cliente**, su richiesta dell'utente — ha portato a deferire un intervento (downgrade EC2) che sarebbe stato rischioso proprio nella finestra sbagliata, e a scoprire un item di readiness non legato al costo (backup retention).
+- **Non fidarsi ciecamente di un falso allarme di sicurezza del subagent** (Task 2) — verificato con una query indipendente prima di accettare o respingere l'allarme.
+- **Fermarsi su un rischio genuinamente non chiarificabile dagli strumenti disponibili** (l'avviso Register.it sul servizio email) invece di procedere assumendo che andasse tutto bene — l'utente ha un servizio email reale in gioco, non uno di test.
+- **Riconoscere che il beneficio marginale (Route53) non giustificava il rischio residuo**, una volta che il problema originale era già risolto in modo indipendente (Elastic IP) — non tutto il piano andava completato a tutti i costi per "finire quanto pianificato".
+
+## What Didn't Work / Da tenere a mente
+
+- **`dig` locale in questo sandbox non è affidabile per verifiche DNS critiche** — ha restituito risposte stantie per >10 minuti indipendentemente dal server `@` interrogato esplicitamente, causando falsi allarmi di propagazione lenta. Usare query DoH dirette (es. `curl -H "accept: application/dns-json" "https://cloudflare-dns.com/dns-query?name=X&type=A"`) o l'API del provider DNS direttamente (`aws route53 list-resource-record-sets`) per verifiche affidabili in questo ambiente.
+- **La spec/piano originali non avevano previsto il rischio "servizi aggiuntivi" del pannello Register.it** — un avviso generico del genere può nascondere dipendenze reali (hosting email) non deducibili dalla sola ispezione dei record DNS via `dig`/`aws sesv2`. Da verificare esplicitamente con il supporto del registrar prima di un cutover simile in futuro, non solo dall'inventario tecnico dei record.
+
+## Next Steps (in ordine di urgenza)
+
+1. **Contattare il supporto Register.it** e chiedere esplicitamente se attivare DNS esterni per `dataxiom.it` disattiva la casella `diego@dataxiom.it` — bloccante per riprendere il Task 9.
+2. Se confermato sicuro: completare Task 9 (cutover nameserver, hosted zone Route53 già pronta) e Task 10 (verifica post-cutover, incluso lo stato DKIM SES).
+3. Se NON sicuro o non chiarificabile: valutare se eliminare la hosted zone Route53 (costa ~$0.50/mese inutilizzata) o lasciarla per un'eventuale migrazione futura via altra strada (es. migrare prima la casella email a un servizio esterno, poi il DNS).
+4. A fine mese, verificare la spesa reale (`aws budgets describe-budgets`) contro il target €20-30 per confermare l'efficacia dei Task 1-5.
+5. **Downgrade EC2 prod** (deferito): non prima che il cliente pilota sia stabile da 2-4 settimane — richiede prima l'installazione di un CloudWatch Agent per dati di memoria reali.
+6. Tutto il backlog invariato dalle sessioni precedenti resta aperto (PR #11 in attesa di merge — AWS era temporaneamente non disponibile in Session 109, ora risolto, il merge non è ancora stato eseguito in questa sessione) — vedi Session 109 sotto.
+
+---
+
 # Badge System — Session 109 Handoff
 
 **Date:** 2026-08-22
