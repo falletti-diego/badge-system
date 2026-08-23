@@ -1,3 +1,65 @@
+# Badge System — Session 111-112 Handoff
+
+**Date:** 2026-08-23
+**Session:** 111-112 — Pacchetto "Sales-Ready" completo (readiness prodotto/legale/commerciale prima del primo cliente pilota) + chiusura Task 10 (DNS Route53 verificato propagato) + refresh `product-marketing.md` v4 + analisi critica prossimi passi marketing
+**Status:** ✅ **PR #13 mergiata e live in produzione** — 6 task readiness (S.27/S.28/S.29 mitigati, fix documentali, messaging Face ID, modulo d'ordine). ✅ **Task 10 chiuso** — DNS Route53 verificato completamente propagato (3 resolver, MX/DKIM/SES/HTTPS tutti confermati funzionanti). ✅ **PR #15 mergiata** (product-marketing v4 + chiusura Task 10 in TASKS.md), dopo aver chiuso e riaperto da un branch pulito la PR #14 (conflitto spurio da merge-base obsoleto). ✅ **Regressione CI latente trovata e corretta** durante quel riavvio (4 workflow file fermi a `actions/*@v4` nel branch di lavoro, main già a v5). Nessun task pending residuo di questa sessione.
+
+---
+
+## Goal (Session 111-112)
+
+Su richiesta esplicita di un'analisi critica dello stato del progetto vista dal punto di vista dell'adozione del primo cliente pilota, emerso che il prodotto è tecnicamente completo ma **zero clienti, zero contatti commerciali fatti** — il piano di outreach esiste da settimane ma è stato deliberatamente mai eseguito — e 3 gap legali aperti da Session 100 (S.27 base giuridica consenso GPS, S.28 autorizzazione Art.4 Statuto Lavoratori, S.29 DPIA) mai indirizzati. Deciso di dare priorità alla readiness prodotto/legale/commerciale prima di riprendere l'outreach (Settembre 2026 inteso come "pronti a vendere", non "cliente firmato").
+
+## Current Progress
+
+**Pacchetto Sales-Ready** — ciclo completo `/superpowers:brainstorming` (Opzione B, pacchetto completo) → `/grilling` (7 domande chiuse, tra cui una correzione strutturale: scoperto che non esiste un "wizard di onboarding" per un nuovo cliente — la creazione tenant è un form a 3 campi in `ClientsTab.jsx` compilato da un superadmin, non dal cliente — il gate Art.4 andava quindi agganciato al tentativo di attivazione in `SettingsTab.jsx`, non alla creazione) → spec (`docs/superpowers/specs/2026-08-23-sales-ready-package-design.md`, con una correzione post-scrittura da analisi critica esplicita) → piano 6 task (`docs/superpowers/plans/2026-08-23-sales-ready-package.md`, verificato riga per riga contro route/firme/RBAC reali prima di scriverlo) → esecuzione **inline** via `/superpowers:executing-plans`, con **verifica progressiva**: un subagent indipendente (spec-review + code-quality-review) dopo *ogni singolo task*, non solo a fine piano — pattern richiesto esplicitamente dall'utente, ibridando `executing-plans` con la disciplina di review di `subagent-driven-development`.
+
+**I 6 task** (dettaglio completo nel piano):
+1. **S.27**: allineato `GPSConsentDialog.jsx` (mobile) alla base giuridica Art. 6(1)(f) legittimo interesse già dichiarata nei documenti privacy policy — il gap era solo nel codice, non nei doc.
+2. **S.29**: template DPIA precompilato (`docs/DPIA_geofencing_IT.md`), bozza con disclaimer esplicito.
+3. **S.28**: nuovo cliente → `geofencing_feature_enabled=false` di default (hardcoded nell'insert `clients.js`); attivarlo richiede `geofencing_art4_confirmed:true` nella stessa richiesta (`PUT /admin/settings`) con audit log dedicato; UI in `SettingsTab.jsx` (checkbox di conferma, Save disabilitato finché non spuntata). 4 test real-Postgres nuovi.
+4. Fix dicitura stale in `CLAUDE.md` (Offline Mode/export paghe erano ancora marcati "Fase 2" mentre sono live).
+5. Messaging Face ID/anti-frode aggiunto all'hero di `/prova-demo`.
+6. Modulo d'ordine commerciale breve (`docs/modulo-ordine-commerciale-IT.md`), referenzia SLA/DPA esistenti invece di duplicarli.
+
+**Verifica progressiva ha trovato 4 finding reali, tutti corretti in corsa** prima di procedere al task successivo: (a) DPIA dichiarava il gate Art.4 "già in essere" prima che il Task 3 lo implementasse — corretto a "in rilascio"; (b) checkbox di conferma Art.4 non si resettava dopo un salvataggio (rischio di riuso di una conferma stale in un ciclo attiva→disattiva→riattiva) — fixato; (c) `.catch()` mancante per coerenza stilistica sull'audit log dedicato — aggiunto (non funzionalmente necessario, `logAudit` già cattura tutto internamente); (d) modulo d'ordine mancava clausola IVA e foro competente, standard per un ordine B2B italiano — aggiunte.
+
+**Code review finale su tutto il diff di sessione** (5 angoli: CLAUDE.md compliance, bug scan, git history/blame, code-comments compliance, + verifica diretta di un sospetto falso positivo) ha trovato **2 finding aggiuntivi**: cleanup-ordering in un test (`clientId` assegnato dopo l'assert invece che prima — Pattern 5 di `CLAUDE.md`) e un commento che sovra-affermava allineamento a "v2.1" quando `privacy_policy_version` nel codice resta hardcoded a `'2.0'` (disallineamento preesistente e sistemico, non introdotto qui — corretto solo il commento, non espanso lo scope al bug di versioning). Un sospetto bug su `ValidationError('...', {code:...})` verificato **falso positivo** con lettura diretta di `app.js` (il pattern `{code:...}` come `details` è già quello stabilito nel codebase, `events.js` lo usa identico).
+
+**PR #13**: push → CI fallita al primo giro (**errore lint reale, non un test**: `Strings must use singlequote quotes` su un template literal single-line senza interpolazione in un nuovo file di test — non avevo eseguito `npm run lint` localmente, solo i test) → fixato (riformattato multi-line, esente dalla regola) → CI verde (Backend Lint&Test, Mobile, Security) → merge squash (`5b94bca`) → CI/CD Pipeline + Build&Push ECR verdi → Deploy to EC2 riuscito → verificato live: `/health` 200 DB connesso, `PUT /api/v1/admin/settings` → 401 non 404 (route montata correttamente).
+
+**Task 10 (verifica DNS finale)**: propagazione completata. Verificato: NS su 3 resolver indipendenti (Cloudflare, Google, Quad9) tutti e 4 i nameserver Route53, nessuna traccia di `ns1/ns2.register.it`; SOA conferma Route53 come autorità effettiva; MX invariato (`mail.register.it`); i 3 CNAME DKIM SES; A `api.dataxiom.it`→Elastic IP; CNAME `www`/`badge`→Netlify. **Verifica ulteriore su richiesta esplicita**: `aws sesv2 get-email-identity` conferma `VerifiedForSendingStatus:true`, `DkimStatus:SUCCESS`; tutti i siti (`dataxiom.it`, `api.dataxiom.it/health`, `badge.dataxiom.it`, `www.dataxiom.it`) rispondono 200/301 con TLS valido. Routine cloud di monitoraggio (`trig_01S8bNdjhTyzFYn6LYCP5Vj9`, ogni 12h, aveva già girato una volta e confermato) disattivata.
+
+**`.agents/product-marketing.md` v3→v4** (skill `product-marketing`): aggiornati Proof Points (messaging Face ID ora effettivamente live nel funnel demo, non solo pianificato), Objections (aggiunta obiezione compliance/DPIA con risposta basata sul nuovo template+gate), Goals/Conversion action (ora esiste un modulo d'ordine formale). Nessun cambiamento di posizionamento.
+
+**Chiusura PR #14→#15**: dopo aver committato la chiusura DNS+product-marketing sullo stesso branch worktree lungamente vissuto, il push ha rivelato **due problemi**: (1) 4 file workflow CI (`ci.yml`, `deploy-staging.yml`, `deploy-to-ec2.yml`, `ecr-push.yml`) erano rimasti fermi a `actions/*@v4` in questo branch, mentre `origin/main` era già a `@v5` (fix di PR #12, mai arrivato su questo branch di lavoro riusato da settimane) — se pushato così com'è avrebbe **revertito** quel fix. Sincronizzati con `origin/main` prima di procedere. (2) Anche dopo la sincronizzazione, `gh pr create`→`gh pr merge` ha riportato **conflitto di merge nonostante un `git diff origin/main..HEAD --stat` pulito** (solo 2 file) — causa: il merge-base di questo branch con `main` risale a settimane fa (prima di molte squash-merge di sessioni precedenti), quindi GitHub tenta un vero merge a 3 vie sull'intera storia divergente, non un diff a 2 punti. **Risolto** creando un branch pulito da `origin/main` (`git worktree add`), applicando la patch dei soli 2 file realmente cambiati (`git diff`→`git apply`), pushando da lì — PR #15, mergeable, CI verde, mergiata (`5e72ad0`). Worktree temporaneo ripulito.
+
+**Analisi critica marketing** (skill `marketing-ideas`+`product-marketing`): l'utente ha chiarito che **Dataxiom non ha attualmente clienti esistenti** da cui partire con introduzioni calde (il "Passo 0" del piano di lista contatti, pensato per questo, è quindi non applicabile). Raccomandazione rivista: **batch ridotto di cold outreach (10-15 account)**, non il piano intero da 100-150/€1500 — usando gli asset già pronti (`docs/marketing/cold-email-outreach-template.md`), per rompere il pattern "pianifica e non esegui" osservato su più sessioni, con criterio di successo/stop a 2 settimane invece di 4.
+
+## What Worked
+
+- **Verifica progressiva subagent dopo ogni task, non solo a fine piano** — ha trovato 4 finding reali *prima* che si accumulassero, incluso un caso (DPIA che sovra-affermava lo stato del gate Art.4) che sarebbe stato un problema serio se il documento fosse arrivato a un cliente reale in quello stato.
+- **Verificare contro il codice reale prima di scrivere la spec**, non durante l'esecuzione — il grilling ha scoperto che "wizard di onboarding" non esiste, evitando di pianificare codice contro un componente inesistente.
+- **Non fidarsi di un sospetto bug trovato da un agente senza verifica diretta** — il caso `ValidationError`/`err.details` è stato controllato leggendo `app.js` riga per riga invece di accettare la segnalazione, evitando un "fix" che avrebbe introdotto un'inconsistenza reale col pattern stabilito.
+- **Lint locale prima del push, imparato dopo il primo fallimento CI** — la prima iterazione di PR #13 è fallita per un errore ESLint reale mai controllato localmente (avevo eseguito solo i test, non `npm run lint`).
+- **Verificare il diff a 2 punti (`git diff origin/main..HEAD`) prima di assumere che un conflitto di merge sia un problema di contenuto** — ha rivelato che il vero problema era la storia del branch (merge-base obsoleto), non i file stessi, permettendo un fix pulito (branch fresco + patch) invece di un debug prolungato del conflitto.
+
+## What Didn't Work / Da tenere a mente
+
+- **Riusare un worktree branch a lungo termine su più sessioni accumula rischio silenzioso**: due volte in questa sessione (workflow file stale a v4, poi il conflitto di merge-base) il problema è nato dal fatto che il branch non era mai stato riallineato a `main` dopo le squash-merge precedenti. La prossima volta che si lavora su un branch così vecchio, **verificare `git diff origin/main..HEAD --stat` PRIMA di iniziare**, non solo prima del push finale.
+- **Non fidarsi di `gh pr merge` che fallisce con "not mergeable" come prova di un vero conflitto di contenuto** — controllare sempre `git diff <base>..HEAD --stat` per distinguere un conflitto di storia (merge-base vecchio) da un conflitto di contenuto reale, prima di investigare la causa sbagliata.
+- **Un documento legale (DPIA) scritto in un task che dipende da un task successivo può temporaneamente sovra-affermare lo stato del sistema** se non si presta attenzione alla sequenza — non un errore concettuale, ma un promemoria a leggere ogni documento generato con l'occhio di "cosa afferma essere vero *in questo momento del commit*", non solo "cosa sarà vero a piano completato".
+
+## Next Steps (in ordine di urgenza)
+
+1. **Eseguire il batch ridotto di cold outreach (10-15 account)** raccomandato dall'analisi marketing — non ancora iniziato, decisione su chi se ne occupa (utente vs prossima sessione) lasciata aperta a fine sessione.
+2. **S.27/S.28/S.29 restano bozze non validate da un legale esterno** — mitigate tecnicamente/documentalmente ma non chiuse in senso legale formale; da tenere presente se un prospect con ufficio legale interno scrutina a fondo prima di firmare.
+3. Validare positioning/pricing (gap 1,3-1,9x vs NoBadge) con un prospect reale — resta non testato, dipende dal punto 1.
+4. La landing esterna `dataxiom.it/badge-system` (repo separato `dataxiom-landing`) non è stata toccata da questo pacchetto — il messaging Face ID è solo nel funnel demo interno (`/prova-demo`), non lì. Backlog separato se si vuole allinearla.
+5. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 110 sotto.
+
+---
+
 # Badge System — Session 110 Handoff
 
 **Date:** 2026-08-23

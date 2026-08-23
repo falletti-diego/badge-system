@@ -6,6 +6,29 @@
 
 ---
 
+## Session 111-112 — Pacchetto "Sales-Ready" (readiness pre-primo-cliente) + chiusura DNS Route53 (23 Agosto 2026)
+
+### Contesto
+Su richiesta di un'analisi critica dello stato del progetto vista dal punto di vista dell'adozione del primo cliente pilota: prodotto tecnicamente completo, ma **zero clienti, zero contatti commerciali fatti** (outreach mai eseguito nonostante piano pronto da settimane), e 3 gap legali GDPR aperti da Session 100 mai indirizzati (S.27 base giuridica consenso GPS, S.28 autorizzazione Art.4 Statuto Lavoratori, S.29 DPIA obbligatoria).
+
+### Decisione: readiness prima dell'outreach, non in parallelo
+Via `/superpowers:brainstorming`, scelta tra 3 opzioni (solo blocchi legali / pacchetto sales-ready completo / tutto in parallelo con l'outreach): **pacchetto completo**, dando priorità alla chiusura dei gap prodotto/legale/commerciale prima di riprendere l'outreach. "Settembre 2026" (target MVP da `CLAUDE.md`) interpretato via `/grilling` come "pronti a vendere entro quella data", non "cliente firmato entro quella data" — l'outreach segue con la propria timeline separata.
+
+### Correzione strutturale scoperta nel grilling
+Il design iniziale assumeva un "wizard di onboarding" per attivare il gate Art.4 su un nuovo cliente. Verifica diretta del codice ha mostrato che **non esiste** — la creazione di un tenant è un form a 3 campi (`ClientsTab.jsx`) compilato da un superadmin Dataxiom, non un flusso self-service del cliente. Il gate è stato quindi riprogettato per agganciarsi al **tentativo di attivazione** in `SettingsTab.jsx` (dove è l'admin del cliente stesso a poter attestare l'autorizzazione), non alla creazione del tenant — con default `geofencing_feature_enabled=false` hardcoded per i nuovi clienti indipendentemente da chi li crea.
+
+### Esecuzione — verifica progressiva per-task, non solo a fine piano
+6 task (S.27 wording consenso GPS, S.29 template DPIA, S.28 gate Art.4+audit dedicato, fix dicitura stale `CLAUDE.md`, messaging Face ID in `/prova-demo`, modulo d'ordine commerciale) eseguiti inline via `/superpowers:executing-plans`, con un **subagent di review indipendente dopo ogni singolo task** (spec-review + code-quality-review) — pattern ibrido richiesto esplicitamente dall'utente, non solo una review finale. Ha trovato 4 finding reali corretti in corsa, tra cui un caso rilevante: la DPIA dichiarava il gate Art.4 "già in essere" prima che il task che lo implementa fosse stato eseguito — un documento a rilevanza legale che affermava qualcosa di non ancora vero al momento del proprio commit. Una **code review finale su tutto il diff** (5 angoli: CLAUDE.md, bug scan, git blame, code-comments compliance, verifica di un sospetto falso positivo) ha trovato altri 2 problemi minori, corretti, e confermato che un sospetto bug su `ValidationError`/`err.details` era in realtà il pattern già stabilito nel codebase (verificato leggendo `app.js` invece di fidarsi della segnalazione).
+
+### Deploy e chiusura
+PR #13 (fallita al primo giro CI per un errore ESLint reale mai controllato localmente prima del push, poi verde) mergiata e verificata live in produzione (`/health`, endpoint). Migrazione DNS Route53 (Task 10, sospesa da Session 110) verificata completamente propagata: 3 resolver DNS indipendenti, SOA/MX/DKIM/SES tutti confermati, tutti i siti HTTPS verificati 200/301 — routine di monitoraggio automatico disattivata.
+
+**Lezione di processo su un worktree branch riusato per settimane**: chiudere la sessione (PR #15) ha rivelato che il branch di lavoro portava ancora 4 file workflow CI fermi a `actions/*@v4`, mentre `main` era già a `@v5` da una PR precedente mai arrivata su questo branch — se pushato così com'è avrebbe *revertito* quel fix. Sincronizzati prima del push. Anche dopo la sincronizzazione, `gh pr merge` ha riportato un conflitto nonostante un diff a 2 punti (`git diff origin/main..HEAD`) pulito — causa: il merge-base del branch con `main` risaliva a prima di molte squash-merge di sessioni precedenti, quindi GitHub tentava un vero merge a 3 vie sull'intera storia divergente. Risolto creando un branch pulito da `origin/main` e applicando solo la patch reale (`git apply`), non investigando il conflitto sul branch vecchio.
+
+**Stato:** Pacchetto Sales-Ready live in produzione (PR #13). Task 10 chiuso (PR #15). `product-marketing.md` v3→v4. S.27/S.28/S.29 mitigati tecnicamente/documentalmente, non chiusi in senso legale formale (bozze, disclaimer esplicito, nessuna revisione legale esterna richiesta per scelta deliberata). Prossimo passo aperto: eseguire un batch ridotto di cold outreach (10-15 account, non i 100-150 del piano completo) — Dataxiom non ha relazioni clienti esistenti da cui partire con introduzioni calde, quindi si parte direttamente a freddo.
+
+---
+
 ## Session 110 — AWS cost optimization eseguito, migrazione DNS a Route53 pausata per rischio email (23 Agosto 2026)
 
 ### Contesto
