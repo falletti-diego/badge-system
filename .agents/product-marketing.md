@@ -1,7 +1,7 @@
 # Product Marketing Context
 
-**Document version:** v3
-**Last updated:** 2026-08-12
+**Document version:** v4
+**Last updated:** 2026-08-23
 
 ## Product Overview
 **One-liner:** SaaS multi-tenant per il tracciamento delle presenze nel retail italiano/europeo — QR code da smartphone + Face ID nativo, zero hardware.
@@ -86,6 +86,7 @@
 | "NoBadge costa meno della metà e fa quasi la stessa cosa" | Vero sul prezzo nominale (gap ridotto a ~1,3-1,9x, non più ~2x, dopo la revisione pricing) — il delta residuo è esplicitamente giustificato da Face ID anti-frode, audit log/RBAC e opzione white-label, argomenti assenti in NoBadge. **Nota onestà:** questa risposta non è ancora stata testata su un cliente reale (vedi rischio sotto). |
 | "Le suite HR (Zucchetti/TeamSystem, Factorial, Personio) fanno già tutto" | Sono percepite come pesanti/costose o overkill da chi vuole solo il modulo presenze in una PMI/catena 25-200 dipendenti — Badge System è verticale sul solo problema presenze/anti-frode, non una suite HR completa. |
 | "Perché pagare un fee per sede se cresco?" | Il fee sede è a scaglioni decrescenti (€250 → €150 → €100) proprio per non penalizzare le catene con molte sedi, il segmento target scelto. |
+| "Il nostro DPO/legale chiederà una DPIA e l'autorizzazione sindacale prima di attivare il GPS" | **Aggiunta 2026-08-23.** Template DPIA precompilato pronto (`docs/DPIA_geofencing_IT.md`, bozza — il cliente resta Titolare e deve validarla col proprio legale). Il geofencing di un nuovo cliente parte **spento di default** e richiede una conferma esplicita dell'autorizzazione Art. 4 Statuto Lavoratori prima di poterlo attivare (gate tecnico con audit log dedicato) — riduce il rischio di attivazione senza autorizzazione, un argomento difendibile in una conversazione con HR/Ops Director sensibile alla compliance. |
 
 **Anti-persona:** Il singolo punto vendita/PMI che cerca solo di smettere di usare un foglio Excel senza un problema di time-theft/compliance da giustificare a un livello superiore — per questo segmento il prezzo NoBadge è probabilmente più competitivo. *(Dedotto esplicitamente dal riposizionamento del target in "Decisione di posizionamento" della fonte.)*
 
@@ -120,7 +121,7 @@ Nessuna citazione verbatim di clienti, nessun linguaggio "as heard in sales" è 
 
 **Non ancora validato — zero clienti reali ad oggi.** Nessuna metrica di prodotto in produzione con clienti paganti, nessun cliente/logo referenziabile, nessuna testimonianza. Il documento sorgente è esplicito su questo vincolo di realtà.
 
-**Asset di vendita reale disponibile (verificato 2026-08-12):** pagina pubblica dedicata `dataxiom.it/badge-system` con demo self-serve attiva su `badge.dataxiom.it` (dati realistici, attivabile in pochi secondi, nessun impegno) — non è un proof point cliente, ma è un asset concreto utilizzabile subito in outreach/ads/social invece di "nessuna pagina pubblica" (assunzione precedente, errata, corretta in questa revisione).
+**Asset di vendita reale disponibile (verificato 2026-08-12, aggiornato 2026-08-23):** pagina pubblica dedicata `dataxiom.it/badge-system` con demo self-serve attiva su `badge.dataxiom.it/prova-demo` (dati realistici, attivabile in pochi secondi, nessun impegno) — non è un proof point cliente, ma è un asset concreto utilizzabile subito in outreach/ads/social. **Aggiornamento 2026-08-23:** il funnel demo ora porta esplicitamente il messaging Face ID/anti-frode in hero (prima l'asset esisteva ma senza questo argomento in evidenza) — un prospect che arriva dalla demo vede subito l'argomento di vendita #1 (vedi Argomenti di vendita sotto), non solo screenshot della dashboard.
 
 **Claim commerciale approvato (non ancora testato su clienti reali, ma è la posizione ufficiale attuale, quindi riportato qui come tale):**
 > "Non solo digitalizzare il cartellino — impedire che qualcuno timbri al posto di un collega, con una traccia di audit che regge a un controllo."
@@ -141,7 +142,7 @@ Nessuna citazione verbatim di clienti, nessun linguaggio "as heard in sales" è 
 
 **Verifica pricing 2026-08-11 (skill `pricing`, framework value metric / willingness-to-pay / packaging):** esito **CONFERMA — nessuna modifica**. Value metric (per-dipendente ricorrente + per-sede una tantum decrescente) allineato al valore percepito e coerente col segmento target multi-sede. Gap reale vs. NoBadge ricalcolato: **1,59x** in fascia bassa (€8/€5,04), **1,29x** in fascia alta (€6,50/€5,04) — leggermente sotto il range dichiarato "1,3-1,9x" nello spec 26/7 ma entro soglia comunemente difendibile con differenziazione chiara. Nessun aggiustamento di prezzo proposto; unico follow-up è di messaging (vedi Differentiation, nota Face ID/impersonificazione).
 
-**Conversion action:** Firma del primo cliente pilota (catena multi-sede, 3+ sedi, 25-200 dipendenti) sul listino Tier 1 sopra.
+**Conversion action:** Firma del primo cliente pilota (catena multi-sede, 3+ sedi, 25-200 dipendenti) sul listino Tier 1 sopra. **Aggiornamento 2026-08-23:** esiste ora un meccanismo di chiusura formale — `docs/modulo-ordine-commerciale-IT.md` (prezzo, fatturazione, durata, referenzia SLA/DPA esistenti) — prima assente, la conversion action non aveva un documento pronto da far firmare.
 
 **Current metrics:** Zero clienti paganti ad oggi. Margine stimato (non ancora verificato su un cliente reale) sul primo pilota: ricavo ~€200/mese (€8 × 25 dipendenti) contro un costo infrastrutturale reale attuale stimato di ~€85-130/mese (Auth0 non ancora attivo), per un margine stimato di ~€70-115/mese. *(Fonte: spec positioning/pricing, sezione "Verifica margine sul primo cliente MVP", che a sua volta cita `CLAUDE.md` sezione "Monthly Operating".)*
 
@@ -153,6 +154,7 @@ Nessuna citazione verbatim di clienti, nessun linguaggio "as heard in sales" è 
 
 ## Changelog
 *Newest first. One line per revision: what changed and why.*
+- v4 (2026-08-23) — Sessione readiness "Sales-Ready": aggiornato Proof Points (messaging Face ID ora effettivamente live nel funnel demo `/prova-demo`, non solo pianificato), aggiunta obiezione compliance/DPIA in Objections (mitigata con template DPIA + gate tecnico Art.4 su attivazione geofencing), aggiornato Goals/Conversion action (modulo d'ordine commerciale ora esiste). Nessun cambiamento di posizionamento — solo la realtà del prodotto che ha raggiunto quanto il documento già dichiarava.
 - v3 (2026-08-12) — Corretta assunzione errata "nessuna pagina pubblica": esiste dataxiom.it/badge-system con demo self-serve su badge.dataxiom.it, aggiunta come asset in Proof Points; aggiunto export tracciati paghe Zucchetti/TeamSystem come differenziatore reale e funzionante (confermato da Diego), con nota di disallineamento verso CLAUDE.md sulla dicitura "Payroll — Fase 2".
 - v2 (2026-08-11) — Aggiornato Competitive Landscape dopo verifica fresca (competitor-profiling: NoBadge ha aggiunto QR dinamico anti-frode ma resta senza biometria, pricing competitor invariato, aggiunto 4HSE come indirect/categoria adiacente su richiesta esplicita); pricing skill: esito CONFERMATO, nessun aggiustamento; precisato messaging Face ID (impersonificazione, non solo clonabilità QR).
 - v1 (2026-08-11) — Bozza iniziale da spec positioning/pricing 26/7 e CLAUDE.md.
