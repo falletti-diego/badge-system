@@ -61,11 +61,14 @@ const styles = StyleSheet.create({
 /**
  * GPSConsentDialog — GDPR Art. 6(1)(f) Legittimo interesse (sicurezza sede,
  * prevenzione frode) + consenso esplicito Art. 7 come layer UX aggiuntivo di
- * trasparenza (allineato a docs/privacy-policy-IT.md v2.1, sezione "Base
- * Legale"). Shown before il primo check-in su una sede con geofencing
- * attivo, e ad ogni scan successivo finché il dipendente non accetta
- * (nessun cooldown — il check-in resta bloccato su quella sede fino al
- * consenso, Fase C).
+ * trasparenza (allineato alla base giuridica dichiarata in
+ * docs/privacy-policy-IT.md, sezione "Base Legale" — NOTA: il campo
+ * privacy_policy_version inviato sotto è ancora hardcoded a '2.0', un
+ * disallineamento preesistente col numero di versione corrente del
+ * documento, non toccato da questa modifica). Shown before il primo
+ * check-in su una sede con geofencing attivo, e ad ogni scan successivo
+ * finché il dipendente non accetta (nessun cooldown — il check-in resta
+ * bloccato su quella sede fino al consenso, Fase C).
  */
 export default function GPSConsentDialog({ visible, onConsent, onDecline }) {
   const [submitting, setSubmitting] = useState(false);

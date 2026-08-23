@@ -70,8 +70,8 @@ describe('POST /admin/clients + PUT /admin/settings — geofencing Art.4 confirm
       .set('Authorization', `Bearer ${superToken}`)
       .send({ name: 'Gate Test Co', email: uniqueEmail('gate-test-client'), plan: 'starter' });
 
+    clientId = res.body.data?.id;
     expect(res.status).toBe(201);
-    clientId = res.body.data.id;
 
     const row = await pool.query('SELECT geofencing_feature_enabled FROM clients WHERE id = $1', [clientId]);
     expect(row.rows[0].geofencing_feature_enabled).toBe(false);
