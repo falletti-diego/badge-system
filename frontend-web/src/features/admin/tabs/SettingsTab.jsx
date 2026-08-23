@@ -10,6 +10,8 @@ import { ConfirmSaveDialog } from '../components/ConfirmSaveDialog';
 export function SettingsTab() {
   const [mealHours, setMealHours] = useState('');
   const [geofencingEnabled, setGeofencingEnabled] = useState(true);
+  const [initialGeofencingEnabled, setInitialGeofencingEnabled] = useState(true);
+  const [art4Confirmed, setArt4Confirmed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [msg, setMsg] = useState(null);
@@ -28,6 +30,7 @@ export function SettingsTab() {
           if (client) {
             setMealHours(client.meal_voucher_hours != null ? String(client.meal_voucher_hours) : '5');
             setGeofencingEnabled(client.geofencing_feature_enabled !== false);
+            setInitialGeofencingEnabled(client.geofencing_feature_enabled !== false);
           } else {
             setMsg({ type: 'warning', text: 'Impostazioni cliente non trovate. Verifica la sessione.' });
           }
@@ -40,6 +43,8 @@ export function SettingsTab() {
     })();
     return () => { cancelled = true; };
   }, [clientId]);
+
+  const isActivatingGeofencing = !initialGeofencingEnabled && geofencingEnabled;
 
   const handleSave = () => {
     setConfirmDialog(true);
@@ -58,8 +63,10 @@ export function SettingsTab() {
       await apiClient.put('/api/v1/admin/settings', {
         meal_voucher_hours: parsed,
         geofencing_feature_enabled: geofencingEnabled,
+        ...(isActivatingGeofencing ? { geofencing_art4_confirmed: art4Confirmed } : {}),
       });
       setMsg({ type: 'success', text: 'Impostazioni salvate.' });
+      setInitialGeofencingEnabled(geofencingEnabled);
       setConfirmDialog(false);
     } catch (err) {
       setMsg({ type: 'error', text: err.response?.data?.message || err.message });
@@ -99,6 +106,20 @@ export function SettingsTab() {
                   Il controllo GPS è disabilitato. I dipendenti possono fare check-in da qualsiasi posizione.
                 </Alert>
               )}
+              {isActivatingGeofencing && (
+                <Alert severity="warning" sx={{ mt: 1, maxWidth: 500 }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={art4Confirmed}
+                        onChange={(e) => setArt4Confirmed(e.target.checked)}
+                        color="warning"
+                      />
+                    }
+                    label="Confermo di aver ottenuto l'autorizzazione sindacale o dell'Ispettorato del Lavoro (Art. 4 Statuto Lavoratori) prima di attivare la verifica GPS."
+                  />
+                </Alert>
+              )}
             </Box>
 
             {/* MEAL VOUCHERS SECTION (SECOND) */}
@@ -126,7 +147,7 @@ export function SettingsTab() {
             <Button
               variant="contained"
               onClick={handleSave}
-              disabled={loading}
+              disabled={loading || (isActivatingGeofencing && !art4Confirmed)}
               sx={{ backgroundColor: '#1E3A5F', mt: 2 }}
             >
               {loading ? <CircularProgress size={18} /> : 'Salva'}

@@ -335,6 +335,7 @@ describe('PUT /api/admin/settings', () => {
 
   it('admin updates meal_voucher_hours → 200', async () => {
     pool.query
+      .mockResolvedValueOnce({ rows: [{ geofencing_feature_enabled: true }] }) // current-state lookup (Art.4 gate)
       .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: CLIENT_ID, meal_voucher_hours: '4.5' }] })
       .mockResolvedValueOnce({ rows: [] }); // audit log
 
@@ -345,6 +346,7 @@ describe('PUT /api/admin/settings', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
+    expect(res.body.data.meal_voucher_hours).toBe('4.5');
   });
 
   it('manager → 403', async () => {
@@ -384,6 +386,7 @@ describe('PUT /api/admin/settings', () => {
 
   it('admin disables geofencing_feature_enabled → 200', async () => {
     pool.query
+      .mockResolvedValueOnce({ rows: [{ geofencing_feature_enabled: true }] }) // current-state lookup (Art.4 gate)
       .mockResolvedValueOnce({
         rowCount: 1,
         rows: [{ id: CLIENT_ID, meal_voucher_hours: '5', geofencing_feature_enabled: false }],
@@ -399,18 +402,31 @@ describe('PUT /api/admin/settings', () => {
     expect(res.body.data.geofencing_feature_enabled).toBe(false);
   });
 
-  it('admin enables geofencing_feature_enabled → 200', async () => {
-    pool.query
-      .mockResolvedValueOnce({
-        rowCount: 1,
-        rows: [{ id: CLIENT_ID, meal_voucher_hours: '5', geofencing_feature_enabled: true }],
-      })
-      .mockResolvedValueOnce({ rows: [] }); // audit log
+  it('admin enables geofencing_feature_enabled without Art.4 confirmation → 400', async () => {
+    pool.query.mockResolvedValueOnce({ rows: [{ geofencing_feature_enabled: false }] }); // current-state lookup
 
     const res = await request(app)
       .put('/api/v1/admin/settings')
       .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
       .send({ meal_voucher_hours: 5.0, geofencing_feature_enabled: true });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('admin enables geofencing_feature_enabled with Art.4 confirmation → 200', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: [{ geofencing_feature_enabled: false }] }) // current-state lookup (was off)
+      .mockResolvedValueOnce({
+        rowCount: 1,
+        rows: [{ id: CLIENT_ID, meal_voucher_hours: '5', geofencing_feature_enabled: true }],
+      })
+      .mockResolvedValueOnce({ rows: [] }) // update_settings audit log
+      .mockResolvedValueOnce({ rows: [] }); // geofencing_art4_confirmed audit log
+
+    const res = await request(app)
+      .put('/api/v1/admin/settings')
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+      .send({ meal_voucher_hours: 5.0, geofencing_feature_enabled: true, geofencing_art4_confirmed: true });
 
     expect(res.status).toBe(200);
     expect(res.body.data.geofencing_feature_enabled).toBe(true);

@@ -540,6 +540,7 @@ const AdminSettingsSchema = z.object({
       .max(24, 'meal_voucher_hours must be <= 24')
       .optional(),
     geofencing_feature_enabled: z.boolean().optional(),
+    geofencing_art4_confirmed: z.boolean().optional(),
   }).refine(
     (data) => data.meal_voucher_hours !== undefined || data.geofencing_feature_enabled !== undefined,
     { message: 'At least one setting must be provided' }

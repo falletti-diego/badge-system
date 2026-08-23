@@ -18,8 +18,8 @@ router.post('/', requireSuperadmin, createValidationMiddleware(AdminClientSchema
     const data = req.validated.body;
 
     const result = await pool.query(
-      `INSERT INTO clients (name, email, plan)
-       VALUES ($1, $2, $3)
+      `INSERT INTO clients (name, email, plan, geofencing_feature_enabled)
+       VALUES ($1, $2, $3, false)
        RETURNING id, name, email, plan, created_at`,
       [data.name, data.email, data.plan]
     );
