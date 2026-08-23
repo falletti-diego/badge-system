@@ -31,6 +31,7 @@ Tier [1 — SaaS multi-tenant condiviso / 2 — White-label dedicato, fuori list
 
 **Numero di dipendenti pattuito alla firma:** [X] → scaglione applicato: [€_/dipendente/mese]
 **Numero di sedi pattuito alla firma:** [X]
+**Prezzi espressi:** IVA esclusa, salvo diversa indicazione in fattura.
 
 ## 4. Fatturazione
 
@@ -52,7 +53,11 @@ Tier [1 — SaaS multi-tenant condiviso / 2 — White-label dedicato, fuori list
 - Disdetta e cancellazione dati: `docs/sla.md` §8
 - Limitazione di responsabilità: `docs/sla.md` §9
 
-## 7. Firme
+## 7. Legge applicabile e foro competente
+
+Il presente modulo d'ordine è regolato dalla legge italiana. Per ogni controversia relativa alla sua interpretazione o esecuzione è competente in via esclusiva il Foro di [CITTÀ SEDE LEGALE DATAXIOM — DA CONFERMARE], salvo il foro del consumatore ove applicabile per legge.
+
+## 8. Firme
 
 | | Nome | Ruolo | Data | Firma |
 |---|---|---|---|---|
