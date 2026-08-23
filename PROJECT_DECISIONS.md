@@ -96,6 +96,14 @@ Nota collaterale trovata durante l'indagine (non parte del bug, non fixata): il 
 
 **Stato:** bug chiuso, verificato con prova diretta end-to-end, non solo lettura del codice.
 
+### Addendum — Warning CI Node 20 risolto (ultimo item pending della sessione)
+
+Bump `actions/checkout`/`actions/setup-node`/`actions/upload-artifact` da `@v4` a `@v5` in tutti e 4 i workflow (`ci.yml`, `ecr-push.yml`, `deploy-staging.yml`, `deploy-to-ec2.yml`, 18 occorrenze totali) — GitHub aveva iniziato a forzare l'esecuzione di queste action su Node 24 con un warning ad ogni run, dato che `@v4` dichiara Node 20 (deprecato lato runner). Nessuna logica di workflow toccata, solo le versioni pinnate.
+
+Branch dedicato creato da `origin/main` (non sul branch di questa sessione, già squash-mergiato — stesso pattern di divergenza post-squash-merge già documentato in sessioni precedenti, evitato ripartendo pulito). Tutti e 4 i file YAML validati (`yaml.safe_load`) prima del push. CI verde su tutti i check obbligatori. **PR #12 mergiata** (squash `fd9e876`).
+
+**Stato:** tutti i task pending aperti in questa sessione risultano ora completati, ad eccezione del Task 10 (verifica finale post-cutover DNS), in attesa della propagazione dei nameserver Route53 (24-48h + validazione Nic.it) — da ripetere quando la propagazione sarà completa.
+
 ---
 
 ## Session 109 — Mutua esclusione Smart Working ↔ Eventi/Training, PR #11 aperta, merge posticipato (22 Agosto 2026)
