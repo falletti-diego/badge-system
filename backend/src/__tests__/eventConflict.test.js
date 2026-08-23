@@ -1,6 +1,6 @@
 'use strict';
 
-const { lockEventConflictScope, findConflictingEvent, findConflictingCheckin } = require('../utils/eventConflict');
+const { lockEventConflictScope, findConflictingEvent, findConflictingCheckin, findConflictingSmartWorking } = require('../utils/eventConflict');
 
 function makeMockClient(queryImpl) {
   return { query: jest.fn(queryImpl) };
@@ -109,6 +109,42 @@ describe('eventConflict utility', () => {
       const client = makeMockClient(async () => ({ rows: [] }));
       const result = await findConflictingCheckin(client, { clientId: 'c1', employeeId: 'e1', date: '2026-09-01' });
       expect(result).toBeNull();
+    });
+  });
+
+  describe('findConflictingSmartWorking', () => {
+    it('returns the smart_working_days row when one exists for that client/employee/date', async () => {
+      const row = { id: 'sw-1', date: '2026-09-01' };
+      const client = makeMockClient(async () => ({ rows: [row] }));
+
+      const result = await findConflictingSmartWorking(client, { clientId: 'c1', employeeId: 'e1', date: '2026-09-01' });
+
+      expect(result).toEqual(row);
+    });
+
+    it('returns null when no smart working day exists for that date', async () => {
+      const client = makeMockClient(async () => ({ rows: [] }));
+
+      const result = await findConflictingSmartWorking(client, { clientId: 'c1', employeeId: 'e1', date: '2026-09-01' });
+
+      expect(result).toBeNull();
+    });
+
+    it('queries smart_working_days scoped by client_id, employee_id and date', async () => {
+      let capturedSql, capturedParams;
+      const client = makeMockClient(async (sql, params) => {
+        capturedSql = sql;
+        capturedParams = params;
+        return { rows: [] };
+      });
+
+      await findConflictingSmartWorking(client, { clientId: 'c1', employeeId: 'e1', date: '2026-09-01' });
+
+      expect(capturedSql).toContain('FROM smart_working_days');
+      expect(capturedSql).toContain('client_id = $1');
+      expect(capturedSql).toContain('employee_id = $2');
+      expect(capturedSql).toContain('date = $3');
+      expect(capturedParams).toEqual(['c1', 'e1', '2026-09-01']);
     });
   });
 });
