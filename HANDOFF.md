@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-23
 **Session:** 110 — AWS cost optimization eseguito (8/11 task), migrazione DNS a Route53 pausata: rischio non chiarito per l'email `diego@dataxiom.it`
-**Status:** ✅ **Target di risparmio raggiunto** (Task 1-5). ✅ **Incidente DNS/IP di apertura sessione risolto** (Task 6, Elastic IP). ⏸️ **Task 9 (cutover nameserver Route53) fermato dall'utente** — hosted zone creata e verificata (Task 7-8) ma non attivata, in attesa di conferma dal supporto Register.it sul servizio email. ✅ **PR #11 (Smart Working↔Eventi) mergiata e live in produzione**, incluso un fix collaterale al deploy stesso (secret `EC2_HOST` obsoleto).
+**Status:** ✅ **Target di risparmio raggiunto** (Task 1-5). ✅ **Incidente DNS/IP di apertura sessione risolto** (Task 6, Elastic IP). ⏸️ **Task 9 (cutover nameserver Route53) fermato dall'utente** — hosted zone creata e verificata (Task 7-8) ma non attivata, in attesa di conferma dal supporto Register.it sul servizio email. ✅ **PR #11 (Smart Working↔Eventi) mergiata e live in produzione**, incluso un fix collaterale al deploy stesso (secret `EC2_HOST` obsoleto). ✅ **Downgrade EC2 prod `t3.small`→`t3.micro` eseguito e verificato sano**, con nuovo alarm CloudWatch memoria — rivalutato e completato nella stessa sessione dopo che l'analisi originale si è rivelata eccessivamente cauta.
 
 ---
 
@@ -36,6 +36,10 @@ La sessione è iniziata verificando se AWS fosse "attivo e funzionante" — trov
 
 **Dopo la chiusura del piano, merge di PR #11 eseguito** (mutua esclusione Smart Working↔Eventi, Session 109 — era in attesa perché AWS non era raggiungibile). Squash-merge (`3697b8e`), CI/CD e Build&Push ECR verdi, ma **il deploy EC2 è fallito al primo tentativo** (`dial tcp ***:22: i/o timeout`). Causa: il secret GitHub `EC2_HOST` era ancorato all'IP effimero originale, fermo dal 2 giugno 2026 — reso obsoleto dal nuovo Elastic IP allocato nel Task 6 di questa stessa sessione, un effetto collaterale non previsto dal piano (il secret non era nell'inventario delle risorse toccate). Corretto (`gh secret set EC2_HOST --body "52.19.238.50"`), rilanciato con `gh run rerun` — secondo tentativo verde, `/health` confermato con database connesso. PR #11 ora live in produzione.
 
+**Downgrade EC2 prod rivalutato e completato via `/superpowers:brainstorming`**: esplorando il contesto reale via SSH diretto sull'istanza + query CloudWatch (non solo stime), trovato che il "gap" di dati memoria (motivo del deferimento nella spec originale) era in realtà un falso allarme — il CloudWatch Agent pubblicava già `mem_used_percent` da settimane sotto un namespace custom (`BadgeSystem/EC2`) mai interrogato prima. Recuperate 3 settimane di dati reali: memoria media 22.87%, picco 32.37% (~615MB su 1.9GiB); CPU media 1.09%, picco 32.59%. **Verifica cruciale**: riletto il dettaglio della crisi di stabilità storica (`backend_stability_crisis_resolved.md`) — le cause erano pool di connessioni DB troppo piccolo, timeout RDS cold-start, healthcheck rigido, **nessuna legata alla RAM host**. Il rischio OOM della spec originale era sovrastimato. Dato che non c'è ancora un cliente reale, l'utente ha scelto di eseguire il downgrade ORA (finestra a rischio minimo) invece di aspettare, capovolgendo la logica originale.
+
+**Eseguito** via `/superpowers:subagent-driven-development` (subagent executor per step + verifica indipendente del controller): alarm CloudWatch `badge-ec2-memory-high` creato (soglia 85%, stesso pattern degli alarm esistenti); downgrade `t3.small`→`t3.micro` (stop→modify-instance-attribute→start→wait status-ok, Elastic IP rimasto invariato automaticamente); verifica indipendente — `/health` 200 con DB connesso, container Docker `Up (healthy)`, memoria **12.81%** (116.5MiB/909.5MiB), `RestartCount: 0`, alarm in stato `OK` con dati reali (~19.7%).
+
 ## What Worked
 
 - **Diagnosi bottom-up da inventario reale invece che da stime** — Cost Explorer si è confermato inaffidabile (dati vicini a zero, coerente con quanto già annotato in sessioni precedenti), ma `aws budgets describe-budgets` ha dato numeri reali e verificabili (spesa attuale, previsione, storico alert).
@@ -44,6 +48,9 @@ La sessione è iniziata verificando se AWS fosse "attivo e funzionante" — trov
 - **Fermarsi su un rischio genuinamente non chiarificabile dagli strumenti disponibili** (l'avviso Register.it sul servizio email) invece di procedere assumendo che andasse tutto bene — l'utente ha un servizio email reale in gioco, non uno di test.
 - **Riconoscere che il beneficio marginale (Route53) non giustificava il rischio residuo**, una volta che il problema originale era già risolto in modo indipendente (Elastic IP) — non tutto il piano andava completato a tutti i costi per "finire quanto pianificato".
 - **Leggere il log di errore reale invece di assumere una causa generica** quando il deploy EC2 è fallito — il timeout SSH avrebbe potuto sembrare un problema di rete transitorio, ma il log esatto (`gh run view --log-failed`) ha portato dritti al vero secret obsoleto in pochi minuti.
+- **Non fidarsi di un risultato negativo di `aws cloudwatch list-metrics` senza controllare il namespace giusto** — un "gap" apparente (nessun dato memoria) era in realtà solo il namespace sbagliato interrogato; un secondo controllo più ampio (`list-metrics` senza filtro namespace) ha rivelato 3 settimane di dati già esistenti.
+- **Rileggere il dettaglio esatto di un incidente storico prima di generalizzarlo come "rischio memoria"** — la crisi di stabilità del 4 giugno era interamente config applicativa (pool DB, healthcheck), non RAM host. Una lettura superficiale della memoria ("crisi di pool exhaustion") aveva portato a una cautela eccessiva nella spec originale.
+- **Capovolgere la sequenza "aspetta il cliente prima di rischiare" quando il rischio reale si è ridimensionato** — il momento più sicuro per un cambio a basso rischio è prima che un cliente dipenda dal sistema, non dopo.
 
 ## What Didn't Work / Da tenere a mente
 
@@ -56,9 +63,9 @@ La sessione è iniziata verificando se AWS fosse "attivo e funzionante" — trov
 1. **Contattare il supporto Register.it** e chiedere esplicitamente se attivare DNS esterni per `dataxiom.it` disattiva la casella `diego@dataxiom.it` — bloccante per riprendere il Task 9.
 2. Se confermato sicuro: completare Task 9 (cutover nameserver, hosted zone Route53 già pronta) e Task 10 (verifica post-cutover, incluso lo stato DKIM SES).
 3. Se NON sicuro o non chiarificabile: valutare se eliminare la hosted zone Route53 (costa ~$0.50/mese inutilizzata) o lasciarla per un'eventuale migrazione futura via altra strada (es. migrare prima la casella email a un servizio esterno, poi il DNS).
-4. A fine mese, verificare la spesa reale (`aws budgets describe-budgets`) contro il target €20-30 per confermare l'efficacia dei Task 1-5.
-5. **Downgrade EC2 prod** (deferito): non prima che il cliente pilota sia stabile da 2-4 settimane — richiede prima l'installazione di un CloudWatch Agent per dati di memoria reali.
-6. **Warning CI non bloccante, non ancora affrontato** (emerso durante il monitoraggio del deploy PR #11): le GitHub Actions `actions/checkout@v4`/`setup-node@v4`/`upload-artifact@v4` in tutti i workflow (`ci.yml`, `ecr-push.yml`, `deploy-staging.yml`, `deploy-to-ec2.yml`) dichiarano Node 20, deprecato lato runner GitHub (forzate a girare su Node 24 con warning). Fix a basso rischio: bump a `@v5` in ogni occorrenza — nessuna logica applicativa toccata. Rimandato su richiesta esplicita dell'utente a dopo la verifica del deploy PR #11.
+4. A fine mese, verificare la spesa reale (`aws budgets describe-budgets`) contro il target €20-30 per confermare l'efficacia dei Task 1-5 + il downgrade EC2.
+5. **Warning CI non bloccante, non ancora affrontato** (emerso durante il monitoraggio del deploy PR #11): le GitHub Actions `actions/checkout@v4`/`setup-node@v4`/`upload-artifact@v4` in tutti i workflow (`ci.yml`, `ecr-push.yml`, `deploy-staging.yml`, `deploy-to-ec2.yml`) dichiarano Node 20, deprecato lato runner GitHub (forzate a girare su Node 24 con warning). Fix a basso rischio: bump a `@v5` in ogni occorrenza — nessuna logica applicativa toccata. Rimandato su richiesta esplicita dell'utente a dopo la verifica del deploy PR #11.
+6. Monitorare l'alarm `badge-ec2-memory-high` nei prossimi giorni/settimane per confermare che il margine resti sano man mano che arriva traffico reale (specialmente dopo l'attivazione del primo cliente).
 7. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 109 sotto.
 
 ---

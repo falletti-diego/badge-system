@@ -60,6 +60,24 @@ Dopo la chiusura del piano AWS cost optimization, l'utente ha chiesto di procede
 
 **Lezione**: un Elastic IP appena associato va propagato anche a qualunque secret/config esterno che referenzi l'IP dell'istanza in modo statico (non solo il DNS) — in questo caso un secret CI/CD, non solo il record DNS di `api.dataxiom.it`. Da controllare esplicitamente la prossima volta che si tocca l'IP pubblico di un'istanza EC2 con un deploy automatico basato su SSH diretto.
 
+### Addendum — Downgrade EC2 prod eseguito lo stesso giorno, dopo una rivalutazione approfondita
+
+L'utente ha chiesto una nuova analisi via `/superpowers:brainstorming` sul downgrade EC2 prod, deferito nella spec originale. Dati reali raccolti via SSH diretto sull'istanza + query CloudWatch, non solo stime:
+
+- **Il container usava solo 72MB** in una fotografia puntuale, ma serviva uno storico — trovato un **falso gap**: il CloudWatch Agent pubblicava correttamente `mem_used_percent` già da settimane, semplicemente sotto un namespace custom (`BadgeSystem/EC2`), non quello di default (`CWAgent`) interrogato inizialmente. Recuperate **3 settimane di dati reali** (1-23 agosto, 521 datapoint): memoria media 22.87%, **picco 32.37%** (~615MB su 1.9GiB); CPU media 1.09%, picco 32.59%.
+- **Verifica cruciale che ha cambiato la valutazione del rischio**: riletto il dettaglio della crisi di stabilità storica (`backend_stability_crisis_resolved.md`, 4 giugno) — le cause erano **pool di connessioni DB troppo piccolo (min=1/max=5, poi fixato a 5/20), timeout di cold-start RDS troppo breve, healthcheck troppo rigido**. Nessuna di queste è legata alla RAM dell'host. La preoccupazione "rischio OOM" della spec originale era una generalizzazione eccessiva di un incidente che non era di memoria.
+- Su un `t3.micro` (1GiB), il picco reale (615MB) sarebbe ~60% di utilizzo — margine sano, sotto l'85% dell'alarm.
+
+**Decisione**: dato che il rischio tecnico è risultato più basso del previsto, e non c'è ancora un cliente reale (quindi qualunque problema imprevisto impatta solo traffico interno/demo), l'utente ha scelto di **capovolgere la logica della spec originale**: eseguire il downgrade ORA, nella finestra a più basso rischio possibile, invece di aspettare che un cliente pagante dipenda dal sistema.
+
+**Eseguito** (via `/superpowers:subagent-driven-development`, un subagent executor per step + verifica indipendente del controller):
+1. **Alarm CloudWatch `badge-ec2-memory-high`** creato (soglia 85%, stesso pattern degli alarm esistenti — SNS `badge-alerts`, Period 300, EvaluationPeriods 2).
+2. **Downgrade `t3.small`→`t3.micro`** eseguito (stop → modify-instance-attribute → start → wait status-ok) — Elastic IP rimasto invariato automaticamente attraverso lo stop/start, nessun impatto DNS.
+3. **Verifica post-downgrade** (fatta dal controller, non dal subagent, per indipendenza): `/health` → 200 con database connesso; container Docker `Up (healthy)`, **12.81% di memoria** (116.5MiB/909.5MiB), **RestartCount: 0**; alarm memoria in stato `OK` con dati reali (~19.7% di utilizzo).
+4. Piano di rollback documentato (stesso pattern stop/modify/start, ~2 minuti) — non necessario, nessun problema riscontrato.
+
+**Stato:** downgrade completato e verificato sano. Risparmio stimato ~$7-8/mese aggiuntivo rispetto ai Task 1-5 già eseguiti.
+
 ---
 
 ## Session 109 — Mutua esclusione Smart Working ↔ Eventi/Training, PR #11 aperta, merge posticipato (22 Agosto 2026)
