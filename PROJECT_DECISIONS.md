@@ -50,7 +50,15 @@ Nel pannello "Cambio DNS" di Register.it è comparso un avviso non previsto nell
 
 **Decisione**: dato che il problema originale (IP EC2 effimero) è già risolto autonomamente dal Task 6, il beneficio residuo della migrazione Route53 (gestione DNS via API) è stato giudicato insufficiente a giustificare il rischio concreto di perdere una casella email di lavoro attiva, senza prima una conferma esplicita dal supporto Register.it. **Il cutover è pausato, non abbandonato** — la hosted zone Route53 resta creata e verificata, pronta a riprendere dal Task 9 senza rifare il Task 7.
 
-**Stato:** Task 1-8/11 completati e verificati. Target di risparmio (~€20-30/mese) già raggiunto dai Task 1-5, indipendentemente dall'esito della migrazione DNS. Task 9-10 in attesa di conferma Register.it sul servizio email. Task 11 (questo aggiornamento documentale) in corso.
+**Stato:** Task 1-8/11 completati e verificati. Target di risparmio (~€20-30/mese) già raggiunto dai Task 1-5, indipendentemente dall'esito della migrazione DNS. Task 9-10 in attesa di conferma Register.it sul servizio email.
+
+### Addendum — merge PR #11 + effetto collaterale scoperto nel deploy (stesso giorno)
+
+Dopo la chiusura del piano AWS cost optimization, l'utente ha chiesto di procedere con il merge di PR #11 (mutua esclusione Smart Working↔Eventi, Session 109, era in attesa perché AWS non era raggiungibile). Squash-merge eseguito (`3697b8e`) — pipeline CI/CD e Build&Push ECR verdi, ma **il job "Deploy to EC2" è fallito** al primo tentativo: `dial tcp ***:22: i/o timeout` nello step SCP.
+
+**Root cause**: il secret GitHub Actions `EC2_HOST` (usato dal workflow `deploy-to-ec2.yml` per l'SSH verso l'istanza) era impostato dal 2 giugno 2026 — ancorato all'IP pubblico effimero originale, mai aggiornato. L'Elastic IP allocato oggi stesso nel Task 6 del piano di cost optimization ha reso quell'IP obsoleto, senza che il piano lo prevedesse (il secret non era nell'inventario delle risorse toccate). Fix: `gh secret set EC2_HOST --body "52.19.238.50"`, poi `gh run rerun` sul job fallito — secondo tentativo verde, `/health` confermato con database connesso.
+
+**Lezione**: un Elastic IP appena associato va propagato anche a qualunque secret/config esterno che referenzi l'IP dell'istanza in modo statico (non solo il DNS) — in questo caso un secret CI/CD, non solo il record DNS di `api.dataxiom.it`. Da controllare esplicitamente la prossima volta che si tocca l'IP pubblico di un'istanza EC2 con un deploy automatico basato su SSH diretto.
 
 ---
 

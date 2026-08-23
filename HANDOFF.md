@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-23
 **Session:** 110 — AWS cost optimization eseguito (8/11 task), migrazione DNS a Route53 pausata: rischio non chiarito per l'email `diego@dataxiom.it`
-**Status:** ✅ **Target di risparmio raggiunto** (Task 1-5). ✅ **Incidente DNS/IP di apertura sessione risolto** (Task 6, Elastic IP). ⏸️ **Task 9 (cutover nameserver Route53) fermato dall'utente** — hosted zone creata e verificata (Task 7-8) ma non attivata, in attesa di conferma dal supporto Register.it sul servizio email.
+**Status:** ✅ **Target di risparmio raggiunto** (Task 1-5). ✅ **Incidente DNS/IP di apertura sessione risolto** (Task 6, Elastic IP). ⏸️ **Task 9 (cutover nameserver Route53) fermato dall'utente** — hosted zone creata e verificata (Task 7-8) ma non attivata, in attesa di conferma dal supporto Register.it sul servizio email. ✅ **PR #11 (Smart Working↔Eventi) mergiata e live in produzione**, incluso un fix collaterale al deploy stesso (secret `EC2_HOST` obsoleto).
 
 ---
 
@@ -34,6 +34,8 @@ La sessione è iniziata verificando se AWS fosse "attivo e funzionante" — trov
 
 **Task 9 (cutover nameserver) fermato dall'utente**: nel pannello "Cambio DNS" di Register.it è comparso un avviso non previsto — *"L'impostazione dei DNS esterni comporterà la disattivazione di tutti i servizi aggiuntivi legati al dominio"*. L'utente ha una casella email reale e attiva `diego@dataxiom.it` ospitata lì. Non determinabile dagli strumenti disponibili se l'avviso riguardi solo componenti Register.it o disattivi il servizio email stesso, a prescindere dal record MX (già replicato correttamente). Dato che il problema originale è già risolto dal Task 6, il beneficio residuo di Route53 non giustifica il rischio senza conferma esplicita dal supporto Register.it.
 
+**Dopo la chiusura del piano, merge di PR #11 eseguito** (mutua esclusione Smart Working↔Eventi, Session 109 — era in attesa perché AWS non era raggiungibile). Squash-merge (`3697b8e`), CI/CD e Build&Push ECR verdi, ma **il deploy EC2 è fallito al primo tentativo** (`dial tcp ***:22: i/o timeout`). Causa: il secret GitHub `EC2_HOST` era ancorato all'IP effimero originale, fermo dal 2 giugno 2026 — reso obsoleto dal nuovo Elastic IP allocato nel Task 6 di questa stessa sessione, un effetto collaterale non previsto dal piano (il secret non era nell'inventario delle risorse toccate). Corretto (`gh secret set EC2_HOST --body "52.19.238.50"`), rilanciato con `gh run rerun` — secondo tentativo verde, `/health` confermato con database connesso. PR #11 ora live in produzione.
+
 ## What Worked
 
 - **Diagnosi bottom-up da inventario reale invece che da stime** — Cost Explorer si è confermato inaffidabile (dati vicini a zero, coerente con quanto già annotato in sessioni precedenti), ma `aws budgets describe-budgets` ha dato numeri reali e verificabili (spesa attuale, previsione, storico alert).
@@ -41,11 +43,13 @@ La sessione è iniziata verificando se AWS fosse "attivo e funzionante" — trov
 - **Non fidarsi ciecamente di un falso allarme di sicurezza del subagent** (Task 2) — verificato con una query indipendente prima di accettare o respingere l'allarme.
 - **Fermarsi su un rischio genuinamente non chiarificabile dagli strumenti disponibili** (l'avviso Register.it sul servizio email) invece di procedere assumendo che andasse tutto bene — l'utente ha un servizio email reale in gioco, non uno di test.
 - **Riconoscere che il beneficio marginale (Route53) non giustificava il rischio residuo**, una volta che il problema originale era già risolto in modo indipendente (Elastic IP) — non tutto il piano andava completato a tutti i costi per "finire quanto pianificato".
+- **Leggere il log di errore reale invece di assumere una causa generica** quando il deploy EC2 è fallito — il timeout SSH avrebbe potuto sembrare un problema di rete transitorio, ma il log esatto (`gh run view --log-failed`) ha portato dritti al vero secret obsoleto in pochi minuti.
 
 ## What Didn't Work / Da tenere a mente
 
 - **`dig` locale in questo sandbox non è affidabile per verifiche DNS critiche** — ha restituito risposte stantie per >10 minuti indipendentemente dal server `@` interrogato esplicitamente, causando falsi allarmi di propagazione lenta. Usare query DoH dirette (es. `curl -H "accept: application/dns-json" "https://cloudflare-dns.com/dns-query?name=X&type=A"`) o l'API del provider DNS direttamente (`aws route53 list-resource-record-sets`) per verifiche affidabili in questo ambiente.
 - **La spec/piano originali non avevano previsto il rischio "servizi aggiuntivi" del pannello Register.it** — un avviso generico del genere può nascondere dipendenze reali (hosting email) non deducibili dalla sola ispezione dei record DNS via `dig`/`aws sesv2`. Da verificare esplicitamente con il supporto del registrar prima di un cutover simile in futuro, non solo dall'inventario tecnico dei record.
+- **Un Elastic IP appena associato va propagato anche a secret/config esterni che referenziano l'IP dell'istanza in modo statico, non solo al DNS** — il piano aveva previsto l'aggiornamento del record DNS `api.dataxiom.it` ma non il secret CI/CD `EC2_HOST`, causando un fallimento di deploy inatteso poche ore dopo. Da controllare esplicitamente la prossima volta che cambia l'IP pubblico di un'istanza con deploy automatico via SSH diretto.
 
 ## Next Steps (in ordine di urgenza)
 
@@ -54,7 +58,8 @@ La sessione è iniziata verificando se AWS fosse "attivo e funzionante" — trov
 3. Se NON sicuro o non chiarificabile: valutare se eliminare la hosted zone Route53 (costa ~$0.50/mese inutilizzata) o lasciarla per un'eventuale migrazione futura via altra strada (es. migrare prima la casella email a un servizio esterno, poi il DNS).
 4. A fine mese, verificare la spesa reale (`aws budgets describe-budgets`) contro il target €20-30 per confermare l'efficacia dei Task 1-5.
 5. **Downgrade EC2 prod** (deferito): non prima che il cliente pilota sia stabile da 2-4 settimane — richiede prima l'installazione di un CloudWatch Agent per dati di memoria reali.
-6. Tutto il backlog invariato dalle sessioni precedenti resta aperto (PR #11 in attesa di merge — AWS era temporaneamente non disponibile in Session 109, ora risolto, il merge non è ancora stato eseguito in questa sessione) — vedi Session 109 sotto.
+6. **Warning CI non bloccante, non ancora affrontato** (emerso durante il monitoraggio del deploy PR #11): le GitHub Actions `actions/checkout@v4`/`setup-node@v4`/`upload-artifact@v4` in tutti i workflow (`ci.yml`, `ecr-push.yml`, `deploy-staging.yml`, `deploy-to-ec2.yml`) dichiarano Node 20, deprecato lato runner GitHub (forzate a girare su Node 24 con warning). Fix a basso rischio: bump a `@v5` in ogni occorrenza — nessuna logica applicativa toccata. Rimandato su richiesta esplicita dell'utente a dopo la verifica del deploy PR #11.
+7. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 109 sotto.
 
 ---
 
