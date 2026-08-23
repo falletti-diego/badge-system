@@ -59,10 +59,13 @@ const styles = StyleSheet.create({
 });
 
 /**
- * GPSConsentDialog — GDPR Art. 7 explicit consent for geofencing
- * Shown before il primo check-in su una sede con geofencing attivo, e ad ogni
- * scan successivo finché il dipendente non accetta (nessun cooldown — il
- * check-in resta bloccato su quella sede fino al consenso, Fase C).
+ * GPSConsentDialog — GDPR Art. 6(1)(f) Legittimo interesse (sicurezza sede,
+ * prevenzione frode) + consenso esplicito Art. 7 come layer UX aggiuntivo di
+ * trasparenza (allineato a docs/privacy-policy-IT.md v2.1, sezione "Base
+ * Legale"). Shown before il primo check-in su una sede con geofencing
+ * attivo, e ad ogni scan successivo finché il dipendente non accetta
+ * (nessun cooldown — il check-in resta bloccato su quella sede fino al
+ * consenso, Fase C).
  */
 export default function GPSConsentDialog({ visible, onConsent, onDecline }) {
   const [submitting, setSubmitting] = useState(false);
@@ -101,7 +104,7 @@ export default function GPSConsentDialog({ visible, onConsent, onDecline }) {
         <View style={styles.container}>
           <Text style={styles.title}>📍 Verifica di Sede</Text>
           <Text style={styles.message}>
-            Il datore di lavoro ha abilitato la verifica di sede (GPS). Badge System registra la tua posizione solo al momento del check-in per verificare che tu sia fisicamente in sede.{'\n\n'}
+            Il datore di lavoro ha abilitato la verifica di sede (GPS) per motivi di sicurezza e prevenzione frodi. Badge System registra la tua posizione solo al momento del check-in per verificare che tu sia fisicamente in sede.{'\n\n'}
             <Text style={{ fontWeight: '600' }}>Dati raccolti:</Text>
             {'\n'}• Latitudine e longitudine al momento del check-in{'\n'}
             {'\n'}
