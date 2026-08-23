@@ -50,7 +50,7 @@
 | Accesso non autorizzato ai dati GPS | Bassa | Media | Cifratura a riposo (AWS RDS), RBAC multi-tenant, audit log completo |
 | Uso del dato oltre la finalità dichiarata (function creep) | Bassa | Alta | Nessun endpoint di reporting aggregato su GPS oltre la verifica check-in; cancellazione automatica 90gg |
 | Consenso non genuinamente libero (squilibrio datore/dipendente) | Media | Media | Base giuridica primaria = legittimo interesse Art. 6(1)(f), non solo consenso; diritto di revoca sempre disponibile da Impostazioni |
-| Assenza di autorizzazione sindacale/ITL (Art. 4 Statuto Lavoratori) | **Da valutare dal Titolare** | Alta | Gate tecnico che impedisce l'attivazione senza conferma esplicita del cliente nel pannello amministrativo |
+| Assenza di autorizzazione sindacale/ITL (Art. 4 Statuto Lavoratori) | **Da valutare dal Titolare** | Alta | Gate tecnico previsto: il pannello amministrativo richiederà conferma esplicita del cliente prima di attivare il geofencing (in rilascio nello stesso pacchetto di readiness di questo documento) |
 
 ## 4. Misure per affrontare i rischi
 
@@ -59,7 +59,9 @@
 - Diritto di revoca self-service (app mobile, Impostazioni)
 - Toggle di disattivazione a livello cliente e per singola sede
 - Audit log di ogni modifica (chi/quando/cosa)
-- Gate tecnico di conferma Art. 4 prima dell'attivazione del geofencing
+
+**In rilascio nello stesso pacchetto di readiness di questo documento:**
+- Gate tecnico di conferma Art. 4 prima dell'attivazione del geofencing (nuovo cliente = geofencing spento di default; l'attivazione richiederà conferma esplicita registrata in audit log)
 
 **Responsabilità del Titolare:**
 - [ ] Ottenere l'accordo sindacale o l'autorizzazione ITL prima di confermare l'attivazione (Art. 4 Statuto Lavoratori)
