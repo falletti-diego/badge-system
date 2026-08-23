@@ -117,7 +117,9 @@ describe('POST /admin/clients + PUT /admin/settings — geofencing Art.4 confirm
     expect(res.body.data.geofencing_feature_enabled).toBe(true);
 
     const audit = await pool.query(
-      `SELECT * FROM audit_log WHERE entity_id = $1 AND action = 'geofencing_art4_confirmed' ORDER BY timestamp DESC LIMIT 1`,
+      `SELECT * FROM audit_log
+       WHERE entity_id = $1 AND action = 'geofencing_art4_confirmed'
+       ORDER BY timestamp DESC LIMIT 1`,
       [clientId]
     );
     expect(audit.rows.length).toBe(1);
