@@ -70,7 +70,7 @@ router.put('/', createValidationMiddleware(AdminSettingsSchema), async (req, res
         oldValue: null,
         newValue: { confirmed_by: req.user.user_id },
         userId: req.user.user_id,
-      });
+      }).catch(() => {});
     }
 
     res.json({ success: true, data: result.rows[0] });

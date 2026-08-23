@@ -67,6 +67,9 @@ export function SettingsTab() {
       });
       setMsg({ type: 'success', text: 'Impostazioni salvate.' });
       setInitialGeofencingEnabled(geofencingEnabled);
+      // Ogni attivazione richiede una nuova attestazione esplicita — non deve
+      // restare pre-spuntata per un ciclo attiva→disattiva→riattiva successivo.
+      setArt4Confirmed(false);
       setConfirmDialog(false);
     } catch (err) {
       setMsg({ type: 'error', text: err.response?.data?.message || err.message });
