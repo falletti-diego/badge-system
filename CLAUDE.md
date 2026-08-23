@@ -23,12 +23,13 @@
 
 ### MVP Scope
 - ✅ Mobile app (QR scanning + Face ID)
-- ✅ Web dashboard (reporting, corrections, corrections, corrections)
+- ✅ Web dashboard (reporting, corrections)
 - ✅ CSV export
 - ✅ Multi-site support
 - ✅ Audit log
-- ❌ Payroll API (Phase 2)
-- ❌ Offline mode (Phase 2)
+- ✅ Offline mode (coda check-in + sync, completo dalla Session 86)
+- ✅ Export tracciati paghe Zucchetti/TeamSystem (export compatibile, non un'API diretta — quella resta Fase 2)
+- ❌ Integrazione Payroll API diretta (Fase 2)
 
 ---
 

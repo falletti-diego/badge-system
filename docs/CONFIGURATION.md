@@ -250,7 +250,7 @@ EXPO_PUBLIC_SENTRY_DSN=<prod-sentry-dsn>
 | RATE_LIMIT_MAX_REQUESTS | ❌ | number | 100 | Max requests per window per IP |
 | SENTRY_DSN | ❌ | string (URL) | https://key@sentry.io/... | Leave empty to disable |
 | SENTRY_ENVIRONMENT | ❌ | enum | development | For Sentry filtering |
-| ENABLE_OFFLINE_MODE | ❌ | boolean | false | Phase 2 feature |
+| ENABLE_OFFLINE_MODE | ❌ | boolean | false | Non usato — offline mode è live in produzione senza feature flag dedicato (coda AsyncStorage lato mobile, `client_uuid`/`occurred_at` lato backend) |
 | ENABLE_PAYROLL_API | ❌ | boolean | false | Phase 2 feature |
 | ENABLE_WEBHOOKS | ❌ | boolean | false | Phase 2 feature |
 | DISABLE_AUTH | ❌ | boolean | false | SECURITY: NEVER true in production |
@@ -288,7 +288,7 @@ EXPO_PUBLIC_SENTRY_DSN=<prod-sentry-dsn>
 | EXPO_PUBLIC_APP_VERSION | ❌ | string | 1.0.0 | For analytics |
 | EXPO_PUBLIC_LOG_LEVEL | ❌ | enum | debug | debug, info, warn, error |
 | EXPO_PUBLIC_ENABLE_FACE_ID | ❌ | boolean | true | Enable biometric? |
-| EXPO_PUBLIC_ENABLE_OFFLINE_CACHE | ❌ | boolean | false | Phase 2 feature |
+| EXPO_PUBLIC_ENABLE_OFFLINE_CACHE | ❌ | boolean | false | Non usato — offline mode è live in produzione senza feature flag dedicato |
 | EXPO_PUBLIC_SENTRY_DSN | ❌ | string (URL) | https://... | Leave empty to disable |
 | EXPO_PUBLIC_DEBUG | ❌ | boolean | true | Show dev menu? |
 

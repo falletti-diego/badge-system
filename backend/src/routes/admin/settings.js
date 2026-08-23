@@ -2,7 +2,7 @@
 
 const express = require('express');
 const { pool } = require('../../db/pool');
-const { ForbiddenError, NotFoundError } = require('../../utils/errors');
+const { ForbiddenError, NotFoundError, ValidationError } = require('../../utils/errors');
 const { logAudit } = require('../../middleware/audit');
 const { AdminSettingsSchema, createValidationMiddleware } = require('../../middleware/validation');
 
@@ -13,10 +13,26 @@ router.put('/', createValidationMiddleware(AdminSettingsSchema), async (req, res
     return next(new ForbiddenError('Only admins can update settings', 'FORBIDDEN_ROLE'));
   }
 
-  const { meal_voucher_hours, geofencing_feature_enabled } = req.validated.body;
+  const { meal_voucher_hours, geofencing_feature_enabled, geofencing_art4_confirmed } = req.validated.body;
   const clientId = req.user.client_id;
 
   try {
+    const current = await pool.query(
+      'SELECT geofencing_feature_enabled FROM clients WHERE id = $1',
+      [clientId]
+    );
+    if (current.rowCount === 0) {
+      return next(new NotFoundError('Client not found', 'CLIENT_NOT_FOUND'));
+    }
+
+    const isActivating = geofencing_feature_enabled === true && current.rows[0].geofencing_feature_enabled !== true;
+    if (isActivating && geofencing_art4_confirmed !== true) {
+      return next(new ValidationError(
+        'Attivare il geofencing richiede la conferma esplicita dell\'autorizzazione Art. 4 Statuto Lavoratori (geofencing_art4_confirmed)',
+        { code: 'GEOFENCING_ART4_CONFIRMATION_REQUIRED' }
+      ));
+    }
+
     const setClauses = [];
     const params = [];
 
@@ -37,10 +53,6 @@ router.put('/', createValidationMiddleware(AdminSettingsSchema), async (req, res
       params
     );
 
-    if (result.rowCount === 0) {
-      return next(new NotFoundError('Client not found', 'CLIENT_NOT_FOUND'));
-    }
-
     await logAudit(pool, {
       action: 'update_settings',
       entity: 'client',
@@ -49,6 +61,17 @@ router.put('/', createValidationMiddleware(AdminSettingsSchema), async (req, res
       newValue: { meal_voucher_hours, geofencing_feature_enabled },
       userId: req.user.user_id,
     }).catch(() => {});
+
+    if (isActivating) {
+      await logAudit(pool, {
+        action: 'geofencing_art4_confirmed',
+        entity: 'client',
+        entityId: clientId,
+        oldValue: null,
+        newValue: { confirmed_by: req.user.user_id },
+        userId: req.user.user_id,
+      }).catch(() => {});
+    }
 
     res.json({ success: true, data: result.rows[0] });
   } catch (err) {

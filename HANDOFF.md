@@ -1,3 +1,132 @@
+# Badge System — Session 110 Handoff
+
+**Date:** 2026-08-23
+**Session:** 110 — AWS cost optimization eseguito (8/11 task), migrazione DNS a Route53 pausata: rischio non chiarito per l'email `diego@dataxiom.it`
+**Status:** ✅ **Target di risparmio raggiunto** (Task 1-5). ✅ **Incidente DNS/IP di apertura sessione risolto** (Task 6, Elastic IP). ✅ **Task 9 (cutover nameserver Route53) eseguito** dopo conferma di Register.it sui requisiti email (MX+DKIM già replicati in Task 7) — in attesa di propagazione (24-48h + validazione Nic.it), verifica finale (Task 10) da ripetere a propagazione completata. ✅ **PR #11 (Smart Working↔Eventi) mergiata e live in produzione**, incluso un fix collaterale al deploy stesso (secret `EC2_HOST` obsoleto). ✅ **Downgrade EC2 prod `t3.small`→`t3.micro` eseguito e verificato sano**, con nuovo alarm CloudWatch memoria. ✅ **Bug Session 106 (durata/giorno evento in Presenze) chiuso**, confermato già fixato in produzione con verifica end-to-end via API. ✅ **Warning CI Node 20 risolto** (PR #12 mergiata). **Tutti i task pending della sessione completati, tranne il Task 10 (verifica DNS finale) in attesa di propagazione.**
+
+---
+
+## Goal (Session 110)
+
+La sessione è iniziata verificando se AWS fosse "attivo e funzionante" — trovato l'EC2 di produzione `stopped` (causa ignota, verosimilmente un riavvio precedente), riavviato, poi scoperto che `api.dataxiom.it` restava comunque irraggiungibile: l'IP pubblico dell'istanza era cambiato (nessun Elastic IP), e il DNS su Register.it puntava ancora al vecchio IP. Prima di fixare quell'incidente, l'utente ha chiesto una spending review completa (AWS a ~$100/mese contro un budget di $20) via `/superpowers:brainstorming`, poi ha esteso l'analisi a due fronti: readiness per l'attivazione di un cliente entro 1 mese, e fattibilità di migrare la gestione DNS di `dataxiom.it` da Register.it a Route53.
+
+## Current Progress
+
+**Diagnosi reale** (via inventario `aws ec2`/`rds`/`ecr`/`logs`/`budgets`, non stime): RDS staging 24/7 non coperto da Free Tier (~$15-16/mese), EC2 prod `t3.small` sovradimensionato (CPU media 1.07%), 2 snapshot RDS manuali dimenticati di giugno (~$3.8/mese), ECR senza lifecycle policy (181 immagini/33GB in crescita illimitata), log staging senza retention.
+
+**Revisione esplicita per readiness cliente (~1 mese)**: downgrade EC2 prod deferito (rischio memoria/OOM, storico di crisi pool-exhaustion già documentato); backup retention RDS prod alzata da 1 a 7gg invece (readiness, non risparmio).
+
+**DNS**: confermato via `aws route53domains` che `.it` è supportato da Route53 per il trasferimento di registrazione, ma scelta la Soluzione A (solo delega DNS via nameserver, registrazione invariata su Register.it) per il rischio del trasferimento completo a ridosso del lancio. Inventario record reale catturato (A/CNAME/MX/TXT/3×DKIM SES).
+
+**Spec** (`docs/superpowers/specs/2026-08-23-aws-cost-optimization-design.md`) → **piano 11 task** (`docs/superpowers/plans/2026-08-23-aws-cost-optimization.md`) → `/superpowers:subagent-driven-development`, adattato: subagent "executor" per task (nessuna code-quality-review, non c'è codice — verifica diretta del controller sull'output reale).
+
+**Eseguiti e verificati (Task 1-8/11):**
+1. RDS staging fermato.
+2. 2 snapshot manuali cancellati (un subagent ha sollevato un falso allarme di sicurezza "unica risorsa di backup" — verificato e smentito: i 6 snapshot automatici, il vero backup, restano intatti).
+3. Lifecycle policy ECR applicata (166 immagini marcate per scadenza, 15 mantenute).
+4. Retention log staging → 30gg.
+5. Backup retention RDS prod → 7gg.
+6. **Elastic IP `52.19.238.50` allocato e associato** a `badge-system-api` — chiude l'incidente di apertura sessione indipendentemente da Route53. Record A `api.dataxiom.it` aggiornato su Register.it dall'utente.
+7. Hosted zone Route53 creata e popolata con tutti e 9 i record reali (incluso MX e 3× DKIM SES).
+8. Verifica pre-cutover superata (tutti i record confermati via `aws route53 list-resource-record-sets`).
+
+**Scoperta collaterale non correlata**: il resolver DNS locale del sandbox restituiva risposte stantie indipendentemente dal server `@` specificato in `dig` — ha causato falsi allarmi di "propagazione lenta" su Register.it già in realtà avvenuta. Risolto verificando con query DoH dirette (Cloudflare) e con l'API Route53 direttamente.
+
+**Task 9 (cutover nameserver) fermato dall'utente**: nel pannello "Cambio DNS" di Register.it è comparso un avviso non previsto — *"L'impostazione dei DNS esterni comporterà la disattivazione di tutti i servizi aggiuntivi legati al dominio"*. L'utente ha una casella email reale e attiva `diego@dataxiom.it` ospitata lì. Non determinabile dagli strumenti disponibili se l'avviso riguardi solo componenti Register.it o disattivi il servizio email stesso, a prescindere dal record MX (già replicato correttamente). Dato che il problema originale è già risolto dal Task 6, il beneficio residuo di Route53 non giustifica il rischio senza conferma esplicita dal supporto Register.it.
+
+**Dopo la chiusura del piano, merge di PR #11 eseguito** (mutua esclusione Smart Working↔Eventi, Session 109 — era in attesa perché AWS non era raggiungibile). Squash-merge (`3697b8e`), CI/CD e Build&Push ECR verdi, ma **il deploy EC2 è fallito al primo tentativo** (`dial tcp ***:22: i/o timeout`). Causa: il secret GitHub `EC2_HOST` era ancorato all'IP effimero originale, fermo dal 2 giugno 2026 — reso obsoleto dal nuovo Elastic IP allocato nel Task 6 di questa stessa sessione, un effetto collaterale non previsto dal piano (il secret non era nell'inventario delle risorse toccate). Corretto (`gh secret set EC2_HOST --body "52.19.238.50"`), rilanciato con `gh run rerun` — secondo tentativo verde, `/health` confermato con database connesso. PR #11 ora live in produzione.
+
+**Downgrade EC2 prod rivalutato e completato via `/superpowers:brainstorming`**: esplorando il contesto reale via SSH diretto sull'istanza + query CloudWatch (non solo stime), trovato che il "gap" di dati memoria (motivo del deferimento nella spec originale) era in realtà un falso allarme — il CloudWatch Agent pubblicava già `mem_used_percent` da settimane sotto un namespace custom (`BadgeSystem/EC2`) mai interrogato prima. Recuperate 3 settimane di dati reali: memoria media 22.87%, picco 32.37% (~615MB su 1.9GiB); CPU media 1.09%, picco 32.59%. **Verifica cruciale**: riletto il dettaglio della crisi di stabilità storica (`backend_stability_crisis_resolved.md`) — le cause erano pool di connessioni DB troppo piccolo, timeout RDS cold-start, healthcheck rigido, **nessuna legata alla RAM host**. Il rischio OOM della spec originale era sovrastimato. Dato che non c'è ancora un cliente reale, l'utente ha scelto di eseguire il downgrade ORA (finestra a rischio minimo) invece di aspettare, capovolgendo la logica originale.
+
+**Eseguito** via `/superpowers:subagent-driven-development` (subagent executor per step + verifica indipendente del controller): alarm CloudWatch `badge-ec2-memory-high` creato (soglia 85%, stesso pattern degli alarm esistenti); downgrade `t3.small`→`t3.micro` (stop→modify-instance-attribute→start→wait status-ok, Elastic IP rimasto invariato automaticamente); verifica indipendente — `/health` 200 con DB connesso, container Docker `Up (healthy)`, memoria **12.81%** (116.5MiB/909.5MiB), `RestartCount: 0`, alarm in stato `OK` con dati reali (~19.7%).
+
+**Register.it ha confermato** (contattato dall'utente) che il cambio DNS esterni non rompe la posta **a condizione che** MX e i relativi record SPF/DKIM siano già presenti nel nuovo provider prima del cutover — verificato che era già così (Task 7: MX `10 mail.register.it` + 3 CNAME DKIM SES già replicati; nessun SPF esisteva prima, quindi nulla da aggiungere). **Task 9 eseguito**: nameserver di `dataxiom.it` cambiati su Register.it ai 4 di Route53. Il pannello conferma il salvataggio, ma la propagazione pubblica (verificata via DoH, non ancora arrivata) richiede 24-48h più la validazione della Registration Authority italiana (Nic.it) — normale, non un fallimento. **Task 10 (verifica finale) da ripetere quando la propagazione sarà completa**, su richiesta dell'utente rimandata "a fine giornata".
+
+**Bug Session 106 (durata/giorno evento non visibile nelle Presenze) chiuso, con verifica end-to-end reale**: l'esplorazione del codice (`Explore` agent) aveva già trovato che il fix esisteva (commit `570c06b`, 21/8 — endpoint `GET /events/approved` + `mapEventToPresenceRow`), ma non era mai stato verificato a schermo. Confermato che il fix è live in produzione controllando il contenuto reale del bundle JS servito da `badge.dataxiom.it` (stesso metodo usato per l'OTA mobile: grep di stringhe distintive `events/approved`/`ore_label`/`is_event`, non solo il log del deploy). Poi **verifica end-to-end reale via API**, richiesta esplicitamente dall'utente: creato un tenant demo isolato (`/demo/start`), sottomesso e approvato un evento reale (`POST /events/request` → `PUT /:id/approve`), chiamato l'endpoint reale (`GET /events/approved`), e passato la risposta reale attraverso la funzione di mapping frontend vera (`mapEventToPresenceRow`, eseguita con Node, stesso codice del browser) — risultato: `timestamp` corretto (24/8 09:00 Europe/Rome) e `ore_label: "8h"` corretto. Bug chiuso con prova diretta sul contenuto, non solo lettura del codice.
+
+## What Worked
+
+- **Diagnosi bottom-up da inventario reale invece che da stime** — Cost Explorer si è confermato inaffidabile (dati vicini a zero, coerente con quanto già annotato in sessioni precedenti), ma `aws budgets describe-budgets` ha dato numeri reali e verificabili (spesa attuale, previsione, storico alert).
+- **Rivalutare esplicitamente il piano di risparmio rispetto al rischio di attivazione cliente**, su richiesta dell'utente — ha portato a deferire un intervento (downgrade EC2) che sarebbe stato rischioso proprio nella finestra sbagliata, e a scoprire un item di readiness non legato al costo (backup retention).
+- **Non fidarsi ciecamente di un falso allarme di sicurezza del subagent** (Task 2) — verificato con una query indipendente prima di accettare o respingere l'allarme.
+- **Fermarsi su un rischio genuinamente non chiarificabile dagli strumenti disponibili** (l'avviso Register.it sul servizio email) invece di procedere assumendo che andasse tutto bene — l'utente ha un servizio email reale in gioco, non uno di test.
+- **Riconoscere che il beneficio marginale (Route53) non giustificava il rischio residuo**, una volta che il problema originale era già risolto in modo indipendente (Elastic IP) — non tutto il piano andava completato a tutti i costi per "finire quanto pianificato".
+- **Leggere il log di errore reale invece di assumere una causa generica** quando il deploy EC2 è fallito — il timeout SSH avrebbe potuto sembrare un problema di rete transitorio, ma il log esatto (`gh run view --log-failed`) ha portato dritti al vero secret obsoleto in pochi minuti.
+- **Non fidarsi di un risultato negativo di `aws cloudwatch list-metrics` senza controllare il namespace giusto** — un "gap" apparente (nessun dato memoria) era in realtà solo il namespace sbagliato interrogato; un secondo controllo più ampio (`list-metrics` senza filtro namespace) ha rivelato 3 settimane di dati già esistenti.
+- **Rileggere il dettaglio esatto di un incidente storico prima di generalizzarlo come "rischio memoria"** — la crisi di stabilità del 4 giugno era interamente config applicativa (pool DB, healthcheck), non RAM host. Una lettura superficiale della memoria ("crisi di pool exhaustion") aveva portato a una cautela eccessiva nella spec originale.
+- **Capovolgere la sequenza "aspetta il cliente prima di rischiare" quando il rischio reale si è ridimensionato** — il momento più sicuro per un cambio a basso rischio è prima che un cliente dipenda dal sistema, non dopo.
+
+## What Didn't Work / Da tenere a mente
+
+- **`dig` locale in questo sandbox non è affidabile per verifiche DNS critiche** — ha restituito risposte stantie per >10 minuti indipendentemente dal server `@` interrogato esplicitamente, causando falsi allarmi di propagazione lenta. Usare query DoH dirette (es. `curl -H "accept: application/dns-json" "https://cloudflare-dns.com/dns-query?name=X&type=A"`) o l'API del provider DNS direttamente (`aws route53 list-resource-record-sets`) per verifiche affidabili in questo ambiente.
+- **La spec/piano originali non avevano previsto il rischio "servizi aggiuntivi" del pannello Register.it** — un avviso generico del genere può nascondere dipendenze reali (hosting email) non deducibili dalla sola ispezione dei record DNS via `dig`/`aws sesv2`. Da verificare esplicitamente con il supporto del registrar prima di un cutover simile in futuro, non solo dall'inventario tecnico dei record.
+- **Un Elastic IP appena associato va propagato anche a secret/config esterni che referenziano l'IP dell'istanza in modo statico, non solo al DNS** — il piano aveva previsto l'aggiornamento del record DNS `api.dataxiom.it` ma non il secret CI/CD `EC2_HOST`, causando un fallimento di deploy inatteso poche ore dopo. Da controllare esplicitamente la prossima volta che cambia l'IP pubblico di un'istanza con deploy automatico via SSH diretto.
+
+## Next Steps (in ordine di urgenza)
+
+1. **Ripetere la verifica post-cutover DNS (Task 10)** quando la propagazione sarà completa (utente ha chiesto di ricontrollare "a fine giornata"): `dig +short NS dataxiom.it` deve mostrare i 4 nameserver Route53, poi ripetere il check di tutti i record + stato DKIM SES (`aws sesv2 get-email-identity --email-identity dataxiom.it --query "DkimAttributes.Status"`, deve restare `SUCCESS`) + un secondo test di invio/ricezione email reale su `diego@dataxiom.it` come conferma finale.
+2. A fine mese, verificare la spesa reale (`aws budgets describe-budgets`) contro il target €20-30 per confermare l'efficacia dei Task 1-5 + il downgrade EC2.
+3. ~~**Warning CI Node 20 deprecato**~~ — ✅ **Risolto**: bump `actions/checkout`/`setup-node`/`upload-artifact` da `@v4` a `@v5` in tutti e 4 i workflow (`ci.yml`, `ecr-push.yml`, `deploy-staging.yml`, `deploy-to-ec2.yml`), 18 occorrenze totali. Branch dedicato da `origin/main` (per evitare la divergenza post-squash-merge già vista in sessione), CI verde su tutti i check, **PR #12 mergiata** (`fd9e876`).
+4. Monitorare l'alarm `badge-ec2-memory-high` nei prossimi giorni/settimane per confermare che il margine resti sano man mano che arriva traffico reale.
+6. Monitorare l'alarm `badge-ec2-memory-high` nei prossimi giorni/settimane per confermare che il margine resti sano man mano che arriva traffico reale (specialmente dopo l'attivazione del primo cliente).
+7. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 109 sotto.
+
+---
+
+# Badge System — Session 109 Handoff
+
+**Date:** 2026-08-22
+**Session:** 109 — Mutua esclusione Smart Working ↔ Eventi/Training implementata end-to-end, PR #11 aperta e verde, merge posticipato
+**Status:** ✅ **Feature implementata, testata e review-completa. PR #11 aperta e mergeable (CI verde).** ⏸️ **Merge posticipato su richiesta esplicita dell'utente**: account AWS temporaneamente non disponibile — il merge GitHub in sé non ne dipende, ma il deploy automatico post-merge (ECR/EC2) fallirebbe.
+
+---
+
+## Goal (Session 109)
+
+L'utente ha confermato che la conferma visiva sul device reale della mutua esclusione Eventi/Training↔QR check-in (PR #7) funziona, ma testando con l'utenza Maria ha trovato un gap parallelo: un dipendente poteva ancora dichiarare Smart Working per un giorno con un evento già approvato — cosa che il check-in QR già impediva correttamente. Richiesta di implementare la stessa mutua esclusione anche verso Smart Working, con `/superpowers:brainstorming`+`/grilling` per il design, poi l'intera pipeline fino a push+PR.
+
+## Current Progress
+
+**Design (`/grilling`, 4 decisioni, tutte risolte sulla raccomandazione)**: stati bloccanti PENDING+APPROVED (coerente con la logica già esistente in `events.js POST /request`); blocco anche in fase di approvazione evento se Smart Working già dichiarato (non solo il verso opposto); UX mobile mirror esatto di `QRScannerScreen.jsx`; riuso di `lockEventConflictScope` esistente (nessun nuovo lock). Spec: `docs/superpowers/specs/2026-08-22-smart-working-event-conflict-design.md`. Piano 6 task: `docs/superpowers/plans/2026-08-22-smart-working-event-conflict.md`.
+
+**Implementazione (`/superpowers:subagent-driven-development`, worktree isolato, 6 task, ognuno con spec-review + code-quality-review indipendenti)**:
+1. Nuova `findConflictingSmartWorking()` in `backend/src/utils/eventConflict.js`.
+2. `smartWorking.js POST` riscritto: lock → `findConflictingEvent` → insert. **Fix collaterale trovato**: la route usava `CURRENT_DATE` Postgres (timezone di sessione) invece di `todayInTimeZone()` Europe/Rome — stessa classe già documentata come **Pattern 6** in `CLAUDE.md`, corretta.
+3. `events.js PUT /:id/approve` esteso con `findConflictingSmartWorking`, riusando il lock già acquisito per il controllo checkin esistente.
+4. Test real-Postgres dedicati `smartWorking-event-conflict.test.js` (6 test). Deviazione dal piano (verificata necessaria e inerte): aggiunto `makeAdminEmployee` perché `event_requests.approved_by` referenzia `employees(id)`.
+5. Pre-check mobile in `SmartWorkingScreen.jsx`, mirror di `QRScannerScreen.jsx`.
+6. Review finale olistica: nessun difetto critico/importante residuo.
+
+Un code-quality-reviewer del Task 5 è stato interrotto a metà da un limite di sessione API — completato manualmente (non ri-dispatchato, per evitare di ricolpire lo stesso limite).
+
+**Verifica finale**: `/code-review:code-review` adattato al diff locale (nessuna PR esisteva ancora) — 5 agenti paralleli, 2 candidati sotto soglia 80 (score 45 e 25) → nessun problema riportato. `/test-all`: backend verde (entrambi i batch), frontend-web 330/330 (1 timeout confermato flaky/non correlato in `EmployeesTab.test.jsx`), mobile 163/163 già verificato in sessione precedente.
+
+**Push + PR**: `git push -u origin worktree-smart-working-event-conflict` → **PR #11** creata (https://github.com/falletti-diego/badge-system/pull/11). CI verde su tutti i check (Backend - Lint & Test ✅, Mobile - Test ✅, Security Check ✅), stato `MERGEABLE`.
+
+**Merge posticipato**: l'utente ha segnalato che il proprio account AWS non è al momento raggiungibile e ha chiesto di attendere. Chiarito che il merge GitHub è indipendente da AWS, ma la pipeline CI/CD successiva al push su `main` (build Docker→ECR→SSH EC2) fallirebbe senza accesso AWS — decisione: **attendere**, PR resta aperta.
+
+## What Worked
+
+- **`/grilling` per chiudere le 4 decisioni di design prima di scrivere codice** — nessuna ambiguità residua durante l'implementazione, tutte le decisioni già prese in anticipo.
+- **Riuso deliberato dell'infrastruttura esistente** (`lockEventConflictScope`, `findConflictingEvent`, pattern UI di `QRScannerScreen.jsx`) invece di reinventare — la feature è quasi interamente composizione di pezzi già testati.
+- **Riconoscere lo stesso Pattern 6 (timezone) al terzo incontro** e fixarlo immediatamente invece di introdurlo di nuovo per la terza volta — la checklist in `CLAUDE.md` ha funzionato come previsto.
+- **Completare manualmente una review interrotta da un limite API invece di ri-dispatchare** un subagent identico — evitato un secondo fallimento prevedibile.
+- **Chiarire esplicitamente la dipendenza reale da AWS prima di agire**: il merge GitHub e il deploy automatico sono due operazioni distinte — permesso di procedere in modo granulare invece di bloccare tutto per precauzione.
+
+## What Didn't Work / Da tenere a mente
+
+- Nessun problema di processo nuovo in questa sessione — la pipeline design→piano→subagent-driven-development→code-review→test-all→PR ha funzionato end-to-end senza intoppi degni di nota, a parte l'interruzione per limite di sessione già gestita.
+
+## Next Steps (in ordine di urgenza)
+
+1. **Merge PR #11** appena l'account AWS torna disponibile (o comunque appena l'utente lo richiede esplicitamente) — poi verificare che la pipeline di deploy (ECR/EC2) vada a buon fine.
+2. **Deploy backend/web in produzione**: sia questa feature sia PR #7 (mutua esclusione Eventi/Training↔QR, mergeata Session 107) risultano ancora **non deployate** su `api.dataxiom.it`/`badge.dataxiom.it` — solo mergeate su `main` a livello di repo. Da fare nello stesso giro di deploy.
+3. **Raccomandazione operativa dalla PR #11, non ancora eseguita**: audit sui dati di produzione esistenti per individuare eventuali PENDING/APPROVED già in conflitto con uno Smart Working già dichiarato sulla stessa data, da fare prima o subito dopo il deploy.
+4. **🔴 Ancora aperto da Session 106**: durata/giorno evento non compare correttamente nelle Presenze dopo l'approvazione manager.
+5. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 108/107 sotto.
+
+---
+
 # Badge System — Session 108 Handoff
 
 **Date:** 2026-08-22
