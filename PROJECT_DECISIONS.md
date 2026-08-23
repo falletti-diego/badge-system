@@ -78,6 +78,24 @@ L'utente ha chiesto una nuova analisi via `/superpowers:brainstorming` sul downg
 
 **Stato:** downgrade completato e verificato sano. Risparmio stimato ~$7-8/mese aggiuntivo rispetto ai Task 1-5 già eseguiti.
 
+### Addendum — Task 9 (cutover DNS) eseguito dopo conferma Register.it
+
+L'utente ha contattato il supporto Register.it, che ha confermato: il cambio DNS esterni non rompe la posta **a condizione che** MX e i relativi SPF/DKIM siano già presenti nel nuovo provider prima del cutover. Verificato che era già così — Task 7 aveva già replicato il record MX (`10 mail.register.it`) e i 3 CNAME DKIM SES nella hosted zone Route53; nessun record SPF esisteva originariamente (riconfermato via query DoH), quindi nulla mancava. Un test reale di invio email a `diego@dataxiom.it` (fatto dall'utente prima del cutover) ha confermato il funzionamento come baseline.
+
+**Task 9 eseguito**: nameserver di `dataxiom.it` cambiati su Register.it dai 2 originali ai 4 di Route53. Il pannello conferma il salvataggio ("Le nostre configurazioni sono disabilitate"), ma la propagazione pubblica (verificata via DoH — ancora `ns1/ns2.register.it` al momento del controllo) richiede 24-48h più la validazione della Registration Authority italiana (Nic.it) sulla corretta configurazione tecnica dei nuovi DNS. Non un fallimento, un'attesa normale. **Task 10 (verifica finale) rimandato a fine giornata su richiesta dell'utente.**
+
+### Addendum — Bug Session 106 (durata/giorno evento in Presenze) chiuso con verifica end-to-end via API
+
+Investigato il bug mai risolto da Session 106 ("dopo l'approvazione manager, giorno e durata dell'evento non compaiono correttamente nella sezione Presenze"). Un agente Explore ha trovato che il codice era **già stato fixato** (commit `570c06b`, 21 agosto — nuovo endpoint `GET /api/v1/events/approved` + funzione `mapEventToPresenceRow` nel frontend) ma mai verificato a schermo — la root cause reale non era un mismatch di nomi di campo, ma un'assenza totale: la tabella Presenze non includeva affatto gli eventi prima del fix.
+
+Confermato che il fix è live in produzione ispezionando direttamente il contenuto del bundle JS servito da `badge.dataxiom.it` (stesso metodo usato per la verifica OTA mobile in Session 108 — grep di stringhe distintive `events/approved`/`ore_label`/`is_event` nel bundle compilato, non solo il log del deploy).
+
+**Verifica end-to-end reale via API**, richiesta esplicitamente dall'utente: creato un tenant demo isolato (`POST /demo/start`, pulizia automatica già verificata in Session 89), sottomesso un evento reale (`POST /events/request`) e approvato (`PUT /:id/approve`), chiamata la risposta reale dell'endpoint `GET /events/approved`, e passata quella risposta reale attraverso la funzione di mapping frontend vera (`mapEventToPresenceRow`, eseguita con Node — stesso codice sorgente che gira nel browser, non una simulazione). Risultato: `timestamp` corretto (evento del 24/8 09:00 Europe/Rome → `2026-08-24T07:00:00.000Z` UTC) e `ore_label: "8h"` corretto (09:00-17:00) — esattamente i due sintomi originariamente segnalati come rotti.
+
+Nota collaterale trovata durante l'indagine (non parte del bug, non fixata): il ruolo `superadmin` non è tra i ruoli riconosciuti da `GET /events/approved` (solo `employee`/`manager`/`admin`/`viewer`) — un gap minore pre-esistente, irrilevante per Dataxiom staff dato che gestiscono clienti reali con account `admin` scoped al tenant, non `superadmin`.
+
+**Stato:** bug chiuso, verificato con prova diretta end-to-end, non solo lettura del codice.
+
 ---
 
 ## Session 109 — Mutua esclusione Smart Working ↔ Eventi/Training, PR #11 aperta, merge posticipato (22 Agosto 2026)
