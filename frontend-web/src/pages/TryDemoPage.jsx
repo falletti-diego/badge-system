@@ -157,8 +157,9 @@ export default function TryDemoPage() {
                 maxWidth: '38rem',
               }}
             >
-              Una demo completa con dati realistici, pronta in pochi secondi. Nessuna carta,
-              nessun impegno.
+              Face ID nativo impedisce che un collega timbri al posto di un altro — con una
+              traccia di audit che regge a un controllo. Demo completa con dati realistici,
+              pronta in pochi secondi. Nessuna carta, nessun impegno.
             </Typography>
 
             {/* Signature element: real-ish live KPI teaser from the fixed demo dataset */}
