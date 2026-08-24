@@ -1,3 +1,42 @@
+# Badge System — Session 113 Handoff
+
+**Date:** 2026-08-24
+**Session:** 113 — Sync `main` locale↔`origin` (5 commit indietro) + recupero doc mai committati, nessuna feature
+**Status:** ✅ **Repo sincronizzato e pulito**. `git pull --ff-only` senza conflitti, 4 documenti recuperati e committati (`442a40a`), `.gitignore` aggiornato per build APK locali, push su `origin/main` completato. Nessun task pending residuo.
+
+## Goal (Session 113)
+
+L'utente ha chiesto lo stato del bug "durata/giorno evento in Presenze" (Session 106), ritenendolo già risolto — in disaccordo con la risposta iniziale data (basata sul `main` locale, che lo mostrava ancora aperto). Verificare chi avesse ragione ha portato a scoprire un problema più ampio del singolo bug.
+
+## Current Progress
+
+**Causa root**: il `main` locale era **5 commit indietro rispetto a `origin/main`** — mancavano PR #11 (mutua esclusione Smart Working↔Eventi), PR #12 (fix CI Node 20/actions v5), il pacchetto "Sales-Ready" (S.27/S.28/S.29 mitigati), la chiusura del Task 10 (DNS Route53) e l'handoff Session 111-112. Il bug Session 106 era in realtà già chiuso da Session 110 — l'utente aveva ragione, il mio riepilogo era stale.
+
+**Fix**: `git fetch` + confronto `main...origin/main` (0 commit locali non pushati, 5 remoti non recepiti) → `git pull --ff-only origin main`, verificato working tree pulito prima (solo file non tracciati) → fast-forward senza conflitti né merge.
+
+**Secondo problema, trovato durante la verifica post-sync**: 5 file rimasti solo in locale, mai committati in nessuna sessione precedente:
+- 3 piani di implementazione (`docs/superpowers/plans/2026-06-21-mobile-leave-illness-step1.md`, `2026-06-25-mobile-bug-fix-qr-ferie.md`, `2026-08-20-eventi-training.md`) — confermato via `git log --follow` (nessuna storia sotto nessun nome). Le feature che descrivono sono tutte già live in produzione: gap solo documentale.
+- 1 checklist di verifica staging (`docs/verifica-staging-fase-a-2026-08-05.md`) — caselle vuote, verifica già fatta a voce in Session 93.
+- 1 build APK locale, 186MB (`frontend-mobile/build-1785393173426.apk`) — mai adatta a un commit git.
+
+**Azione**: committati i 4 `.md` così come trovati (nessuna riscrittura), aggiunto `*.apk` a `.gitignore`, rimossa la build binaria dal disco. Commit `442a40a`, push su `origin/main` riuscito.
+
+## What Worked
+
+- **Non accettare passivamente il disaccordo dell'utente**: invece di ribadire la risposta iniziale, ho verificato `git fetch`/`merge-base` — ha rivelato che il checkout locale, non la memoria del progetto, era la fonte dell'errore.
+- **`git diff --stat`/`git log --follow` prima di committare file non tracciati**: ha confermato che i 3 piani non erano duplicati di contenuto già presente altrove sotto un altro nome, evitando un commit ridondante.
+- **Verificare `git status` (working tree pulito) prima di un `git pull --ff-only`**, come da protocollo standard prima di operazioni che toccano lo stato locale.
+
+## What Didn't Work / Da tenere a mente
+
+- **Fidarsi di `TASKS.md`/`HANDOFF.md`/`git log` letti da un checkout locale senza prima un `git fetch`** — stessa lezione già vista in Session 111-112 con i worktree stale: un checkout riusato su più sessioni può disallinearsi silenziosamente da `origin` se altre sessioni (specialmente da worktree isolate) pushano direttamente. Verificare `main...origin/main` a inizio sessione quando si deve rispondere su "cosa è stato fatto", non solo prima di un push.
+
+## Next Steps
+
+Nessuno specifico a questa sessione. Il backlog aperto resta quello descritto in Session 111-112 sotto: outreach commerciale mai iniziato, S.27/S.28/S.29 mitigati ma non validati legalmente, Auth0 reale non integrato, ANDROID.1a/1b rinviata.
+
+---
+
 # Badge System — Session 111-112 Handoff
 
 **Date:** 2026-08-23

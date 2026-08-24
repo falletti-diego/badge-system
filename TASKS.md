@@ -1,13 +1,14 @@
 # Badge System — Task Tracker
 
 **Target:** MVP Lancio Settembre 2026 · 10h/week · ~150 ore totali  
-**Last Updated:** 2026-08-23 (Session 111: **Pacchetto "Sales-Ready" completo — S.27/S.28/S.29 mitigati (bozze/gate tecnico, non chiusura legale formale), CLAUDE.md/CONFIGURATION.md disallineati corretti, messaging anti-frode in demo, modulo d'ordine commerciale — tutti i 6 task con verifica progressiva via subagent, 4 finding reali trovati e corretti in corsa**)  
+**Last Updated:** 2026-08-24 (Session 113: **Sync `main` locale↔`origin` (era 5 commit indietro) + recupero 3 piani di implementazione e 1 checklist mai committati + `.gitignore` per build APK locali — nessun contenuto di sessioni precedenti modificato**)  
 **Production:** https://badge.dataxiom.it · API: https://api.dataxiom.it
 
 ---
 
 ## 📋 Session Log
 
+| 113 | 2026-08-24 | **Manutenzione repo, nessuna feature** — scoperto `main` locale 5 commit indietro rispetto a `origin/main` (mancavano PR #11 Smart Working↔Eventi, PR #12 CI v5, pacchetto Sales-Ready, chiusura DNS Task 10, handoff Session 111-112) durante una domanda dell'utente sullo stato di un bug già chiuso — `git pull --ff-only` senza conflitti. Recuperati 3 piani di implementazione mai committati (`2026-06-21-mobile-leave-illness-step1.md`, `2026-06-25-mobile-bug-fix-qr-ferie.md`, `2026-08-20-eventi-training.md` — tutti descrivono feature già live, solo gap nello storico) + 1 checklist di verifica staging obsoleta (caselle vuote, verifica già fatta a voce in Session 93). Aggiunto `*.apk` a `.gitignore` e rimossa build binaria locale da 186MB mai adatta a git. Commit `442a40a`, push su `origin/main`.
 | Sessione | Data | Sintesi |
 |---|---|---|
 | 112 | 2026-08-23 | **✅ Task 10 chiuso — migrazione DNS Route53 verificata completa e propagata** — Verifica diretta via `dig` contro 1.1.1.1 e 8.8.8.8: tutti e 4 i nameserver Route53 (`ns-640.awsdns-16.net`, `ns-420.awsdns-52.com`, `ns-1949.awsdns-51.co.uk`, `ns-1442.awsdns-52.org`) presenti su entrambi i resolver, nessuna traccia residua di `ns1/ns2.register.it`. Record critici confermati corretti post-propagazione: MX `10 mail.register.it` (posta continua a funzionare), i 3 CNAME DKIM SES (`f2p3zqvnhqkbkg6l4z5r7ehlffmyuney`/`me5k4wgeffp4etlmz6e7up42b3rrkv2p`/`lbnyjkec7aw3x2l3qxxzcckt4ldftwkk`, sending-domain SES resta valido), A `api.dataxiom.it` → Elastic IP `52.19.238.50`, CNAME `www`/`badge` → rispettivi siti Netlify. Migrazione a Route53 (nameserver delegation, registrazione dominio invariata a Register.it) dichiarabile completa. Routine cloud di monitoraggio periodico (`trig_01S8bNdjhTyzFYn6LYCP5Vj9`, ogni 12h) disattivata: non più necessaria. |
