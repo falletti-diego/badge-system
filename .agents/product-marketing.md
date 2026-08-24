@@ -1,7 +1,7 @@
 # Product Marketing Context
 
-**Document version:** v4
-**Last updated:** 2026-08-23
+**Document version:** v5
+**Last updated:** 2026-08-24
 
 ## Product Overview
 **One-liner:** SaaS multi-tenant per il tracciamento delle presenze nel retail italiano/europeo — QR code da smartphone + Face ID nativo, zero hardware.
@@ -73,6 +73,7 @@
 - Audit log completo (chi/quando/cosa) + RBAC, rilevante per un HR/Ops director di catena multi-sede, non per il singolo negozio
 - Opzione white-label Tier 2 (branding completo: nome/icona proprie, possibile dominio dedicato) per clienti grandi — nessun competitor italiano citato la offre. *(Fonte: `docs/superpowers/specs/2026-07-26-tenant-branding-and-whitelabel-design.md` — Tier 1 SaaS multi-tenant condiviso è il modello base/listino; Tier 2 white-label dedicato è una trattativa custom fuori listino per clienti grandi con scala attesa di 1-2 clienti nel primo anno.)*
 - **Export tracciati paghe Zucchetti/TeamSystem un click** (confermato reale 2026-08-12) — nessun competitor tra quelli analizzati dichiara pubblicamente questa integrazione specifica per i due gestionali paghe italiani più diffusi; riduce l'attrito verso lo studio paghe del cliente, un punto di frizione reale per un HR/Ops director
+- **Pianificazione turni integrata con presenze/ferie/malattia/eventi** (aggiunto 2026-08-24, feature live da Session 3.3/34/38/44 — matrice manager, vista settimanale, "Copia Settimana", export PDF, blocco automatico del turno se il dipendente ha ferie approvate/malattia/evento per quel giorno) — NoBadge (concorrente diretto) è descritto nel Competitive Landscape come QR+GPS-only, senza pianificazione turni; le suite enterprise (Zucchetti/TeamSystem/Factorial/Personio) la offrono ma dentro un pacchetto pesante/costoso. Rafforza l'obiezione "le suite HR fanno già tutto": con Badge System non si rinuncia alla pianificazione scegliendo un prodotto verticale invece di una suite intera
 
 **How we do it differently:** "Zero hardware + QR + smartphone" da solo non è più un differenziatore reale (è commodity in Italia grazie a NoBadge). Il vero differenziale è biometrico (Face ID) e strutturale (audit/RBAC/white-label), non la meccanica di check-in in sé.
 
@@ -84,7 +85,7 @@
 | Objection | Response |
 |-----------|----------|
 | "NoBadge costa meno della metà e fa quasi la stessa cosa" | Vero sul prezzo nominale (gap ridotto a ~1,3-1,9x, non più ~2x, dopo la revisione pricing) — il delta residuo è esplicitamente giustificato da Face ID anti-frode, audit log/RBAC e opzione white-label, argomenti assenti in NoBadge. **Nota onestà:** questa risposta non è ancora stata testata su un cliente reale (vedi rischio sotto). |
-| "Le suite HR (Zucchetti/TeamSystem, Factorial, Personio) fanno già tutto" | Sono percepite come pesanti/costose o overkill da chi vuole solo il modulo presenze in una PMI/catena 25-200 dipendenti — Badge System è verticale sul solo problema presenze/anti-frode, non una suite HR completa. |
+| "Le suite HR (Zucchetti/TeamSystem, Factorial, Personio) fanno già tutto" | Sono percepite come pesanti/costose o overkill da chi vuole solo il modulo presenze in una PMI/catena 25-200 dipendenti — Badge System è verticale sul solo problema presenze/anti-frode, non una suite HR completa. **Aggiunta 2026-08-24:** include comunque la pianificazione turni (integrata con ferie/malattia/eventi, blocco automatico dei conflitti) — non si rinuncia a questa funzione scegliendo un prodotto verticale invece di una suite intera. |
 | "Perché pagare un fee per sede se cresco?" | Il fee sede è a scaglioni decrescenti (€250 → €150 → €100) proprio per non penalizzare le catene con molte sedi, il segmento target scelto. |
 | "Il nostro DPO/legale chiederà una DPIA e l'autorizzazione sindacale prima di attivare il GPS" | **Aggiunta 2026-08-23.** Template DPIA precompilato pronto (`docs/DPIA_geofencing_IT.md`, bozza — il cliente resta Titolare e deve validarla col proprio legale). Il geofencing di un nuovo cliente parte **spento di default** e richiede una conferma esplicita dell'autorizzazione Art. 4 Statuto Lavoratori prima di poterlo attivare (gate tecnico con audit log dedicato) — riduce il rischio di attivazione senza autorizzazione, un argomento difendibile in una conversazione con HR/Ops Director sensibile alla compliance. |
 
@@ -154,6 +155,7 @@ Nessuna citazione verbatim di clienti, nessun linguaggio "as heard in sales" è 
 
 ## Changelog
 *Newest first. One line per revision: what changed and why.*
+- v5 (2026-08-24) — Aggiunta la pianificazione turni (integrata con ferie/malattia/eventi) come differenziatore in Differentiation, rafforzata l'obiezione "le suite HR fanno già tutto" in Objections. Feature era già live da tempo (Session 3.3/34/38/44) ma non era mai stata catturata nel documento — gap di documentazione, non di prodotto.
 - v4 (2026-08-23) — Sessione readiness "Sales-Ready": aggiornato Proof Points (messaging Face ID ora effettivamente live nel funnel demo `/prova-demo`, non solo pianificato), aggiunta obiezione compliance/DPIA in Objections (mitigata con template DPIA + gate tecnico Art.4 su attivazione geofencing), aggiornato Goals/Conversion action (modulo d'ordine commerciale ora esiste). Nessun cambiamento di posizionamento — solo la realtà del prodotto che ha raggiunto quanto il documento già dichiarava.
 - v3 (2026-08-12) — Corretta assunzione errata "nessuna pagina pubblica": esiste dataxiom.it/badge-system con demo self-serve su badge.dataxiom.it, aggiunta come asset in Proof Points; aggiunto export tracciati paghe Zucchetti/TeamSystem come differenziatore reale e funzionante (confermato da Diego), con nota di disallineamento verso CLAUDE.md sulla dicitura "Payroll — Fase 2".
 - v2 (2026-08-11) — Aggiornato Competitive Landscape dopo verifica fresca (competitor-profiling: NoBadge ha aggiunto QR dinamico anti-frode ma resta senza biometria, pricing competitor invariato, aggiunto 4HSE come indirect/categoria adiacente su richiesta esplicita); pricing skill: esito CONFERMATO, nessun aggiustamento; precisato messaging Face ID (impersonificazione, non solo clonabilità QR).
