@@ -155,3 +155,6 @@ badge-system/
 
 # Superpowers brainstorming companion (local, ephemeral)
 .superpowers/
+
+# Local mobile build artifacts (rigenerabili, non versionare binari)
+*.apk
