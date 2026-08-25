@@ -16,7 +16,7 @@ Le catene retail multi-sede tracciano le presenze con metodi che non prevengono 
 
 ## Perché Badge System, non un'alternativa
 
-1. **Face ID nativo previene l'impersonificazione, non solo la clonazione del QR.** Un QR — anche "dinamico" come quello di alcuni concorrenti italiani — può sempre essere scansionato da un collega al posto del titolare. Face ID lega il check-in all'identità fisica della persona: nessun concorrente italiano analizzato lo offre.
+1. **Face ID nativo, non solo QR.** Un QR — anche "dinamico" come quello di alcuni concorrenti italiani — può sempre essere scansionato da un collega al posto del titolare. Badge System affianca al QR un'autenticazione biometrica nativa del dispositivo, con ogni check-in tracciato in un log verificabile: nessun concorrente italiano analizzato la offre.
 2. **Audit log completo + RBAC, pensati per la scala multi-sede.** Ogni modifica (chi, quando, cosa) è tracciata — la risposta pronta a un controllo di compliance che un foglio Excel o un sistema QR-only non danno.
 3. **Zero hardware, prezzo pensato per non punire la crescita.** Nessun terminale da installare per sede; il listino è a scaglioni decrescenti sia per dipendente sia per sede aggiuntiva, così l'espansione a nuove sedi non fa lievitare il costo unitario.
 
@@ -41,3 +41,5 @@ Una demo di 20 minuti sul flusso di check-in e sulla dashboard di audit — ness
 ### Nota di onestà (da rimuovere non appena disponibile prova sul campo)
 
 Badge System non ha ancora clienti paganti: questo one-pager riporta la posizione commerciale ufficiale e la differenziazione verificata sui competitor pubblici (aggiornata 2026-08-11), non metriche o testimonianze reali — nessuna verrà inventata. Proof point quantificati (risparmio tempo, riduzione time-theft, testimonianze) andranno aggiunti qui solo dopo il primo cliente pilota.
+
+**Aggiornata 2026-08-25:** precisato il punto 1 — rimosso "Face ID lega il check-in all'identità fisica della persona", claim più assoluto di quanto il codice implementi (verificato in `.agents/product-marketing.md` v6: Face ID è opzionale e verifica il dispositivo, non un confronto col volto specifico dell'account). In una demo con un prospect tecnico, qualificare l'argomento come prevenzione della falsificazione della richiesta, non come verifica biometrica ad ogni scan.

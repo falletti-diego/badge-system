@@ -24,12 +24,12 @@ tenere sotto controllo chi timbra dove, e poter rispondere subito
 a un controllo, non sia banale.
 
 La maggior parte dei sistemi QR o GPS che ho visto in giro ha lo
-stesso limite: chiunque può timbrare al posto di un collega, quindi
-il dato di presenza non è mai davvero verificato.
+stesso limite: un QR può essere condiviso o clonato tra colleghi,
+quindi il dato di presenza non è mai davvero verificato.
 
-Lavoriamo su un sistema che lega la timbratura al Face ID dello
-smartphone del dipendente (zero hardware da installare), con un
-log di ogni modifica pronto per un controllo.
+Lavoriamo su un sistema che affianca il QR al Face ID nativo dello
+smartphone del dipendente (zero hardware da installare) e traccia
+ogni modifica in un log pronto per un controllo.
 
 Vale la pena approfondire?
 
@@ -69,3 +69,5 @@ insisto oltre.
 ### Nota di onestà
 
 Nessun proof point quantificato (risparmio tempo, % riduzione time-theft, testimonianza cliente) è incluso: Badge System non ha ancora clienti paganti (vedi `.agents/product-marketing.md`, sezione Proof Points). Il template si appoggia solo al ragionamento sul problema, non a risultati misurati — da aggiornare con dati reali dopo il primo cliente pilota.
+
+**Aggiornata 2026-08-25:** rimosso il claim "lega la timbratura al Face ID" — verificato sul codice (`.agents/product-marketing.md` v6) che Face ID è opzionale e verifica il dispositivo, non un confronto col volto specifico dell'account. Non usare l'argomento Face ID come prevenzione assoluta dell'impersonificazione in una risposta diretta a un prospect tecnico: previene la falsificazione della richiesta di check-in, non un confronto biometrico ad ogni scan.
