@@ -1,3 +1,48 @@
+# Badge System — Session 114 Handoff
+
+**Date:** 2026-08-25
+**Session:** 114 — Precisazione claim marketing (Face ID) + design/piano mutua esclusione Evento/Ferie/Malattia (nessuna implementazione eseguita)
+**Status:** ✅ **Marketing aggiornato e pushato** (`.agents/product-marketing.md` v6, 2 asset di outreach corretti). ✅ **Design spec e piano di implementazione TDD completi, approvati e pushati** per un bug reale di produzione (Evento+Ferie+Malattia approvati simultaneamente). ⏸️ **Implementazione del piano non ancora iniziata** — prossima sessione parte da lì. ⏸️ **Cleanup del dato corrotto di Maria in produzione: rimandato esplicitamente**, richiede SSH su EC2 prod non autorizzato in questa sessione.
+
+## Goal (Session 114)
+
+Continuazione della sessione precedente (repo sync). Prima l'utente ha chiesto come investire budget marketing e come spiegare le feature ai clienti, poi una domanda tecnica diretta sul funzionamento di Face ID ha portato a correggere un claim impreciso nei materiali commerciali. Poi l'utente ha segnalato un bug reale trovato testando manualmente `maria@badge.local` in produzione: Evento, Ferie e Malattia tutti approvati/attivi per lo stesso giorno (25/08/2026) — dovrebbero essere mutuamente esclusivi.
+
+## Current Progress
+
+**Marketing:** aggiunta la pianificazione turni come differenziatore mancante in `.agents/product-marketing.md` (v5). Poi, rispondendo a "cosa succede se un dipendente presta il telefono a un collega già loggato", verificato nel codice reale che Face ID è opzionale e verifica il device (non il volto per-account) — corretto il claim in `.agents/product-marketing.md` (v6) e nei due asset di outreach (`cold-email-outreach-template.md`, `one-pager-badge-system.md`), tutto committato e pushato. Proposto ma non eseguito un piano di validazione del gap di prezzo 1,3-1,9x vs NoBadge tramite le prime conversazioni di cold outreach.
+
+**Bug mutua esclusione — causa radice:** `backend/src/utils/eventConflict.js` esiste già (feature Eventi/Training) ma applicato in modo asimmetrico — `events.js` controlla ferie/malattia solo in creazione, non in approvazione; `leaves.js`/`illnesses.js` non controllano nulla in nessun punto. Verificato leggendo il codice, non ipotizzato.
+
+**Design (`/superpowers:brainstorming`, 2 round di analisi critica esplicitamente richiesti dall'utente):**
+- Round 1 ha trovato e mitigato 2 rischi critici verificati nel codice: `leave_saldi.used_days` incrementato in approvazione senza nessun percorso di decremento esistente (rischio di perdita permanente di giorni ferie da un'auto-cancellazione); auto-cancellazione retroattiva che avrebbe potuto alterare silenziosamente ore/buoni pasto già esportati al commercialista — risolto limitando la cascata "malattia vince sempre" a date odierne/future.
+- Round 2 ("valuta soluzioni allo stato dell'arte") ha trovato un **quarto punto di scrittura non protetto**: `demoSeed.js` (tenant demo self-service, lo stesso usato per l'outreach) scrive `leave_requests`/`illnesses` bypassando tutte le route — non un bug attivo oggi (offset hard-coded), ma fragile. Valutate e scartate 2 alternative (Postgres `EXCLUDE` constraint, trigger DB cross-tabella) in favore di un fix mirato + un nuovo "Known Bug Pattern 7" in `CLAUDE.md`.
+
+**Deliverable pushati:**
+- `docs/superpowers/specs/2026-08-25-event-leave-illness-mutual-exclusion-design.md`
+- `docs/superpowers/plans/2026-08-25-event-leave-illness-mutual-exclusion.md` (8 task TDD, ogni step con test eseguibile e codice reale, verificato riga per riga contro il codice sorgente attuale prima di scriverlo — nessun placeholder)
+
+## What Worked
+
+- **Verificare il codice reale prima di rispondere a una domanda tecnica dell'utente** ("cosa succede se...") invece di rispondere dal materiale di marketing già scritto — ha rivelato che il claim Face ID era impreciso, prima che finisse davanti a un prospect reale.
+- **Due round di analisi critica su richiesta esplicita, non uno solo** — il secondo ha trovato `demoSeed.js`, un gap che il primo (concentrato sulle 3 route HTTP dirette) non aveva considerato. Stesso principio di Session 93: una review non è mai "finita" al primo giro quando si tratta di completezza sui punti di scrittura.
+- **`grep` su tutto il backend per i veri punti di scrittura** (`INSERT INTO`/`UPDATE` sulle 3 tabelle) invece di fidarsi della lista delle route note — ha trovato il quarto file.
+- **Leggere gli schemi Zod, le firme di funzione esatte e i pattern di test esistenti prima di scrivere il piano**, non durante l'esecuzione — il piano risultante non ha bisogno di "scoprire" nulla durante l'implementazione.
+
+## What Didn't Work / Da tenere a mente
+
+- **SSH verso l'EC2 di produzione è stato bloccato dal classificatore di sicurezza automatico** quando si è provato a verificare/pulire il dato corrotto di Maria — l'utente ha scelto di rimandare il cleanup piuttosto che autorizzarlo esplicitamente. Da riprendere in una sessione futura se richiesto.
+- **Il DB locale non ha i dati del test manuale dell'utente** — la verifica del bug ha richiesto di scoprire (tramite `DEMO_USERS` fixture) che l'`employee_id` reale dietro `maria@badge.local` non è la riga `employees` con quell'email letterale (decorativa/orfana), ma quella di `maria.rossi@torino.it` — stessa lezione già in memoria da Session 97, riconfermata qui.
+
+## Next Steps (in ordine di urgenza)
+
+1. **Eseguire il piano** `docs/superpowers/plans/2026-08-25-event-leave-illness-mutual-exclusion.md` — scelta tra `/superpowers:subagent-driven-development` (consigliato, review a due stadi per task) o `/superpowers:executing-plans` (inline) lasciata all'inizio della prossima sessione.
+2. **Cleanup del dato corrotto di Maria in produzione** (Evento+Ferie+Malattia del 25/08/2026) — rimandato, richiede accesso SSH a EC2 prod da autorizzare esplicitamente.
+3. **Eseguire il batch di cold outreach** (10-15 account) — ancora non iniziato, backlog invariato da Session 111-112.
+4. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 111-112 sotto.
+
+---
+
 # Badge System — Session 113 Handoff
 
 **Date:** 2026-08-24
