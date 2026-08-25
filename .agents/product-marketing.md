@@ -1,7 +1,7 @@
 # Product Marketing Context
 
-**Document version:** v5
-**Last updated:** 2026-08-24
+**Document version:** v6
+**Last updated:** 2026-08-25
 
 ## Product Overview
 **One-liner:** SaaS multi-tenant per il tracciamento delle presenze nel retail italiano/europeo — QR code da smartphone + Face ID nativo, zero hardware.
@@ -69,7 +69,8 @@
 
 ## Differentiation
 **Key differentiators:**
-- Face ID nativo come anti-frode: lega il check-in all'identità fisica della persona, prevenendo l'**impersonificazione** (un collega che timbra al posto di un altro) — non solo la clonabilità del QR. **Nota 2026-08-11:** NoBadge ha introdotto un QR "dinamico" (cambia ogni secondo) che mitiga lo screenshot/foto del QR statico, ma non risolve l'impersonificazione: un collega può comunque scansionare il QR dinamico al posto del titolare. Il differenziatore Face ID resta quindi valido, ma il messaging va precisato su *chi* timbra, non su *come* viene generato il codice — assente in tutti i competitor italiani analizzati
+- Face ID nativo come anti-frode: lega il check-in all'**account loggato sul device**, prevenendo la falsificazione del payload/impersonificazione via richiesta contraffatta — non solo la clonabilità del QR. **Nota 2026-08-11:** NoBadge ha introdotto un QR "dinamico" (cambia ogni secondo) che mitiga lo screenshot/foto del QR statico, ma non risolve l'impersonificazione: un collega può comunque scansionare il QR dinamico al posto del titolare. Il differenziatore Face ID resta quindi valido, ma il messaging va precisato su *chi* timbra, non su *come* viene generato il codice — assente in tutti i competitor italiani analizzati
+  - **Precisazione tecnica 2026-08-25 (verificata sul codice, `checkins.js`/`QRScannerScreen.jsx`/`FaceIDScreen.jsx`):** Face ID è **opzionale** (disattivabile dall'utente in Impostazioni — da cui il chip "No Face ID" nelle presenze) e, anche attivo, verifica solo lo sblocco biometrico/PIN **del dispositivo** (`expo-local-authentication`), non un confronto col volto specifico registrato per quell'account — inoltre il flag `faceid_verified` è salvato come metadato informativo, mai usato come gate di autorizzazione lato server. Il sistema lega quindi il check-in a **chi è loggato sul device in quel momento**, non a "chi tocca fisicamente lo schermo": se un dipendente A si logga con le proprie credenziali sul telefono del collega B e scansiona, il check-in risulta correttamente di A (nessuna falla), ma nel caso di collusione volontaria (A presta le credenziali a B che timbra restando "se stesso" nel sistema) Face ID **non** è una barriera tecnica — è un problema organizzativo/disciplinare, non risolvibile lato software. **Messaging corretto:** Face ID previene l'impersonificazione via *payload falsificato* e rende visibile in dashboard (chip "No Face ID") quando la verifica biometrica del device non è stata usata — non è una verifica biometrica per-account ad ogni scan. Va usato con questa precisione in una demo con un prospect tecnico, per evitare un'obiezione che smonterebbe l'argomento se scoperta dopo la firma.
 - Audit log completo (chi/quando/cosa) + RBAC, rilevante per un HR/Ops director di catena multi-sede, non per il singolo negozio
 - Opzione white-label Tier 2 (branding completo: nome/icona proprie, possibile dominio dedicato) per clienti grandi — nessun competitor italiano citato la offre. *(Fonte: `docs/superpowers/specs/2026-07-26-tenant-branding-and-whitelabel-design.md` — Tier 1 SaaS multi-tenant condiviso è il modello base/listino; Tier 2 white-label dedicato è una trattativa custom fuori listino per clienti grandi con scala attesa di 1-2 clienti nel primo anno.)*
 - **Export tracciati paghe Zucchetti/TeamSystem un click** (confermato reale 2026-08-12) — nessun competitor tra quelli analizzati dichiara pubblicamente questa integrazione specifica per i due gestionali paghe italiani più diffusi; riduce l'attrito verso lo studio paghe del cliente, un punto di frizione reale per un HR/Ops director
@@ -77,7 +78,7 @@
 
 **How we do it differently:** "Zero hardware + QR + smartphone" da solo non è più un differenziatore reale (è commodity in Italia grazie a NoBadge). Il vero differenziale è biometrico (Face ID) e strutturale (audit/RBAC/white-label), non la meccanica di check-in in sé.
 
-**Why that's better:** Un QR/GPS può essere condiviso o clonato tra colleghi; Face ID nativo lega il check-in fisicamente alla persona. L'audit log e l'RBAC danno una risposta pronta a un controllo di compliance che un foglio Excel o un sistema QR-only non offrono.
+**Why that's better:** Un QR/GPS può essere condiviso o clonato tra colleghi; Face ID nativo previene la falsificazione della richiesta di check-in e rende visibile in dashboard quando manca la verifica biometrica del device (vedi precisazione tecnica sopra — non è un confronto col volto ad ogni scan). L'audit log e l'RBAC danno una risposta pronta a un controllo di compliance che un foglio Excel o un sistema QR-only non offrono.
 
 **Why customers choose us:** Per catene multi-sede dove il time-theft e la compliance hanno un costo reale da giustificare a un HR/Ops director — non per il singolo punto vendita che cerca solo di smettere di usare Excel (quel segmento è meglio servito, sul prezzo, da NoBadge).
 
@@ -152,9 +153,11 @@ Nessuna citazione verbatim di clienti, nessun linguaggio "as heard in sales" è 
 - Il margine sul primo cliente è positivo ma sottile (~€70-115/mese) finché c'è un solo cliente sull'infrastruttura condivisa
 - Il costo Auth0 (€20-30/mese) non è ancora nel calcolo di margine reale — si attiverà quando i ricavi lo giustificheranno
 - Il differenziale Face ID non è difendibile in modo permanente se un competitor (es. NoBadge) lo implementa
+- **Aggiunto 2026-08-25:** il claim "Face ID lega il check-in fisicamente alla persona" era più assoluto di quanto il codice implementi — Face ID è opzionale, verifica il device (non il volto per-account) e non è un gate lato server. Se un prospect tecnico lo scopre in demo dopo un pitch non precisato, è un rischio di credibilità maggiore del gap stesso non menzionarlo prima. Vedi precisazione tecnica in Differentiation.
 
 ## Changelog
 *Newest first. One line per revision: what changed and why.*
+- v6 (2026-08-25) — Corretto il claim Face ID in Differentiation/Why that's better: verificato sul codice reale (`checkins.js`, `QRScannerScreen.jsx`, `FaceIDScreen.jsx`) che è opzionale, verifica il device non il volto per-account, e `faceid_verified` non è mai un gate di autorizzazione server-side. Aggiunto rischio corrispondente in Rischi noti. Nessun cambiamento di posizionamento complessivo — solo precisione tecnica su un argomento di vendita esistente, per evitare un'obiezione da un prospect tecnico.
 - v5 (2026-08-24) — Aggiunta la pianificazione turni (integrata con ferie/malattia/eventi) come differenziatore in Differentiation, rafforzata l'obiezione "le suite HR fanno già tutto" in Objections. Feature era già live da tempo (Session 3.3/34/38/44) ma non era mai stata catturata nel documento — gap di documentazione, non di prodotto.
 - v4 (2026-08-23) — Sessione readiness "Sales-Ready": aggiornato Proof Points (messaging Face ID ora effettivamente live nel funnel demo `/prova-demo`, non solo pianificato), aggiunta obiezione compliance/DPIA in Objections (mitigata con template DPIA + gate tecnico Art.4 su attivazione geofencing), aggiornato Goals/Conversion action (modulo d'ordine commerciale ora esiste). Nessun cambiamento di posizionamento — solo la realtà del prodotto che ha raggiunto quanto il documento già dichiarava.
 - v3 (2026-08-12) — Corretta assunzione errata "nessuna pagina pubblica": esiste dataxiom.it/badge-system con demo self-serve su badge.dataxiom.it, aggiunta come asset in Proof Points; aggiunto export tracciati paghe Zucchetti/TeamSystem come differenziatore reale e funzionante (confermato da Diego), con nota di disallineamento verso CLAUDE.md sulla dicitura "Payroll — Fase 2".
