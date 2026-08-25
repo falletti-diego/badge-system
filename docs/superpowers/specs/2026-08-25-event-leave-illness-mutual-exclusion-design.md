@@ -87,11 +87,35 @@ Le funzioni esistenti (`findConflictingEvent`, `findConflictingCheckin`, `findCo
   5. Se il record rifiutato è una `leave_requests` il cui `status` precedente era `APPROVED` e `leave_type != 'MALATTIA'`: `UPDATE leave_saldi SET used_days = used_days - $num_days`.
   6. Una voce di audit log per ciascuna cancellazione automatica (`action: 'leave_request_auto_rejected_by_illness'` / `'event_request_auto_rejected_by_illness'`, `oldValue`/`newValue` con lo status).
 
+### `backend/src/utils/demoSeed.js`
+
+- Prima degli `INSERT` di `leave_requests`/`illnesses` demo, chiamare `findConflictingLeaveRange`/`findConflictingIllnessRange` (le stesse funzioni condivise usate dalle route reali) invece di affidarsi all'offset implicito `ferieRun.endIndex + 3` — se un futuro sviluppo del seed introducesse eventi demo o modificasse l'offset, il conflitto verrebbe rilevato dalla stessa fonte di verità usata ovunque, non da una convenzione non verificata. Nessun cambiamento al comportamento attuale (l'offset esistente già non produce conflitti), solo una garanzia esplicita al posto di una implicita.
+
 ## Testing (vincoli da CLAUDE.md)
 
 - Ogni nuovo confronto di date (`GREATEST`, overlap) su colonne coinvolte deve rispettare il pattern timezone-safe già stabilito (`AT TIME ZONE 'Europe/Rome'` dove si confronta con "oggi" — vedi Pattern 6 di CLAUDE.md); test di regressione con `SET timezone = 'UTC'` sulla connessione di test.
 - Nuovi test real-Postgres: ogni asserzione scoped a righe create dal test stesso (Pattern 5 di CLAUDE.md); cleanup in `finally`.
 - Casi da coprire: creazione Ferie/Evento bloccata da conflitto esistente (entrambe le direzioni); approvazione bloccata da conflitto comparso dopo la creazione; Malattia mai bloccata in creazione; Malattia futura auto-rigetta Evento/Ferie APPROVED e PENDING; Malattia passata NON tocca Evento/Ferie passati; decremento `used_days` verificato dopo auto-rigetto di una ferie APPROVED; nessuna regressione su `checkins.js` (import invariati da `eventConflict.js`).
+
+## Seconda review critica — completezza dei punti di scrittura
+
+`grep` su tutto il backend per INSERT/UPDATE sulle 3 tabelle trova **4 file**, non 3: oltre a `events.js`, `leaves.js`, `illnesses.js` c'è **`src/utils/demoSeed.js`**, che inserisce `leave_requests` e `illnesses` con SQL diretto per popolare il tenant demo self-service (`badge.dataxiom.it/prova-demo`, l'asset usato per l'outreach commerciale).
+
+**Non è un bug attivo oggi**: `malattiaRun` è scelto esplicitamente a partire da `ferieRun.endIndex + 3` (offset hard-coded pensato apposta per non sovrapporsi). Ma è un'invariante mantenuta **solo per convenzione nel codice del seed**, non verificata da nulla — un futuro sviluppo di `demoSeed.js` (es. aggiunta di eventi demo) potrebbe reintrodurre esattamente il bug di Maria nel tenant che un prospect vede per primo, senza che nessuno dei controlli nelle 3 route se ne accorga. **Questo significa che il design (controlli solo nelle route HTTP) ha un limite strutturale**: non protegge da un futuro script di seed/import/bulk che scriva direttamente sul DB.
+
+### Alternative valutate per chiudere il gap
+
+1. **Postgres `EXCLUDE` constraint (GiST + daterange).** Scartata: vive dentro una singola tabella, non può esprimere l'esclusione incrociata Ferie↔Evento (tabelle diverse) senza un trigger comunque; inoltre ha semantica di sola rejection, incompatibile con "Malattia vince sempre" (che deve sempre accettare l'insert e agire sugli altri lati).
+2. **Trigger DB cross-tabella** (BEFORE INSERT/UPDATE su `leave_requests`/`event_requests`, AFTER INSERT su `illnesses`) — stesso pattern già usato con successo per l'invariante `assigned_sites` (Session 93: "non un'altra patch one-off, ma un trigger che garantisce l'invariante per sempre, indipendentemente da quale codice scriva sulla tabella in futuro"). Chiuderebbe anche `demoSeed.js` e qualunque futuro script bulk/import. Contro: sposterebbe la logica di cascata + audit in PL/pgSQL, rompendo la coerenza con `logAudit()` (helper JS già usato ovunque nel resto del codebase) e senza precedenti in questo progetto di audit-log scritto da un trigger (solo invarianti semplici come `assigned_sites`).
+3. **Vista unificata di sola lettura `v_employee_absences`** (UNION ALL normalizzato) — riduce la duplicazione delle query di conflitto in un'unica fonte di verità, ma da sola non chiude il gap: continua a servire solo chi la interroga esplicitamente, `demoSeed.js` potrebbe comunque ignorarla.
+
+### Decisione
+
+Non spostare la logica di cascata/audit nei trigger ora — salto di complessità sproporzionato rispetto al problema reale trovato (`demoSeed.js` è fragile, non bacato oggi), e romperebbe la coerenza con `logAudit()`. Tre azioni concrete, a basso rischio, aggiunte allo scope di questo fix:
+
+1. **`demoSeed.js` chiama la stessa funzione condivisa di conflict-check** (`eventConflict.js`) prima di inserire ferie/malattia demo, invece di affidarsi all'offset implicito `+3` — stesso principio "single source of truth" già richiesto altrove nel progetto (Pattern 4 di CLAUDE.md, DRY sui dati demo).
+2. **Nuovo "Known Bug Pattern 7" in CLAUDE.md**: qualunque futuro punto di scrittura su `event_requests`/`leave_requests`/`illnesses` (import CSV, wizard onboarding, script di seed) deve passare dalla stessa funzione condivisa — così una prossima feature che tocca queste tabelle non reintroduce il buco per ignoranza, invece di scoprirlo in produzione come successo con Maria.
+3. **Trigger DB rimandato esplicitamente come hardening futuro**, non bloccante per questo fix — da riconsiderare seriamente se in futuro arriva un vero bulk-import di ferie/eventi (il progetto ne ha già uno per i dipendenti, `admin/employees.js`) che scriverebbe di nuovo bypassando le route.
 
 ## Fuori scope (esplicito)
 
