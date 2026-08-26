@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-26
 **Session:** 115 — Esecuzione del piano Evento/Ferie/Malattia (Session 114), race condition trovata da code-review pre-merge e fixata, deploy produzione
-**Status:** ✅ **PR #17 mergiata, CI verde, deploy EC2 completato e verificato in produzione** (`/health` 200, container healthy). ✅ **Bug originale chiuso e verificato robusto sotto concorrenza**. ⏸️ **Cleanup del dato corrotto di Maria in produzione (25/08/2026) ancora rimandato** — richiede SSH EC2 prod da autorizzare esplicitamente.
+**Status:** ✅ **PR #17 mergiata, CI verde, deploy EC2 completato e verificato in produzione** (`/health` 200, container healthy). ✅ **Bug originale chiuso e verificato robusto sotto concorrenza**. ✅ **Nessun cleanup dati richiesto** — Maria è un utente di test, non un cliente reale: il record del 25/08/2026 non richiede correzione.
 
 ## Goal (Session 115)
 
@@ -43,10 +43,9 @@ Continuazione diretta di Session 114: eseguire il piano approvato (`docs/superpo
 
 ## Next Steps (in ordine di urgenza)
 
-1. **Cleanup del dato corrotto di Maria in produzione** (Evento+Ferie+Malattia del 25/08/2026) — ancora rimandato, richiede SSH EC2 prod da autorizzare esplicitamente. Il fix di questa sessione previene nuove occorrenze ma non corregge il dato storico già presente.
-2. Follow-up non bloccanti documentati nella PR #17 (nessuno urgente): `EVENT_DATE_CONFLICT` condiviso tra 4 motivi di conflitto in `events.js`; `rejection_reason` senza superficie UI; una ferie passato-futuro viene rigettata per intero (comportamento di design intenzionale, non un bug).
-3. **Eseguire il batch di cold outreach** (10-15 account) — ancora non iniziato, backlog invariato da più sessioni.
-4. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 114 sotto.
+1. Follow-up non bloccanti documentati nella PR #17 (nessuno urgente): `EVENT_DATE_CONFLICT` condiviso tra 4 motivi di conflitto in `events.js`; `rejection_reason` senza superficie UI; una ferie passato-futuro viene rigettata per intero (comportamento di design intenzionale, non un bug).
+2. **Eseguire il batch di cold outreach** (10-15 account) — ancora non iniziato, backlog invariato da più sessioni.
+3. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 114 sotto. **Nota**: le voci "cleanup del dato corrotto di Maria" nelle sessioni 114 e precedenti sono chiuse/non applicabili — Maria è un utente di test, non un cliente reale (chiarito dall'utente in Session 115).
 
 ---
 

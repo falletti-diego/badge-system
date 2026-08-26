@@ -33,7 +33,7 @@ PR #17 mergiata (squash, `876f2db`), CI verde (Backend Lint&Test, Mobile, Securi
 - `EVENT_DATE_CONFLICT` resta un codice condiviso tra 4 motivi di conflitto diversi in `events.js` — un client può distinguerli solo dal testo del messaggio.
 - Una ferie che copre un intervallo passato-futuro viene rigettata (e il saldo ripristinato) per intero quando solo la porzione futura è in conflitto con una malattia — comportamento intenzionale del design, non un bug.
 - `rejection_reason` non ha ancora una superficie UI dedicata (gap preesistente, non introdotto da questa sessione).
-- **Cleanup del dato corrotto di Maria in produzione (25/08/2026)**: ancora rimandato, richiede SSH su EC2 prod da autorizzare esplicitamente in una sessione futura — il fix di questa sessione previene nuove occorrenze ma non corregge il dato storico.
+- ~~Cleanup del dato corrotto di Maria in produzione (25/08/2026)~~ — **non necessario**: Maria è un utente di test, non un cliente reale (chiarito dall'utente).
 
 ---
 
