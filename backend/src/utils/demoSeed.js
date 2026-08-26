@@ -47,6 +47,8 @@
  * }>}
  */
 
+const { findConflictingLeaveRange } = require('./eventConflict');
+
 const DAYS_BACK = 34; // covers the last ~30-35 calendar days ending today
 const ORDINARY_OUT_HOUR = 18;
 const OVERTIME_OUT_HOUR = 20;
@@ -271,6 +273,26 @@ async function seedDemoTenant(clientId, dbClient) {
   }
 
   if (malattiaRun) {
+    // Guardia esplicita al posto dell'offset implicito ferieRun.endIndex+3:
+    // se un futuro sviluppo di questo file (o una modifica all'offset)
+    // producesse mai una malattia che si sovrappone alla ferie già inserita,
+    // questo fallisce rumorosamente invece di seminare dati corrotti nel
+    // tenant demo self-service — stessa fonte di verità usata dalle route
+    // reali (design spec 2026-08-25, sezione "Seconda review critica").
+    if (ferieRun) {
+      const overlap = await findConflictingLeaveRange(client, {
+        clientId,
+        employeeId: employee.id,
+        startDate: malattiaRun.startDate,
+        endDate: malattiaRun.endDate,
+      });
+      if (overlap.length > 0) {
+        throw new Error(
+          'seedDemoTenant: malattiaRun overlaps an already-inserted ferie run — adjust the offset in demoSeed.js (see 2026-08-25 mutual-exclusion design spec)'
+        );
+      }
+    }
+
     await client.query(
       `INSERT INTO illnesses (id, client_id, employee_id, start_date, end_date, num_days, reason, created_by)
        VALUES (uuid_generate_v4(), $1, $2, $3, $4, $5, 'Malattia (dato demo)', $2)`,
