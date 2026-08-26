@@ -30,9 +30,10 @@ const { ConflictError } = require('./errors');
  * employee now serialize too) for actual correctness — acceptable given this
  * is an internal HR/attendance feature at a few requests/day per employee.
  */
-// eslint-disable-next-line no-unused-vars -- `date` kept in the signature so existing call sites
-// (checkins.js, smartWorking.js, events.js) don't need to change; intentionally excluded from the
-// lock key itself, see doc comment above.
+// `date` is kept in the signature so existing call sites (checkins.js,
+// smartWorking.js, events.js) don't need to change; intentionally excluded
+// from the lock key itself, see doc comment above.
+// eslint-disable-next-line no-unused-vars
 async function lockEventConflictScope(client, { clientId, employeeId, date }) {
   const key = `${clientId}:${employeeId}`;
   const hash = crypto.createHash('sha256').update(key).digest();

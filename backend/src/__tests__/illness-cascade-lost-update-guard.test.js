@@ -1,7 +1,14 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const { Pool, Client } = require('pg');
 const { findConflictingEventRange } = require('../utils/eventConflict');
+
+const illnessesRouteSource = fs.readFileSync(
+  path.join(__dirname, '..', 'routes', 'illnesses.js'),
+  'utf8'
+);
 
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
@@ -27,9 +34,25 @@ const dbConfig = {
  * entirely — it exists to prove the WHERE guard itself has teeth, not to
  * prove the interleaving is reachable through the real API (with the unified
  * lock in place, it mostly isn't any more).
+ *
+ * IMPORTANT LIMITATION: the interleaving test below re-types the guarded
+ * UPDATE literally (it does not call into illnesses.js's own code, since the
+ * cascade isn't factored into a separately-callable function) — so it alone
+ * cannot detect a future accidental regression in illnesses.js's actual SQL
+ * (e.g. someone drops the WHERE guard during a refactor). The
+ * "guard clause is actually present in illnesses.js" test right below reads
+ * the real route source as a cheap tripwire for exactly that case.
  */
 describe('illnesses.js cascade — PENDING/APPROVED status guard prevents lost updates', () => {
   jest.setTimeout(15000);
+
+  it('the guard clause is actually present in illnesses.js (tripwire against a future accidental regression)', () => {
+    const guardedUpdateCount = (illnessesRouteSource.match(
+      /UPDATE (?:event_requests|leave_requests) SET status = 'REJECTED'[^;]*WHERE id = \$2::uuid AND status IN \('PENDING', 'APPROVED'\)/gs
+    ) || []).length;
+    // Both cascade UPDATEs (event_requests and leave_requests) must carry the guard.
+    expect(guardedUpdateCount).toBe(2);
+  });
 
   let pool;
   let dbAvailable = false;
