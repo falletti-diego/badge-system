@@ -14,7 +14,10 @@ const { logAudit } = require('../middleware/audit');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
 const { invalidateSignatureIfExists } = require('../utils/timesheetSignature');
-const { lockEventConflictScope, findConflictingCheckin, findConflictingSmartWorking } = require('../utils/eventConflict');
+const {
+  lockEventConflictScope, findConflictingCheckin, findConflictingSmartWorking,
+  findConflictingLeaveRange, findConflictingIllnessRange,
+} = require('../utils/eventConflict');
 const { NotFoundError, ValidationError, ForbiddenError, ConflictError } = require('../utils/errors');
 const logger = require('../utils/logger');
 
@@ -63,7 +66,7 @@ router.post('/request', requireAuth, createValidationMiddleware(PostEventRequest
       );
 
       if (conflictResult.rows.length > 0) {
-        throw new ConflictError('A presence or absence is already recorded for this date', 'EVENT_DATE_CONFLICT');
+        throw new ConflictError('Esiste già una presenza o un\'assenza registrata per questa data', 'EVENT_DATE_CONFLICT');
       }
 
       // 3. Create event request
@@ -234,6 +237,28 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveEventR
             'Impossibile approvare: il dipendente ha già dichiarato Smart Working per questa data',
             'EVENT_DATE_CONFLICT',
             { conflicting_smart_working_id: conflictingSmartWorking.id }
+          );
+        }
+
+        // Design spec 2026-08-25: mutua esclusione Evento/Ferie/Malattia —
+        // un evento è sempre un giorno singolo, quindi startDate === endDate.
+        const conflictingLeaves = await findConflictingLeaveRange(client, {
+          clientId, employeeId: eventRequest.user_id, startDate: eventRequest.event_date, endDate: eventRequest.event_date,
+        });
+        if (conflictingLeaves.length > 0) {
+          throw new ConflictError(
+            'Impossibile approvare: esiste già una ferie per questa data',
+            'EVENT_DATE_CONFLICT'
+          );
+        }
+
+        const conflictingIllnesses = await findConflictingIllnessRange(client, {
+          clientId, employeeId: eventRequest.user_id, startDate: eventRequest.event_date, endDate: eventRequest.event_date,
+        });
+        if (conflictingIllnesses.length > 0) {
+          throw new ConflictError(
+            'Impossibile approvare: il dipendente ha già comunicato una malattia per questa data',
+            'EVENT_DATE_CONFLICT'
           );
         }
       }

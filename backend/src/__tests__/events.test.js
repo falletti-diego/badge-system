@@ -317,6 +317,8 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
         .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
         .mockResolvedValueOnce({ rows: [] }) // findConflictingCheckin — no conflict
         .mockResolvedValueOnce({ rows: [] }) // findConflictingSmartWorking — no conflict
+        .mockResolvedValueOnce({ rows: [] }) // findConflictingLeaveRange — no conflict
+        .mockResolvedValueOnce({ rows: [] }) // findConflictingIllnessRange — no conflict
         .mockResolvedValueOnce({ rows: [] }); // UPDATE affects no rows (race)
 
       const res = await request(app)
@@ -327,8 +329,8 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('VALIDATION_ERROR');
       expect(res.body.message).toBe('Event request has already been processed');
-      expect(mockPool.query).toHaveBeenCalledTimes(6);
-      expect(mockPool.query.mock.calls[5][0]).toContain('WHERE id = $4::uuid AND status = \'PENDING\'');
+      expect(mockPool.query).toHaveBeenCalledTimes(8);
+      expect(mockPool.query.mock.calls[7][0]).toContain('WHERE id = $4::uuid AND status = \'PENDING\'');
     });
 
     it('lets a manager approve a request for an employee assigned to their site via assigned_sites, even when the employee has no primary site_id set (regression: manager authorization previously checked employees.site_id, which is unset for regular employee rows and caused a false 403)', async () => {
@@ -350,6 +352,8 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
         .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
         .mockResolvedValueOnce({ rows: [] }) // findConflictingCheckin — no conflict
         .mockResolvedValueOnce({ rows: [] }) // findConflictingSmartWorking — no conflict
+        .mockResolvedValueOnce({ rows: [] }) // findConflictingLeaveRange — no conflict
+        .mockResolvedValueOnce({ rows: [] }) // findConflictingIllnessRange — no conflict
         .mockResolvedValueOnce({
           rows: [{
             id: TEST_EVENT_ID,
@@ -391,6 +395,8 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
         .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
         .mockResolvedValueOnce({ rows: [] }) // findConflictingCheckin — no conflict
         .mockResolvedValueOnce({ rows: [] }) // findConflictingSmartWorking — no conflict
+        .mockResolvedValueOnce({ rows: [] }) // findConflictingLeaveRange — no conflict
+        .mockResolvedValueOnce({ rows: [] }) // findConflictingIllnessRange — no conflict
         .mockResolvedValueOnce({
           rows: [{
             id: TEST_EVENT_ID,
@@ -413,11 +419,11 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
         .send({ status: 'APPROVED' });
 
       expect(res.status).toBe(200);
-      expect(mockPool.query).toHaveBeenCalledTimes(10);
-      const invalidateCallSql = mockPool.query.mock.calls[6][0];
+      expect(mockPool.query).toHaveBeenCalledTimes(12);
+      const invalidateCallSql = mockPool.query.mock.calls[8][0];
       expect(invalidateCallSql).toContain('timesheet_signatures');
       expect(invalidateCallSql).toContain('status = \'invalidated\'');
-      expect(mockPool.query.mock.calls[6][1]).toEqual([TEST_EMPLOYEE_ID, expect.any(Number), expect.any(Number)]);
+      expect(mockPool.query.mock.calls[8][1]).toEqual([TEST_EMPLOYEE_ID, expect.any(Number), expect.any(Number)]);
     });
 
     it('derives the correct month/year for a 1st-of-month event_date regardless of server timezone (regression: event_date must reach invalidateSignatureIfExists as a ::text-cast date string, not a raw pg Date)', async () => {
@@ -447,6 +453,8 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
         .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
         .mockResolvedValueOnce({ rows: [] }) // findConflictingCheckin — no conflict
         .mockResolvedValueOnce({ rows: [] }) // findConflictingSmartWorking — no conflict
+        .mockResolvedValueOnce({ rows: [] }) // findConflictingLeaveRange — no conflict
+        .mockResolvedValueOnce({ rows: [] }) // findConflictingIllnessRange — no conflict
         .mockResolvedValueOnce({
           rows: [{
             id: TEST_EVENT_ID,
@@ -468,7 +476,7 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
 
       expect(res.status).toBe(200);
       // month=6 (June), year=2026 — must NOT resolve to month=5 (May)
-      expect(mockPool.query.mock.calls[6][1]).toEqual([TEST_EMPLOYEE_ID, 6, 2026]);
+      expect(mockPool.query.mock.calls[8][1]).toEqual([TEST_EMPLOYEE_ID, 6, 2026]);
     });
 
     it('does NOT touch timesheet_signatures when the request is REJECTED (rejecting never changes computed hours)', async () => {
