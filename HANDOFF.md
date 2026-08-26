@@ -1,3 +1,55 @@
+# Badge System — Session 115 Handoff
+
+**Date:** 2026-08-26
+**Session:** 115 — Esecuzione del piano Evento/Ferie/Malattia (Session 114), race condition trovata da code-review pre-merge e fixata, deploy produzione
+**Status:** ✅ **PR #17 mergiata, CI verde, deploy EC2 completato e verificato in produzione** (`/health` 200, container healthy). ✅ **Bug originale chiuso e verificato robusto sotto concorrenza**. ⏸️ **Cleanup del dato corrotto di Maria in produzione (25/08/2026) ancora rimandato** — richiede SSH EC2 prod da autorizzare esplicitamente.
+
+## Goal (Session 115)
+
+Continuazione diretta di Session 114: eseguire il piano approvato (`docs/superpowers/plans/2026-08-25-event-leave-illness-mutual-exclusion.md`) via `/superpowers:executing-plans`+`/superpowers:subagent-driven-development`, poi (su richiesta esplicita, prima del merge) verificare con `/test-all`+`/code-review:code-review` che non ci fossero bug o race condition residue, e infine mergiare e deployare.
+
+## Current Progress
+
+**Esecuzione del piano** (worktree isolato `worktree-event-leave-illness-mutual-exclusion`, subagent-driven-development, 8 task, spec-review + code-quality-review indipendenti per task):
+1. `eventConflict.js`: `lockAbsenceConflictScope` + `findConflictingEventRange`/`findConflictingLeaveRange`/`findConflictingIllnessRange`.
+2-3. `leaves.js`: guardia di conflitto in creazione **e** approvazione.
+4. `events.js`: guardia mancante (ferie/malattia) in approvazione + traduzione messaggio errore stale in inglese. **Un subagent implementatore ha esaurito il proprio limite settimanale a metà di questo task** (dopo aver scritto il codice ma prima di verificare/committare) — il controller ha recuperato il lavoro non committato dal worktree, verificato che fosse corretto, trovato e fixato una regressione collaterale nei mock di `events.test.js` (4 test approvazione richiedevano 2 mock in più per le nuove query), e committato.
+5. `illnesses.js`: cascata "malattia vince sempre" (mai bloccante, cascata di auto-rigetto solo su porzione odierna/futura, reversal saldo). **Un gap di copertura test trovato dal proprio spec-reviewer** (nessuno dei 5 test del piano esercitava davvero il clamp passato/futuro — testavano solo range non sovrapposti) chiuso aggiungendo 2 test che dimostrano il clamp con l'overlap "grezzo" dell'illness che include una porzione passata.
+6. `demoSeed.js`: guardia esplicita al posto dell'offset implicito — l'implementatore ha trovato e corretto un bug reale nella stessa bozza di test del piano (FK violation: `leave_requests.user_id` senza una riga `employees` corrispondente).
+7. `CLAUDE.md`: nuovo Known Bug Pattern 7.
+8. Verifica finale (suite completa, lint, grep dei punti di scrittura) — tutto verde.
+
+**Review olistica finale** (oltre alle review per-task, stesso principio di Session 114 su `demoSeed.js`): trovati 2 gap di copertura test genuini — `leaves.js` approvazione↔malattia (solo il ramo evento era testato) e cascata malattia↔ferie PENDING (solo il ramo APPROVED era testato). Entrambi i percorsi di codice erano già corretti; chiusi con test dedicati prima di aprire la PR.
+
+**PR #17 aperta e mergeable, CI verde** — a questo punto l'utente ha chiesto esplicitamente `/code-review:code-review` + `/test-all` prima del merge.
+
+**Bug critico trovato dal code-review pre-merge (non catturato da nessuna review per-task)**: 4 agenti paralleli, **2 hanno trovato indipendentemente la stessa root cause** — `lockEventConflictScope` (events.js/checkins.js/smartWorking.js) e `lockAbsenceConflictScope` (leaves.js/illnesses.js) usavano due keyspace di advisory-lock Postgres disgiunti per lo stesso dipendente (il suffisso `:absence` era stato progettato **deliberatamente** per non collidere — quella era la scelta di design sbagliata). Sotto READ COMMITTED, questo permetteva a un event-create e una leave-create/illness-report concorrenti di superare entrambi il proprio controllo di conflitto prima che l'altro committasse — vanificando la mutua esclusione per Evento↔Ferie ed Evento↔Malattia (Ferie↔Malattia era già protetta). Un quarto agente ha trovato indipendentemente un secondo bug: le UPDATE della cascata malattia non avevano guardia `WHERE status IN ('PENDING','APPROVED')` → rischio di lost-update silenzioso su un'approvazione concorrente.
+
+**Fix** (guidato dai principi di `/senior-backend` + `/senior-architect`: un solo meccanismo di serializzazione per un invariante condiviso, mai due namespace paralleli): unificato il lock in un solo namespace per-dipendente (entrambe le funzioni ora hashano `clientId:employeeId`, ignorando la data — trade-off consapevole: due date diverse per lo stesso dipendente ora si serializzano anch'esse, accettabile a bassissimo QPS); `illnesses.js` ora acquisisce il lock a inizio transazione, non a metà; guardia di stato aggiunta alle UPDATE della cascata. Verificato con test di concorrenza reali a due connessioni Postgres, **confermati esplicitamente a fallire contro il codice pre-fix** prima di essere accettati. Una review indipendente post-fix ha trovato un gap minore nel test del lost-update-guard (non chiamava il codice reale di `illnesses.js`) — chiuso con un test "tripwire" che legge il sorgente reale e verifica la presenza della guardia.
+
+**Merge e deploy**: PR #17 squash-mergiata (`876f2db`), CI verde, deploy automatico EC2 verificato (`/health` 200, container `badge-system-api` healthy). Worktree e branch (locale+remoto) ripuliti a fine sessione.
+
+## What Worked
+
+- **Recuperare il lavoro di un subagent interrotto da un limite di sessione invece di scartarlo o ri-dispatchare identico** — il codice era già corretto, serviva solo verifica/completamento manuale.
+- **`/code-review:code-review` con più agenti paralleli PRIMA del merge, richiesto esplicitamente dall'utente** — ha trovato un bug che nessuna delle review per-task (pur essendo a due stadi, spec+quality) aveva catturato, perché nessuna review per-task aveva mai messo a confronto diretto `lockEventConflictScope` e `lockAbsenceConflictScope` fianco a fianco per verificare che collidessero davvero.
+- **Verificare che un regression test fallisca davvero contro il codice pre-fix** (via `git stash`/checkout temporaneo, poi ripristino pulito) prima di accettarlo — pratica ormai ricorrente in questo progetto, ha impedito di accettare un test "tripwire" che in realtà non testava il codice reale.
+- **Una seconda review indipendente anche dopo un fix critico**, non solo dopo l'implementazione iniziale — ha trovato il gap del test lost-update-guard che altrimenti sarebbe rimasto silenzioso.
+
+## What Didn't Work / Da tenere a mente
+
+- **`ExitWorktree action:"remove"` non è riuscito a cancellare la directory del worktree** (probabilmente permessi/sandbox su `node_modules` annidati) — la directory è rimasta su disco pur essendo stata correttamente derigistrata da git. Risolto con `rm -rf` diretto (che ha impiegato 2 tentativi) + `git worktree prune`. Da verificare se ricapita in future sessioni con worktree che hanno `node_modules` installati.
+- **Il design originale di `lockAbsenceConflictScope` (Task 1, Session 114) documentava esplicitamente "nessuna collisione con `lockEventConflictScope`" come una garanzia positiva** — era in realtà il bug. Promemoria: un commento che descrive una proprietà del lock come "intenzionale" non la rende automaticamente corretta; va verificata contro l'invariante che il lock deve effettivamente proteggere (qui: serializzazione cross-tabella, non solo assenza di falsi "lock busy").
+
+## Next Steps (in ordine di urgenza)
+
+1. **Cleanup del dato corrotto di Maria in produzione** (Evento+Ferie+Malattia del 25/08/2026) — ancora rimandato, richiede SSH EC2 prod da autorizzare esplicitamente. Il fix di questa sessione previene nuove occorrenze ma non corregge il dato storico già presente.
+2. Follow-up non bloccanti documentati nella PR #17 (nessuno urgente): `EVENT_DATE_CONFLICT` condiviso tra 4 motivi di conflitto in `events.js`; `rejection_reason` senza superficie UI; una ferie passato-futuro viene rigettata per intero (comportamento di design intenzionale, non un bug).
+3. **Eseguire il batch di cold outreach** (10-15 account) — ancora non iniziato, backlog invariato da più sessioni.
+4. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 114 sotto.
+
+---
+
 # Badge System — Session 114 Handoff
 
 **Date:** 2026-08-25

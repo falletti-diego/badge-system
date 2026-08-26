@@ -1,8 +1,39 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 26 Luglio 2026 (Session 82 — Infrastruttura di test mobile completata: jest-expo+RNTL [61 test, CI bloccante] + Maestro E2E [2 flow verdi sul simulatore iOS locale])  
+**Last Updated:** 26 Agosto 2026 (Session 115 — Mutua esclusione Evento/Ferie/Malattia deployata in produzione, race condition su advisory-lock trovata da code-review pre-merge e fixata)  
 **Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Landing dataxiom.it+badge-system.html ✅ LIVE, lancio LinkedIn ✅ pubblicato | Offline Mode Fase A (backend) ✅ LIVE | Offline Mode Fase B (mobile) ✅ codice completo, **in test su device reale (Task B6), Sezioni 1-8 testate almeno una volta, 8 bug totali trovati e fixati tra Session 80-81, Build 33 pronta per il retest finale** | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ VERIFICATO | Pipeline CI/CD ✅ (backend job con Postgres 14 reale + **nuovo job "Mobile - Test" bloccante**, 61 test RN) | `scripts/run-migrations.js`/`config-loader.js` ✅ FIXATI | **Infrastruttura di test mobile ✅ NUOVA** (Session 82): gap che aveva causato 8 bug reali (Session 80-81) ora colmato con 2 livelli — component test jest-expo+RNTL (61 test, CI bloccante) + Maestro E2E su simulatore iOS locale (2 flow verificati con esecuzioni ripetute reali)  
 **MVP Launch Target:** Settembre 2026 | **Current Phase:** Validazione Android completa (Session 83). SES: DKIM verificato (`SUCCESS`), richiesta sandbox-exit `DENIED` dopo prima risposta — controreplica dettagliata inviata, da verificare l'esito (Session 84). Onboarding cliente self-service: ✅ 8/8 task implementati + code review finale (Session 85), resta solo il Gate finale E2E con SES reale. **Offline Mode Task B6: ✅ COMPLETATO (Session 86)** — retest finale su iPhone reale confermato funzionante dall'utente, Offline Mode ora interamente pronta per un cliente pilota. *(Nota: header sopra risale a Session 82, non aggiornato ad ogni sessione — vedi footer in fondo al file per lo stato più recente.)*
+
+---
+
+## Session 115 — Mutua esclusione Evento/Ferie/Malattia: implementazione, race condition trovata pre-merge e fixata, deploy produzione (26 Agosto 2026)
+
+### Contesto
+Continuazione di Session 114 (design spec + piano approvati, esecuzione non iniziata). Bug reale in produzione: un dipendente poteva avere Evento/Training, Ferie e Malattia tutti approvati/pendenti simultaneamente per lo stesso giorno.
+
+### Decisione: `/superpowers:subagent-driven-development` in worktree isolato, non inline
+Piano da 8 task eseguito con implementer + spec-reviewer + code-quality-reviewer indipendenti per task, come raccomandato dall'handoff Session 114 (review a due stadi, non un solo giro a fine piano). Un implementer ha esaurito il proprio limite settimanale a metà Task 4 (guardia mancante in `events.js`) — il lavoro non committato è stato recuperato, verificato e completato manualmente dal controller invece di essere ri-dispatchato o scartato.
+
+### Decisione: review olistica finale oltre alle review per-task
+Dopo tutti gli 8 task, una review sull'intero diff (non solo task-per-task) ha trovato 2 gap di copertura test genuini (percorsi già corretti nel codice ma mai esercitati da un test: `leaves.js` approvazione↔malattia, cascata malattia↔ferie PENDING) — chiusi prima di aprire la PR. Stesso principio già applicato in Session 114 per `demoSeed.js` (una review non è mai "finita" al primo giro quando si tratta di completezza).
+
+### Bug critico trovato da `/code-review:code-review` pre-merge (non dai reviewer per-task)
+Richiesto esplicitamente dall'utente prima del merge: `/test-all` (verde) + `/code-review:code-review` (4 agenti paralleli). **Due agenti indipendenti hanno trovato la stessa root cause**: `lockEventConflictScope` (usato da `events.js`/`checkins.js`/`smartWorking.js`, chiave con `date`) e `lockAbsenceConflictScope` (usato da `leaves.js`/`illnesses.js`, chiave con suffisso `:absence` **deliberatamente** progettato per non collidere mai con l'altro) vivevano in due keyspace di advisory-lock Postgres disgiunti per lo stesso dipendente. Sotto READ COMMITTED (nessun isolation level esplicito in `db-transaction.js`), questo permetteva a un event-create e una leave-create/illness-report concorrenti di superare entrambi il proprio controllo di conflitto prima che l'altro committasse — vanificando la mutua esclusione proprio per le coppie Evento↔Ferie ed Evento↔Malattia (Ferie↔Malattia era già protetta, condividendo la stessa chiave). Un quarto agente ha trovato indipendentemente un secondo bug nella stessa area: le UPDATE della cascata "malattia vince sempre" non avevano guardia `WHERE status IN ('PENDING','APPROVED')`, con rischio di lost-update silenzioso su un'approvazione concorrente.
+
+### Decisione: unificare il namespace dei lock invece di farli coesistere
+Con `/senior-backend` + `/senior-architect` a inquadrare il principio (un solo meccanismo di serializzazione per un invariante condiviso, mai due namespace paralleli sulla stessa risorsa logica): entrambe le funzioni ora calcolano la stessa chiave hash per `(clientId, employeeId)`, ignorando la data — tutti e 5 i punti di scrittura (checkin, smart working, evento create/approve, ferie create/approve, malattia report) ora si serializzano a vicenda per lo stesso dipendente. Trade-off accettato consapevolmente: due date diverse per lo stesso dipendente ora si serializzano anch'esse (perdita di parallelismo intra-dipendente) — accettabile per una feature HR interna a bassissimo QPS (poche richieste/dipendente/giorno). In aggiunta: `illnesses.js` ora acquisisce il lock a inizio transazione (prima dell'INSERT della malattia, non a metà), e le UPDATE della cascata hanno la guardia di stato mancante.
+
+### Verifica del fix (non solo "i test passano")
+Il fix è stato verificato con test di concorrenza reali a due connessioni Postgres separate (stesso pattern già stabilito in `eventConflict-lock-race.test.js`), confermati esplicitamente a **fallire contro il codice pre-fix** (via `git stash`/checkout temporaneo) prima di essere accettati come regression test genuini — non solo test che passano per coincidenza. Una review indipendente post-fix ha trovato un ulteriore gap minore (il test del lost-update-guard non chiamava il codice reale di `illnesses.js`, solo una riscrittura letterale della SQL) — chiuso con un test "tripwire" che legge il sorgente reale del file e verifica che la clausola di guardia sia effettivamente presente.
+
+### Esito
+PR #17 mergiata (squash, `876f2db`), CI verde (Backend Lint&Test, Mobile, Security), deploy automatico EC2 completato e verificato (`/health` 200, container `healthy`). Worktree e branch (locale+remoto) ripuliti a fine sessione.
+
+### Follow-up aperti (non bloccanti, documentati nella PR)
+- `EVENT_DATE_CONFLICT` resta un codice condiviso tra 4 motivi di conflitto diversi in `events.js` — un client può distinguerli solo dal testo del messaggio.
+- Una ferie che copre un intervallo passato-futuro viene rigettata (e il saldo ripristinato) per intero quando solo la porzione futura è in conflitto con una malattia — comportamento intenzionale del design, non un bug.
+- `rejection_reason` non ha ancora una superficie UI dedicata (gap preesistente, non introdotto da questa sessione).
+- **Cleanup del dato corrotto di Maria in produzione (25/08/2026)**: ancora rimandato, richiede SSH su EC2 prod da autorizzare esplicitamente in una sessione futura — il fix di questa sessione previene nuove occorrenze ma non corregge il dato storico.
 
 ---
 
