@@ -246,6 +246,14 @@ describe('PUT /api/v1/leave/:id/approve — event/illness conflict guard', () =>
     );
   }
 
+  async function makeIllness(clientId, employeeId, startDate, endDate) {
+    await pool.query(
+      `INSERT INTO illnesses (id, client_id, employee_id, start_date, end_date, num_days, created_by)
+       VALUES (uuid_generate_v4(), $1, $2, $3::date, $4::date, 1, $2)`,
+      [clientId, employeeId, startDate, endDate]
+    );
+  }
+
   function tokenFor({ client_id, role, employee_id, site_id }) {
     const privateKey = process.env.JWT_PRIVATE_KEY.replace(/\\n/g, '\n');
     return jwt.sign(
@@ -273,6 +281,30 @@ describe('PUT /api/v1/leave/:id/approve — event/illness conflict guard', () =>
     // exactly the race the design spec's "creazione + approvazione" decision
     // covers: creation-time check alone would have missed it.
     await makeEventRequest(clientId, employeeId, '2026-09-02', 'APPROVED');
+    const adminToken = tokenFor({ client_id: clientId, role: 'admin', employee_id: employeeId });
+
+    const res = await request(app)
+      .put(`/api/v1/leave/${leaveId}/approve`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'APPROVED' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('EVENT_DATE_CONFLICT');
+
+    const check = await pool.query('SELECT status FROM leave_requests WHERE id = $1', [leaveId]);
+    expect(check.rows[0].status).toBe('PENDING');
+  });
+
+  it('rejects approval with 409 EVENT_DATE_CONFLICT when an illness now overlaps, leaving the leave PENDING', async () => {
+    if (!dbAvailable) return;
+    clientId = await makeClient();
+    const employeeId = await makeEmployee(clientId);
+    await makeSaldo(clientId, employeeId, 'FERIE_1', 2026);
+    const leaveId = await makePendingLeave(clientId, employeeId, '2026-09-01', '2026-09-03');
+    // The illness was reported AFTER the leave request was created — same
+    // race as the event case above, but for the illness branch of the
+    // approval-time guard (leaves.js's findConflictingIllnessRange call).
+    await makeIllness(clientId, employeeId, '2026-09-02', '2026-09-02');
     const adminToken = tokenFor({ client_id: clientId, role: 'admin', employee_id: employeeId });
 
     const res = await request(app)

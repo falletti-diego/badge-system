@@ -87,6 +87,16 @@ describe('POST /api/v1/illnesses/report — "malattia vince sempre" cascade', ()
     return result.rows[0].id;
   }
 
+  async function makePendingLeave(clientId, employeeId, startDate, endDate, numDays) {
+    const result = await pool.query(
+      `INSERT INTO leave_requests (id, client_id, user_id, leave_type, start_date, end_date, num_days, status)
+       VALUES (uuid_generate_v4(), $1, $2, 'FERIE_1', $3::date, $4::date, $5, 'PENDING')
+       RETURNING id`,
+      [clientId, employeeId, startDate, endDate, numDays]
+    );
+    return result.rows[0].id;
+  }
+
   async function makePendingEvent(clientId, employeeId, eventDate) {
     const result = await pool.query(
       `INSERT INTO event_requests (id, client_id, user_id, event_date, start_time, end_time, description, status)
@@ -176,6 +186,34 @@ describe('POST /api/v1/illnesses/report — "malattia vince sempre" cascade', ()
       [employeeId, 'FERIE_1', year]
     );
     expect(saldoCheck.rows[0].used_days).toBe(0); // 3 - 3 = 0, reversed correctly
+  });
+
+  it('auto-rejects a PENDING future leave without touching the saldo (nothing was ever decremented for a PENDING request)', async () => {
+    if (!dbAvailable) return;
+    clientId = await makeClient();
+    const employeeId = await makeEmployee(clientId);
+    const futureStart = addDays(todayInTimeZone(), 3);
+    const futureEnd = addDays(todayInTimeZone(), 5);
+    const year = new Date(futureStart).getFullYear();
+    await makeSaldo(clientId, employeeId, 'FERIE_1', year, 0); // PENDING leaves never increment used_days
+    const leaveId = await makePendingLeave(clientId, employeeId, futureStart, futureEnd, 3);
+    const token = tokenFor({ client_id: clientId, role: 'employee', employee_id: employeeId });
+
+    const res = await request(app)
+      .post('/api/v1/illnesses/report')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ start_date: futureStart, end_date: futureEnd });
+
+    expect(res.status).toBe(201);
+
+    const leaveCheck = await pool.query('SELECT status FROM leave_requests WHERE id = $1', [leaveId]);
+    expect(leaveCheck.rows[0].status).toBe('REJECTED');
+
+    const saldoCheck = await pool.query(
+      'SELECT used_days FROM leave_saldi WHERE user_id = $1 AND leave_type = $2 AND year = $3',
+      [employeeId, 'FERIE_1', year]
+    );
+    expect(saldoCheck.rows[0].used_days).toBe(0); // untouched — the status !== 'APPROVED' guard skipped the decrement
   });
 
   it('never touches an approved leave that is entirely in the past', async () => {
