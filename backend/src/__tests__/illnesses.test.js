@@ -87,6 +87,8 @@ describe('Illnesses API', () => {
       withTransaction.mockImplementation(async (callback) => {
         const mockClient = {
           query: jest.fn()
+            .mockResolvedValueOnce({ rows: [] }) // lockAbsenceConflictScope: SET LOCAL lock_timeout
+            .mockResolvedValueOnce({ rows: [] }) // lockAbsenceConflictScope: pg_advisory_xact_lock
             .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] }) // Employee exists
             .mockResolvedValueOnce({ rows: [mockIllness] }), // Insert illness
         };

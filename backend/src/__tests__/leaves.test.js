@@ -157,6 +157,10 @@ describe('Leave Request API Endpoints — Saldo negativo consentito', () => {
     mockPool.query
       .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] }) // employee lookup
       .mockResolvedValueOnce({ rows: [{ remaining_days: 1 }] }) // solo 1 giorno disponibile
+      .mockResolvedValueOnce({ rows: [] }) // SET LOCAL lock_timeout (lockAbsenceConflictScope)
+      .mockResolvedValueOnce({ rows: [] }) // SELECT pg_advisory_xact_lock (lockAbsenceConflictScope)
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingEventRange — nessun evento in conflitto
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingIllnessRange — nessuna malattia in conflitto
       .mockResolvedValueOnce({ rows: [{ id: TEST_LEAVE_ID, num_days: 3, status: 'PENDING' }] }); // insert
 
     const res = await request(app)
@@ -316,6 +320,15 @@ describe('Leave Request API Endpoints — Security Regression Tests', () => {
             status: 'PENDING',
           }],
         })
+        // SET LOCAL lock_timeout (lockAbsenceConflictScope)
+        .mockResolvedValueOnce({ rows: [] })
+        // SELECT pg_advisory_xact_lock (lockAbsenceConflictScope)
+        .mockResolvedValueOnce({ rows: [] })
+        // findConflictingEventRange — no conflicting events
+        .mockResolvedValueOnce({ rows: [] })
+        // findConflictingIllnessRange — no conflicting illnesses
+        .mockResolvedValueOnce({ rows: [] })
+        // Atomic UPDATE ... WHERE status = 'PENDING' — affects no rows (stale)
         .mockResolvedValueOnce({ rows: [] });
 
       const res = await request(app)
@@ -326,8 +339,8 @@ describe('Leave Request API Endpoints — Security Regression Tests', () => {
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('VALIDATION_ERROR');
       expect(res.body.message).toBe('Leave request has already been processed');
-      expect(mockPool.query).toHaveBeenCalledTimes(2);
-      expect(mockPool.query.mock.calls[1][0]).toContain('WHERE id = $4::uuid AND status = \'PENDING\'');
+      expect(mockPool.query).toHaveBeenCalledTimes(6);
+      expect(mockPool.query.mock.calls[5][0]).toContain('WHERE id = $4::uuid AND status = \'PENDING\'');
     });
   });
 

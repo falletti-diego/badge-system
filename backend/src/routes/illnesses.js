@@ -17,6 +17,8 @@ const { requireAuth } = require('../middleware/auth');
 const { NotFoundError, ValidationError, ForbiddenError } = require('../utils/errors');
 const logger = require('../utils/logger');
 const { z } = require('zod');
+const { todayInTimeZone } = require('../utils/date');
+const { lockAbsenceConflictScope, findConflictingEventRange, findConflictingLeaveRange } = require('../utils/eventConflict');
 
 const router = express.Router();
 
@@ -83,6 +85,16 @@ router.post(
       const numDays = Math.floor(timeDiff / (1000 * 60 * 60 * 24)) + 1;
 
       const result = await withTransaction(async (client) => {
+        // 0. Serialize this entire report-and-cascade operation against a
+        // concurrent event/leave create (or another illness report) for the
+        // same employee, from the very start of the transaction — not just
+        // around the cascade below. This closes the same race the cascade's
+        // own lock used to leave open for the illness's own INSERT: without
+        // acquiring the lock this early, two concurrent illness reports (or
+        // an illness report racing an event/leave create) could both pass
+        // whatever conflict checks they run before either commits.
+        await lockAbsenceConflictScope(client, { clientId, employeeId });
+
         // 1. Verify employee exists and belongs to this client
         const userResult = await client.query(
           'SELECT id, client_id FROM employees WHERE id = $1::uuid AND client_id = $2::uuid LIMIT 1',
@@ -116,6 +128,90 @@ router.post(
         );
 
         const illness = illnessResult.rows[0];
+
+        // 2.5 "Malattia vince sempre" (design spec 2026-08-25): la malattia
+        // non è mai bloccata, ma cancella automaticamente ogni Evento/Ferie
+        // PENDING o APPROVED che si sovrappone — SOLO sulla porzione
+        // odierna/futura del range, mai su una data interamente passata
+        // (evita di alterare silenziosamente ore/buoni pasto potenzialmente
+        // già esportati verso il commercialista).
+        const today = todayInTimeZone();
+        const cascadeStart = start_date > today ? start_date : today;
+
+        if (cascadeStart <= end_date) {
+          // Lock already acquired at the top of the transaction (step 0 above).
+          const rejectionReason = 'Rifiutato automaticamente: malattia comunicata per questa data';
+
+          const conflictingEvents = await findConflictingEventRange(client, {
+            clientId, employeeId, startDate: cascadeStart, endDate: end_date,
+          });
+          for (const event of conflictingEvents) {
+            // Atomic PENDING/APPROVED-guarded update, same defense-in-depth
+            // pattern as events.js's/leaves.js's approve handlers: the SELECT
+            // above (findConflictingEventRange) and this UPDATE are two
+            // separate statements, so the row's status could in principle
+            // have changed between them. The unified lock (see eventConflict.js)
+            // makes this interleaving very hard to hit via the real HTTP API,
+            // but the guard costs nothing and removes the lost-update risk
+            // entirely: if rowCount is 0, some other transaction already
+            // resolved this row's status since we read it, so we must not
+            // blindly overwrite it (and must not log a false audit entry for
+            // a row we didn't actually touch).
+            const updateResult = await client.query(
+              `UPDATE event_requests SET status = 'REJECTED', rejection_reason = $1, updated_at = NOW()
+               WHERE id = $2::uuid AND status IN ('PENDING', 'APPROVED')`,
+              [rejectionReason, event.id]
+            );
+            if (updateResult.rowCount === 0) {
+              continue;
+            }
+            await logAudit(client, {
+              action: 'event_request_auto_rejected_by_illness',
+              entity: 'event_request',
+              entityId: event.id,
+              clientId,
+              oldValue: { status: event.status },
+              newValue: { status: 'REJECTED', rejection_reason: rejectionReason },
+              userId,
+            });
+          }
+
+          const conflictingLeaves = await findConflictingLeaveRange(client, {
+            clientId, employeeId, startDate: cascadeStart, endDate: end_date,
+          });
+          for (const leave of conflictingLeaves) {
+            // Same atomic PENDING/APPROVED guard as the event branch above —
+            // if another transaction already changed this leave's status
+            // since findConflictingLeaveRange read it, skip it entirely
+            // (including the saldo reversal below and the audit entry) rather
+            // than clobbering whatever it just became.
+            const updateResult = await client.query(
+              `UPDATE leave_requests SET status = 'REJECTED', rejection_reason = $1, updated_at = NOW()
+               WHERE id = $2::uuid AND status IN ('PENDING', 'APPROVED')`,
+              [rejectionReason, leave.id]
+            );
+            if (updateResult.rowCount === 0) {
+              continue;
+            }
+            if (leave.status === 'APPROVED' && leave.leave_type !== 'MALATTIA') {
+              const leaveYear = new Date(leave.start_date).getFullYear();
+              await client.query(
+                `UPDATE leave_saldi SET used_days = used_days - $1, updated_at = NOW()
+                 WHERE user_id = $2::uuid AND leave_type = $3 AND year = $4`,
+                [leave.num_days, employeeId, leave.leave_type, leaveYear]
+              );
+            }
+            await logAudit(client, {
+              action: 'leave_request_auto_rejected_by_illness',
+              entity: 'leave_request',
+              entityId: leave.id,
+              clientId,
+              oldValue: { status: leave.status },
+              newValue: { status: 'REJECTED', rejection_reason: rejectionReason },
+              userId,
+            });
+          }
+        }
 
         // 3. Log audit trail
         await logAudit(client, {

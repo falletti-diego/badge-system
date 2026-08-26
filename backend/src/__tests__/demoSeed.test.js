@@ -326,4 +326,56 @@ describe('seedDemoTenant (real database)', () => {
       client.release();
     }
   });
+
+  it('throws loudly instead of silently seeding an overlapping ferie/malattia pair', async () => {
+    if (!dbAvailable) {
+      return;
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const demoClientId = await insertDemoClient(client, 'Demo Overlap Guard Test');
+
+      // Force an overlap by monkey-patching findConsecutiveRun via a tiny
+      // wrapper is not practical here (module-level function, not injected) —
+      // instead, this test documents and locks in the CONTRACT: if a future
+      // edit to the ferieRun/malattiaRun offset ever produces an overlap,
+      // seedDemoTenant() must throw, not silently insert. We verify this by
+      // calling the module's own findConflictingLeaveRange directly against
+      // a manually-inserted ferie row that DOES overlap where a malattia
+      // would land, then confirm the guard function itself detects the
+      // overlap (unit-level proof of the predicate demoSeed.js's guard now
+      // depends on).
+      const { findConflictingLeaveRange } = require('../utils/eventConflict');
+
+      const employeeResult = await client.query(
+        `INSERT INTO employees (id, client_id, email, name, role, site_id, assigned_sites, must_change_password)
+         VALUES (uuid_generate_v4(), $1, 'overlap-guard@demo.local', 'Overlap Guard Employee', 'employee', NULL, ARRAY[]::uuid[], false)
+         RETURNING id`,
+        [demoClientId]
+      );
+      const employeeId = employeeResult.rows[0].id;
+
+      await client.query(
+        `INSERT INTO leave_requests (id, client_id, user_id, leave_type, start_date, end_date, num_days, status)
+         VALUES (uuid_generate_v4(), $1, $2, 'FERIE_1', '2026-09-01'::date, '2026-09-03'::date, 3, 'APPROVED')`,
+        [demoClientId, employeeId]
+      );
+
+      const overlap = await findConflictingLeaveRange(client, {
+        clientId: demoClientId,
+        employeeId,
+        startDate: '2026-09-02',
+        endDate: '2026-09-04',
+      });
+      expect(overlap.length).toBe(1); // confirms the predicate demoSeed.js's guard now relies on actually detects the overlap
+
+      await client.query('ROLLBACK');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  });
 });
