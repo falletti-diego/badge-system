@@ -17,6 +17,8 @@ const { requireAuth } = require('../middleware/auth');
 const { NotFoundError, ValidationError, ForbiddenError } = require('../utils/errors');
 const logger = require('../utils/logger');
 const { z } = require('zod');
+const { todayInTimeZone } = require('../utils/date');
+const { lockAbsenceConflictScope, findConflictingEventRange, findConflictingLeaveRange } = require('../utils/eventConflict');
 
 const router = express.Router();
 
@@ -116,6 +118,66 @@ router.post(
         );
 
         const illness = illnessResult.rows[0];
+
+        // 2.5 "Malattia vince sempre" (design spec 2026-08-25): la malattia
+        // non è mai bloccata, ma cancella automaticamente ogni Evento/Ferie
+        // PENDING o APPROVED che si sovrappone — SOLO sulla porzione
+        // odierna/futura del range, mai su una data interamente passata
+        // (evita di alterare silenziosamente ore/buoni pasto potenzialmente
+        // già esportati verso il commercialista).
+        const today = todayInTimeZone();
+        const cascadeStart = start_date > today ? start_date : today;
+
+        if (cascadeStart <= end_date) {
+          await lockAbsenceConflictScope(client, { clientId, employeeId });
+          const rejectionReason = 'Rifiutato automaticamente: malattia comunicata per questa data';
+
+          const conflictingEvents = await findConflictingEventRange(client, {
+            clientId, employeeId, startDate: cascadeStart, endDate: end_date,
+          });
+          for (const event of conflictingEvents) {
+            await client.query(
+              `UPDATE event_requests SET status = 'REJECTED', rejection_reason = $1, updated_at = NOW() WHERE id = $2::uuid`,
+              [rejectionReason, event.id]
+            );
+            await logAudit(client, {
+              action: 'event_request_auto_rejected_by_illness',
+              entity: 'event_request',
+              entityId: event.id,
+              clientId,
+              oldValue: { status: event.status },
+              newValue: { status: 'REJECTED', rejection_reason: rejectionReason },
+              userId,
+            });
+          }
+
+          const conflictingLeaves = await findConflictingLeaveRange(client, {
+            clientId, employeeId, startDate: cascadeStart, endDate: end_date,
+          });
+          for (const leave of conflictingLeaves) {
+            await client.query(
+              `UPDATE leave_requests SET status = 'REJECTED', rejection_reason = $1, updated_at = NOW() WHERE id = $2::uuid`,
+              [rejectionReason, leave.id]
+            );
+            if (leave.status === 'APPROVED' && leave.leave_type !== 'MALATTIA') {
+              const leaveYear = new Date(leave.start_date).getFullYear();
+              await client.query(
+                `UPDATE leave_saldi SET used_days = used_days - $1, updated_at = NOW()
+                 WHERE user_id = $2::uuid AND leave_type = $3 AND year = $4`,
+                [leave.num_days, employeeId, leave.leave_type, leaveYear]
+              );
+            }
+            await logAudit(client, {
+              action: 'leave_request_auto_rejected_by_illness',
+              entity: 'leave_request',
+              entityId: leave.id,
+              clientId,
+              oldValue: { status: leave.status },
+              newValue: { status: 'REJECTED', rejection_reason: rejectionReason },
+              userId,
+            });
+          }
+        }
 
         // 3. Log audit trail
         await logAudit(client, {
