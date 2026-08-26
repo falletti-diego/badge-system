@@ -13,7 +13,8 @@ const { createValidationMiddleware, PostLeaveRequestSchema, ApproveLeaveSchema }
 const { logAudit } = require('../middleware/audit');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
-const { NotFoundError, ValidationError, ForbiddenError } = require('../utils/errors');
+const { NotFoundError, ValidationError, ForbiddenError, ConflictError } = require('../utils/errors');
+const { lockAbsenceConflictScope, findConflictingEventRange, findConflictingIllnessRange } = require('../utils/eventConflict');
 const { deleteCacheByPattern } = require('../db/redis');
 const logger = require('../utils/logger');
 
@@ -68,6 +69,31 @@ router.post('/request', requireAuth, createValidationMiddleware(PostLeaveRequest
             { field: 'leave_type', code: 'NO_SALDO_CONFIGURED' }
           );
         }
+      }
+
+      // 2.5 Conflict check: block if an Evento/Training or Malattia already
+      // occupies any day in this range (design spec 2026-08-25 — mutua
+      // esclusione Evento/Ferie/Malattia).
+      await lockAbsenceConflictScope(client, { clientId, employeeId: userId });
+
+      const conflictingEvents = await findConflictingEventRange(client, {
+        clientId, employeeId: userId, startDate: start_date, endDate: end_date,
+      });
+      if (conflictingEvents.length > 0) {
+        throw new ConflictError(
+          'Esiste già un evento/training pianificato per una data in questo intervallo',
+          'EVENT_DATE_CONFLICT'
+        );
+      }
+
+      const conflictingIllnesses = await findConflictingIllnessRange(client, {
+        clientId, employeeId: userId, startDate: start_date, endDate: end_date,
+      });
+      if (conflictingIllnesses.length > 0) {
+        throw new ConflictError(
+          'Hai già comunicato una malattia per una data in questo intervallo',
+          'EVENT_DATE_CONFLICT'
+        );
       }
 
       // 3. Create leave request

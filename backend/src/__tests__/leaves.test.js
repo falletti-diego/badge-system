@@ -157,6 +157,10 @@ describe('Leave Request API Endpoints — Saldo negativo consentito', () => {
     mockPool.query
       .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] }) // employee lookup
       .mockResolvedValueOnce({ rows: [{ remaining_days: 1 }] }) // solo 1 giorno disponibile
+      .mockResolvedValueOnce({ rows: [] }) // SET LOCAL lock_timeout (lockAbsenceConflictScope)
+      .mockResolvedValueOnce({ rows: [] }) // SELECT pg_advisory_xact_lock (lockAbsenceConflictScope)
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingEventRange — nessun evento in conflitto
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingIllnessRange — nessuna malattia in conflitto
       .mockResolvedValueOnce({ rows: [{ id: TEST_LEAVE_ID, num_days: 3, status: 'PENDING' }] }); // insert
 
     const res = await request(app)
