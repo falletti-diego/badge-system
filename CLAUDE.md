@@ -399,6 +399,18 @@ req.user = {
 
 ---
 
+### Pattern 7: Punti di Scrittura Nuovi su Tabelle con Invarianti Cross-Tabella
+**Files:** `backend/src/routes/events.js`, `backend/src/routes/leaves.js`, `backend/src/routes/illnesses.js`, `backend/src/utils/demoSeed.js`, e qualunque futuro import CSV/wizard/script che scriva su `event_requests`/`leave_requests`/`illnesses`
+
+**Risk:** Evento/Training, Ferie e Malattia sono mutuamente esclusivi a coppie per lo stesso dipendente/data (design spec `docs/superpowers/specs/2026-08-25-event-leave-illness-mutual-exclusion-design.md`), garantito da un controllo applicativo in `backend/src/utils/eventConflict.js` (`findConflictingEventRange`, `findConflictingLeaveRange`, `findConflictingIllnessRange`, `lockAbsenceConflictScope`) — **non da un vincolo a livello di database**. Un nuovo punto di scrittura che inserisce/aggiorna direttamente una di queste tabelle senza passare da queste funzioni condivise può reintrodurre esattamente il bug originale (un dipendente con Evento+Ferie+Malattia approvati sullo stesso giorno), invisibile finché qualcuno non lo nota manualmente — è già successo una volta in produzione prima che esistesse questo controllo, e `backend/src/utils/demoSeed.js` (il tenant demo self-service) si affidava a un offset implicito prima di essere corretto per usare la stessa fonte di verità.
+
+**Prevention Checklist:**
+- [ ] Qualunque nuovo endpoint, script di seed, wizard di import o job batch che scrive `event_requests`, `leave_requests` o `illnesses` chiama `findConflictingEventRange`/`findConflictingLeaveRange`/`findConflictingIllnessRange` prima dell'insert/update, oppure documenta esplicitamente perché non serve (es. lo scrive solo su uno stato non-bloccante come `REJECTED`/`cancelled_at` già impostato)
+- [ ] Se il nuovo punto di scrittura opera su un range di date (non un giorno singolo), usa `lockAbsenceConflictScope` (non un lock per singolo giorno) per evitare falsi `EVENT_CONFLICT_LOCK_BUSY` su richieste che si sovrappongono parzialmente
+- [ ] Se si considera di spostare questa logica in un vincolo a livello di database (trigger Postgres), vedere la sezione "Alternative valutate" nella design spec collegata sopra — un `EXCLUDE` constraint nativo non basta da solo (multi-tabella, e la regola "malattia vince sempre" richiede una cascata, non solo un rifiuto)
+
+---
+
 ## 🔍 Code Review Checklists
 
 ### Auth & Config Changes
