@@ -320,6 +320,15 @@ describe('Leave Request API Endpoints — Security Regression Tests', () => {
             status: 'PENDING',
           }],
         })
+        // SET LOCAL lock_timeout (lockAbsenceConflictScope)
+        .mockResolvedValueOnce({ rows: [] })
+        // SELECT pg_advisory_xact_lock (lockAbsenceConflictScope)
+        .mockResolvedValueOnce({ rows: [] })
+        // findConflictingEventRange — no conflicting events
+        .mockResolvedValueOnce({ rows: [] })
+        // findConflictingIllnessRange — no conflicting illnesses
+        .mockResolvedValueOnce({ rows: [] })
+        // Atomic UPDATE ... WHERE status = 'PENDING' — affects no rows (stale)
         .mockResolvedValueOnce({ rows: [] });
 
       const res = await request(app)
@@ -330,8 +339,8 @@ describe('Leave Request API Endpoints — Security Regression Tests', () => {
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('VALIDATION_ERROR');
       expect(res.body.message).toBe('Leave request has already been processed');
-      expect(mockPool.query).toHaveBeenCalledTimes(2);
-      expect(mockPool.query.mock.calls[1][0]).toContain('WHERE id = $4::uuid AND status = \'PENDING\'');
+      expect(mockPool.query).toHaveBeenCalledTimes(6);
+      expect(mockPool.query.mock.calls[5][0]).toContain('WHERE id = $4::uuid AND status = \'PENDING\'');
     });
   });
 

@@ -251,6 +251,31 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveLeaveS
         throw new ValidationError('Leave request has already been processed', { code: 'ALREADY_PROCESSED' });
       }
 
+      // Conflict check: an event or illness may have appeared/been approved
+      // AFTER this leave request was created — re-verify at approval time
+      // too (design spec 2026-08-25, decisione 1: "creazione + approvazione").
+      await lockAbsenceConflictScope(client, { clientId, employeeId: leaveRequest.user_id });
+
+      const conflictingEvents = await findConflictingEventRange(client, {
+        clientId, employeeId: leaveRequest.user_id, startDate: leaveRequest.start_date, endDate: leaveRequest.end_date,
+      });
+      if (conflictingEvents.length > 0) {
+        throw new ConflictError(
+          'Impossibile approvare: esiste già un evento/training per una data in questo intervallo',
+          'EVENT_DATE_CONFLICT'
+        );
+      }
+
+      const conflictingIllnesses = await findConflictingIllnessRange(client, {
+        clientId, employeeId: leaveRequest.user_id, startDate: leaveRequest.start_date, endDate: leaveRequest.end_date,
+      });
+      if (conflictingIllnesses.length > 0) {
+        throw new ConflictError(
+          'Impossibile approvare: il dipendente ha già comunicato una malattia per una data in questo intervallo',
+          'EVENT_DATE_CONFLICT'
+        );
+      }
+
       // 3. Update leave request status
       const updateResult = await client.query(
         `UPDATE leave_requests
