@@ -1,7 +1,7 @@
 'use strict';
 
 const { Pool } = require('pg');
-const { lockEventConflictScope } = require('../utils/eventConflict');
+const { lockEventConflictScope, lockAbsenceConflictScope } = require('../utils/eventConflict');
 
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
@@ -49,6 +49,39 @@ describe('lockEventConflictScope — Postgres advisory lock serialization', () =
       // Give B a real chance to finish if (incorrectly) not blocked.
       await new Promise((resolve) => setTimeout(resolve, 300));
       expect(bResolved).toBe(false); // B must still be waiting — proves serialization
+
+      await clientA.query('COMMIT'); // releases A's advisory lock
+      await bLockPromise; // B's acquisition now completes
+      expect(bResolved).toBe(true);
+
+      await clientB.query('COMMIT');
+    } finally {
+      clientA.release();
+      clientB.release();
+    }
+  });
+
+  it('lockEventConflictScope and lockAbsenceConflictScope contend for the SAME lock for the same employee — proves the unified lock namespace actually serializes an event create against a concurrent leave/illness create', async () => {
+    if (!dbAvailable) return;
+    const clientId = 'race-test-client-cross-lock';
+    const employeeId = 'race-test-employee-cross-lock';
+
+    const clientA = await pool.connect();
+    const clientB = await pool.connect();
+    try {
+      await clientA.query('BEGIN');
+      // Transaction A: an event create/approve acquiring the per-date lock.
+      await lockEventConflictScope(clientA, { clientId, employeeId, date: '2026-09-01' });
+
+      await clientB.query('BEGIN');
+      let bResolved = false;
+      // Transaction B: a leave create/illness report acquiring the per-employee
+      // absence lock for the SAME employee — must block on A's lock, not sail
+      // through on a disjoint key (that disjointness was the bug).
+      const bLockPromise = lockAbsenceConflictScope(clientB, { clientId, employeeId }).then(() => { bResolved = true; });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(bResolved).toBe(false); // B must still be waiting — proves cross-lock serialization
 
       await clientA.query('COMMIT'); // releases A's advisory lock
       await bLockPromise; // B's acquisition now completes

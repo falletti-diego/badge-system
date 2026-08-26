@@ -8,15 +8,33 @@ const crypto = require('crypto');
 const { ConflictError } = require('./errors');
 
 /**
- * Serializes any conflict-check-then-write for a given (client, employee, date)
+ * Serializes any conflict-check-then-write for a given (client, employee)
  * scope across the whole request lifetime of the transaction, so a checkin
- * creation and an event approval racing for the same slot can't both pass
- * their own conflict check before either commits. Released automatically at
- * transaction end (COMMIT/ROLLBACK) — no explicit unlock needed. Must be
- * called inside an already-BEGUN transaction (SET LOCAL requires it).
+ * creation, an event approval, a leave create/approve, or an illness report
+ * racing for the same employee can't both pass their own conflict check
+ * before either commits. Released automatically at transaction end
+ * (COMMIT/ROLLBACK) — no explicit unlock needed. Must be called inside an
+ * already-BEGUN transaction (SET LOCAL requires it).
+ *
+ * IMPORTANT: this is now the SAME lock namespace as lockAbsenceConflictScope
+ * below — both compute the identical key for a given (clientId, employeeId),
+ * by design (see that function's doc comment for why). The `date` param is
+ * accepted (and still required by all existing call sites in checkins.js,
+ * smartWorking.js and events.js) but deliberately NOT included in the hash
+ * any more: a per-date key allowed an event-create and a leave-create (or
+ * illness report) for the SAME employee on the SAME date to acquire disjoint
+ * locks and race past each other's conflict check under READ COMMITTED,
+ * committing two mutually-exclusive records (e.g. an APPROVED event AND an
+ * APPROVED leave for the same day). Collapsing to a per-employee key trades
+ * a small amount of intra-employee parallelism (different dates for the same
+ * employee now serialize too) for actual correctness — acceptable given this
+ * is an internal HR/attendance feature at a few requests/day per employee.
  */
+// eslint-disable-next-line no-unused-vars -- `date` kept in the signature so existing call sites
+// (checkins.js, smartWorking.js, events.js) don't need to change; intentionally excluded from the
+// lock key itself, see doc comment above.
 async function lockEventConflictScope(client, { clientId, employeeId, date }) {
-  const key = `${clientId}:${employeeId}:${date}`;
+  const key = `${clientId}:${employeeId}`;
   const hash = crypto.createHash('sha256').update(key).digest();
   // Full 64-bit signed int (pg_advisory_xact_lock(bigint)'s native width) from a
   // stable hash, avoiding both Postgres's undocumented hashtext() and the much
@@ -40,18 +58,30 @@ async function lockEventConflictScope(client, { clientId, employeeId, date }) {
 }
 
 /**
- * Same mechanism as lockEventConflictScope, but scoped per-employee (no
- * date component) — used for a multi-day range operation (leave create/
- * approve, illness report) so l'intera operazione multi-giorno è serializzata
- * in un colpo solo, invece di un lock per singolo giorno del range (che
- * rischierebbe un falso EVENT_CONFLICT_LOCK_BUSY quando due richieste che si
- * sovrappongono parzialmente acquisiscono i lock sui singoli giorni in ordine
- * diverso — vedi design spec 2026-08-25, sezione "Performance e falso lock
- * occupato"). La chiave include un suffisso ':absence' così non collide mai
- * con lockEventConflictScope per lo stesso employee.
+ * Same mechanism as lockEventConflictScope, and — as of the fix for the
+ * event↔leave↔illness race (see lockEventConflictScope's doc comment) — the
+ * SAME lock namespace: this function computes the IDENTICAL key as
+ * lockEventConflictScope for the same (clientId, employeeId), by design, so
+ * a leave create/approve or an illness report genuinely contends with an
+ * event create/approve (or a checkin) for the same employee. This function
+ * is kept separate (rather than call sites just calling lockEventConflictScope
+ * directly with a placeholder date) because it's scoped per-employee across a
+ * whole multi-day range operation (leave create/approve, illness report) so
+ * l'intera operazione multi-giorno è serializzata in un colpo solo, invece di
+ * un lock per singolo giorno del range (che rischierebbe un falso
+ * EVENT_CONFLICT_LOCK_BUSY quando due richieste che si sovrappongono
+ * parzialmente acquisiscono i lock sui singoli giorni in ordine diverso —
+ * vedi design spec 2026-08-25, sezione "Performance e falso lock occupato").
+ *
+ * PREVIOUSLY this doc comment (and the ':absence' suffix in the key) claimed
+ * the opposite — that this lock was deliberately engineered to NEVER collide
+ * with lockEventConflictScope for the same employee. That was the bug: it
+ * meant an event-create and a concurrent leave-create/illness-report for the
+ * same employee/date acquired disjoint locks and could both pass their
+ * conflict check before either committed. Fixed 2026-08-26.
  */
 async function lockAbsenceConflictScope(client, { clientId, employeeId }) {
-  const key = `${clientId}:${employeeId}:absence`;
+  const key = `${clientId}:${employeeId}`;
   const hash = crypto.createHash('sha256').update(key).digest();
   const lockKey = hash.readBigInt64BE(0).toString();
   await client.query('SET LOCAL lock_timeout = \'3s\'');

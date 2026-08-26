@@ -34,7 +34,7 @@ describe('eventConflict utility', () => {
       expect(seen[0]).toBe(seen[1]);
     });
 
-    it('produces a different lock key for a different date', async () => {
+    it('produces the SAME lock key regardless of date (date intentionally excluded — see doc comment)', async () => {
       const seen = [];
       const client = makeMockClient(async (sql, params) => {
         if (sql.includes('pg_advisory_xact_lock')) seen.push(params[0]);
@@ -44,7 +44,7 @@ describe('eventConflict utility', () => {
       await lockEventConflictScope(client, { clientId: 'c1', employeeId: 'e1', date: '2026-09-01' });
       await lockEventConflictScope(client, { clientId: 'c1', employeeId: 'e1', date: '2026-09-02' });
 
-      expect(seen[0]).not.toBe(seen[1]);
+      expect(seen[0]).toBe(seen[1]);
     });
 
     it('maps a lock_not_available (55P03) error to a 409 ConflictError with EVENT_CONFLICT_LOCK_BUSY', async () => {
@@ -115,7 +115,7 @@ describe('eventConflict utility', () => {
       expect(seen[0]).not.toBe(seen[1]);
     });
 
-    it('produces a different lock key from lockEventConflictScope for the same employee (no cross-lock collision)', async () => {
+    it('produces the SAME lock key as lockEventConflictScope for the same employee (unified lock namespace, by design)', async () => {
       const seen = [];
       const client = makeMockClient(async (sql, params) => {
         if (sql.includes('pg_advisory_xact_lock')) seen.push(params[0]);
@@ -125,7 +125,7 @@ describe('eventConflict utility', () => {
       await lockEventConflictScope(client, { clientId: 'c1', employeeId: 'e1', date: '2026-09-01' });
       await lockAbsenceConflictScope(client, { clientId: 'c1', employeeId: 'e1' });
 
-      expect(seen[0]).not.toBe(seen[1]);
+      expect(seen[0]).toBe(seen[1]);
     });
 
     it('maps a lock_not_available (55P03) error to a 409 ConflictError with EVENT_CONFLICT_LOCK_BUSY', async () => {
