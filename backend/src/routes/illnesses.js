@@ -137,7 +137,8 @@ router.post(
           });
           for (const event of conflictingEvents) {
             await client.query(
-              `UPDATE event_requests SET status = 'REJECTED', rejection_reason = $1, updated_at = NOW() WHERE id = $2::uuid`,
+              `UPDATE event_requests SET status = 'REJECTED', rejection_reason = $1, updated_at = NOW()
+               WHERE id = $2::uuid`,
               [rejectionReason, event.id]
             );
             await logAudit(client, {
@@ -156,7 +157,8 @@ router.post(
           });
           for (const leave of conflictingLeaves) {
             await client.query(
-              `UPDATE leave_requests SET status = 'REJECTED', rejection_reason = $1, updated_at = NOW() WHERE id = $2::uuid`,
+              `UPDATE leave_requests SET status = 'REJECTED', rejection_reason = $1, updated_at = NOW()
+               WHERE id = $2::uuid`,
               [rejectionReason, leave.id]
             );
             if (leave.status === 'APPROVED' && leave.leave_type !== 'MALATTIA') {

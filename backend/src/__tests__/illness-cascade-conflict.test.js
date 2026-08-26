@@ -205,6 +205,74 @@ describe('POST /api/v1/illnesses/report — "malattia vince sempre" cascade', ()
     expect(leaveCheck.rows[0].status).toBe('APPROVED'); // untouched
   });
 
+  it('does not touch an approved leave entirely in the past even when the illness range itself spans past-to-future (clamp is real, not cosmetic)', async () => {
+    if (!dbAvailable) return;
+    clientId = await makeClient();
+    const employeeId = await makeEmployee(clientId);
+    // The leave sits entirely in the past, but the illness's RAW range
+    // (unclamped) does overlap it — if the cascadeStart clamp were a no-op,
+    // this leave would be wrongly rejected. This is the exact scenario the
+    // design spec worried about: silently altering hours/meal vouchers
+    // potentially already exported to payroll for a past, closed period.
+    const pastStart = addDays(todayInTimeZone(), -4);
+    const pastEnd = addDays(todayInTimeZone(), -2);
+    const year = new Date(pastStart).getFullYear();
+    await makeSaldo(clientId, employeeId, 'FERIE_1', year, 3);
+    const leaveId = await makeApprovedLeave(clientId, employeeId, pastStart, pastEnd, 3);
+    const illnessStart = addDays(todayInTimeZone(), -5);
+    const illnessEnd = addDays(todayInTimeZone(), 3);
+    const token = tokenFor({ client_id: clientId, role: 'employee', employee_id: employeeId });
+
+    const res = await request(app)
+      .post('/api/v1/illnesses/report')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ start_date: illnessStart, end_date: illnessEnd });
+
+    expect(res.status).toBe(201);
+
+    const leaveCheck = await pool.query('SELECT status FROM leave_requests WHERE id = $1', [leaveId]);
+    expect(leaveCheck.rows[0].status).toBe('APPROVED'); // untouched — the clamp protected it
+
+    const saldoCheck = await pool.query(
+      'SELECT used_days FROM leave_saldi WHERE user_id = $1 AND leave_type = $2 AND year = $3',
+      [employeeId, 'FERIE_1', year]
+    );
+    expect(saldoCheck.rows[0].used_days).toBe(3); // untouched
+  });
+
+  it('rejects an approved leave that spans past-to-future, when the illness overlaps only its future portion', async () => {
+    if (!dbAvailable) return;
+    clientId = await makeClient();
+    const employeeId = await makeEmployee(clientId);
+    // The leave itself started before today and ends in the future — it is
+    // still an active, currently-relevant record (not a closed past period),
+    // so the cascade must reject it in full, the same as a fully-future leave.
+    const spanningStart = addDays(todayInTimeZone(), -2);
+    const spanningEnd = addDays(todayInTimeZone(), 4);
+    const year = new Date(spanningStart).getFullYear();
+    await makeSaldo(clientId, employeeId, 'FERIE_1', year, 7);
+    const leaveId = await makeApprovedLeave(clientId, employeeId, spanningStart, spanningEnd, 7);
+    const illnessStart = addDays(todayInTimeZone(), 2);
+    const illnessEnd = addDays(todayInTimeZone(), 3);
+    const token = tokenFor({ client_id: clientId, role: 'employee', employee_id: employeeId });
+
+    const res = await request(app)
+      .post('/api/v1/illnesses/report')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ start_date: illnessStart, end_date: illnessEnd });
+
+    expect(res.status).toBe(201);
+
+    const leaveCheck = await pool.query('SELECT status FROM leave_requests WHERE id = $1', [leaveId]);
+    expect(leaveCheck.rows[0].status).toBe('REJECTED');
+
+    const saldoCheck = await pool.query(
+      'SELECT used_days FROM leave_saldi WHERE user_id = $1 AND leave_type = $2 AND year = $3',
+      [employeeId, 'FERIE_1', year]
+    );
+    expect(saldoCheck.rows[0].used_days).toBe(0); // 7 - 7 = 0, reversed in full
+  });
+
   it('writes an audit log entry for each auto-rejected record', async () => {
     if (!dbAvailable) return;
     clientId = await makeClient();
@@ -219,7 +287,8 @@ describe('POST /api/v1/illnesses/report — "malattia vince sempre" cascade', ()
       .send({ start_date: futureDate, end_date: futureDate });
 
     const auditCheck = await pool.query(
-      `SELECT action FROM audit_log WHERE entity = 'event_request' AND entity_id = $1 AND action = 'event_request_auto_rejected_by_illness'`,
+      `SELECT action FROM audit_log
+       WHERE entity = 'event_request' AND entity_id = $1 AND action = 'event_request_auto_rejected_by_illness'`,
       [eventId]
     );
     expect(auditCheck.rows.length).toBe(1);
