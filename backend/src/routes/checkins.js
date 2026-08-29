@@ -489,6 +489,22 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
         throw new NotFoundError('Check-in not found or not assigned to your organization', 'CHECKIN_NOT_FOUND');
       }
 
+      // 2a-bis. senior_manager/director hanno ricevuto da questa feature solo
+      // visibilità/approvazione admin-equivalente su liste pending (design
+      // spec, decisione 5) — non uno scope di correzione sui cartellini dei
+      // dipendenti comuni, che il modello dati non permette di delimitare per
+      // loro (non hanno un site_id singolo come un manager). Senza questo
+      // controllo cadrebbero nel varco tra 2a (solo role==='manager') e 2c
+      // (solo target manager/senior_manager) e potrebbero correggere il
+      // cartellino di QUALSIASI dipendente, in QUALSIASI sede, senza alcuna
+      // restrizione — trovato in code review prima del merge.
+      const callerLevelForEmployeeTarget = getRoleLevel(req.user.role);
+      if (getRoleLevel(checkin.employee_role) < ROLE_LEVELS.manager &&
+          callerLevelForEmployeeTarget >= ROLE_LEVELS.senior_manager &&
+          callerLevelForEmployeeTarget < ROLE_LEVELS.admin) {
+        throw new ForbiddenError('You do not have permission to correct this check-in', 'FORBIDDEN_ROLE');
+      }
+
       // 2b. Self-correction block per manager/senior_manager/director — non
       // per admin/superadmin, che non hanno un superiore che potrebbe
       // altrimenti farlo al posto loro (design spec 2026-08-29, decisione 6).

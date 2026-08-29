@@ -30,6 +30,7 @@ const SENIOR_ID = '550e8400-e29b-41d4-a716-446655440302';
 const OTHER_SENIOR_ID = '550e8400-e29b-41d4-a716-446655440303';
 const ADMIN_ID = '550e8400-e29b-41d4-a716-446655440304';
 const DIRECTOR_ID = '550e8400-e29b-41d4-a716-446655440305';
+const EMPLOYEE_ID = '550e8400-e29b-41d4-a716-446655440306';
 const ADMIN_TOKEN = makeToken({ user_id: ADMIN_ID, client_id: CLIENT_ID, role: 'admin' });
 
 function mockClientQuery({ checkinEmployeeId, checkinRole, checkinReportsToId }) {
@@ -134,6 +135,67 @@ describe('PUT /api/checkins/:id — hierarchy-aware correction', () => {
   it('allows admin to correct a director regardless of reports_to_id', async () => {
     pool.connect.mockResolvedValue({
       query: mockClientQuery({ checkinEmployeeId: DIRECTOR_ID, checkinRole: 'director', checkinReportsToId: null }),
+      release: jest.fn(),
+    });
+
+    const res = await request(app)
+      .put(`/api/checkins/${CHECKIN_ID}`)
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+      .send({ correction_note: 'admin fix' });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('blocks a senior_manager from correcting a plain employee\'s check-in (no defined scope over regular employees — code review finding)', async () => {
+    pool.connect.mockResolvedValue({
+      query: mockClientQuery({ checkinEmployeeId: EMPLOYEE_ID, checkinRole: 'employee', checkinReportsToId: null }),
+      release: jest.fn(),
+    });
+    const seniorToken = makeToken({ user_id: SENIOR_ID, client_id: CLIENT_ID, role: 'senior_manager', employee_id: SENIOR_ID });
+
+    const res = await request(app)
+      .put(`/api/checkins/${CHECKIN_ID}`)
+      .set('Authorization', `Bearer ${seniorToken}`)
+      .send({ correction_note: 'oops' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('FORBIDDEN_ROLE');
+  });
+
+  it('blocks a director from correcting a plain employee\'s check-in', async () => {
+    pool.connect.mockResolvedValue({
+      query: mockClientQuery({ checkinEmployeeId: EMPLOYEE_ID, checkinRole: 'employee', checkinReportsToId: null }),
+      release: jest.fn(),
+    });
+    const directorToken = makeToken({ user_id: DIRECTOR_ID, client_id: CLIENT_ID, role: 'director', employee_id: DIRECTOR_ID });
+
+    const res = await request(app)
+      .put(`/api/checkins/${CHECKIN_ID}`)
+      .set('Authorization', `Bearer ${directorToken}`)
+      .send({ correction_note: 'oops' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('FORBIDDEN_ROLE');
+  });
+
+  it('still allows a manager to correct a plain employee\'s check-in (unaffected by the new guard)', async () => {
+    pool.connect.mockResolvedValue({
+      query: mockClientQuery({ checkinEmployeeId: EMPLOYEE_ID, checkinRole: 'employee', checkinReportsToId: null }),
+      release: jest.fn(),
+    });
+    const mgrToken = makeToken({ user_id: MGR_ID, client_id: CLIENT_ID, role: 'manager', employee_id: MGR_ID });
+
+    const res = await request(app)
+      .put(`/api/checkins/${CHECKIN_ID}`)
+      .set('Authorization', `Bearer ${mgrToken}`)
+      .send({ correction_note: 'fix' });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('still allows admin to correct a plain employee\'s check-in (unaffected by the new guard)', async () => {
+    pool.connect.mockResolvedValue({
+      query: mockClientQuery({ checkinEmployeeId: EMPLOYEE_ID, checkinRole: 'employee', checkinReportsToId: null }),
       release: jest.fn(),
     });
 
