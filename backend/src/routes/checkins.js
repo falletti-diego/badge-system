@@ -17,6 +17,7 @@ const { deleteCacheByPattern } = require('../db/redis');
 const { resolveEmployeeId, resolveSiteId } = require('../utils/resolvers');
 const { lockEventConflictScope, findConflictingEvent } = require('../utils/eventConflict');
 const { buildScopedFilters } = require('../utils/queryScope');
+const { getRoleLevel, ROLE_LEVELS, resolveIsApprover } = require('../utils/roles');
 const { invalidateSignatureIfExists } = require('../utils/timesheetSignature');
 const { todayInTimeZone, dateInTimeZone } = require('../utils/date');
 const logger = require('../utils/logger');
@@ -468,7 +469,8 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
     const result = await withTransaction(async (client) => {
       // 1. Find check-in and verify ownership via employee.client_id
       const checkinResult = await client.query(
-        `SELECT c.id, c.employee_id, c.site_id, c.type, c.timestamp
+        `SELECT c.id, c.employee_id, c.site_id, c.type, c.timestamp,
+                e.role AS employee_role, e.reports_to_id AS employee_reports_to_id
          FROM checkins c
          JOIN employees e ON c.employee_id = e.id
          WHERE c.id = $1::uuid AND e.client_id = $2::uuid`,
@@ -485,6 +487,32 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
       const userSiteId = req.user.site_id;
       if (req.user.role === 'manager' && userSiteId && checkin.site_id !== userSiteId) {
         throw new NotFoundError('Check-in not found or not assigned to your organization', 'CHECKIN_NOT_FOUND');
+      }
+
+      // 2b. Self-correction block per manager/senior_manager/director — non
+      // per admin/superadmin, che non hanno un superiore che potrebbe
+      // altrimenti farlo al posto loro (design spec 2026-08-29, decisione 6).
+      const callerLevel = getRoleLevel(req.user.role);
+      if (req.user.employee_id && checkin.employee_id === req.user.employee_id &&
+          callerLevel >= ROLE_LEVELS.manager && callerLevel < ROLE_LEVELS.admin) {
+        throw new ForbiddenError('You cannot correct your own check-in', 'FORBIDDEN_SELF_CORRECTION');
+      }
+
+      // 2c. Correggere il cartellino di un manager/senior_manager richiede di
+      // essere admin/superadmin OPPURE lo specifico superiore risolto via
+      // reports_to_id — lo scoping di sede (2a sopra) non è sufficiente
+      // quando il target è a sua volta un manager.
+      if (['manager', 'senior_manager'].includes(checkin.employee_role) &&
+          !resolveIsApprover(client, {
+            candidateEmployeeId: req.user.employee_id,
+            candidateRole: req.user.role,
+            targetEmployeeId: checkin.employee_id,
+            targetReportsToId: checkin.employee_reports_to_id,
+          })) {
+        throw new ForbiddenError(
+          "Only this employee's designated superior or an admin can correct this check-in",
+          'FORBIDDEN_HIERARCHY'
+        );
       }
 
       // Event conflict check — solo se la correzione sposta la data del check-in;
