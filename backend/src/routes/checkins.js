@@ -510,7 +510,7 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
             targetReportsToId: checkin.employee_reports_to_id,
           })) {
         throw new ForbiddenError(
-          "Only this employee's designated superior or an admin can correct this check-in",
+          'Only this employee\'s designated superior or an admin can correct this check-in',
           'FORBIDDEN_HIERARCHY'
         );
       }
