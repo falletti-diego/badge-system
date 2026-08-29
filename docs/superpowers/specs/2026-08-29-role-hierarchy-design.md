@@ -9,7 +9,7 @@ Oggi `employees.role` supporta solo `employee`, `manager`, `admin`, `viewer`, `s
 
 ## Non-Goals (esplicitamente fuori scope)
 
-- Nessuna nuova funzionalità di visibilità/scoping per i nuovi ruoli oltre a "vedono/approvano tutto il client come admin" sulle liste **pending** e sugli endpoint di **approvazione** di eventi/ferie/malattie. Non si toccano `routes/admin/*` (CRUD client/sedi/dipendenti), non si toccano `DELETE /api/v1/illnesses/:id` (resta solo-admin per compliance), non si tocca `POST /api/checkins` (creazione check-in per altri resta solo-admin).
+- Nessuna nuova funzionalità di visibilità/scoping per i nuovi ruoli oltre a "vedono/approvano tutto il client come admin" sulle liste **pending** e sugli endpoint di **approvazione** di eventi/ferie/malattie. Non si toccano le regole RBAC/visibilità di `routes/admin/*` (CRUD client/sedi) — l'unica eccezione è `routes/admin/employees.js`, che Task 3 estende per accettare `reports_to_id` in creazione, senza toccarne le regole di accesso (resta solo-admin). Non si toccano `DELETE /api/v1/illnesses/:id` (resta solo-admin per compliance), non si tocca `POST /api/checkins` (creazione check-in per altri resta solo-admin).
 - Nessuna migrazione dati sui client esistenti. Un client a 2 livelli (solo `employee`/`manager`/`admin`) deve continuare a funzionare **identico a oggi, senza toccare una riga** — l'intera gerarchia si attiva solo quando un admin crea effettivamente righe `senior_manager`/`director` e imposta `reports_to_id`.
 - Nessun vincolo di auto-approvazione aggiunto a `leaves.js`/`illnesses.js` (`PUT /:id/approve`) in questa fase — solo `checkins.js` riceve il blocco di self-correction, come da design confermato. È un gap collaterale noto ma esplicitamente rimandato (vedi "Rischi noti / lavoro futuro" in fondo).
 - `backend/src/utils/demoSeed.js` (tenant demo self-service) non viene modificato: il tenant demo resta a 2 livelli.
@@ -97,6 +97,7 @@ CREATE INDEX IF NOT EXISTS idx_employees_reports_to_id ON employees(reports_to_i
 
 - Additiva al 100%: nessuna riga esistente cambia `role` o guadagna un `reports_to_id` non-NULL da questa migrazione.
 - Un client a 2 livelli continua a funzionare identico: `isAdminEquivalent('manager')` è `false` come oggi, `resolveIsApprover` per un manager con `reports_to_id IS NULL` ricade su admin come oggi (l'unico che poteva approvare comunque).
+- **Nota:** un'eccezione a "comportamento identico" riguarda `PUT /api/checkins/:id`: un manager che oggi corregge il cartellino di un manager pari grado (stesso client, nessuna gerarchia) smette di poterlo fare dopo questo deploy — la regola gerarchica del punto 6 richiede sempre admin/superadmin o il `reports_to_id` esatto, che per un client a 2 livelli è sempre NULL. È una stretta di sicurezza intenzionale (chiude lo stesso gap descritto al punto 6), non una regressione, ma va comunicata ai clienti esistenti prima del deploy.
 - Rollback: la migrazione di rimozione colonna/CHECK è sicura solo se nessuna riga ha `role IN ('senior_manager', 'director')` — da verificare manualmente prima di un downgrade (stesso vincolo pratico già vale per `035_employee_lifecycle.sql` e simili).
 
 ## Rischi noti / lavoro futuro (fuori scope di questo piano)

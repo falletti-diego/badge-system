@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Aggiungere due nuovi ruoli (`senior_manager`, `director`) e una catena di approvazione configurabile (`reports_to_id`) per le richieste personali (ferie, malattia, correzione cartellino) di manager e senior manager, senza toccare il comportamento di nessun client esistente a 2 livelli.
+**Goal:** Aggiungere due nuovi ruoli (`senior_manager`, `director`) e una catena di approvazione (`reports_to_id`) per la correzione cartellino di manager e senior manager, più uno scope di visibilità/approvazione admin-equivalente per senior_manager/director su ferie/malattia/eventi — senza toccare il comportamento di nessun client esistente a 2 livelli.
 
 **Architecture:** Migrazione additiva (nuovo CHECK constraint + colonna `reports_to_id` self-referenziante su `employees`), un nuovo modulo `backend/src/utils/roles.js` come unica fonte di verità per `ROLE_LEVELS`/`isAdminEquivalent`/`resolveIsApprover`, poi 3 punti di integrazione mirati: creazione dipendente (validazione), viste "pending"/approvazione (events/leaves/illnesses), correzione cartellino (checkins).
 
@@ -15,7 +15,7 @@
 - Nessuna migrazione dati: ogni cambiamento è additivo, righe esistenti (`role IN ('employee','manager','admin','viewer','superadmin')`, `reports_to_id` sempre NULL prima di questo lavoro) restano bit-per-bit identiche.
 - `reports_to_id` è usata solo per righe `role IN ('manager', 'senior_manager')`; sempre NULL per `employee`, `director`, `admin`, `viewer`, `superadmin`.
 - `role_level` NON è mai una colonna DB: vive solo in `ROLE_LEVELS` dentro `backend/src/utils/roles.js`.
-- `routes/admin/*` (CRUD client/sedi), `DELETE /api/v1/illnesses/:id`, `GET /api/v1/illnesses/manager`, `POST /api/checkins` NON vengono toccati da questo piano (vedi Non-Goals nella spec).
+- Le regole RBAC/visibilità di `routes/admin/*` (CRUD client/sedi) NON vengono toccate da questo piano — l'unica eccezione è `routes/admin/employees.js`, che Task 3 estende per accettare `reports_to_id` in creazione, senza toccarne le regole di accesso (resta solo-admin). `DELETE /api/v1/illnesses/:id`, `GET /api/v1/illnesses/manager`, `POST /api/checkins` NON vengono toccati da questo piano (vedi Non-Goals nella spec).
 - `backend/src/utils/demoSeed.js` NON viene toccato.
 - Ogni test nuovo mocka `pool`/`client.query` con lo stesso pattern già in uso in `backend/src/__tests__/checkins-rbac.test.js` e `checkins-ownership.test.js` — nessun nuovo test reale-Postgres in questo piano (nessun rischio Pattern 5 di CLAUDE.md).
 - Ogni riferimento a `client_id`/`site_id`/`employee_id` nei test usa UUID validi (Pattern 1 di CLAUDE.md) — niente stringhe come `'client-1'`.
