@@ -15,6 +15,7 @@ const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
 const { NotFoundError, ValidationError, ForbiddenError, ConflictError } = require('../utils/errors');
 const { lockAbsenceConflictScope, findConflictingEventRange, findConflictingIllnessRange } = require('../utils/eventConflict');
+const { isAdminEquivalent } = require('../utils/roles');
 const { deleteCacheByPattern } = require('../db/redis');
 const logger = require('../utils/logger');
 
@@ -168,7 +169,7 @@ router.get('/pending', requireAuth, async (req, res, next) => {
     const params = [clientId];
 
     // RBAC: Admin sees all pending requests; managers only see their own store.
-    if (role === 'admin') {
+    if (isAdminEquivalent(role)) {
       // No additional filter.
     } else if (role === 'manager' && siteId) {
       query += ' AND e.site_id = $2::uuid';
@@ -207,7 +208,7 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveLeaveS
   const siteId = req.user.site_id;
 
   try {
-    if (role !== 'admin' && !(role === 'manager' && siteId)) {
+    if (!isAdminEquivalent(role) && !(role === 'manager' && siteId)) {
       throw new ForbiddenError('You do not have permission to approve leave requests', 'FORBIDDEN');
     }
 
@@ -404,7 +405,7 @@ router.get('/approved', requireAuth, async (req, res, next) => {
     const params = [clientId];
 
     // RBAC: Admin sees all approved requests; managers see store employees; employees see own
-    if (role === 'admin') {
+    if (isAdminEquivalent(role)) {
       // No additional filter
     } else if (role === 'manager' && siteId) {
       query += ' AND e.site_id = $2::uuid';

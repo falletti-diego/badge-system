@@ -18,6 +18,7 @@ const { NotFoundError, ValidationError, ForbiddenError } = require('../utils/err
 const logger = require('../utils/logger');
 const { z } = require('zod');
 const { todayInTimeZone } = require('../utils/date');
+const { isAdminEquivalent } = require('../utils/roles');
 const { lockAbsenceConflictScope, findConflictingEventRange, findConflictingLeaveRange } = require('../utils/eventConflict');
 
 const router = express.Router();
@@ -288,7 +289,7 @@ router.get('/by-date-range', requireAuth, async (req, res, next) => {
     const params = [clientId, start_date, end_date];
 
     // RBAC filtering
-    if (role === 'admin') {
+    if (isAdminEquivalent(role)) {
       // Admin sees all
     } else if (role === 'manager' && siteId) {
       // Manager sees only their store employees
@@ -333,7 +334,7 @@ router.get('/admin', requireAuth, async (req, res, next) => {
 
   try {
     // RBAC: Only admin can view all illnesses
-    if (role !== 'admin') {
+    if (!isAdminEquivalent(role)) {
       throw new ForbiddenError(
         'Non hai permessi per visualizzare tutte le malattie',
         'FORBIDDEN'

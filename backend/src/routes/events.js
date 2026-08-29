@@ -14,6 +14,7 @@ const { logAudit } = require('../middleware/audit');
 const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
 const { invalidateSignatureIfExists } = require('../utils/timesheetSignature');
+const { isAdminEquivalent } = require('../utils/roles');
 const {
   lockEventConflictScope, findConflictingCheckin, findConflictingSmartWorking,
   findConflictingLeaveRange, findConflictingIllnessRange,
@@ -133,7 +134,7 @@ router.get('/pending', requireAuth, async (req, res, next) => {
 
     const params = [clientId];
 
-    if (role === 'admin') {
+    if (isAdminEquivalent(role)) {
       // No additional filter.
     } else if (role === 'manager' && siteId) {
       query += ' AND $2::uuid = ANY(e.assigned_sites)';
@@ -172,7 +173,7 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveEventR
   const siteId = req.user.site_id;
 
   try {
-    if (role !== 'admin' && !(role === 'manager' && siteId)) {
+    if (!isAdminEquivalent(role) && !(role === 'manager' && siteId)) {
       throw new ForbiddenError('You do not have permission to approve event requests', 'FORBIDDEN');
     }
 
