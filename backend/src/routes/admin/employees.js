@@ -5,7 +5,8 @@ const { z } = require('zod');
 const { randomBytes } = require('crypto');
 const { pool } = require('../../db/pool');
 const { hashPassword } = require('../../auth/password');
-const { ValidationError, NotFoundError, ConflictError, InvalidManagerAssignmentError } = require('../../utils/errors');
+const { ValidationError, NotFoundError, ConflictError, InvalidManagerAssignmentError, InvalidReportsToAssignmentError } = require('../../utils/errors');
+const { getRoleLevel } = require('../../utils/roles');
 const logger = require('../../utils/logger');
 const { logAudit } = require('../../middleware/audit');
 const { resolveTenantScope } = require('../../utils/tenantScope');
@@ -60,18 +61,40 @@ router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, re
       }
     }
 
+    // Validazione server-side di reports_to_id: deve essere un dipendente
+    // attivo dello stesso client, con role_level strettamente superiore a
+    // quello del nuovo dipendente — altrimenti la catena di approvazione
+    // sarebbe invertita o piatta (es. un manager "approvato" da un altro
+    // manager pari livello).
+    if (data.reports_to_id) {
+      const approverCheck = await pool.query(
+        'SELECT id, role FROM employees WHERE id = $1 AND client_id = $2 AND active = true',
+        [data.reports_to_id, targetClientId]
+      );
+      if (approverCheck.rowCount === 0) {
+        return next(new InvalidReportsToAssignmentError());
+      }
+      const approverLevel = getRoleLevel(approverCheck.rows[0].role);
+      const ownLevel = getRoleLevel(data.role);
+      if (approverLevel <= ownLevel) {
+        return next(new InvalidReportsToAssignmentError(
+          'reports_to_id must point to a strictly higher-level role than this employee'
+        ));
+      }
+    }
+
     const tempPassword = data.password || generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);
 
     let result;
     try {
       result = await pool.query(
-        `INSERT INTO employees (client_id, email, name, phone, role, site_id, password_hash, assigned_sites, external_employee_id, hiring_date, manager_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::UUID[], $9, $10, $11)
-         RETURNING id, client_id, email, name, phone, role, site_id, assigned_sites, external_employee_id, hiring_date, manager_id, created_at`,
+        `INSERT INTO employees (client_id, email, name, phone, role, site_id, password_hash, assigned_sites, external_employee_id, hiring_date, manager_id, reports_to_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::UUID[], $9, $10, $11, $12)
+         RETURNING id, client_id, email, name, phone, role, site_id, assigned_sites, external_employee_id, hiring_date, manager_id, reports_to_id, created_at`,
         [targetClientId, data.email, data.name, data.phone || null,
           data.role, data.site_id || null, passwordHash, data.assigned_sites,
-          data.external_employee_id || null, data.hiring_date || null, data.manager_id || null]
+          data.external_employee_id || null, data.hiring_date || null, data.manager_id || null, data.reports_to_id || null]
       );
     } catch (err) {
       if (err.code === '23505' && err.constraint === 'uq_employees_external_id') {

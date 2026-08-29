@@ -96,6 +96,13 @@ class InvalidManagerAssignmentError extends ApiError {
   }
 }
 
+class InvalidReportsToAssignmentError extends ApiError {
+  constructor(message = 'reports_to_id does not match a valid superior for this role') {
+    super('INVALID_REPORTS_TO_ASSIGNMENT', message, 400);
+    this.name = 'InvalidReportsToAssignmentError';
+  }
+}
+
 module.exports = {
   ApiError,
   ValidationError,
@@ -109,4 +116,5 @@ module.exports = {
   EmploymentNotStartedError,
   SessionRevokedError,
   InvalidManagerAssignmentError,
+  InvalidReportsToAssignmentError,
 };

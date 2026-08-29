@@ -472,8 +472,8 @@ const AdminEmployeeSchema = z.object({
     email: z.string().email('Invalid email format').max(100),
     name: z.string().min(2, 'name must be at least 2 characters').max(100),
     phone: z.string().max(20).optional(),
-    role: z.enum(['employee', 'manager'], {
-      errorMap: () => ({ message: 'role must be employee or manager' }),
+    role: z.enum(['employee', 'manager', 'senior_manager', 'director'], {
+      errorMap: () => ({ message: 'role must be employee, manager, senior_manager or director' }),
     }).default('employee'),
     site_id: z.string().uuid('site_id must be a valid UUID').optional().nullable(),
     // Niente `.min(1)` qui: per role === 'manager' questo campo è legittimamente
@@ -501,8 +501,14 @@ const AdminEmployeeSchema = z.object({
       })
       .optional(),
     manager_id: z.string().uuid('manager_id must be a valid UUID').optional().nullable(),
+    // Usata solo per role manager/senior_manager — chi approva le loro
+    // richieste personali (ferie/malattia/correzione cartellino). NULL è
+    // sempre valido: ricade sull'admin (vedi design spec 2026-08-29,
+    // decisione 4). Diversa da manager_id: vedi quella colonna nella
+    // migration 042 per il motivo per cui non sono la stessa cosa.
+    reports_to_id: z.string().uuid('reports_to_id must be a valid UUID').optional().nullable(),
   }).refine(
-    (data) => data.role === 'manager' || data.assigned_sites.length > 0,
+    (data) => ['manager', 'senior_manager', 'director'].includes(data.role) || data.assigned_sites.length > 0,
     { message: 'employees must have at least one assigned site', path: ['assigned_sites'] }
   ).refine(
     // Un dipendente non può esistere senza un manager di riferimento — la sede a
@@ -511,8 +517,16 @@ const AdminEmployeeSchema = z.object({
     // manager). Trovato testando manualmente questo branch: creare un dipendente
     // su una sede appena creata, ancora senza manager, veniva accettato senza
     // alcun avviso.
-    (data) => data.role === 'manager' || !!data.manager_id,
+    (data) => ['manager', 'senior_manager', 'director'].includes(data.role) || !!data.manager_id,
     { message: 'employees must have a manager_id — create a manager for this site first', path: ['manager_id'] }
+  ).refine(
+    // reports_to_id è concettualmente un'escalation di approvazione, non un
+    // organigramma di sede — ha senso solo per chi ha bisogno di un
+    // superiore che approvi le SUE richieste personali. employee/director
+    // non lo usano mai (employee usa manager_id/site scoping; director è il
+    // tappo della gerarchia).
+    (data) => !data.reports_to_id || ['manager', 'senior_manager'].includes(data.role),
+    { message: 'reports_to_id can only be set for manager or senior_manager', path: ['reports_to_id'] }
   ),
 });
 
