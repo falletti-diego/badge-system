@@ -498,11 +498,15 @@ router.put('/:id', requireAuth, createValidationMiddleware(PutCheckinSchema), as
         throw new ForbiddenError('You cannot correct your own check-in', 'FORBIDDEN_SELF_CORRECTION');
       }
 
-      // 2c. Correggere il cartellino di un manager/senior_manager richiede di
-      // essere admin/superadmin OPPURE lo specifico superiore risolto via
-      // reports_to_id — lo scoping di sede (2a sopra) non è sufficiente
-      // quando il target è a sua volta un manager.
-      if (['manager', 'senior_manager'].includes(checkin.employee_role) &&
+      // 2c. Correggere il cartellino di un manager/senior_manager/director
+      // richiede di essere admin/superadmin OPPURE lo specifico superiore
+      // risolto via reports_to_id — lo scoping di sede (2a sopra) non è
+      // sufficiente quando il target è a sua volta un manager. Usiamo un
+      // controllo per range di role_level (non un elenco di nomi ruolo)
+      // così che un director — che per design non ha mai un reports_to_id —
+      // resti coperto da questo guard invece di sfuggirgli del tutto.
+      const targetLevel = getRoleLevel(checkin.employee_role);
+      if (targetLevel >= ROLE_LEVELS.manager && targetLevel < ROLE_LEVELS.admin &&
           !resolveIsApprover(client, {
             candidateEmployeeId: req.user.employee_id,
             candidateRole: req.user.role,

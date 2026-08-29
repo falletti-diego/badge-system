@@ -29,6 +29,7 @@ const MGR_ID = '550e8400-e29b-41d4-a716-446655440301';
 const SENIOR_ID = '550e8400-e29b-41d4-a716-446655440302';
 const OTHER_SENIOR_ID = '550e8400-e29b-41d4-a716-446655440303';
 const ADMIN_ID = '550e8400-e29b-41d4-a716-446655440304';
+const DIRECTOR_ID = '550e8400-e29b-41d4-a716-446655440305';
 const ADMIN_TOKEN = makeToken({ user_id: ADMIN_ID, client_id: CLIENT_ID, role: 'admin' });
 
 function mockClientQuery({ checkinEmployeeId, checkinRole, checkinReportsToId }) {
@@ -103,6 +104,36 @@ describe('PUT /api/checkins/:id — hierarchy-aware correction', () => {
   it('allows admin to correct a manager regardless of reports_to_id', async () => {
     pool.connect.mockResolvedValue({
       query: mockClientQuery({ checkinEmployeeId: MGR_ID, checkinRole: 'manager', checkinReportsToId: null }),
+      release: jest.fn(),
+    });
+
+    const res = await request(app)
+      .put(`/api/checkins/${CHECKIN_ID}`)
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+      .send({ correction_note: 'admin fix' });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('blocks a senior_manager from correcting a director (director has no reports_to_id)', async () => {
+    pool.connect.mockResolvedValue({
+      query: mockClientQuery({ checkinEmployeeId: DIRECTOR_ID, checkinRole: 'director', checkinReportsToId: null }),
+      release: jest.fn(),
+    });
+    const seniorToken = makeToken({ user_id: SENIOR_ID, client_id: CLIENT_ID, role: 'senior_manager', employee_id: SENIOR_ID });
+
+    const res = await request(app)
+      .put(`/api/checkins/${CHECKIN_ID}`)
+      .set('Authorization', `Bearer ${seniorToken}`)
+      .send({ correction_note: 'oops' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('FORBIDDEN_HIERARCHY');
+  });
+
+  it('allows admin to correct a director regardless of reports_to_id', async () => {
+    pool.connect.mockResolvedValue({
+      query: mockClientQuery({ checkinEmployeeId: DIRECTOR_ID, checkinRole: 'director', checkinReportsToId: null }),
       release: jest.fn(),
     });
 
