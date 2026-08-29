@@ -37,35 +37,35 @@ describe('isAdminEquivalent', () => {
 
 describe('resolveIsApprover', () => {
   it('is true when candidate is admin, regardless of reports_to_id', () => {
-    expect(resolveIsApprover({
+    expect(resolveIsApprover(null, {
       candidateEmployeeId: 'admin-1', candidateRole: 'admin',
       targetEmployeeId: 'mgr-1', targetReportsToId: 'senior-1',
     })).toBe(true);
   });
 
   it('is true when candidate is superadmin', () => {
-    expect(resolveIsApprover({
+    expect(resolveIsApprover(null, {
       candidateEmployeeId: 'super-1', candidateRole: 'superadmin',
       targetEmployeeId: 'mgr-1', targetReportsToId: null,
     })).toBe(true);
   });
 
   it('is true when candidate is the exact reports_to_id target', () => {
-    expect(resolveIsApprover({
+    expect(resolveIsApprover(null, {
       candidateEmployeeId: 'senior-1', candidateRole: 'senior_manager',
       targetEmployeeId: 'mgr-1', targetReportsToId: 'senior-1',
     })).toBe(true);
   });
 
   it('is false when candidate is a different senior_manager', () => {
-    expect(resolveIsApprover({
+    expect(resolveIsApprover(null, {
       candidateEmployeeId: 'senior-2', candidateRole: 'senior_manager',
       targetEmployeeId: 'mgr-1', targetReportsToId: 'senior-1',
     })).toBe(false);
   });
 
   it('is false for a plain manager who is not admin and not the reports_to_id target', () => {
-    expect(resolveIsApprover({
+    expect(resolveIsApprover(null, {
       candidateEmployeeId: 'mgr-2', candidateRole: 'manager',
       targetEmployeeId: 'mgr-1', targetReportsToId: null,
     })).toBe(false);

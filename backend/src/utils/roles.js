@@ -49,7 +49,7 @@ function isAdminEquivalent(role) {
  * risolto via reports_to_id (o un fallback a NULL che ricade solo su
  * admin/superadmin).
  */
-function resolveIsApprover({ candidateEmployeeId, candidateRole, targetEmployeeId, targetReportsToId }, client) {
+function resolveIsApprover(client, { candidateEmployeeId, candidateRole, targetEmployeeId, targetReportsToId }) {
   // eslint-disable-next-line no-unused-vars
   void client; // riservato per un futuro attraversamento multi-livello; oggi la regola è a un solo salto (vedi design spec, "Rischi noti")
   if (getRoleLevel(candidateRole) >= ROLE_LEVELS.admin) return true;
