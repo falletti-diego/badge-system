@@ -1,3 +1,55 @@
+# Badge System — Session 116 Handoff
+
+**Date:** 2026-08-29
+**Session:** 116 — Gerarchia ruoli scalabile (senior_manager/director + reports_to_id): design, piano, implementazione a 6 task, review finale + `/code-review` pre-merge, mergiata su `main`
+**Status:** ✅ **Mergiata su `main` (`ce94beb`, fast-forward pulito, worktree/branch rimossi), suite verde sul risultato mergiato** (backend 949/963, 14 skip preesistenti; frontend 331/332, 1 skip preesistente). ⏸️ **2 follow-up deliberatamente non risolti**, spawnati come task in background e già avviati dall'utente in sessioni separate — vedi Next Steps.
+
+## Goal (Session 116)
+
+Richiesta esplicita dell'utente (non un bug segnalato): estendere il modello di ruoli oltre `employee/manager/admin` per supportare clienti con più di 2 livelli organizzativi, con una catena di approvazione configurabile per le richieste personali (ferie, malattia, correzione cartellino) di manager e senior manager — **senza migrazione dati e senza toccare il comportamento di nessun client esistente a 2 livelli**.
+
+## Current Progress
+
+**Design** (`/superpowers:writing-plans` dopo riepilogo confermato in chat): `docs/superpowers/specs/2026-08-29-role-hierarchy-design.md` + piano 6 task `docs/superpowers/plans/2026-08-29-role-hierarchy.md`. Scoperta chiave nell'esplorazione pre-piano: esisteva già `employees.manager_id` (migration 040) con semantica diversa (manager di sede, validato per ruolo+sede) — deliberatamente non riusata, introdotta `reports_to_id` come colonna nuova.
+
+**Esecuzione** (`/superpowers:subagent-driven-development`, worktree isolato `role-hierarchy`, un implementer + un task-reviewer indipendente per task):
+1. Migration 042 (nuovi ruoli `senior_manager`/`director` + `reports_to_id`, additiva).
+2. `backend/src/utils/roles.js` (`ROLE_LEVELS`/`getRoleLevel`/`isAdminEquivalent`/`resolveIsApprover`) — 1 fix round: ordine parametri di `resolveIsApprover` invertito rispetto al piano, avrebbe rotto silenziosamente le chiamate del Task 5 (nessun errore, solo `false` sempre).
+3. Validazione creazione dipendente (`AdminEmployeeSchema` + `admin/employees.js`) — 1 fix round: un test non isolava davvero il nuovo `.refine()` (confuso con uno preesistente), corretto con sanity-check esplicita.
+4. Scope admin-equivalente su 7 endpoint pending/approvazione (events/leaves/illnesses) — pulito al primo giro.
+5. Correzione cartellino gerarchica (`checkins.js`) — self-block manager+ (esclusi admin/superadmin) + regola `reports_to_id` — 1 fix round minore (UUID non valido in un fixture di test).
+6. Suite completa + lint.
+
+**Review finale whole-branch** (Opus): coerenza cross-task confermata, ma trovato **1 bug di sicurezza reale** — la guardia gerarchica di `checkins.js` copriva solo `['manager','senior_manager']` come target, escludendo `director` (privilege inversion: un senior_manager poteva correggere il cartellino di un director). Fixato (soglia `role_level` invece di lista nomi) + 3 correzioni di accuratezza nella documentazione.
+
+**Su richiesta esplicita dell'utente, `/test-all` + `/code-review` prima del merge** (anche dopo una review finale già dichiarata pulita): ha trovato un **secondo bug reale**, non catturato da nessuna review precedente — `senior_manager`/`director` potevano correggere il cartellino di **qualsiasi dipendente comune, in qualsiasi sede**, cadendo nel varco tra la guardia di sede (solo `role==='manager'`) e la guardia gerarchica (solo target manager+). Fixato con blocco esplicito + 4 test di regressione (commit `ce94beb`).
+
+**Merge**: fast-forward pulito su `main`, worktree e branch rimossi, suite riverificata verde sul risultato mergiato.
+
+**Aggiornamento post-merge**: TASKS.md, PROJECT_DECISIONS.md e questo HANDOFF.md aggiornati con Session 116.
+
+## What Worked
+
+- **Esplorare il codice reale prima di scrivere la spec** ha trovato `manager_id` (colonna già esistente con semantica diversa) prima che diventasse un problema di design — evitato un riuso sbagliato che avrebbe conflato due significati diversi in una colonna delicata e già ben testata.
+- **`/test-all` + `/code-review` richiesti esplicitamente dall'utente anche dopo una review finale interna già "pulita"** — ha trovato un secondo bug reale (gap combinatorio: nuovo ruolo × target di livello più basso) che 6 review per-task + 1 review whole-branch non avevano catturato. Lezione riconfermata da Session 115: nessun numero di review interne sostituisce un passaggio indipendente esterno al processo che le ha prodotte.
+- **Distinguere esplicitamente due soglie di autorizzazione simili ma diverse** (`isAdminEquivalent` per la visibilità pending vs. una soglia `role_level >= admin` per la correzione cartellino) — documentato nella spec PRIMA di scrivere il codice, ha impedito che l'implementatore del Task 5 usasse per errore l'helper più permissivo.
+
+## What Didn't Work / Da tenere a mente
+
+- **Un piano ben specificato con codice completo per ogni task non garantisce l'assenza di gap combinatori** — sia il bug trovato dalla review finale (target `director` dimenticato in una lista di ruoli hardcoded) sia quello trovato da `/code-review` (target `employee` non coperto da nessuna guardia per un corrector senior_manager/director) sono nati da liste di ruoli scritte a mano invece che da soglie su `role_level` — la lezione, già presa a bordo nel fix, è preferire sempre un confronto numerico a un elenco di nomi quando la gerarchia può crescere.
+- **I file `.env*` sono gitignored e non esistono in un worktree nuovo** (`EnterWorktree` parte da `origin/<default-branch>`) — vanno copiati manualmente dal checkout principale prima di poter eseguire `npm test` nel worktree, altrimenti `validate-env` fallisce con 14/15 variabili mancanti.
+- **La spec/piano scritti prima dell'implementazione possono restare accurati solo fino a quando l'implementazione stessa non li smentisce** — la spec dichiarava "comportamento identico a oggi" per i client a 2 livelli, ma il fix del Task 5 introduce un cambio di comportamento reale (un manager non può più correggere il cartellino di un pari grado) — corretto in un giro di review dedicato, ma vale la pena verificare le affermazioni di compatibilità della spec CONTRO il codice finale, non solo contro l'intento originale.
+
+## Next Steps (in ordine di urgenza)
+
+1. **`task_bceb920f`** (background, già avviato dall'utente) — i nuovi ruoli ricevono 403 fail-closed su `GET /api/checkins`, `/stats`, export CSV perché `buildScopedFilters` (`backend/src/utils/queryScope.js`) non li riconosce. Sicuro (nessuna fuga dati) ma li rende parzialmente inutilizzabili finché non risolto.
+2. **`task_0e1577e8`** (background, già avviato dall'utente) — `presences.js:141` usa una denylist di ruoli invece di un allowlist, i nuovi ruoli comparirebbero come dipendenti a zero ore in un export payroll (Zucchetti/TeamSystem) una volta creata una riga reale `senior_manager`/`director`. Il più delicato dei due follow-up, tocca dati payroll-adjacent.
+3. `reports_to_id` è impostabile solo in creazione (nessun endpoint di update) — un cliente che vuole promuovere un manager esistente nella gerarchia deve farlo via SQL diretto finché non esiste un endpoint PATCH. Non bloccante, non ancora spawnato come task separato.
+4. Nessuna UI per i nuovi ruoli (backend-only per design di questa spec) — se un cliente reale li richiede, serve un piano dedicato lato frontend (dropdown ruolo in `EmployeesTab.jsx`, campo `reports_to_id`).
+5. Tutto il backlog invariato dalle sessioni precedenti resta aperto — vedi Session 115 sotto.
+
+---
+
 # Badge System — Session 115 Handoff
 
 **Date:** 2026-08-26
