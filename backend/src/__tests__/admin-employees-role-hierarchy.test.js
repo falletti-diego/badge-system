@@ -102,6 +102,20 @@ describe('POST /api/admin/employees — role hierarchy', () => {
     expect(res.status).toBe(400);
   });
 
+  it('rejects reports_to_id on a director (isolates the reports_to_id refine — director needs no assigned_sites/manager_id, so this 400 can only come from the reports_to_id refine)', async () => {
+    const res = await request(app)
+      .post('/api/admin/employees')
+      .set('Authorization', `Bearer ${ADMIN_TOKEN}`)
+      .send({
+        email: 'dir2@test.local', name: 'Director Two', role: 'director',
+        reports_to_id: SENIOR_ID,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Validation Error');
+    expect(res.body.details.some((d) => d.field === 'body.reports_to_id')).toBe(true);
+  });
+
   it('allows senior_manager/director with no reports_to_id (falls back to admin, per design)', async () => {
     mockQueryDispatch([
       ['FROM CLIENTS', () => ({ rows: [{ id: CLIENT_ID }] })],
