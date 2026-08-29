@@ -28,7 +28,8 @@ const CHECKIN_ID = '550e8400-e29b-41d4-a716-446655440300';
 const MGR_ID = '550e8400-e29b-41d4-a716-446655440301';
 const SENIOR_ID = '550e8400-e29b-41d4-a716-446655440302';
 const OTHER_SENIOR_ID = '550e8400-e29b-41d4-a716-446655440303';
-const ADMIN_TOKEN = makeToken({ user_id: 'admin-1', client_id: CLIENT_ID, role: 'admin' });
+const ADMIN_ID = '550e8400-e29b-41d4-a716-446655440304';
+const ADMIN_TOKEN = makeToken({ user_id: ADMIN_ID, client_id: CLIENT_ID, role: 'admin' });
 
 function mockClientQuery({ checkinEmployeeId, checkinRole, checkinReportsToId }) {
   return jest.fn().mockImplementation((sql) => {
