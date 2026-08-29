@@ -13,6 +13,7 @@ const { ForbiddenError } = require('../utils/errors');
 const { calculateDailyHours, aggregateMonthly, toUtcDateString, buildEventDailyEntries } = require('../utils/hours');
 const { resolveSiteId } = require('../utils/resolvers');
 const { buildTrendDays } = require('../utils/trendStats');
+const { isAdminEquivalent } = require('../utils/roles');
 
 const router = express.Router();
 
@@ -35,7 +36,7 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
     const dateTo = new Date(Date.UTC(year, month, 1)); // exclusive upper bound
 
     // Build the check-ins query
-    // - admin / viewer: all employees for the client
+    // - admin / superadmin / senior_manager / director (isAdminEquivalent) + viewer: all employees for the client
     // - manager: only employees assigned to manager's site
     // FAIL-CLOSED RBAC: manager without site_id throws 403 instead of bypassing filter
     const params = [client_id, dateFrom.toISOString(), dateTo.toISOString()];
@@ -49,13 +50,21 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
       employeeFilter = `AND ci.site_id = $${params.length}::uuid`;
     }
 
-    // Fetch all check-ins for the period, sorted by (employee_id, timestamp)
+    // Fetch all check-ins for the period, sorted by (employee_id, timestamp).
+    // role = 'employee' allowlist (not a denylist): this grid is the
+    // individual-employee timesheet that feeds the payroll export, so
+    // management-tier rows (manager / senior_manager / director / admin /
+    // viewer / superadmin) must never appear here — including a
+    // senior_manager who happens to have badged in. Matches the manager
+    // branch's roster query below and /trend, which both allowlist the same
+    // way. A denylist here silently admitted senior_manager/director once the
+    // 2026-08-29 role-hierarchy feature added them.
     const checkinsResult = await pool.query(
       `SELECT ci.id, ci.employee_id, ci.timestamp, ci.type,
               e.name AS employee_name, e.external_employee_id AS matricola,
               e.id AS emp_id
        FROM checkins ci
-       JOIN employees e ON e.id = ci.employee_id AND e.active = true
+       JOIN employees e ON e.id = ci.employee_id AND e.active = true AND e.role = 'employee'
        WHERE ci.client_id = $1::uuid
          AND ci.timestamp >= $2
          AND ci.timestamp < $3
@@ -131,14 +140,15 @@ router.get('/summary', requireAuth, createValidationMiddleware(GetPresencesSumma
     const dailyEntries = [...checkinDailyEntries, ...eventDailyEntries];
     const monthlyAgg = aggregateMonthly(dailyEntries, Number(mealVoucherHours));
 
-    // Build response — include all employees (even those with 0 hours) for admin/viewer
+    // Build response — include all employees (even those with 0 hours) for
+    // admin-equivalent (admin/superadmin/senior_manager/director) + viewer.
     // For manager: only employees from the site
     let allEmployeeIds;
-    if (role === 'admin' || role === 'viewer') {
+    if (isAdminEquivalent(role) || role === 'viewer') {
       // Get all employees for the client
       const allEmps = await pool.query(
         `SELECT id, name, external_employee_id AS matricola FROM employees
-         WHERE client_id = $1::uuid AND role != 'viewer' AND role != 'admin' AND role != 'manager' AND active = true
+         WHERE client_id = $1::uuid AND role = 'employee' AND active = true
          ORDER BY name`,
         [client_id]
       );

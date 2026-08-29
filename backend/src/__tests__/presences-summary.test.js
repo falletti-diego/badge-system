@@ -46,6 +46,11 @@ const ADMIN_TOKEN   = makeToken({ user_id: 'admin-uuid-1',   client_id: CLIENT_I
 const MANAGER_TOKEN = makeToken({ user_id: 'mgr-uuid-1',     client_id: CLIENT_ID, role: 'manager', site_id: SITE_ID });
 const VIEWER_TOKEN  = makeToken({ user_id: 'viewer-uuid-1',  client_id: CLIENT_ID, role: 'viewer' });
 const EMP_TOKEN     = makeToken({ user_id: 'emp-uuid-1',     client_id: CLIENT_ID, role: 'employee', employee_id: EMP_ID });
+// Role-hierarchy roles: admin-equivalent for the summary (full client roster,
+// no site filter) — regression guard for the pre-fix bug where they fell
+// through every branch and got only checkin-active employees.
+const SENIOR_MANAGER_TOKEN = makeToken({ user_id: 'sm-uuid-1',  client_id: CLIENT_ID, role: 'senior_manager' });
+const DIRECTOR_TOKEN       = makeToken({ user_id: 'dir-uuid-1', client_id: CLIENT_ID, role: 'director' });
 
 const app = require('../app');
 
@@ -158,6 +163,45 @@ describe('GET /api/presences/summary', () => {
       .set('Authorization', `Bearer ${VIEWER_TOKEN}`);
 
     expect(res.status).toBe(200);
+  });
+
+  it('senior_manager gets summary → 200 with full client roster (no site filter)', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: makeCheckins() }) // check-ins query
+      .mockResolvedValueOnce({ rows: [] }) // approved events query
+      .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] }) // clients query
+      .mockResolvedValueOnce({ rows: [
+        { id: EMP_ID, name: 'Mario Rossi', matricola: '001' },
+        { id: '550e8400-e29b-41d4-a716-446655440102', name: 'Zero Checkin', matricola: '099' },
+      ] }); // all-employees query — reached only via the admin-equivalent branch
+
+    const res = await request(app)
+      .get('/api/v1/presences/summary?month=6&year=2026')
+      .set('Authorization', `Bearer ${SENIOR_MANAGER_TOKEN}`);
+
+    expect(res.status).toBe(200);
+    // No site_id in the check-ins query params (not site-scoped like a manager)
+    expect(pool.query.mock.calls[0][1]).not.toContain(SITE_ID);
+    // Full roster: includes an employee with zero checkins this month
+    const ids = res.body.data.employees.map((e) => e.id);
+    expect(ids).toContain('550e8400-e29b-41d4-a716-446655440102');
+  });
+
+  it('director gets summary → 200 with full client roster (no site filter)', async () => {
+    pool.query
+      .mockResolvedValueOnce({ rows: makeCheckins() })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: '5.0' }] })
+      .mockResolvedValueOnce({ rows: [{ id: EMP_ID, name: 'Mario Rossi', matricola: '001' }] });
+
+    const res = await request(app)
+      .get('/api/v1/presences/summary?month=6&year=2026')
+      .set('Authorization', `Bearer ${DIRECTOR_TOKEN}`);
+
+    expect(res.status).toBe(200);
+    expect(pool.query.mock.calls[0][1]).not.toContain(SITE_ID);
+    expect(res.body.data.employees).toHaveLength(1);
+    expect(res.body.data.employees[0].id).toBe(EMP_ID);
   });
 
   it('manager gets summary → 200 (site-scoped)', async () => {

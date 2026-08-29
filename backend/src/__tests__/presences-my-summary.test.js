@@ -68,6 +68,28 @@ describe('GET /api/v1/presences/my-summary', () => {
     expect(res.body.data.signature).toEqual({ status: 'signed', signed_at: '2026-08-02T09:14:00Z' });
   });
 
+  it.each(['senior_manager', 'director'])('un %s con employee_id ottiene il proprio riepilogo (self-scoped, nessun branch di ruolo)', async (role) => {
+    const token = makeToken({ user_id: EMPLOYEE_ID, employee_id: EMPLOYEE_ID, client_id: CLIENT_ID, role });
+
+    pool.query
+      .mockResolvedValueOnce({ rows: [
+        { id: 'c1', employee_id: EMPLOYEE_ID, timestamp: '2026-07-01T08:00:00Z', type: 'IN' },
+        { id: 'c2', employee_id: EMPLOYEE_ID, timestamp: '2026-07-01T17:00:00Z', type: 'OUT' },
+      ] }) // check-ins query
+      .mockResolvedValueOnce({ rows: [] }) // approved events query
+      .mockResolvedValueOnce({ rows: [{ meal_voucher_hours: 6 }] }) // client meal voucher config
+      .mockResolvedValueOnce({ rows: [] }); // signature lookup
+
+    const res = await request(app)
+      .get('/api/v1/presences/my-summary?month=7&year=2026')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.period).toEqual({ month: 7, year: 2026 });
+    // employee_id sempre da req.user, mai da input
+    expect(pool.query.mock.calls[0][1]).toContain(EMPLOYEE_ID);
+  });
+
   it('rifiuta con 403 un account senza profilo dipendente', async () => {
     const token = makeToken({ user_id: 'admin-1', client_id: CLIENT_ID, role: 'admin' });
 

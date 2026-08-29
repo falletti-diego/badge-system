@@ -140,6 +140,39 @@ describe('GET /api/v1/presences/(summary|trend) — active employee filter (Task
     });
   });
 
+  describe('GET /summary (admin) — management-tier roles excluded from the per-employee payroll grid', () => {
+    // Regression for the role-hierarchy follow-up (spec
+    // docs/superpowers/specs/2026-08-29-role-hierarchy-design.md): the admin
+    // branch of /summary used a role DENYLIST that never learned about the new
+    // 'senior_manager'/'director' roles, so those rows leaked into the
+    // individual-employee grid that feeds the Zucchetti/TeamSystem payroll
+    // export. The grid is employee-only by design (matching /trend and the
+    // manager branch, which both allowlist role = 'employee').
+    it('excludes senior_manager (even with check-ins) and director rows, keeps rank-and-file employees', async () => {
+      if (!dbAvailable) return;
+      const now = new Date();
+      const seniorManagerId = await makeEmployee(clientId, 'Senior Manager', { role: 'senior_manager', siteId });
+      const directorId = await makeEmployee(clientId, 'Director', { role: 'director' });
+      const employeeId = await makeEmployee(clientId, 'Rank And File', { role: 'employee', siteId });
+
+      // A senior_manager can badge in too — prove they are filtered by role,
+      // not merely because they happen to have zero check-ins this month.
+      await makeCheckin(clientId, siteId, seniorManagerId, adminId, now.toISOString());
+      await makeCheckin(clientId, siteId, employeeId, adminId, now.toISOString());
+
+      const token = tokenFor({ client_id: clientId, role: 'admin' });
+      const res = await request(app)
+        .get(`/api/v1/presences/summary?month=${now.getUTCMonth() + 1}&year=${now.getUTCFullYear()}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      const ids = res.body.data.employees.map((e) => e.id);
+      expect(ids).not.toContain(seniorManagerId);
+      expect(ids).not.toContain(directorId);
+      expect(ids).toContain(employeeId);
+    });
+  });
+
   describe('GET /summary (manager)', () => {
     it('excludes a deactivated employee at the manager site with zero check-ins', async () => {
       if (!dbAvailable) return;
