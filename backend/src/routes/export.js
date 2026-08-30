@@ -155,7 +155,14 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
 
     const whereClause = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
-    // Fetch rows — include matricola (external_employee_id) for payroll formats
+    // Fetch rows — include matricola (external_employee_id) for payroll formats.
+    // e.role = 'employee' on the JOIN (same treatment as e.active = true, not
+    // a WHERE filter): a management-tier checkin (manager/senior_manager/
+    // director/admin/etc. can all badge in, nothing blocks it at POST time)
+    // is anonymized exactly like an inactive employee's — the checkin row
+    // still counts, but no name/email/matricola leaks into the payroll feed
+    // for someone who was never a payroll-eligible rank-and-file employee.
+    // Regression for task_bceb920f (Session 116 role-hierarchy follow-up).
     const query = `
       SELECT
         e.name AS employee_name,
@@ -167,7 +174,7 @@ router.get('/', requireAuth, createValidationMiddleware(GetExportCsvSchema), asy
         c.modified_at,
         c.modified_by
       FROM checkins c
-      LEFT JOIN employees e ON c.employee_id = e.id AND e.active = true
+      LEFT JOIN employees e ON c.employee_id = e.id AND e.active = true AND e.role = 'employee'
       LEFT JOIN sites s ON c.site_id = s.id
       ${whereClause}
       ORDER BY c.timestamp ASC

@@ -89,6 +89,30 @@ describe('queryScope.buildScopedFilters — RBAC validation matrix', () => {
     expect(result.whereClauses.length).toBeGreaterThan(0);
   });
 
+  // ─── senior_manager/director/superadmin (admin-equivalent, tenant-wide) ──
+  // Regression for task_bceb920f (Session 116 role-hierarchy follow-up):
+  // these roles used to fail-closed into the 'unknown role' branch below
+  // (403 UNAUTHORIZED_ROLE) on GET /checkins, /checkins/stats and
+  // /export/csv, because this function only recognized 'admin'/'viewer' as
+  // unrestricted. Safe (no data leak) but made the roles unusable on these
+  // three endpoints. Same isAdminEquivalent threshold already used by
+  // presences.js and the pending/approval endpoints.
+
+  it.each(['senior_manager', 'director', 'superadmin'])('%s with any filters → OK (no restrictions)', (role) => {
+    const user = { client_id: CLIENT_ID, role };
+    const result = buildScopedFilters(user, { siteId: SITE_ID_TORINO, employeeId: EMP_ID_A }, 'c');
+    expect(result.whereClauses.length).toBeGreaterThan(0);
+    expect(result.params).toContain(SITE_ID_TORINO);
+    expect(result.params).toContain(EMP_ID_A);
+  });
+
+  it.each(['senior_manager', 'director'])('%s with no filters → OK, no site/employee clause forced', (role) => {
+    const user = { client_id: CLIENT_ID, role };
+    const result = buildScopedFilters(user, {}, 'c');
+    // Only client_id clause — same as admin/viewer with no filters.
+    expect(result.whereClauses).toHaveLength(1);
+  });
+
   // ─── Unknown role ─────────────────────────────────────────────────
 
   it('unknown role → 403 UNAUTHORIZED_ROLE', () => {

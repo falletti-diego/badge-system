@@ -87,6 +87,16 @@ describe('GET /api/v1/export/csv — active employee filter (Task 2)', () => {
     return result.rows[0].id;
   }
 
+  async function makeManagementTierEmployee(clientId, role) {
+    const result = await pool.query(
+      `INSERT INTO employees (client_id, email, name, role, assigned_sites, active)
+       VALUES ($1, $2, 'Export Test Management', $3, '{}', true)
+       RETURNING id`,
+      [clientId, uniqueEmail(`export-active-filter-${role}`), role]
+    );
+    return result.rows[0].id;
+  }
+
   async function makeCheckin(clientId, siteId, employeeId, createdBy) {
     await pool.query(
       `INSERT INTO checkins (employee_id, site_id, timestamp, type, created_by, client_id)
@@ -147,4 +157,25 @@ describe('GET /api/v1/export/csv — active employee filter (Task 2)', () => {
     const emp = await pool.query('SELECT email FROM employees WHERE id = $1', [employeeId]);
     expect(res.text).toContain(emp.rows[0].email);
   });
+
+  // Regression for task_bceb920f (Session 116 role-hierarchy follow-up): a
+  // senior_manager/director who badges in must not leak into the payroll
+  // export, same treatment as an inactive employee above.
+  it.each(['senior_manager', 'director'])(
+    'excludes a %s check-in (even active) from the CSV export identity fields',
+    async (role) => {
+      if (!dbAvailable) return;
+      const managementId = await makeManagementTierEmployee(clientId, role);
+      await makeCheckin(clientId, siteId, managementId, adminId);
+
+      const token = tokenFor({ client_id: clientId, role: 'admin' });
+      const res = await request(app)
+        .get('/api/v1/export/csv')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      const mgmt = await pool.query('SELECT email FROM employees WHERE id = $1', [managementId]);
+      expect(res.text).not.toContain(mgmt.rows[0].email);
+    }
+  );
 });
