@@ -1,8 +1,31 @@
 # Badge System — Decision Log & Architecture
 
-**Last Updated:** 29 Agosto 2026 (Session 116 — Gerarchia ruoli scalabile senior_manager/director implementata e mergiata su `main`, 2 bug di autorizzazione reali trovati e fixati prima del merge)  
+**Last Updated:** 30 Agosto 2026 (Session 117 — Follow-up gerarchia ruoli chiusi con coordinamento cross-session su worktree paralleli + 2 finding aggiuntivi da `/code-reviewer`+`/senior-backend`, tutto deployato)  
 **Status:** Deploy produzione ✅ LIVE (badge.dataxiom.it) | Landing dataxiom.it+badge-system.html ✅ LIVE, lancio LinkedIn ✅ pubblicato | Offline Mode Fase A (backend) ✅ LIVE | Offline Mode Fase B (mobile) ✅ codice completo, **in test su device reale (Task B6), Sezioni 1-8 testate almeno una volta, 8 bug totali trovati e fixati tra Session 80-81, Build 33 pronta per il retest finale** | Fix RBAC cross-tenant ✅ LIVE (`superadmin`, account `superuser@dataxiom.it`) | Demo Self-Service ✅ LIVE + form "Parliamo" ✅ funzionante (SES Sandbox, solo verso `diego@dataxiom.it`) | Cron cleanup demo ✅ VERIFICATO | Pipeline CI/CD ✅ (backend job con Postgres 14 reale + **nuovo job "Mobile - Test" bloccante**, 61 test RN) | `scripts/run-migrations.js`/`config-loader.js` ✅ FIXATI | **Infrastruttura di test mobile ✅ NUOVA** (Session 82): gap che aveva causato 8 bug reali (Session 80-81) ora colmato con 2 livelli — component test jest-expo+RNTL (61 test, CI bloccante) + Maestro E2E su simulatore iOS locale (2 flow verificati con esecuzioni ripetute reali)  
 **MVP Launch Target:** Settembre 2026 | **Current Phase:** Validazione Android completa (Session 83). SES: DKIM verificato (`SUCCESS`), richiesta sandbox-exit `DENIED` dopo prima risposta — controreplica dettagliata inviata, da verificare l'esito (Session 84). Onboarding cliente self-service: ✅ 8/8 task implementati + code review finale (Session 85), resta solo il Gate finale E2E con SES reale. **Offline Mode Task B6: ✅ COMPLETATO (Session 86)** — retest finale su iPhone reale confermato funzionante dall'utente, Offline Mode ora interamente pronta per un cliente pilota. *(Nota: header sopra risale a Session 82, non aggiornato ad ogni sessione — vedi footer in fondo al file per lo stato più recente.)*
+
+---
+
+## Session 117 — Follow-up gerarchia ruoli chiusi con coordinamento cross-session, 2 finding aggiuntivi da code review (30 Agosto 2026)
+
+### Contesto
+Sessione ripresa dopo interruzione. L'utente ha segnalato che i due follow-up di Session 116 (`task_bceb920f`, `task_0e1577e8`) erano già stati avviati "via Claude Code web" — verificato via `git log`/`git worktree list`: il lavoro esisteva davvero, già mergiato in `main` **locale**, ma mai pushato su `origin`.
+
+### Scoperta: 3 sessioni Claude concorrenti sullo stesso follow-up, ciascuna con metà fix incompleta
+`ListAgents` ha rivelato 3 sessioni attive in parallelo su worktree condivisi. Contattate via `SendMessage` per evitare sovrapposizioni: una sessione (`a2`, stesso worktree di questa) aveva già applicato il "cancello" `isAdminEquivalent` a `presences.js` per un task separato; un'altra sessione (`lucid-curie-1d0c69-ca`, worktree diverso) aveva lavorato specificamente su `task_0e1577e8` con un fix più profondo (query roster allowlist **+** filtro di ruolo sul JOIN checkins) e un test real-Postgres — ma **senza il cancello**, rendendolo inerte nel suo checkout (senior_manager/director non raggiungevano mai quella query). **Nessuno dei due pezzi, da solo, produceva il comportamento corretto end-to-end.**
+
+### Decisione: consolidare in un solo worktree, verificare indipendentemente, non fidarsi dei due self-report separati
+Letti direttamente i diff di entrambi i worktree dal filesystem (stessa macchina), applicati insieme nello stesso worktree, eseguita la suite completa (non solo i file toccati) e confermato che il test real-Postgres del secondo contributo girasse per davvero (nessun `dbAvailable=false` silenzioso). Commit con co-authorship esplicita a entrambe le sessioni contributrici; le 3 sessioni notificate del consolidamento, una invitata a scartare la propria copia ormai ridondante (fatto da questa sessione stessa dopo che quella sessione era già terminata).
+
+### `task_bceb920f` chiuso — e un secondo leak payroll trovato mentre lo si chiudeva
+`buildScopedFilters` (`queryScope.js`) passato a `isAdminEquivalent(role)`. Rimuovere questo 403 fail-closed ha riesposto lo stesso problema appena chiuso in `presences.js`, ma in `export.js`: nulla impedisce a un senior_manager/director di timbrare (`POST /checkins` non ha restrizioni di ruolo), quindi il loro check-in reale sarebbe finito, senza filtro, nell'export CSV payroll (Zucchetti/TeamSystem). Stesso fix, stesso precedente: `AND e.role = 'employee'` sulla LEFT JOIN — anonimizza la riga esattamente come già succede per un dipendente disattivato (comportamento preesistente e già testato), non la elimina, per coerenza con quel design già in produzione.
+
+### `/code-reviewer` + `/senior-backend` richiesti esplicitamente prima di aggiornare la documentazione — trovati 2 finding aggiuntivi
+1. **`GET /events/approved`** (`events.js`) non era mai stato portato a `isAdminEquivalent` nel pass originale (a991d22) — sibling dimenticato di `GET /leave/approved` e `GET /illnesses/by-date-range`, entrambi già corretti. Stesso fix, stesso import già presente nel file.
+2. **`isAdminEquivalent()` era una lista di nomi hardcoded**, non una soglia `role_level` — esattamente l'anti-pattern che la Session 116 stessa aveva già identificato come causa del bug di privilege-inversion di `checkins.js`. Refactored a `getRoleLevel(role) >= ROLE_LEVELS.senior_manager` — comportamento identico oggi (verificato: `viewer` resta escluso via il suo livello `-1`), ma un futuro ruolo aggiunto sopra `director` eredita ora il trattamento automaticamente, senza bisogno di ricordarsi di aggiornare una lista. Aggiunto un test di invarianza che blinda la proprietà.
+
+### Esito
+4 commit totali sul giorno, ognuno verificato con TDD rosso→verde, suite completa (964 test, 14 skip preesistenti — confermato su più run; 2 run hanno mostrato lo stesso flake pre-esistente inter-worker già noto dal progetto — Session 77 — su file estranei ai fix, mai riproducibile in isolamento) e lint pulito prima del push. CI/CD verde e deploy EC2 verificato (`/health` 200) dopo ciascun push. Nessun conflitto di merge nonostante lo sviluppo parallelo su worktree diversi.
 
 ---
 
@@ -29,8 +52,8 @@ Stesso pattern di Session 115 (implementer + task-reviewer indipendenti per task
 ### Decisione: `/test-all` + `/code-review` esplicitamente richiesti dall'utente prima del merge, anche dopo una review finale già pulita
 Ha trovato un **secondo bug reale**, non catturato da nessuna delle review precedenti (task-level né whole-branch): `senior_manager`/`director` potevano correggere il cartellino di **qualsiasi dipendente comune, in qualsiasi sede**, perché cadevano nel varco tra la guardia di sede (`checkins.js`, applicata solo se `role==='manager'`) e la guardia gerarchica (applicata solo se il target è già manager+). Nessuna delle due guardie copriva il caso "chi corregge è senior_manager/director, il target è un `employee` qualunque". Fixato con un blocco esplicito (`FORBIDDEN_ROLE` per senior_manager/director su un target sotto il livello manager) + 4 test di regressione. **Lezione**: anche un piano ben specificato e più review indipendenti possono lasciar passare un gap che emerge solo combinando due condizioni previste separatamente (nuovo ruolo × target di livello più basso) — vale la pena mantenere il passaggio esplicito di `/code-review` prima del merge anche quando il processo interno ha già dichiarato "pulito".
 
-### Follow-up deliberatamente non risolti (coerenti coi Non-Goals della spec)
-Spawnati come task in background, già avviati dall'utente in sessioni separate — vedi TASKS.md "TODO — Follow-up Gerarchia Ruoli":
+### Follow-up deliberatamente non risolti (coerenti coi Non-Goals della spec) — ✅ chiusi in Session 117
+Spawnati come task in background, avviati dall'utente in sessioni separate, poi chiusi con coordinamento cross-session — vedi la sezione Session 117 sopra e TASKS.md "Follow-up Gerarchia Ruoli":
 - `task_bceb920f` — i nuovi ruoli ricevono 403 fail-closed su dashboard/stats/export CSV (`buildScopedFilters` in `queryScope.js` non li riconosce) — sicuro, ma li rende parzialmente inutilizzabili.
 - `task_0e1577e8` — `presences.js` usa una denylist di ruoli (non un allowlist) che non esclude i nuovi ruoli, rischiando di farli comparire come dipendenti a zero ore in un export payroll — il più delicato dei due.
 

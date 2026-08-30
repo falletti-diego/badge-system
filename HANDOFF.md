@@ -1,3 +1,53 @@
+# Badge System — Session 117 Handoff
+
+**Date:** 2026-08-30
+**Session:** 117 — Follow-up gerarchia ruoli (`task_0e1577e8` + `task_bceb920f`) chiusi con coordinamento cross-session su worktree paralleli, poi `/code-reviewer`+`/senior-backend` prima dell'aggiornamento doc, 2 finding aggiuntivi trovati e corretti
+**Status:** ✅ **Entrambi i follow-up di Session 116 chiusi, deployati, verificati in produzione**. ✅ **2 finding di code review aggiuntivi trovati e corretti** (parità `isAdminEquivalent` mancante su `events.js`, `isAdminEquivalent()` da lista hardcoded a soglia numerica). ✅ **`main` locale (15 commit non pushati da Session 116) sincronizzato con `origin`**. Nessun task pending residuo di questa sessione.
+
+## Goal (Session 117)
+
+Sessione ripresa dopo interruzione ("riprendi da dove ti sei interrotto"). L'utente ha poi segnalato che i due follow-up spawnati in background da Session 116 (`task_bceb920f`, `task_0e1577e8`) erano già stati avviati "via Claude Code web" — verificare lo stato reale, consolidare, chiudere, e infine — su richiesta esplicita — sottoporre tutto a `/test-all` + `/code-review` (`code-reviewer` + `senior-backend`) prima di aggiornare la documentazione di fine sessione.
+
+## Current Progress
+
+**Verifica stato reale** (`git log`/`git worktree list`/`git branch -a`): il lavoro di Session 116 esisteva già — 14 commit mergiati in `main` **locale** via fast-forward, ma **mai pushati su `origin`** (`origin/main` era ancora fermo a prima di Session 116). Push eseguito.
+
+**Scoperta cruciale — 3 sessioni Claude concorrenti sullo stesso follow-up, ciascuna con metà fix**: `ListAgents` ha rivelato 3 sessioni attive in parallelo. Contattate via `SendMessage` prima di toccare qualunque file (principio: mai assumere "nessuno sta lavorando qui" senza verificare). Risultato:
+- `quirky-gould-317e4e-a2` (stesso worktree di questa sessione): aveva già completato il "cancello" `isAdminEquivalent` su `presences.js` per un task **separato** (non `task_0e1577e8` in sé), poi terminato.
+- `quirky-gould-317e4e-db`: idle, nessun edit.
+- `lucid-curie-1d0c69-ca` (worktree diverso): stava lavorando **specificamente** su `task_0e1577e8` — query roster allowlist + filtro di ruolo sul JOIN checkins (gap più profondo di quanto pianificato: un senior_manager con un check-in reale bypassava la sola fix della query) + un test real-Postgres dedicato. **Ma il suo checkout non aveva il cancello `isAdminEquivalent`** — il suo fix era quindi "spento": senior_manager/director non raggiungevano mai quella query nel suo ambiente, il suo `/test-all` verde non lo dimostrava end-to-end.
+
+**Nessuno dei due pezzi, da solo, produceva il comportamento corretto.** Consolidato: letti direttamente i diff di entrambi i worktree dal filesystem (stessa macchina), applicati insieme in `quirky-gould-317e4e`, eseguita la suite completa (non solo i file toccati — 968/982 verde), confermato che il test real-Postgres del secondo contributo girasse per davvero (nessun `dbAvailable=false` silenzioso, verificato via grep del log). Commit (`b972d31`) con co-authorship esplicita a entrambe le sessioni. Le 3 sessioni notificate; i cambi non committati rimasti orfani nel worktree `lucid-curie-1d0c69` (la sessione era terminata prima di poterli scartare lei stessa) ripuliti direttamente da questa sessione. Merge in `main`, verifica, push, CI/CD verde, deploy EC2 confermato (`/health` 200).
+
+**`task_bceb920f`**: `buildScopedFilters` (`queryScope.js`) passato a `isAdminEquivalent(role)`, TDD rosso→verde (5 nuovi unit test). **Bug collaterale trovato mentre lo si chiudeva**: nulla impedisce a senior_manager/director di timbrare (`POST /checkins` non ha restrizioni di ruolo) — rimuovere il 403 avrebbe riaperto lo stesso leak payroll appena chiuso in `presences.js`, ma via `GET /export/csv` (feed Zucchetti/TeamSystem). Stesso fix, stesso precedente: `AND e.role = 'employee'` sulla LEFT JOIN (anonimizza la riga, come già succede per un dipendente disattivato — comportamento preesistente e testato, non reinventato). Verificato rosso-prima via revert temporaneo della clausola JOIN. Commit `7f02142`, merge, push, CI/CD + deploy verdi.
+
+**Su richiesta esplicita dell'utente**: `/test-all` (975 test verdi, coverage 80.9%/331+1skip frontend) + `/code-review` via skill `code-reviewer` (PR analyzer: nessun rischio critical/high) + `senior-backend` (review architetturale mirata) sull'intero diff di sessione, **prima** di aggiornare HANDOFF/TASKS/PROJECT_DECISIONS. Trovati **2 finding aggiuntivi**, non catturati da nessuna review precedente:
+1. **`GET /events/approved`** (`events.js`) — sibling dimenticato di `GET /leave/approved`/`GET /illnesses/by-date-range` (entrambi già portati a `isAdminEquivalent` nel commit a991d22 di Session 116) — ancora `role === 'admin' || role === 'viewer'`, fail-closed 403 per i nuovi ruoli.
+2. **`isAdminEquivalent()` era una lista di nomi hardcoded**, non una soglia `role_level` — esattamente l'anti-pattern che Session 116 aveva già identificato come causa del bug di privilege-inversion di `checkins.js` nella stessa feature. Un futuro ruolo aggiunto sopra `director` senza ricordarsi di aggiornare la lista avrebbe ripetuto silenziosamente il bug di `task_bceb920f`.
+
+Entrambi fixati con TDD (fix 1 verificato rosso-prima; fix 2 refactored a `getRoleLevel(role) >= ROLE_LEVELS.senior_manager`, comportamento identico verificato per tutti i ruoli esistenti, più un test di invarianza aggiunto per bloccare una regressione futura verso una lista di nomi). Commit `a0b6fa5`, merge, push, CI/CD + deploy verdi, `/health` 200 confermato.
+
+**Verifica finale**: suite completa eseguita 3 volte sul risultato mergiato finale — 964 test verdi (14 skip preesistenti). 2 delle verifiche intermedie (durante il lavoro, non sul risultato finale) hanno mostrato lo stesso flake pre-esistente inter-worker già documentato dal progetto (Session 77): un test casuale fallisce con uno status HTTP inatteso sotto esecuzione parallela completa ma passa sempre pulito in isolamento — il file che fallisce cambia ad ogni run (`illnesses.test.js` → `events.test.js` → `checkins-geofence.test.js`), nessuno collegato ai fix di questa sessione. Lint pulito su ogni commit (0 errori, solo warning preesistenti).
+
+## What Worked
+
+- **Non fidarsi della dichiarazione dell'utente "il lavoro esiste già" senza verificarla sul filesystem/git** — ha rivelato non solo che esisteva, ma che era mergiato solo in locale e mai pushato, e che due sessioni diverse ne avevano fatto metà a testa senza saperlo.
+- **`ListAgents` + `SendMessage` prima di toccare qualunque file condiviso** — ha evitato di duplicare lavoro già fatto e ha scoperto un problema più serio (due fix incompleti e reciprocamente dipendenti) che sarebbe rimasto silenzioso se ciascuna sessione avesse semplicemente committato/pushato la propria metà indipendentemente.
+- **Leggere i diff di un altro worktree direttamente dal filesystem (stessa macchina) invece di fidarsi del self-report testuale di una sessione** — ha rivelato che il fix di `lucid-curie-1d0c69-ca`, per quanto corretto e ben testato, era inerte nel suo stesso ambiente per l'assenza del cancello `isAdminEquivalent`.
+- **`/code-review` richiesto esplicitamente anche dopo un lavoro già dichiarato "chiuso e deployato"** — ha trovato 2 finding reali (uno dei quali, la lista hardcoded in `isAdminEquivalent`, era un rischio di regressione futura silenziosa, non un bug attivo) — stessa lezione già vista in Session 115/116: nessun numero di verifiche interne sostituisce un passaggio indipendente dedicato.
+- **Verificare che un test real-Postgres sia girato per davvero** (grep del log per l'assenza del warning di skip) prima di accettare un "suite verde" come prova — pratica ormai ricorrente in questo progetto.
+
+## What Didn't Work / Da tenere a mente
+
+- **Il worktree `lucid-curie-1d0c69` è rimasto con modifiche non committate orfane** dopo che la sua sessione è terminata senza scartarle — pulito manualmente da questa sessione. Da tenere a mente: una sessione che promette di "scartare la propria copia" può terminare prima di poterlo fare — verificare lo stato del worktree, non solo fidarsi della promessa nel messaggio.
+- **`isAdminEquivalent()` era stata scritta come lista di nomi nonostante la lezione sulla soglia numerica fosse già stata imparata (ed esplicitamente documentata) nella stessa Session 116** — anche una lezione appena imparata e scritta in `CLAUDE.md`/handoff può non essere applicata coerentemente ovunque nello stesso giro di lavoro. Vale la pena un secondo passaggio esplicito di code review anche subito dopo, non solo a distanza di sessioni.
+
+## Next Steps
+
+Nessuno specifico a questa sessione. Backlog invariato dalle sessioni precedenti — outreach commerciale mai iniziato, S.27/S.28/S.29 legali mitigati ma non validati esternamente, Auth0 reale non integrato. Nuovo item minor: `illnesses.js DELETE /:id` resta admin-only nonostante `GET /admin` sia `isAdminEquivalent` — non confermato come bug, da chiarire se un cliente reale lo richiede. Nessun endpoint PATCH per `reports_to_id` su un dipendente esistente (solo in creazione) e nessuna UI frontend per i nuovi ruoli restano backlog aperto da Session 116.
+
+---
+
 # Badge System — Session 116 Handoff
 
 **Date:** 2026-08-29
