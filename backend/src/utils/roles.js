@@ -32,9 +32,19 @@ function getRoleLevel(role) {
  * (design spec, decisione 5) — non altrove. Non usare questo helper per
  * decisioni di correzione cartellino (vedi resolveIsApprover sotto, e la
  * nota nella design spec sul perché quel controllo usa una soglia diversa).
+ *
+ * Soglia numerica (getRoleLevel >= senior_manager), non un elenco di nomi:
+ * un elenco hardcoded ('admin' || 'superadmin' || ...) è esattamente il
+ * pattern che ha causato il bug di privilege-inversion di checkins.js in
+ * questa stessa feature (Session 116) — un futuro livello aggiunto sopra
+ * 'director' senza ricordarsi di aggiornare un elenco qui fail-closerebbe
+ * silenziosamente (stessa classe di task_bceb920f). Con la soglia, un
+ * nuovo ruolo con role_level >= senior_manager eredita questo comportamento
+ * automaticamente appena aggiunto a ROLE_LEVELS, senza toccare questa
+ * funzione. 'viewer' (level -1) resta correttamente escluso.
  */
 function isAdminEquivalent(role) {
-  return role === 'admin' || role === 'superadmin' || role === 'senior_manager' || role === 'director';
+  return getRoleLevel(role) >= ROLE_LEVELS.senior_manager;
 }
 
 /**

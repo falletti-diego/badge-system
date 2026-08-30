@@ -709,6 +709,26 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
       expect(params).toEqual([TEST_CLIENT_ID, '2026-08-01', '2026-08-31']);
     });
 
+    // Regression: sibling of GET /leave/approved (already isAdminEquivalent
+    // since a991d22) — this endpoint was missed in that pass and still
+    // fail-closed 403'd senior_manager/director (found by /code-review).
+    it.each(['senior_manager', 'director'])(
+      '%s sees all approved events client-wide, same as admin (isAdminEquivalent)',
+      async (role) => {
+        const token = makeToken({ role });
+        mockPool.query.mockResolvedValueOnce({ rows: [] });
+
+        const res = await request(app)
+          .get('/api/v1/events/approved')
+          .query({ date_from: '2026-08-01', date_to: '2026-08-31' })
+          .set('Authorization', `Bearer ${token}`);
+
+        expect(res.status).toBe(200);
+        const [, params] = mockPool.query.mock.calls[0];
+        expect(params).toEqual([TEST_CLIENT_ID, '2026-08-01', '2026-08-31']);
+      }
+    );
+
     it('only returns APPROVED requests, never PENDING/REJECTED (enforced in SQL)', async () => {
       const adminToken = makeToken();
       mockPool.query.mockResolvedValueOnce({ rows: [] });

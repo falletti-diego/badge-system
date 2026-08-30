@@ -415,7 +415,7 @@ router.get('/approved', requireAuth, createValidationMiddleware(GetApprovedEvent
         params.push(employee_id);
         query += ` AND er.user_id = $${params.length}::uuid`;
       }
-    } else if (role === 'admin' || role === 'viewer') {
+    } else if (isAdminEquivalent(role) || role === 'viewer') {
       if (site_id) {
         params.push(site_id);
         query += ` AND $${params.length}::uuid = ANY(e.assigned_sites)`;

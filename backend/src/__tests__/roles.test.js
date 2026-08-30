@@ -33,6 +33,18 @@ describe('isAdminEquivalent', () => {
   it.each(['employee', 'manager', 'viewer', 'bogus-role'])('is false for %s', (role) => {
     expect(isAdminEquivalent(role)).toBe(false);
   });
+
+  // Guardrail found by /code-review (senior-backend pass): must stay a
+  // role_level threshold, never a hardcoded name list — a future role added
+  // to ROLE_LEVELS above 'director' without updating a name list here would
+  // silently fail-closed (same bug class as task_bceb920f). This asserts
+  // the invariant directly against ROLE_LEVELS so it can't drift back to a
+  // name list without failing.
+  it('is equivalent to getRoleLevel(role) >= ROLE_LEVELS.senior_manager for every known role', () => {
+    for (const role of Object.keys(ROLE_LEVELS)) {
+      expect(isAdminEquivalent(role)).toBe(getRoleLevel(role) >= ROLE_LEVELS.senior_manager);
+    }
+  });
 });
 
 describe('resolveIsApprover', () => {
