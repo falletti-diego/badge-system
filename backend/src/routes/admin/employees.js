@@ -93,11 +93,7 @@ router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, re
       }
     }
 
-    // Validazione server-side di reports_to_id: deve essere un dipendente
-    // attivo dello stesso client, con role_level strettamente superiore a
-    // quello del nuovo dipendente — altrimenti la catena di approvazione
-    // sarebbe invertita o piatta (es. un manager "approvato" da un altro
-    // manager pari livello).
+    // Validazione server-side di reports_to_id — vedi validateReportsTo() sopra.
     await validateReportsTo({
       reportsToId: data.reports_to_id,
       clientId: targetClientId,
