@@ -20,6 +20,38 @@ function generateTempPassword() {
   return Array.from(bytes, (b) => chars[b % chars.length]).join('');
 }
 
+/**
+ * Valida reports_to_id: deve puntare a un dipendente attivo dello stesso
+ * client, con role_level strettamente superiore a ownLevel — altrimenti la
+ * catena di approvazione sarebbe invertita o piatta. Se excludeId è passato
+ * (solo dal PATCH — alla creazione è strutturalmente impossibile, un
+ * dipendente nuovo non può ancora essere il reports_to_id di nessuno),
+ * rifiuta anche un ciclo diretto: l'approvatore scelto riporta già a
+ * excludeId. Lancia InvalidReportsToAssignmentError — il chiamante ha un
+ * try/catch che inoltra a next(err), mai un valore di ritorno "false".
+ */
+async function validateReportsTo({ reportsToId, clientId, ownLevel, excludeId = null }) {
+  if (!reportsToId) return;
+  const approverCheck = await pool.query(
+    'SELECT id, role, reports_to_id FROM employees WHERE id = $1 AND client_id = $2 AND active = true',
+    [reportsToId, clientId]
+  );
+  if (approverCheck.rowCount === 0) {
+    throw new InvalidReportsToAssignmentError();
+  }
+  const approverLevel = getRoleLevel(approverCheck.rows[0].role);
+  if (approverLevel <= ownLevel) {
+    throw new InvalidReportsToAssignmentError(
+      'reports_to_id must point to a strictly higher-level role than this employee'
+    );
+  }
+  if (excludeId && approverCheck.rows[0].reports_to_id === excludeId) {
+    throw new InvalidReportsToAssignmentError(
+      'reports_to_id would create a cycle — that employee already reports to this one'
+    );
+  }
+}
+
 router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, res, next) => {
   try {
     const data = req.validated.body;
@@ -66,22 +98,11 @@ router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, re
     // quello del nuovo dipendente — altrimenti la catena di approvazione
     // sarebbe invertita o piatta (es. un manager "approvato" da un altro
     // manager pari livello).
-    if (data.reports_to_id) {
-      const approverCheck = await pool.query(
-        'SELECT id, role FROM employees WHERE id = $1 AND client_id = $2 AND active = true',
-        [data.reports_to_id, targetClientId]
-      );
-      if (approverCheck.rowCount === 0) {
-        return next(new InvalidReportsToAssignmentError());
-      }
-      const approverLevel = getRoleLevel(approverCheck.rows[0].role);
-      const ownLevel = getRoleLevel(data.role);
-      if (approverLevel <= ownLevel) {
-        return next(new InvalidReportsToAssignmentError(
-          'reports_to_id must point to a strictly higher-level role than this employee'
-        ));
-      }
-    }
+    await validateReportsTo({
+      reportsToId: data.reports_to_id,
+      clientId: targetClientId,
+      ownLevel: getRoleLevel(data.role),
+    });
 
     const tempPassword = data.password || generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);
