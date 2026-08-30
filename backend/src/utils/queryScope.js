@@ -9,6 +9,7 @@
  */
 
 const { ForbiddenError } = require('./errors');
+const { isAdminEquivalent } = require('./roles');
 
 /**
  * Build scoped WHERE clauses and params for the user's role and filters.
@@ -78,8 +79,9 @@ function buildScopedFilters(user, filters = {}, alias = 'c') {
     paramCount++;
     whereClauses.push(`${alias}.site_id = $${paramCount}::uuid`);
     params.push(scopeSiteId);
-  } else if (role === 'admin' || role === 'viewer') {
-    // Admin/Viewer: no role-based filtering; apply explicit filters if provided
+  } else if (isAdminEquivalent(role) || role === 'viewer') {
+    // Admin-equivalent (admin/superadmin/senior_manager/director) + viewer:
+    // no role-based filtering; apply explicit filters if provided
     if (siteId) {
       paramCount++;
       whereClauses.push(`${alias}.site_id = $${paramCount}::uuid`);
