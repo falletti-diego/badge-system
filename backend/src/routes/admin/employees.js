@@ -10,7 +10,7 @@ const { getRoleLevel } = require('../../utils/roles');
 const logger = require('../../utils/logger');
 const { logAudit } = require('../../middleware/audit');
 const { resolveTenantScope } = require('../../utils/tenantScope');
-const { AdminEmployeeSchema, createValidationMiddleware } = require('../../middleware/validation');
+const { AdminEmployeeSchema, AdminEmployeeRolePatchSchema, createValidationMiddleware } = require('../../middleware/validation');
 
 const router = express.Router();
 
@@ -36,18 +36,18 @@ async function validateReportsTo({ reportsToId, clientId, ownLevel, excludeId = 
     'SELECT id, role, reports_to_id FROM employees WHERE id = $1 AND client_id = $2 AND active = true',
     [reportsToId, clientId]
   );
-  if (approverCheck.rowCount === 0) {
+  if (approverCheck.rows.length === 0) {
     throw new InvalidReportsToAssignmentError();
+  }
+  if (excludeId && approverCheck.rows[0].reports_to_id === excludeId) {
+    throw new InvalidReportsToAssignmentError(
+      'reports_to_id would create a cycle — that employee already reports to this one'
+    );
   }
   const approverLevel = getRoleLevel(approverCheck.rows[0].role);
   if (approverLevel <= ownLevel) {
     throw new InvalidReportsToAssignmentError(
       'reports_to_id must point to a strictly higher-level role than this employee'
-    );
-  }
-  if (excludeId && approverCheck.rows[0].reports_to_id === excludeId) {
-    throw new InvalidReportsToAssignmentError(
-      'reports_to_id would create a cycle — that employee already reports to this one'
     );
   }
 }
@@ -142,6 +142,77 @@ router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, re
     });
   } catch (err) {
     if (err.code === '23505') return next(new ValidationError('Email already exists for this client'));
+    next(err);
+  }
+});
+
+router.patch('/:id/role', createValidationMiddleware(AdminEmployeeRolePatchSchema), async (req, res, next) => {
+  try {
+    const { id } = req.validated.params;
+    const data = req.validated.body;
+    const clientId = req.user.client_id;
+
+    const currentResult = await pool.query(
+      'SELECT id, role, reports_to_id FROM employees WHERE id = $1 AND client_id = $2 AND active = true',
+      [id, clientId]
+    );
+    if (currentResult.rows.length === 0) {
+      return next(new NotFoundError('Employee not found', 'EMPLOYEE_NOT_FOUND'));
+    }
+    const current = currentResult.rows[0];
+
+    // Solo manager/senior_manager hanno una promozione valida da qui — un
+    // director è il tappo terminale rispetto a questa azione (vedi design
+    // spec 2026-08-30, "Solo promozioni, nessuna retrocessione").
+    if (!['manager', 'senior_manager'].includes(current.role)) {
+      return next(new ValidationError(
+        'this employee\'s role cannot be changed via this action',
+        { field: 'role', code: 'ROLE_CHANGE_NOT_ALLOWED' }
+      ));
+    }
+
+    const currentLevel = getRoleLevel(current.role);
+    const targetLevel = getRoleLevel(data.role);
+    if (targetLevel <= currentLevel) {
+      return next(new ValidationError(
+        'role can only be promoted to a strictly higher level via this action',
+        { field: 'role', code: 'ROLE_NOT_A_PROMOTION' }
+      ));
+    }
+
+    // director non ha mai reports_to_id (è il tappo della gerarchia) —
+    // azzerato lato server indipendentemente da cosa arriva nel body,
+    // difesa in profondità oltre all'azzeramento automatico lato client.
+    const reportsToId = data.role === 'director' ? null : (data.reports_to_id || null);
+
+    await validateReportsTo({
+      reportsToId,
+      clientId,
+      ownLevel: targetLevel,
+      excludeId: id,
+    });
+
+    const result = await pool.query(
+      `UPDATE employees SET role = $1, reports_to_id = $2
+       WHERE id = $3 AND client_id = $4
+       RETURNING id, client_id, name, email, role, reports_to_id`,
+      [data.role, reportsToId, id, clientId]
+    );
+    const employee = result.rows[0];
+
+    await logAudit(pool, {
+      action: 'admin_change_employee_role',
+      entity: 'employee',
+      entityId: employee.id,
+      clientId: employee.client_id,
+      oldValue: { role: current.role, reports_to_id: current.reports_to_id },
+      newValue: { role: employee.role, reports_to_id: employee.reports_to_id },
+      userId: req.user.user_id,
+    }).catch(() => {});
+
+    logger.info({ action: 'admin_change_employee_role', employee_id: employee.id });
+    res.json({ success: true, data: employee });
+  } catch (err) {
     next(err);
   }
 });
