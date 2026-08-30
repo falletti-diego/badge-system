@@ -249,20 +249,52 @@ describe('EmployeesTab', () => {
   it('enables Approvatore richieste personali and filters options when role is Manager', async () => {
     const user = userEvent.setup();
     render(<EmployeesTab />);
+    await user.click(screen.getByLabelText(/cliente/i));
+    await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
     await user.click(screen.getByRole('combobox', { name: /^ruolo$/i }));
     await user.click(screen.getByRole('option', { name: 'Manager' }));
-    expect(screen.getByRole('combobox', { name: /approvatore richieste personali/i })).not.toHaveAttribute('aria-disabled', 'true');
+
+    const approverField = screen.getByRole('combobox', { name: /approvatore richieste personali/i });
+    expect(approverField).not.toHaveAttribute('aria-disabled', 'true');
+
+    await user.click(approverField);
+    expect(screen.getByRole('option', { name: /Senior Manager Uno/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Direttore Uno/i })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Manager Torino/i })).not.toBeInTheDocument();
   });
 
-  it('clears reports_to_id when the role changes', async () => {
+  it('shows only Direttore as an approver option when role is Senior Manager', async () => {
     const user = userEvent.setup();
     render(<EmployeesTab />);
+    await user.click(screen.getByLabelText(/cliente/i));
+    await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
+    await user.click(screen.getByRole('combobox', { name: /^ruolo$/i }));
+    await user.click(screen.getByRole('option', { name: 'Senior Manager' }));
+
+    const approverField = screen.getByRole('combobox', { name: /approvatore richieste personali/i });
+    await user.click(approverField);
+    expect(screen.getByRole('option', { name: /Direttore Uno/i })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Senior Manager Uno/i })).not.toBeInTheDocument();
+  });
+
+  it('clears reports_to_id when the role changes after a real approver was selected', async () => {
+    const user = userEvent.setup();
+    render(<EmployeesTab />);
+    await user.click(screen.getByLabelText(/cliente/i));
+    await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
     await user.click(screen.getByRole('combobox', { name: /^ruolo$/i }));
     await user.click(screen.getByRole('option', { name: 'Manager' }));
-    await user.click(screen.getByRole('combobox', { name: /approvatore richieste personali/i }));
-    await user.click(screen.getByRole('option', { name: '— nessuno —' }));
+
+    const approverField = screen.getByRole('combobox', { name: /approvatore richieste personali/i });
+    await user.click(approverField);
+    await user.click(screen.getByRole('option', { name: /Senior Manager Uno/i }));
+    expect(approverField).toHaveTextContent(/Senior Manager Uno/i);
+
+    // Switch to a different role that keeps the field enabled — the stale approver
+    // selection must not silently persist (it may not even be a valid option anymore).
     await user.click(screen.getByRole('combobox', { name: /^ruolo$/i }));
-    await user.click(screen.getByRole('option', { name: 'Dipendente' }));
-    expect(screen.getByRole('combobox', { name: /approvatore richieste personali/i })).toHaveAttribute('aria-disabled', 'true');
+    await user.click(screen.getByRole('option', { name: 'Senior Manager' }));
+
+    expect(approverField).not.toHaveTextContent(/Senior Manager Uno/i);
   });
 });
