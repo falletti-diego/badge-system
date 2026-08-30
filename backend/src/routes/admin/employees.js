@@ -237,7 +237,7 @@ router.get('/', async (req, res, next) => {
     }
     const result = await pool.query(
       `SELECT e.id, e.client_id, e.email, e.name, e.role, e.phone,
-              e.site_id, e.external_employee_id, e.created_at, c.name AS client_name,
+              e.site_id, e.reports_to_id, e.external_employee_id, e.created_at, c.name AS client_name,
               s.name AS site_name
        FROM employees e
        JOIN clients c ON c.id = e.client_id
