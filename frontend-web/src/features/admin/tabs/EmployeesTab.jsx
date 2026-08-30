@@ -8,10 +8,12 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LockResetIcon from '@mui/icons-material/LockReset';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import apiClient from '../../../services/apiClient';
 import { useFetch } from '../components/useFetch';
 import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
 import { ResetPasswordDialog } from '../components/ResetPasswordDialog';
+import { ChangeRoleDialog } from '../components/ChangeRoleDialog';
 import { CopyButton } from '../components/CopyButton';
 import { EmployeeSyncWizardPage } from '../pages/EmployeeSyncWizardPage';
 import { useEmployeeSync } from '../hooks/useEmployeeSync';
@@ -71,6 +73,7 @@ export function EmployeesTab() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [resetTarget, setResetTarget] = useState(null);
+  const [changeRoleTarget, setChangeRoleTarget] = useState(null);
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -346,6 +349,16 @@ export function EmployeesTab() {
                       <TableCell>{e.site_name || '—'}</TableCell>
                       <TableCell>{new Date(e.created_at).toLocaleDateString('it-IT')}</TableCell>
                       <TableCell align="right">
+                        {['manager', 'senior_manager'].includes(e.role) && (
+                          <Tooltip title="Cambia ruolo">
+                            <IconButton
+                              size="small" color="primary" aria-label={`Cambia ruolo — ${e.name}`}
+                              onClick={() => setChangeRoleTarget(e)}
+                            >
+                              <SwapHorizIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                         <Tooltip title="Reset password">
                           <IconButton size="small" color="warning" onClick={() => setResetTarget(e)}>
                             <LockResetIcon fontSize="small" />
@@ -382,6 +395,15 @@ export function EmployeesTab() {
         <ResetPasswordDialog
           employee={resetTarget}
           onClose={() => setResetTarget(null)}
+        />
+      )}
+
+      {changeRoleTarget && (
+        <ChangeRoleDialog
+          employee={changeRoleTarget}
+          allEmployees={allEmployees}
+          onClose={() => setChangeRoleTarget(null)}
+          onSuccess={() => { reloadEmployees(); reloadAllEmployees(); }}
         />
       )}
     </Stack>

@@ -297,4 +297,14 @@ describe('EmployeesTab', () => {
 
     expect(approverField).not.toHaveTextContent(/Senior Manager Uno/i);
   });
+
+  it('shows the Cambia ruolo icon only for manager/senior_manager rows', () => {
+    render(<EmployeesTab />);
+    expect(screen.getByLabelText(/cambia ruolo — manager torino/i)).toBeInTheDocument();
+  });
+
+  it('does not show Cambia ruolo for employee/admin/director rows', () => {
+    render(<EmployeesTab />);
+    expect(screen.queryByLabelText(/cambia ruolo — direttore uno/i)).not.toBeInTheDocument();
+  });
 });
