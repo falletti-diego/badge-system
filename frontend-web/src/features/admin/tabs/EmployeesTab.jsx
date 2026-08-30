@@ -22,7 +22,7 @@ import { useEmployeeSync } from '../hooks/useEmployeeSync';
 // [{ field, message }, ...] }` with NO top-level `message` — so falling back straight to
 // err.message left the admin looking at a generic Axios string like "Request failed with status
 // code 400" (e.g. when submitting with no Sede selected). Surface the real reason instead.
-function extractErrorMessage(err) {
+export function extractErrorMessage(err) {
   const data = err.response?.data;
   if (data?.message) return data.message;
   if (Array.isArray(data?.details) && data.details.length > 0) {
@@ -33,6 +33,18 @@ function extractErrorMessage(err) {
   }
   return err.message;
 }
+
+export const ROLE_LABELS = {
+  employee: 'Dipendente',
+  manager: 'Manager',
+  senior_manager: 'Senior Manager',
+  director: 'Direttore',
+  admin: 'Admin',
+  viewer: 'Viewer',
+  superadmin: 'Superadmin',
+};
+
+const ROLE_CHIP_COLOR = { manager: 'primary', senior_manager: 'primary', director: 'primary' };
 
 export function EmployeesTab() {
   const { data: clients } = useFetch('/api/v1/admin/clients');
@@ -50,7 +62,7 @@ export function EmployeesTab() {
     client_id: '', email: '', name: '', phone: '',
     role: 'employee', site_id: '', password: '',
     external_employee_id: '', hiring_date: new Date().toISOString().slice(0, 10),
-    manager_id: '',
+    manager_id: '', reports_to_id: '',
   });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -80,6 +92,11 @@ export function EmployeesTab() {
   const availableManagers = allEmployees.filter(
     (e) => e.role === 'manager' && e.site_id === form.site_id && e.client_id === form.client_id
   );
+  const approverFieldDisabled = !['manager', 'senior_manager'].includes(form.role);
+  const availableApprovers = allEmployees.filter((e) =>
+    e.client_id === form.client_id
+    && ((form.role === 'manager' && ['senior_manager', 'director'].includes(e.role))
+      || (form.role === 'senior_manager' && e.role === 'director')));
   const matricolaInvalid = form.external_employee_id !== '' && !/^[A-Za-z0-9]*$/.test(form.external_employee_id);
   const managerFieldDisabled = form.role === 'manager' || !form.site_id;
   // Un dipendente deve sempre avere un manager di riferimento — la sede scelta
@@ -114,6 +131,7 @@ export function EmployeesTab() {
         ...(form.external_employee_id && { external_employee_id: form.external_employee_id }),
         ...(form.hiring_date && { hiring_date: form.hiring_date }),
         ...(form.manager_id && { manager_id: form.manager_id }),
+        ...(form.reports_to_id && { reports_to_id: form.reports_to_id }),
       };
       const res = await apiClient.post('/api/v1/admin/employees', payload);
       const emp = res.data.data;
@@ -123,7 +141,7 @@ export function EmployeesTab() {
         text: `Dipendente "${emp.name}" creato con successo.`,
         tempPwd,
       });
-      setForm({ ...form, email: '', name: '', phone: '', site_id: '', password: '', external_employee_id: '', manager_id: '' });
+      setForm({ ...form, email: '', name: '', phone: '', site_id: '', password: '', external_employee_id: '', manager_id: '', reports_to_id: '' });
       reloadEmployees();
       reloadAllEmployees();
     } catch (err) {
@@ -147,7 +165,7 @@ export function EmployeesTab() {
                   <Select
                     labelId="new-employee-client-label"
                     label="Cliente" value={form.client_id}
-                    onChange={(e) => setForm({ ...form, client_id: e.target.value, site_id: '', manager_id: '' })}
+                    onChange={(e) => setForm({ ...form, client_id: e.target.value, site_id: '', manager_id: '', reports_to_id: '' })}
                   >
                     {clients.map((c) => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
                   </Select>
@@ -170,10 +188,12 @@ export function EmployeesTab() {
                   <InputLabel id="new-employee-role-label">Ruolo</InputLabel>
                   <Select
                     labelId="new-employee-role-label"
-                    label="Ruolo" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value, manager_id: '' })}
+                    label="Ruolo" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value, manager_id: '', reports_to_id: '' })}
                   >
                     <MenuItem value="employee">Dipendente</MenuItem>
                     <MenuItem value="manager">Manager</MenuItem>
+                    <MenuItem value="senior_manager">Senior Manager</MenuItem>
+                    <MenuItem value="director">Direttore</MenuItem>
                   </Select>
                 </FormControl>
                 <FormControl size="small" required sx={{ minWidth: 180 }}>
@@ -211,16 +231,30 @@ export function EmployeesTab() {
                   size="small" sx={{ minWidth: 220 }}
                   disabled={managerFieldDisabled} required={form.role === 'employee'} error={managerMissing}
                 >
-                  <InputLabel id="new-employee-manager-label">Manager di riferimento</InputLabel>
+                  <InputLabel id="new-employee-manager-label">Manager di sede</InputLabel>
                   <Select
                     labelId="new-employee-manager-label"
-                    label="Manager di riferimento" value={form.manager_id}
+                    label="Manager di sede" value={form.manager_id}
                     onChange={(e) => setForm({ ...form, manager_id: e.target.value })}
                   >
                     {form.role !== 'employee' && <MenuItem value="">— nessuno —</MenuItem>}
                     {availableManagers.map((m) => <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>)}
                   </Select>
                   {managerHelperText && <FormHelperText>{managerHelperText}</FormHelperText>}
+                </FormControl>
+                <FormControl size="small" sx={{ minWidth: 240 }} disabled={approverFieldDisabled}>
+                  <InputLabel id="new-employee-reports-to-label">Approvatore richieste personali</InputLabel>
+                  <Select
+                    labelId="new-employee-reports-to-label"
+                    label="Approvatore richieste personali" value={form.reports_to_id}
+                    onChange={(e) => setForm({ ...form, reports_to_id: e.target.value })}
+                  >
+                    <MenuItem value="">— nessuno —</MenuItem>
+                    {availableApprovers.map((a) => <MenuItem key={a.id} value={a.id}>{a.name} ({ROLE_LABELS[a.role]})</MenuItem>)}
+                  </Select>
+                  <FormHelperText>
+                    Chi approva ferie, malattia e correzioni cartellino di questa persona — se vuoto, ricade sull&apos;admin.
+                  </FormHelperText>
                 </FormControl>
               </Stack>
               {msg && (
@@ -304,7 +338,7 @@ export function EmployeesTab() {
                     <TableRow key={e.id} hover>
                       <TableCell>{e.name}</TableCell>
                       <TableCell>{e.email}</TableCell>
-                      <TableCell><Chip label={e.role} size="small" color={e.role === 'manager' ? 'primary' : 'default'} /></TableCell>
+                      <TableCell><Chip label={ROLE_LABELS[e.role] || e.role} size="small" color={ROLE_CHIP_COLOR[e.role] || 'default'} /></TableCell>
                       <TableCell sx={{ color: e.external_employee_id ? 'inherit' : 'text.disabled' }}>
                         {e.external_employee_id || '—'}
                       </TableCell>
