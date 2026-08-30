@@ -531,6 +531,26 @@ const AdminEmployeeSchema = z.object({
 });
 
 // =====================================================
+// ADMIN — PATCH /api/admin/employees/:id/role
+// Solo promozioni (mai 'manager' come target — richiederebbe site_id, fuori
+// scope, vedi design spec 2026-08-30). La validazione "il target deve essere
+// strettamente superiore al ruolo ATTUALE del dipendente" dipende dal ruolo
+// corrente in DB, non validabile qui — applicata nella route.
+// =====================================================
+
+const AdminEmployeeRolePatchSchema = z.object({
+  params: z.object({
+    id: z.string().uuid('Invalid employee id: must be valid UUID'),
+  }),
+  body: z.object({
+    role: z.enum(['senior_manager', 'director'], {
+      errorMap: () => ({ message: 'role must be senior_manager or director' }),
+    }),
+    reports_to_id: z.string().uuid('reports_to_id must be a valid UUID').optional().nullable(),
+  }),
+});
+
+// =====================================================
 // ADMIN — POST /api/admin/viewers
 // =====================================================
 
@@ -728,6 +748,7 @@ module.exports = {
   AdminClientSchema,
   AdminSiteSchema,
   AdminEmployeeSchema,
+  AdminEmployeeRolePatchSchema,
   AdminViewerSchema,
   AdminSettingsSchema,
   GetPresencesSummarySchema,

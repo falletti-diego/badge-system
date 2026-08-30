@@ -206,4 +206,31 @@ describe('RBAC scoping: /api/v1/admin/employees', () => {
     expect(res.body.data.every((e) => e.client_id === clientB)).toBe(true);
     expect(res.body.data.length).toBeGreaterThan(0);
   });
+
+  it('GET /admin/employees: response includes reports_to_id', async () => {
+    if (!dbAvailable) return;
+    const directorResult = await pool.query(
+      `INSERT INTO employees (client_id, email, name, role, assigned_sites)
+       VALUES ($1, $2, 'Director', 'director', '{}')
+       RETURNING id`,
+      [clientA, uniqueEmail('employees-scoping-director')]
+    );
+    const directorId = directorResult.rows[0].id;
+    const smResult = await pool.query(
+      `INSERT INTO employees (client_id, email, name, role, assigned_sites, reports_to_id)
+       VALUES ($1, $2, 'Senior Manager', 'senior_manager', '{}', $3)
+       RETURNING id`,
+      [clientA, uniqueEmail('employees-scoping-sm'), directorId]
+    );
+
+    const token = tokenFor({ client_id: clientA, role: 'admin' });
+    const res = await request(app)
+      .get('/api/v1/admin/employees')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const smRow = res.body.data.find((e) => e.id === smResult.rows[0].id);
+    expect(smRow).toBeDefined();
+    expect(smRow.reports_to_id).toBe(directorId);
+  });
 });

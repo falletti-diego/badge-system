@@ -10,7 +10,7 @@ const { getRoleLevel } = require('../../utils/roles');
 const logger = require('../../utils/logger');
 const { logAudit } = require('../../middleware/audit');
 const { resolveTenantScope } = require('../../utils/tenantScope');
-const { AdminEmployeeSchema, createValidationMiddleware } = require('../../middleware/validation');
+const { AdminEmployeeSchema, AdminEmployeeRolePatchSchema, createValidationMiddleware } = require('../../middleware/validation');
 
 const router = express.Router();
 
@@ -18,6 +18,38 @@ function generateTempPassword() {
   const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const bytes = randomBytes(10);
   return Array.from(bytes, (b) => chars[b % chars.length]).join('');
+}
+
+/**
+ * Valida reports_to_id: deve puntare a un dipendente attivo dello stesso
+ * client, con role_level strettamente superiore a ownLevel — altrimenti la
+ * catena di approvazione sarebbe invertita o piatta. Se excludeId è passato
+ * (solo dal PATCH — alla creazione è strutturalmente impossibile, un
+ * dipendente nuovo non può ancora essere il reports_to_id di nessuno),
+ * rifiuta anche un ciclo diretto: l'approvatore scelto riporta già a
+ * excludeId. Lancia InvalidReportsToAssignmentError — il chiamante ha un
+ * try/catch che inoltra a next(err), mai un valore di ritorno "false".
+ */
+async function validateReportsTo({ reportsToId, clientId, ownLevel, excludeId = null }) {
+  if (!reportsToId) return;
+  const approverCheck = await pool.query(
+    'SELECT id, role, reports_to_id FROM employees WHERE id = $1 AND client_id = $2 AND active = true',
+    [reportsToId, clientId]
+  );
+  if (approverCheck.rows.length === 0) {
+    throw new InvalidReportsToAssignmentError();
+  }
+  if (excludeId && approverCheck.rows[0].reports_to_id === excludeId) {
+    throw new InvalidReportsToAssignmentError(
+      'reports_to_id would create a cycle — that employee already reports to this one'
+    );
+  }
+  const approverLevel = getRoleLevel(approverCheck.rows[0].role);
+  if (approverLevel <= ownLevel) {
+    throw new InvalidReportsToAssignmentError(
+      'reports_to_id must point to a strictly higher-level role than this employee'
+    );
+  }
 }
 
 router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, res, next) => {
@@ -61,27 +93,12 @@ router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, re
       }
     }
 
-    // Validazione server-side di reports_to_id: deve essere un dipendente
-    // attivo dello stesso client, con role_level strettamente superiore a
-    // quello del nuovo dipendente — altrimenti la catena di approvazione
-    // sarebbe invertita o piatta (es. un manager "approvato" da un altro
-    // manager pari livello).
-    if (data.reports_to_id) {
-      const approverCheck = await pool.query(
-        'SELECT id, role FROM employees WHERE id = $1 AND client_id = $2 AND active = true',
-        [data.reports_to_id, targetClientId]
-      );
-      if (approverCheck.rowCount === 0) {
-        return next(new InvalidReportsToAssignmentError());
-      }
-      const approverLevel = getRoleLevel(approverCheck.rows[0].role);
-      const ownLevel = getRoleLevel(data.role);
-      if (approverLevel <= ownLevel) {
-        return next(new InvalidReportsToAssignmentError(
-          'reports_to_id must point to a strictly higher-level role than this employee'
-        ));
-      }
-    }
+    // Validazione server-side di reports_to_id — vedi validateReportsTo() sopra.
+    await validateReportsTo({
+      reportsToId: data.reports_to_id,
+      clientId: targetClientId,
+      ownLevel: getRoleLevel(data.role),
+    });
 
     const tempPassword = data.password || generateTempPassword();
     const passwordHash = await hashPassword(tempPassword);
@@ -129,6 +146,77 @@ router.post('/', createValidationMiddleware(AdminEmployeeSchema), async (req, re
   }
 });
 
+router.patch('/:id/role', createValidationMiddleware(AdminEmployeeRolePatchSchema), async (req, res, next) => {
+  try {
+    const { id } = req.validated.params;
+    const data = req.validated.body;
+    const clientId = req.user.client_id;
+
+    const currentResult = await pool.query(
+      'SELECT id, role, reports_to_id FROM employees WHERE id = $1 AND client_id = $2 AND active = true',
+      [id, clientId]
+    );
+    if (currentResult.rows.length === 0) {
+      return next(new NotFoundError('Employee not found', 'EMPLOYEE_NOT_FOUND'));
+    }
+    const current = currentResult.rows[0];
+
+    // Solo manager/senior_manager hanno una promozione valida da qui — un
+    // director è il tappo terminale rispetto a questa azione (vedi design
+    // spec 2026-08-30, "Solo promozioni, nessuna retrocessione").
+    if (!['manager', 'senior_manager'].includes(current.role)) {
+      return next(new ValidationError(
+        'this employee\'s role cannot be changed via this action',
+        { field: 'role', code: 'ROLE_CHANGE_NOT_ALLOWED' }
+      ));
+    }
+
+    const currentLevel = getRoleLevel(current.role);
+    const targetLevel = getRoleLevel(data.role);
+    if (targetLevel <= currentLevel) {
+      return next(new ValidationError(
+        'role can only be promoted to a strictly higher level via this action',
+        { field: 'role', code: 'ROLE_NOT_A_PROMOTION' }
+      ));
+    }
+
+    // director non ha mai reports_to_id (è il tappo della gerarchia) —
+    // azzerato lato server indipendentemente da cosa arriva nel body,
+    // difesa in profondità oltre all'azzeramento automatico lato client.
+    const reportsToId = data.role === 'director' ? null : (data.reports_to_id || null);
+
+    await validateReportsTo({
+      reportsToId,
+      clientId,
+      ownLevel: targetLevel,
+      excludeId: id,
+    });
+
+    const result = await pool.query(
+      `UPDATE employees SET role = $1, reports_to_id = $2
+       WHERE id = $3 AND client_id = $4
+       RETURNING id, client_id, name, email, role, reports_to_id`,
+      [data.role, reportsToId, id, clientId]
+    );
+    const employee = result.rows[0];
+
+    await logAudit(pool, {
+      action: 'admin_change_employee_role',
+      entity: 'employee',
+      entityId: employee.id,
+      clientId: employee.client_id,
+      oldValue: { role: current.role, reports_to_id: current.reports_to_id },
+      newValue: { role: employee.role, reports_to_id: employee.reports_to_id },
+      userId: req.user.user_id,
+    }).catch(() => {});
+
+    logger.info({ action: 'admin_change_employee_role', employee_id: employee.id });
+    res.json({ success: true, data: employee });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/', async (req, res, next) => {
   try {
     const params = [];
@@ -149,7 +237,7 @@ router.get('/', async (req, res, next) => {
     }
     const result = await pool.query(
       `SELECT e.id, e.client_id, e.email, e.name, e.role, e.phone,
-              e.site_id, e.external_employee_id, e.created_at, c.name AS client_name,
+              e.site_id, e.reports_to_id, e.external_employee_id, e.created_at, c.name AS client_name,
               s.name AS site_name
        FROM employees e
        JOIN clients c ON c.id = e.client_id

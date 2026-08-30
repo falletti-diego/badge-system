@@ -11,6 +11,8 @@ const MOCK_SITES = [
 ];
 const MOCK_EMPLOYEES = [
   { id: 'mgr-1', name: 'Manager Torino', role: 'manager', site_id: 'site-1', client_id: 'client-1' },
+  { id: 'sm-1', name: 'Senior Manager Uno', role: 'senior_manager', client_id: 'client-1' },
+  { id: 'dir-1', name: 'Direttore Uno', role: 'director', client_id: 'client-1' },
 ];
 
 vi.mock('../components/useFetch', () => ({
@@ -52,7 +54,7 @@ describe('EmployeesTab', () => {
 
   it('renders Sede, Matricola, Data assunzione fields', () => {
     render(<EmployeesTab />);
-    expect(screen.getByRole('combobox', { name: /sede/i })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /^sede$/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/matricola/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/data assunzione/i)).toBeInTheDocument();
   });
@@ -65,7 +67,7 @@ describe('EmployeesTab', () => {
     await user.click(screen.getByLabelText(/^ruolo$/i));
     await user.click(screen.getByRole('option', { name: 'Manager' }));
 
-    expect(screen.getByRole('combobox', { name: /manager di riferimento/i })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('combobox', { name: /manager di sede/i })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByText(/i manager non hanno un manager di riferimento/i)).toBeInTheDocument();
   });
 
@@ -75,7 +77,7 @@ describe('EmployeesTab', () => {
     await user.click(screen.getByLabelText(/cliente/i));
     await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
 
-    expect(screen.getByRole('combobox', { name: /manager di riferimento/i })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('combobox', { name: /manager di sede/i })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByText(/seleziona prima una sede/i)).toBeInTheDocument();
   });
 
@@ -84,7 +86,7 @@ describe('EmployeesTab', () => {
     render(<EmployeesTab />);
     await user.click(screen.getByLabelText(/cliente/i));
     await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
-    await user.click(screen.getByRole('combobox', { name: /sede/i }));
+    await user.click(screen.getByRole('combobox', { name: /^sede$/i }));
     await user.click(screen.getByRole('option', { name: 'Sede Milano' }));
 
     expect(screen.getByText(/nessun manager assegnato a questa sede/i)).toBeInTheDocument();
@@ -95,10 +97,10 @@ describe('EmployeesTab', () => {
     render(<EmployeesTab />);
     await user.click(screen.getByLabelText(/cliente/i));
     await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
-    await user.click(screen.getByRole('combobox', { name: /sede/i }));
+    await user.click(screen.getByRole('combobox', { name: /^sede$/i }));
     await user.click(screen.getByRole('option', { name: 'Sede Torino' }));
 
-    const managerField = screen.getByRole('combobox', { name: /manager di riferimento/i });
+    const managerField = screen.getByRole('combobox', { name: /manager di sede/i });
     expect(managerField).not.toHaveAttribute('aria-disabled', 'true');
     await user.click(managerField);
     expect(screen.getByRole('option', { name: 'Manager Torino' })).toBeInTheDocument();
@@ -110,7 +112,7 @@ describe('EmployeesTab', () => {
 
     await user.click(screen.getByLabelText(/cliente/i));
     await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
-    await user.click(screen.getByRole('combobox', { name: /sede/i }));
+    await user.click(screen.getByRole('combobox', { name: /^sede$/i }));
     await user.click(screen.getByRole('option', { name: 'Sede Torino' })); // has a manager (mgr-1)
     await user.type(screen.getByRole('textbox', { name: /^nome/i }), 'Mario Rossi');
     await user.type(screen.getByRole('textbox', { name: /^email/i }), 'mario.rossi@example.com');
@@ -119,7 +121,7 @@ describe('EmployeesTab', () => {
     expect(submitButton).toBeDisabled();
     expect(screen.getByText(/seleziona un manager di riferimento/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('combobox', { name: /manager di riferimento/i }));
+    await user.click(screen.getByRole('combobox', { name: /manager di sede/i }));
     await user.click(screen.getByRole('option', { name: 'Manager Torino' }));
 
     expect(submitButton).toBeEnabled();
@@ -133,11 +135,11 @@ describe('EmployeesTab', () => {
     await user.click(screen.getByLabelText(/cliente/i));
     await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
 
-    await user.click(screen.getByRole('combobox', { name: /sede/i }));
+    await user.click(screen.getByRole('combobox', { name: /^sede$/i }));
     await user.click(screen.getByRole('option', { name: 'Sede Torino' }));
 
     // Still role=employee (default): pick a manager di riferimento.
-    await user.click(screen.getByRole('combobox', { name: /manager di riferimento/i }));
+    await user.click(screen.getByRole('combobox', { name: /manager di sede/i }));
     await user.click(screen.getByRole('option', { name: 'Manager Torino' }));
 
     // Now switch role to Manager — manager_id should be cleared.
@@ -216,11 +218,11 @@ describe('EmployeesTab', () => {
 
     await user.click(screen.getByLabelText(/cliente/i));
     await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
-    await user.click(screen.getByRole('combobox', { name: /sede/i }));
+    await user.click(screen.getByRole('combobox', { name: /^sede$/i }));
     await user.click(screen.getByRole('option', { name: 'Sede Torino' }));
     await user.type(screen.getByRole('textbox', { name: /^nome/i }), 'Mario Rossi');
     await user.type(screen.getByRole('textbox', { name: /^email/i }), 'mario.rossi@example.com');
-    await user.click(screen.getByRole('combobox', { name: /manager di riferimento/i }));
+    await user.click(screen.getByRole('combobox', { name: /manager di sede/i }));
     await user.click(screen.getByRole('option', { name: 'Manager Torino' }));
 
     await user.click(screen.getByRole('button', { name: /crea dipendente/i }));
@@ -229,5 +231,80 @@ describe('EmployeesTab', () => {
       expect(screen.getByText(/employees must have at least one assigned site/i)).toBeInTheDocument()
     );
     expect(screen.queryByText(/request failed with status code 400/i)).not.toBeInTheDocument();
+  });
+
+  it('shows Senior Manager and Direttore options in the role dropdown', async () => {
+    const user = userEvent.setup();
+    render(<EmployeesTab />);
+    await user.click(screen.getByRole('combobox', { name: /^ruolo$/i }));
+    expect(screen.getByRole('option', { name: 'Senior Manager' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Direttore' })).toBeInTheDocument();
+  });
+
+  it('disables Approvatore richieste personali when role is Dipendente', () => {
+    render(<EmployeesTab />);
+    expect(screen.getByRole('combobox', { name: /approvatore richieste personali/i })).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('enables Approvatore richieste personali and filters options when role is Manager', async () => {
+    const user = userEvent.setup();
+    render(<EmployeesTab />);
+    await user.click(screen.getByLabelText(/cliente/i));
+    await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
+    await user.click(screen.getByRole('combobox', { name: /^ruolo$/i }));
+    await user.click(screen.getByRole('option', { name: 'Manager' }));
+
+    const approverField = screen.getByRole('combobox', { name: /approvatore richieste personali/i });
+    expect(approverField).not.toHaveAttribute('aria-disabled', 'true');
+
+    await user.click(approverField);
+    expect(screen.getByRole('option', { name: /Senior Manager Uno/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Direttore Uno/i })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Manager Torino/i })).not.toBeInTheDocument();
+  });
+
+  it('shows only Direttore as an approver option when role is Senior Manager', async () => {
+    const user = userEvent.setup();
+    render(<EmployeesTab />);
+    await user.click(screen.getByLabelText(/cliente/i));
+    await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
+    await user.click(screen.getByRole('combobox', { name: /^ruolo$/i }));
+    await user.click(screen.getByRole('option', { name: 'Senior Manager' }));
+
+    const approverField = screen.getByRole('combobox', { name: /approvatore richieste personali/i });
+    await user.click(approverField);
+    expect(screen.getByRole('option', { name: /Direttore Uno/i })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Senior Manager Uno/i })).not.toBeInTheDocument();
+  });
+
+  it('clears reports_to_id when the role changes after a real approver was selected', async () => {
+    const user = userEvent.setup();
+    render(<EmployeesTab />);
+    await user.click(screen.getByLabelText(/cliente/i));
+    await user.click(screen.getByRole('option', { name: 'Cliente Test' }));
+    await user.click(screen.getByRole('combobox', { name: /^ruolo$/i }));
+    await user.click(screen.getByRole('option', { name: 'Manager' }));
+
+    const approverField = screen.getByRole('combobox', { name: /approvatore richieste personali/i });
+    await user.click(approverField);
+    await user.click(screen.getByRole('option', { name: /Senior Manager Uno/i }));
+    expect(approverField).toHaveTextContent(/Senior Manager Uno/i);
+
+    // Switch to a different role that keeps the field enabled — the stale approver
+    // selection must not silently persist (it may not even be a valid option anymore).
+    await user.click(screen.getByRole('combobox', { name: /^ruolo$/i }));
+    await user.click(screen.getByRole('option', { name: 'Senior Manager' }));
+
+    expect(approverField).not.toHaveTextContent(/Senior Manager Uno/i);
+  });
+
+  it('shows the Cambia ruolo icon only for manager/senior_manager rows', () => {
+    render(<EmployeesTab />);
+    expect(screen.getByLabelText(/cambia ruolo — manager torino/i)).toBeInTheDocument();
+  });
+
+  it('does not show Cambia ruolo for employee/admin/director rows', () => {
+    render(<EmployeesTab />);
+    expect(screen.queryByLabelText(/cambia ruolo — direttore uno/i)).not.toBeInTheDocument();
   });
 });
