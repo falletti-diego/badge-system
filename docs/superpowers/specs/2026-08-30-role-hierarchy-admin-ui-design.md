@@ -25,8 +25,8 @@ Nessun cliente reale usa oggi questi ruoli — questo lavoro è preparazione ant
 Dropdown Ruolo guadagna due voci: **Senior Manager**, **Direttore** (etichette italiane, valori DB invariati `senior_manager`/`director`).
 
 Nuovo campo **"Approvatore richieste personali"** (rinominato da "Riporta a" dopo l'analisi di intuitività — il nome originale rischiava confusione col campo "Manager" già esistente, ora rinominato "Manager di sede" per chiarezza):
-- Visibile solo quando il ruolo selezionato è `manager` o `senior_manager` (mirror esatto della visibilità condizionata già usata dal campo "Manager di sede").
-- Opzionale, con voce "— nessuno —" (ricade su admin in fase di risoluzione approvatore, comportamento già implementato in `resolveIsApprover`).
+- Stesso meccanismo del campo "Manager di sede" già esistente, non un meccanismo diverso: il campo resta **sempre renderizzato** nel form, e diventa `disabled` quando il ruolo selezionato è `director` (mai rimosso condizionalmente dal DOM) — per coerenza visiva tra i due campi "chi sta sopra di te" nello stesso form. Quando si disabilita, il suo valore viene **azzerato automaticamente** (`reports_to_id` riportato a `null` nello stato del form), non lasciato stantio in memoria pronto a essere inviato per sbaglio se l'admin cambia ruolo più volte prima di salvare.
+- Opzionale quando abilitato (ruolo `manager`/`senior_manager`), con voce "— nessuno —" (ricade su admin in fase di risoluzione approvatore, comportamento già implementato in `resolveIsApprover`).
 - Opzioni: riusa l'array `employees` già caricato in memoria dal componente (oggi usato per popolare `availableManagers`), filtrato per `role`:
   - ruolo selezionato `manager` → opzioni = `senior_manager` + `director` del client
   - ruolo selezionato `senior_manager` → opzioni = solo `director` del client
@@ -34,13 +34,13 @@ Nuovo campo **"Approvatore richieste personali"** (rinominato da "Riporta a" dop
 
 ### 2. Nuova azione "Cambia ruolo" — modifica di un dipendente esistente
 
-Icona nuova nella tabella dipendenti, stesso pattern visivo di Reset password/Elimina già esistenti. **Visibile solo su righe con ruolo `manager`, `senior_manager` o `director`** (non su `employee`/`viewer`/`admin`/`superadmin` — fuori scope).
+Icona nuova nella tabella dipendenti, stesso pattern visivo di Reset password/Elimina già esistenti. **Visibile solo su righe con ruolo `manager` o `senior_manager`** (non su `director` — nessuna transizione valida esiste per lui, vedi sotto; non su `employee`/`viewer`/`admin`/`superadmin` — fuori scope).
 
-Apre un dialog con 2 campi, stessa UX del form di creazione:
+**Solo promozioni, nessuna retrocessione.** Apre un dialog con 2 campi, stessa UX del form di creazione:
 - **Ruolo**: opzioni dipendono dal ruolo attuale della riga —
-  - da `manager`: `senior_manager`, `director` (sola promozione, mai ritorno a `manager` da qui — vedi Non-Goals)
-  - da `senior_manager`: `director` (promozione) — `manager` escluso
-  - da `director`: `senior_manager` (retrocessione, sicura: nessuno dei due ha bisogno di `site_id`) — `manager` escluso
+  - da `manager`: `senior_manager`, `director`
+  - da `senior_manager`: `director`
+- `director` è un tappo terminale rispetto a questa azione: nessuna via di rientro a `senior_manager`/`manager` da qui. Non è un limite tecnico ma una scelta deliberata di scope — una retrocessione `director→senior_manager` introdurrebbe un rischio distinto (un altro dipendente potrebbe già avere `reports_to_id` puntato a questo director, e la retrocessione lo lascerebbe a riportare a un pari grado, violando l'invariante "approvatore di livello strettamente superiore" su una riga diversa da quella modificata — nessun meccanismo esistente, incluso il vincolo FK `ON DELETE SET NULL`, la intercetta trattandosi di un `UPDATE`, non di una cancellazione). Se un domani servirà una via di rientro, richiederà una spec dedicata con quel controllo.
 - **Approvatore richieste personali**: stessa logica di visibilità/filtro del form di creazione, applicata al ruolo *risultante* selezionato nel dialog, con due aggiunte necessarie solo qui (assenti in creazione perché strutturalmente impossibili per un dipendente nuovo):
   - **Esclusione di sé stesso** dalle opzioni.
   - **Controllo anti-ciclo**: se l'opzione scelta come nuovo approvatore ha, a sua volta, `reports_to_id` che punta esattamente al dipendente che si sta modificando, il salvataggio è bloccato con un messaggio esplicito ("X riporta già a questa persona — creerebbe un ciclo"). Controllo a un solo salto, coerente con il disegno single-hop già documentato in `resolveIsApprover` (nessun attraversamento multi-livello previsto).
@@ -54,10 +54,11 @@ Pre-compilazione del dialog con i valori correnti (`role`, `reports_to_id`) del 
 Nuovo endpoint stretto in `backend/src/routes/admin/employees.js`, mounted sotto la stessa protezione admin-only già esistente per l'intero router. Body: `{ role, reports_to_id }`.
 
 Validazione:
-- `role` deve essere uno tra `manager`/`senior_manager`/`director` — stesso enum Zod del form di creazione.
+- `role` deve essere uno tra `senior_manager`/`director` (mai `manager`, mai lo stesso ruolo attuale) — target ristretto alle sole promozioni valide dal ruolo attuale del dipendente (vedi sezione 2).
+- Rifiuta esplicitamente qualunque transizione che non sia una promozione (incluso `role: 'manager'` come target) con un messaggio dedicato (non un generico "invalid role") — coerente col Non-Goal sopra e con la scelta di non contemplare retrocessioni in questa spec.
 - Riusa (fattorizzata in un helper condiviso tra `POST /` e questo endpoint, non duplicata — Pattern 4 di `CLAUDE.md`) la stessa validazione server-side già scritta per `reports_to_id` in creazione: deve puntare a un dipendente esistente dello stesso client con `role_level` strettamente superiore.
+- Se il target è `director`, `reports_to_id` viene forzato a `null` lato server indipendentemente da cosa arriva nel body (difesa in profondità oltre all'azzeramento automatico lato client — vedi sezione 1).
 - Nuovo controllo anti-ciclo (vedi sopra), lato server oltre che lato UI — la UI filtra le opzioni proattivamente, il server resta l'autorità fail-closed nel caso di chiamata diretta all'API.
-- Rifiuta esplicitamente `role: 'manager'` come target con un messaggio dedicato (non un generico "invalid role") — coerente col Non-Goal sopra.
 
 Side-effect: voce di audit log (`logAudit`, pattern esistente — `admin_change_employee_role`, `oldValue`/`newValue` con `role`+`reports_to_id`), stesso stile già usato da `DELETE /:id` in questo stesso file.
 
@@ -71,11 +72,12 @@ Il `Chip` che mostra il ruolo in tabella usa oggi il valore raw (`e.role`) — a
 
 ## Testing
 
-- **Backend**: nuovo file o estensione di `admin-employees-role-hierarchy.test.js` (già esistente da Session 116) — casi per `PATCH /:id/role`: transizioni valide (manager→senior_manager, senior_manager↔director), `manager` rifiutato come target, ciclo rifiutato, `reports_to_id` verso ruolo pari/inferiore rifiutato (riuso della validazione esistente), audit log scritto, `GET /` include `reports_to_id`.
-- **Frontend**: estensione di `EmployeesTab.test.jsx` — creazione Senior Manager/Direttore con e senza approvatore, visibilità condizionata dei campi, filtro corretto delle opzioni per ruolo (sia in creazione che nel dialog di modifica), dialog "Cambia ruolo" non visibile su righe employee/admin/viewer, pre-compilazione corretta dei valori esistenti.
+- **Backend**: nuovo file o estensione di `admin-employees-role-hierarchy.test.js` (già esistente da Session 116) — casi per `PATCH /:id/role`: transizioni valide (manager→senior_manager, manager→director, senior_manager→director), qualunque retrocessione rifiutata (incluso verso `manager`), ciclo rifiutato, `reports_to_id` verso ruolo pari/inferiore rifiutato (riuso della validazione esistente), `reports_to_id` forzato a `null` quando il target è `director` anche se il body ne invia uno, audit log scritto, `GET /` include `reports_to_id`.
+- **Frontend**: estensione di `EmployeesTab.test.jsx` — creazione Senior Manager/Direttore con e senza approvatore, campo "Approvatore" disabilitato (non rimosso) e azzerato quando il ruolo è `director`, filtro corretto delle opzioni per ruolo (sia in creazione che nel dialog di modifica), dialog "Cambia ruolo" non visibile su righe `director`/employee/admin/viewer, pre-compilazione corretta dei valori esistenti.
 
 ## Rischi noti / lavoro futuro (non bloccanti)
 
 - Wizard Excel non esteso (vedi Non-Goals) — da riprendere se un cliente reale lo richiede.
 - Nessun controllo contro l'orfanaggio di una sede (pre-esistente, condiviso con `DELETE`).
 - Nessuna notifica al dipendente quando il proprio approvatore cambia.
+- **Nessuna via di retrocessione** (`director→senior_manager`, o qualunque ritorno a un livello inferiore) tramite questa azione — scelta deliberata, non un oversight: una retrocessione richiederebbe verificare che nessun altro dipendente abbia `reports_to_id` puntato al dipendente che si sta retrocedendo (altrimenti quel terzo dipendente si ritroverebbe a riportare a un pari grado, invariante violata su una riga diversa da quella modificata) — un controllo non banale, rimandato a una spec dedicata se mai servirà davvero. Oggi l'unica via per "annullare" una promozione è disattivare e ricreare il dipendente.
