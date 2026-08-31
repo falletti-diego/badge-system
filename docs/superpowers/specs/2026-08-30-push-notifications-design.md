@@ -67,7 +67,7 @@ Il progetto è interamente Expo managed workflow (EAS Build, EAS Update/OTA, `ex
 CREATE TABLE device_push_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  client_id UUID NOT NULL,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
   token TEXT NOT NULL UNIQUE,
   platform TEXT NOT NULL CHECK (platform IN ('ios', 'android')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -75,6 +75,8 @@ CREATE TABLE device_push_tokens (
 );
 CREATE INDEX idx_device_push_tokens_employee_id ON device_push_tokens(employee_id);
 ```
+
+`client_id` con FK esplicita verso `clients(id)`, non un `UUID NOT NULL` nudo come `audit_log.client_id`/`notifications.client_id` (entrambi senza FK). Segue invece il precedente più recente e più rigoroso `checkins.client_id REFERENCES clients(id) ON DELETE CASCADE` (migration 030, introdotta esplicitamente come isolamento tenant "mandatory") — nessuna ragione per introdurre una tabella nuova sul precedente più debole quando quello più stretto esiste già nel repo.
 
 - **Multi-device per dipendente**: righe multiple con lo stesso `employee_id`, una per device — un invio push va a tutti i token registrati.
 - **`client_id` denormalizzato**: coerente col pattern di isolamento tenant già usato ovunque nel progetto (`checkins`, `audit_log`, `notifications` stessa) — ogni query di invio filtra esplicitamente per `client_id`, non si affida solo al JOIN via `employee_id`.
@@ -84,12 +86,16 @@ CREATE INDEX idx_device_push_tokens_employee_id ON device_push_tokens(employee_i
 
 `POST /api/notifications/push-token` (auth richiesta), body `{ token: string, platform: 'ios'|'android' }`, upsert come sopra usando `req.user.employee_id`/`req.user.client_id`. Se `req.user.employee_id` è assente (account senza profilo dipendente collegato — stesso caso già gestito in `checkins.js` con `CHECKIN_NO_EMPLOYEE_PROFILE`), la registrazione va rifiutata con lo stesso pattern fail-closed, non ignorata silenziosamente. Nessun endpoint di rimozione esplicita in questo scope (l'upsert su riassegnazione copre il caso reale; un `DELETE` esplicito al logout non ha beneficio pratico dato che il device resta associato allo stesso dipendente nella stragrande maggioranza dei casi — smartphone personale, non condiviso).
 
+**Pulizia alla disattivazione del dipendente**: `DELETE FROM device_push_tokens WHERE employee_id = $1` aggiunto a `DELETE /api/admin/employees/:id` (`admin/employees.js` — oggi fa solo `UPDATE employees SET active = false, exit_date = ...`, un soft-delete che non tocca nient'altro, coerente col comportamento già noto per `manager_id`/`reports_to_id` di altri dipendenti che restano appesi a un manager disattivato). Un token push è dato personale legato a un device fisico di un individuo — a differenza di un FK interno come `manager_id`, ha un profilo GDPR più diretto (minimizzazione dati); costa una riga di codice in più e chiude un gap reale invece di lasciarlo silenzioso. Nessun impatto pratico nell'immediato (un dipendente disattivato non genera più eventi che chiamano `notifyEmployee`), ma il token resterebbe altrimenti in tabella indefinitamente senza motivo.
+
 ### 9. Helper condiviso unico lato backend
 
-Nuovo modulo `backend/src/utils/pushNotifications.js`, funzione `notifyEmployee(client, { employeeId, clientId, type, inAppMessage, pushTitle, pushBody, ...extra })` che fa, in un solo posto:
-1. `INSERT INTO notifications` (stesso schema/comportamento di oggi — `inAppMessage` va nella colonna `message`).
+Nuovo modulo `backend/src/utils/pushNotifications.js`, funzione `notifyEmployee({ employeeId, clientId, type, inAppMessage, pushTitle, pushBody, ...extra })` — **nessun parametro `client`/connessione**: il modulo importa `pool` direttamente (stesso pattern di `utils/email.js`), sempre eseguito **fuori** da qualunque transazione, chiamato dalle tre route solo **dopo** che `withTransaction(...)` è già tornato con successo (stesso punto esatto in cui `shifts.js` scrive oggi la sua notifica — "outside transaction" — quindi `leaves.js`/`events.js` allineano la loro chiamata subito dopo `const result = await withTransaction(...)`, non dentro il callback). Questo evita un'ambiguità reale: un `client` transazionale passato per errore avrebbe fatto sì che un fallimento della *sola* parte di invio potesse propagarsi come eccezione non gestita dentro il callback di `withTransaction`, causando un `ROLLBACK` dell'intera approvazione per colpa di un problema di rete verso Expo — esattamente il tipo di accoppiamento che la spec vuole escludere.
+
+`notifyEmployee` fa, in un solo posto:
+1. `INSERT INTO notifications` (stesso schema/comportamento di oggi — `inAppMessage` va nella colonna `message`) — **awaited**, per garantire che la riga in-app sia scritta in modo affidabile prima di rispondere.
 2. Lookup dei token attivi per quell'`employee_id`+`client_id` in `device_push_tokens`.
-3. Invio a Expo Push Service (via `expo-server-sdk`) per ciascun token trovato.
+3. Invio a Expo Push Service (via `expo-server-sdk`) per ciascun token trovato — **non awaited** dal chiamante (vedi punto 12 sotto per il motivo).
 
 Tutto dentro lo stesso `try/catch` best-effort già collaudato in `shifts.js` — un fallimento di invio push (o l'assenza di token) non deve mai far fallire un salvataggio turno o un'approvazione ferie/evento. Le tre route (`shifts.js`, `leaves.js`, `events.js`) chiamano solo questa funzione — zero duplicazione della logica di invio.
 
@@ -116,12 +122,36 @@ Il cambio turno resta specifico perché l'informazione ("nuovo turno assegnato")
 - Una nuova submission TestFlight prima della produzione
 - Reinstallazione sui device di test — non applicabile via OTA a un'app già installata
 
-## Rischi noti / lavoro futuro (deliberatamente fuori scope, documentati non nascosti)
+### 12. Il salvataggio turni non deve rallentare per colpa dell'invio push
 
-- **Nessun receipt-checking Expo**: un token invalido (app disinstallata) non viene mai ripulito automaticamente. Ogni evento tenterà comunque l'invio, fallendo silenziosamente nel `try/catch` best-effort — nessun impatto funzionale sull'operazione principale, ma la tabella `device_push_tokens` accumulerà righe morte nel tempo, e un fallimento **sistemico** (es. credenziali FCM sbagliate) sarebbe invisibile senza guardare i log applicativi. Da rivalutare con un job dedicato quando il volume di dipendenti reali lo giustifica.
-- **Rollout non istantaneo**: a differenza di ogni feature mobile recente (tutte via OTA), questa richiede che ogni dipendente aggiorni manualmente l'app dallo store. Irrilevante oggi con soli device di test; da comunicare esplicitamente come aspettativa quando ci sarà un cliente pilota reale con i telefoni dei propri dipendenti — nessun meccanismo di force-update/version-check esiste nel codice mobile (verificato: nessun riferimento in tutto `frontend-mobile/src/`).
-- **Nessuno strumento diagnostico admin**: quando un dipendente segnala "non mi arrivano le notifiche", oggi nessuno (Dataxiom o l'admin cliente) ha un modo rapido di verificare se esiste un token registrato per lui, se non con una query diretta sul DB. Da valutare un piccolo strumento (anche solo una voce nel runbook) quando servirà davvero.
-- **Cronologia in-app assente**: una notifica ignorata/persa (es. telefono in tasca durante il turno) non è più recuperabile in app. Accettato per tenere lo scope snello; se un cliente reale segnala frizione su questo, è il candidato naturale per un secondo giro (riuso diretto di `GET /api/notifications`, già esistente).
+`shifts.js` scrive oggi una notifica per **ogni cella turno cambiata** dentro un doppio `for...of` con `await pool.query(...)` sequenziale, PRIMA di rispondere al manager (verificato leggendo il codice reale, righe 347-368) — accettabile oggi perché ogni iterazione è un semplice INSERT locale (pochi millisecondi). Se `notifyEmployee` aggiungesse lì dentro una chiamata HTTPS *awaited* verso Expo per ogni cella, un salvataggio di un piano turni per un negozio con 15-20 dipendenti (facilmente 30-50 celle cambiate in un mese) potrebbe far salire il tempo di risposta da pochi millisecondi a diversi secondi, sequenzialmente — una regressione di prestazioni reale su una feature già in produzione, introdotta da una feature che nominalmente non la riguarda.
+
+**Decisione:** la parte 3 di `notifyEmployee` (invio Expo) **non viene mai attesa (`await`) dal chiamante** — viene avviata e lasciata risolvere in background, con un `.catch()` interno che logga senza propagare mai un unhandled rejection. La parte 1 (insert `notifications`) resta invece sincrona/awaited, perché economica e perché è quella che garantisce la consistenza immediata già richiesta oggi. Il tempo di risposta di `POST /shifts` (e delle approvazioni ferie/eventi) resta quindi invariato rispetto a oggi, indipendentemente da quanti dipendenti hanno un push da ricevere.
+
+## Rischi noti / lavoro futuro
+
+### Risolti in questa revisione (analisi critica pre-piano)
+
+Questi 4 punti erano gap reali nella prima stesura della spec, corretti qui direttamente invece di essere solo documentati:
+
+| # | Gap trovato | Correzione applicata |
+|---|---|---|
+| — | `notifyEmployee(client, {...})` — un client transazionale passato per errore avrebbe potuto far fallire (ROLLBACK) un'intera approvazione per un problema di rete verso Expo | Decisione 9: nessun parametro `client`, sempre fuori transazione, chiamato dopo `withTransaction()` |
+| — | `device_push_tokens.client_id UUID NOT NULL` senza FK, sul precedente più debole (`audit_log`/`notifications`) invece di quello più rigoroso già nel repo (`checkins`) | Decisione 7: `REFERENCES clients(id) ON DELETE CASCADE`, come `checkins.client_id` |
+| — | Nessuna pulizia di `device_push_tokens` alla disattivazione di un dipendente — dato personale legato a un device fisico lasciato indefinitamente in tabella | Decisione 8: `DELETE FROM device_push_tokens` aggiunto a `DELETE /api/admin/employees/:id` |
+| — | Invio push *awaited* dentro il loop sequenziale già esistente di `shifts.js` — rischio concreto di rallentare di diversi secondi il salvataggio di un piano turni ampio | Decisione 12: l'invio Expo non viene mai atteso dal chiamante (fire-and-forget con log interno) |
+
+### Residui, deliberatamente fuori scope — per gravità
+
+Nessuno di questi blocca l'inizio del piano; il primo (🟠) va verificato **prima** di scrivere il codice, non durante.
+
+| Gravità | Rischio | Impatto se si manifesta | Mitigazione / trigger per riaffrontarlo |
+|---|---|---|---|
+| 🟠 **Medio** | Prerequisito Firebase/FCM (+ eventuale Expo access token) non ancora verificato contro la documentazione Expo corrente, né creato | Se scoperto a metà piano, blocca l'implementazione del Task Android a metà lavoro invece che all'inizio | Verificarlo come primo task del piano di implementazione, prima di scrivere qualunque codice — non assunto, controllato |
+| 🟠 **Medio** | Nessun receipt-checking Expo: token invalidi non vengono mai ripuliti; un fallimento **sistemico** (es. credenziali FCM sbagliate) resta visibile solo nei log applicativi, non in un segnale esplicito | Le notifiche potrebbero smettere di funzionare del tutto per un cliente reale senza che nessuno se ne accorga finché un dipendente non si lamenta | Job di receipt-checking dedicato, quando il volume di dipendenti reali lo giustifica |
+| 🟡 **Basso** | Nessuno strumento diagnostico admin ("questo dipendente ha un token registrato?") | Supporto più lento quando un cliente segnala "non ricevo notifiche" — richiede una query diretta sul DB | Piccolo strumento (anche solo una voce nel runbook) quando servirà davvero |
+| 🟡 **Basso** | Cronologia in-app assente — una notifica ignorata/persa (telefono in tasca durante il turno) non è più recuperabile | Frizione per il dipendente in scenari di bassa attenzione al telefono — nessuna perdita di dati, solo di visibilità | Riuso diretto di `GET /api/notifications`, già esistente, se un cliente reale lo richiede esplicitamente |
+| 🟢 **Molto basso** | Rollout non istantaneo: nessun meccanismo di force-update/version-check nel codice mobile (verificato: nessun riferimento in `frontend-mobile/src/`) | Irrilevante oggi (solo device di test); il giorno di un cliente pilota reale, l'adozione della feature dipenderà da quanti dipendenti hanno aggiornato l'app dallo store | Comunicare esplicitamente come aspettativa al primo cliente pilota, non un fix di codice |
 
 ## Compatibilità / rollback
 
