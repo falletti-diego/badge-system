@@ -142,10 +142,131 @@ psql "$DATABASE_URL" -c "\d device_push_tokens"
 
 Expected: colonne `id, employee_id, client_id, token, platform, created_at, updated_at`; vincolo `device_push_tokens_employee_id_fkey` su `employees(id)` e `device_push_tokens_client_id_fkey` su `clients(id)`, entrambi `ON DELETE CASCADE`; `CHECK` su `platform`; indice su `employee_id`.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Scrivere un test automatizzato sui vincoli reali della tabella (non solo `\d`)**
+
+Uno schema verificato a occhio con `\d` può comunque avere un vincolo che si comporta diversamente da quanto atteso (es. un `ON DELETE CASCADE` scritto ma non applicato per un errore di sintassi silenzioso in una migrazione precedente incollata male). Questo test lo verifica eseguendo davvero le operazioni, non solo leggendo lo schema.
+
+**Files:**
+- Create: `backend/src/__tests__/migration-043-device-push-tokens.test.js`
+
+```js
+'use strict';
+
+/**
+ * Verifica i vincoli reali di device_push_tokens (CASCADE, UNIQUE, CHECK) —
+ * non solo che la migrazione sia applicata, ma che si comporti come
+ * dichiarato. Real Postgres, ogni riga scoped a un client_id creato da
+ * QUESTO test (CLAUDE.md Pattern 5).
+ */
+
+const { Pool } = require('pg');
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://localhost/badge_system_test',
+});
+
+afterAll(async () => {
+  await pool.end();
+});
+
+async function createClientAndEmployee(suffix) {
+  const clientResult = await pool.query(
+    `INSERT INTO clients (name, email) VALUES ($1, $2) RETURNING id`,
+    [`Migration 043 Test ${suffix}`, `migration043-${suffix}@example.com`]
+  );
+  const clientId = clientResult.rows[0].id;
+  const empResult = await pool.query(
+    `INSERT INTO employees (client_id, email, name, role, password_hash, active)
+     VALUES ($1::uuid, $2, 'Migration Test Employee', 'employee', 'x', true) RETURNING id`,
+    [clientId, `migration043-emp-${suffix}@example.com`]
+  );
+  return { clientId, employeeId: empResult.rows[0].id };
+}
+
+describe('device_push_tokens constraints', () => {
+  it('cascades delete when the employee is deleted', async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const { clientId, employeeId } = await createClientAndEmployee(suffix);
+    try {
+      await pool.query(
+        `INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, 'ios')`,
+        [employeeId, clientId, `ExponentPushToken[cascade-emp-${suffix}]`]
+      );
+
+      await pool.query('DELETE FROM employees WHERE id = $1::uuid', [employeeId]);
+
+      const row = await pool.query('SELECT id FROM device_push_tokens WHERE employee_id = $1::uuid', [employeeId]);
+      expect(row.rows).toHaveLength(0);
+    } finally {
+      await pool.query('DELETE FROM clients WHERE id = $1', [clientId]);
+    }
+  });
+
+  it('cascades delete when the client is deleted', async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const { clientId, employeeId } = await createClientAndEmployee(suffix);
+    try {
+      await pool.query(
+        `INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, 'android')`,
+        [employeeId, clientId, `ExponentPushToken[cascade-client-${suffix}]`]
+      );
+
+      await pool.query('DELETE FROM clients WHERE id = $1::uuid', [clientId]);
+
+      const row = await pool.query('SELECT id FROM device_push_tokens WHERE client_id = $1::uuid', [clientId]);
+      expect(row.rows).toHaveLength(0);
+    } finally {
+      await pool.query('DELETE FROM clients WHERE id = $1', [clientId]).catch(() => {});
+    }
+  });
+
+  it('rejects a duplicate token (UNIQUE constraint)', async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const { clientId, employeeId } = await createClientAndEmployee(suffix);
+    const token = `ExponentPushToken[unique-${suffix}]`;
+    try {
+      await pool.query(
+        `INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, 'ios')`,
+        [employeeId, clientId, token]
+      );
+
+      await expect(pool.query(
+        `INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, 'ios')`,
+        [employeeId, clientId, token]
+      )).rejects.toThrow(/duplicate key/);
+    } finally {
+      await pool.query('DELETE FROM clients WHERE id = $1', [clientId]);
+    }
+  });
+
+  it('rejects a platform value outside ios/android (CHECK constraint)', async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const { clientId, employeeId } = await createClientAndEmployee(suffix);
+    try {
+      await expect(pool.query(
+        `INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, 'windows-phone')`,
+        [employeeId, clientId, `ExponentPushToken[check-${suffix}]`]
+      )).rejects.toThrow(/violates check constraint/);
+    } finally {
+      await pool.query('DELETE FROM clients WHERE id = $1', [clientId]);
+    }
+  });
+});
+```
+
+Eseguire e verificare che passi (la tabella esiste già dallo Step 2, quindi qui non c'è una fase "rosso" — questo test verifica un vincolo dichiarativo, non un comportamento applicativo da scrivere):
 
 ```bash
-git add backend/migrations/043_create_device_push_tokens.sql
+cd backend
+npx jest src/__tests__/migration-043-device-push-tokens.test.js
+```
+
+Expected: PASS, 4 test. Se uno di questi fallisse, la migrazione allo Step 1 ha un errore nonostante `\d` sembri corretto — non proseguire finché non è verde.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add backend/migrations/043_create_device_push_tokens.sql backend/src/__tests__/migration-043-device-push-tokens.test.js
 git commit -m "feat: add device_push_tokens table for push notifications"
 ```
 
@@ -304,6 +425,88 @@ describe('utils/pushNotifications.notifyEmployee', () => {
     // No assertion needed beyond "test process didn't crash from an unhandled
     // rejection" — Jest fails the run on those automatically.
   });
+
+  it('scopes the token lookup to both employee_id AND client_id (tenant isolation)', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await notifyEmployee({
+      employeeId: 'emp-1', clientId: 'client-1', type: 'shift_updated',
+      inAppMessage: 'x', pushTitle: 'x', pushBody: 'x',
+    });
+
+    expect(mockQuery).toHaveBeenNthCalledWith(2,
+      expect.stringContaining('WHERE employee_id = $1::uuid AND client_id = $2::uuid'),
+      ['emp-1', 'client-1']
+    );
+  });
+
+  it('filters out a malformed token before calling Expo (never sends garbage upstream)', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ token: 'not-a-real-expo-token' }, { token: 'ExponentPushToken[valid]' }] });
+    mockSendPushNotificationsAsync.mockResolvedValue([{ status: 'ok' }]);
+
+    await notifyEmployee({
+      employeeId: 'emp-1', clientId: 'client-1', type: 'shift_updated',
+      inAppMessage: 'x', pushTitle: 'x', pushBody: 'x',
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mockChunkPushNotifications).toHaveBeenCalledWith([
+      expect.objectContaining({ to: 'ExponentPushToken[valid]' }),
+    ]);
+  });
+
+  it('skips the Expo call entirely when every registered token is malformed', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ token: 'garbage' }] });
+
+    await notifyEmployee({
+      employeeId: 'emp-1', clientId: 'client-1', type: 'shift_updated',
+      inAppMessage: 'x', pushTitle: 'x', pushBody: 'x',
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mockSendPushNotificationsAsync).not.toHaveBeenCalled();
+  });
+
+  it('sends one request per chunk when Expo returns multiple chunks (>100 tokens)', async () => {
+    const manyTokens = Array.from({ length: 150 }, (_, i) => ({ token: `ExponentPushToken[t${i}]` }));
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: manyTokens });
+    // Real Expo.chunkPushNotifications caps a chunk at 100 messages — simulate
+    // that behavior here instead of the default single-chunk mock.
+    mockChunkPushNotifications.mockImplementationOnce((messages) => [messages.slice(0, 100), messages.slice(100)]);
+    mockSendPushNotificationsAsync.mockResolvedValue([{ status: 'ok' }]);
+
+    await notifyEmployee({
+      employeeId: 'emp-1', clientId: 'client-1', type: 'shift_updated',
+      inAppMessage: 'x', pushTitle: 'x', pushBody: 'x',
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mockSendPushNotificationsAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('passes null shift fields through unchanged for a non-shift notification type (schema compatibility)', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await notifyEmployee({
+      employeeId: 'emp-1', clientId: 'client-1', type: 'leave_approved',
+      inAppMessage: 'x', pushTitle: 'x', pushBody: 'x',
+    });
+
+    expect(mockQuery).toHaveBeenNthCalledWith(1,
+      expect.stringContaining('INSERT INTO notifications'),
+      ['emp-1', 'client-1', 'leave_approved', 'x', null, null, null]
+    );
+  });
 });
 ```
 
@@ -428,7 +631,7 @@ cd backend
 npx jest src/__tests__/pushNotifications.test.js
 ```
 
-Expected: PASS, 5 test.
+Expected: PASS, 11 test.
 
 - [ ] **Step 5: Commit**
 
@@ -581,6 +784,51 @@ describe('POST /api/notifications/push-token', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('rejects a request missing the token field', async () => {
+    const res = await request(app)
+      .post('/api/notifications/push-token')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ platform: 'ios' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a request missing the platform field', async () => {
+    const res = await request(app)
+      .post('/api/notifications/push-token')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ token: 'ExponentPushToken[test-eee]' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('ignores any client_id sent in the body — always uses the authenticated employee\'s own client_id (tenant isolation)', async () => {
+    const suffix3 = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const otherClientResult = await pool.query(
+      `INSERT INTO clients (name, email) VALUES ($1, $2) RETURNING id`,
+      [`Other Client ${suffix3}`, `other-client-${suffix3}@example.com`]
+    );
+    const otherClientId = otherClientResult.rows[0].id;
+
+    try {
+      const res = await request(app)
+        .post('/api/notifications/push-token')
+        .set('Authorization', `Bearer ${authToken}`)
+        // A malicious or buggy client could try to send someone else's
+        // client_id — the endpoint must never trust it.
+        .send({ token: 'ExponentPushToken[test-fff]', platform: 'ios', client_id: otherClientId });
+
+      expect(res.status).toBe(200);
+      const row = await pool.query(
+        `SELECT client_id FROM device_push_tokens WHERE token = $1`,
+        ['ExponentPushToken[test-fff]']
+      );
+      expect(row.rows[0].client_id).toBe(clientId); // authToken's own client, not otherClientId
+    } finally {
+      await pool.query('DELETE FROM clients WHERE id = $1', [otherClientId]);
+    }
+  });
 });
 ```
 
@@ -655,7 +903,7 @@ cd backend
 npx jest src/__tests__/notifications-push-token.test.js
 ```
 
-Expected: PASS, 4 test.
+Expected: PASS, 7 test.
 
 - [ ] **Step 5: Commit**
 
@@ -716,9 +964,19 @@ it('deletes any registered push tokens when deactivating an employee', async () 
   const row = await pool.query('SELECT id FROM device_push_tokens WHERE employee_id = $1::uuid', [employeeId]);
   expect(row.rows).toHaveLength(0);
 });
+
+it('deactivates an employee with no registered push tokens without error (idempotency)', async () => {
+  // Nessun INSERT in device_push_tokens qui — copre il caso più comune (un
+  // dipendente che non ha mai installato la build con push abilitato).
+  const res = await request(app)
+    .delete(`/api/admin/employees/${employeeId}`)
+    .set('Authorization', `Bearer ${adminToken}`);
+
+  expect(res.status).toBe(200);
+});
 ```
 
-Adattare i nomi delle variabili (`employeeId`, `clientId`, `adminToken`, `app`, `pool`) a quelli già in uso in quel file — non introdurre un secondo schema di setup.
+Adattare i nomi delle variabili (`employeeId`, `clientId`, `adminToken`, `app`, `pool`) a quelli già in uso in quel file — non introdurre un secondo schema di setup. Se il file usa lo stesso `employeeId` in entrambi i test sopra, verificare che non sia già stato disattivato dal primo test (usare un `employeeId` distinto per il secondo, creato nello stesso `beforeEach`/`it`, se il file non ricrea il dipendente ad ogni test).
 
 - [ ] **Step 3: Eseguire il test e verificare che fallisca prima della Step 1, poi passi dopo**
 
@@ -766,17 +1024,29 @@ git commit -m "feat: delete device push tokens on employee deactivation (GDPR)"
         // sincrona esattamente come il vecchio pool.query diretto (design
         // spec, decisione 9 e 12: solo l'invio Expo è fire-and-forget,
         // l'insert in-app resta affidabile).
-        await notifyEmployee({
-          employeeId: empId,
-          clientId,
-          type: 'shift_updated',
-          inAppMessage: message,
-          pushTitle: 'Turno aggiornato',
-          pushBody: message,
-          shiftDate: date,
-          newShift,
-          siteId,
-        });
+        //
+        // try/catch mantenuto qui (era già presente attorno al vecchio
+        // pool.query diretto, prima di questa modifica) come difesa in
+        // profondità: notifyEmployee è documentata per non lanciare mai,
+        // ma se lo facesse per un bug futuro, un salvataggio turni già
+        // COMMITTATO sul DB non deve tornare un 500 al manager solo per un
+        // problema nella notifica — lo stesso principio già applicato
+        // all'audit log qui sopra (Step 5).
+        try {
+          await notifyEmployee({
+            employeeId: empId,
+            clientId,
+            type: 'shift_updated',
+            inAppMessage: message,
+            pushTitle: 'Turno aggiornato',
+            pushBody: message,
+            shiftDate: date,
+            newShift,
+            siteId,
+          });
+        } catch (notifErr) {
+          logger.warn({ action: 'notification_create_error', error: notifErr.message, empId, date });
+        }
       }
     }
 ```
@@ -836,7 +1106,78 @@ npx jest <file-trovato> -t "does not await the Expo push send"
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Aggiungere due test di regressione mirati sul comportamento cella-per-cella**
+
+Nello stesso file:
+
+```js
+it('does not write a notification for a shift cell that did not change', async () => {
+  // Primo salvataggio: stabilisce lo stato "vecchio".
+  await request(app)
+    .put(`/api/shifts/${siteId}/${month}/${year}`)
+    .set('Authorization', `Bearer ${managerToken}`)
+    .send({ shifts_data: { [employeeId]: { '2026-09-03': 'm' } } });
+
+  const before = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM notifications WHERE employee_id = $1::uuid AND type = 'shift_updated'`,
+    [employeeId]
+  );
+
+  // Secondo salvataggio con lo STESSO valore per la stessa cella: non deve
+  // generare una seconda notifica (oldShift === newShift, riga 351 del file
+  // sorgente resta invariata da questa modifica).
+  await request(app)
+    .put(`/api/shifts/${siteId}/${month}/${year}`)
+    .set('Authorization', `Bearer ${managerToken}`)
+    .send({ shifts_data: { [employeeId]: { '2026-09-03': 'm' } } });
+
+  const after = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM notifications WHERE employee_id = $1::uuid AND type = 'shift_updated'`,
+    [employeeId]
+  );
+
+  expect(after.rows[0].count).toBe(before.rows[0].count);
+});
+
+it('writes one notification per employee when multiple employees change shifts in the same save', async () => {
+  const res = await request(app)
+    .put(`/api/shifts/${siteId}/${month}/${year}`)
+    .set('Authorization', `Bearer ${managerToken}`)
+    .send({
+      shifts_data: {
+        [employeeId]: { '2026-09-10': 'p' },
+        [employeeId2]: { '2026-09-10': 's' },
+      },
+    });
+
+  expect(res.status).toBe(200);
+
+  const notifEmp1 = await pool.query(
+    `SELECT id FROM notifications WHERE employee_id = $1::uuid AND shift_date = '2026-09-10'`,
+    [employeeId]
+  );
+  const notifEmp2 = await pool.query(
+    `SELECT id FROM notifications WHERE employee_id = $1::uuid AND shift_date = '2026-09-10'`,
+    [employeeId2]
+  );
+  expect(notifEmp1.rows.length).toBeGreaterThanOrEqual(1);
+  expect(notifEmp2.rows.length).toBeGreaterThanOrEqual(1);
+});
+```
+
+Se il file non ha già un secondo dipendente fixture (`employeeId2`), crearne uno nello stesso `beforeEach`/setup del file, seguendo lo stesso schema già usato per `employeeId`.
+
+- [ ] **Step 7: Eseguire e verificare che passino**
+
+```bash
+cd backend
+npx jest <file-trovato> -t "does not write a notification for a shift cell"
+npx jest <file-trovato> -t "writes one notification per employee"
+```
+
+Expected: PASS, 2 test.
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add backend/src/routes/shifts.js backend/src/__tests__/<file-trovato>.test.js
@@ -875,20 +1216,31 @@ con:
 
     // Fuori transazione, per design (decisione 9 della spec): un problema
     // di rete verso Expo non deve mai poter far fallire un'approvazione già
-    // committata sul DB.
-    const period = `dal ${new Date(result.start_date).toLocaleDateString('it-IT')} al ${new Date(result.end_date).toLocaleDateString('it-IT')}`;
-    const isApproved = result.status === 'APPROVED';
-    const reasonSuffix = !isApproved && rejection_reason ? ` (${rejection_reason})` : '';
-    await notifyEmployee({
-      employeeId: result.user_id,
-      clientId,
-      type: isApproved ? 'leave_approved' : 'leave_rejected',
-      inAppMessage: `Richiesta ferie ${period} ${isApproved ? 'approvata' : 'rifiutata' + reasonSuffix}.`,
-      pushTitle: 'Richiesta ferie',
-      pushBody: isApproved
-        ? 'La tua richiesta è stata approvata. Apri l\'app per i dettagli.'
-        : 'La tua richiesta è stata rifiutata. Apri l\'app per i dettagli.',
-    });
+    // committata sul DB. try/catch esplicito qui come difesa in profondità
+    // — notifyEmployee è documentata per non lanciare mai, ma se lo
+    // facesse per un bug futuro, il manager deve comunque ricevere 200 per
+    // un'approvazione già scritta sul DB, non un 500 fuorviante.
+    try {
+      const period = `dal ${new Date(result.start_date).toLocaleDateString('it-IT')} al ${new Date(result.end_date).toLocaleDateString('it-IT')}`;
+      const isApproved = result.status === 'APPROVED';
+      const reasonSuffix = !isApproved && rejection_reason ? ` (${rejection_reason})` : '';
+      // ATTENZIONE (decisione 10 della spec): pushBody NON deve mai
+      // includere rejection_reason — può rivelare un dato sensibile
+      // (es. motivo di salute) su un lock screen visibile a chiunque. Solo
+      // inAppMessage, mai visto fuori dall'app sbloccata, può includerlo.
+      await notifyEmployee({
+        employeeId: result.user_id,
+        clientId,
+        type: isApproved ? 'leave_approved' : 'leave_rejected',
+        inAppMessage: `Richiesta ferie ${period} ${isApproved ? 'approvata' : 'rifiutata' + reasonSuffix}.`,
+        pushTitle: 'Richiesta ferie',
+        pushBody: isApproved
+          ? 'La tua richiesta è stata approvata. Apri l\'app per i dettagli.'
+          : 'La tua richiesta è stata rifiutata. Apri l\'app per i dettagli.',
+      });
+    } catch (notifErr) {
+      logger.warn({ action: 'notification_create_error', error: notifErr.message, leave_request_id: result.id });
+    }
 
     logger.info({
 ```
@@ -952,7 +1304,85 @@ npx jest <file-trovato> -t "writes an in-app notification"
 
 Expected: PASS, 2 test.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Aggiungere un test end-to-end che mocka `expo-server-sdk` per verificare che il corpo del push non contenga mai il motivo del rifiuto (decisione 10 della spec, privacy)**
+
+Nello stesso file di test, aggiungere in cima (prima di `require('../app')`):
+
+```js
+const mockChunkPushNotifications = jest.fn((messages) => [messages]);
+const mockSendPushNotificationsAsync = jest.fn().mockResolvedValue([{ status: 'ok' }]);
+jest.mock('expo-server-sdk', () => ({
+  Expo: Object.assign(
+    jest.fn().mockImplementation(() => ({
+      chunkPushNotifications: (...args) => mockChunkPushNotifications(...args),
+      sendPushNotificationsAsync: (...args) => mockSendPushNotificationsAsync(...args),
+    })),
+    { isExpoPushToken: () => true }
+  ),
+}));
+```
+
+Poi il test:
+
+```js
+it('never includes the rejection reason in the push body, even though it is present in-app (privacy, decisione 10)', async () => {
+  await pool.query(
+    `INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, 'ios')`,
+    [employeeId, clientId, `ExponentPushToken[privacy-test-${Date.now()}]`]
+  );
+  mockChunkPushNotifications.mockClear();
+
+  const res = await request(app)
+    .put(`/api/v1/leave/${leaveRequestId3}/approve`)
+    .set('Authorization', `Bearer ${managerToken}`)
+    .send({ status: 'REJECTED', rejection_reason: 'Motivo di salute riservato' });
+
+  expect(res.status).toBe(200);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  expect(mockChunkPushNotifications).toHaveBeenCalledWith([
+    expect.objectContaining({
+      body: expect.not.stringContaining('Motivo di salute riservato'),
+    }),
+  ]);
+});
+
+it('never sends a push notification to the approving manager — only the requesting employee (Non-Goal della spec)', async () => {
+  await pool.query(
+    `INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, 'ios')`,
+    [managerEmployeeId, clientId, `ExponentPushToken[manager-${Date.now()}]`]
+  );
+  mockChunkPushNotifications.mockClear();
+
+  const res = await request(app)
+    .put(`/api/v1/leave/${leaveRequestId4}/approve`)
+    .set('Authorization', `Bearer ${managerToken}`)
+    .send({ status: 'APPROVED' });
+
+  expect(res.status).toBe(200);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  // Solo l'employee_id della richiesta va notificato — mai il manager che approva.
+  const managerToken2 = await pool.query(`SELECT token FROM device_push_tokens WHERE employee_id = $1::uuid`, [managerEmployeeId]);
+  expect(mockChunkPushNotifications).not.toHaveBeenCalledWith(
+    expect.arrayContaining([expect.objectContaining({ to: managerToken2.rows[0].token })])
+  );
+});
+```
+
+Adattare `leaveRequestId3`, `leaveRequestId4`, `managerEmployeeId` (l'`employee_id` collegato all'account manager, se esiste in questo schema — se il manager di test non ha un `employee_id` proprio, verificare con `grep -n "manager" <file-trovato>` come il file rappresenta il manager, e adattare il test di conseguenza senza inventare una riga `employees` che il resto del file non usa) alle fixture del file.
+
+- [ ] **Step 7: Eseguire e verificare che passino**
+
+```bash
+cd backend
+npx jest <file-trovato> -t "never includes the rejection reason"
+npx jest <file-trovato> -t "never sends a push notification to the approving manager"
+```
+
+Expected: PASS, 2 test.
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add backend/src/routes/leaves.js backend/src/__tests__/<file-trovato>.test.js
@@ -988,19 +1418,28 @@ con:
 ```js
     });
 
-    const eventDateFormatted = new Date(result.event_date).toLocaleDateString('it-IT');
-    const isApproved = result.status === 'APPROVED';
-    const reasonSuffix = !isApproved && rejection_reason ? ` (${rejection_reason})` : '';
-    await notifyEmployee({
-      employeeId: result.user_id,
-      clientId,
-      type: isApproved ? 'event_approved' : 'event_rejected',
-      inAppMessage: `Richiesta evento del ${eventDateFormatted} ${isApproved ? 'approvata' : 'rifiutata' + reasonSuffix}.`,
-      pushTitle: 'Richiesta evento',
-      pushBody: isApproved
-        ? 'La tua richiesta è stata approvata. Apri l\'app per i dettagli.'
-        : 'La tua richiesta è stata rifiutata. Apri l\'app per i dettagli.',
-    });
+    // try/catch esplicito come difesa in profondità (stesso principio di
+    // leaves.js Task 8) — un'eccezione qui non deve mai trasformare
+    // un'approvazione già committata in un 500 per il manager.
+    try {
+      const eventDateFormatted = new Date(result.event_date).toLocaleDateString('it-IT');
+      const isApproved = result.status === 'APPROVED';
+      const reasonSuffix = !isApproved && rejection_reason ? ` (${rejection_reason})` : '';
+      // ATTENZIONE (decisione 10 della spec): pushBody NON deve mai
+      // includere rejection_reason, per lo stesso motivo di leaves.js.
+      await notifyEmployee({
+        employeeId: result.user_id,
+        clientId,
+        type: isApproved ? 'event_approved' : 'event_rejected',
+        inAppMessage: `Richiesta evento del ${eventDateFormatted} ${isApproved ? 'approvata' : 'rifiutata' + reasonSuffix}.`,
+        pushTitle: 'Richiesta evento',
+        pushBody: isApproved
+          ? 'La tua richiesta è stata approvata. Apri l\'app per i dettagli.'
+          : 'La tua richiesta è stata rifiutata. Apri l\'app per i dettagli.',
+      });
+    } catch (notifErr) {
+      logger.warn({ action: 'notification_create_error', error: notifErr.message, event_request_id: result.id });
+    }
 
     logger.info({
       action: 'event_request_approved',
@@ -1028,7 +1467,44 @@ npx jest <file-trovato> -t "writes an in-app notification"
 
 Expected: PASS, 2 test.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Aggiungere lo stesso test di privacy del Task 8 (push body senza rejection_reason)**
+
+Stesso schema del Task 8 Step 6 (mock `expo-server-sdk`, verifica che `chunkPushNotifications` non riceva mai il `rejection_reason` nel `body`), adattato a `PUT /api/v1/events/:id/approve` e a un `eventRequestId` di questo file.
+
+```js
+it('never includes the rejection reason in the push body for a rejected event (privacy, decisione 10)', async () => {
+  await pool.query(
+    `INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, 'ios')`,
+    [employeeId, clientId, `ExponentPushToken[privacy-event-test-${Date.now()}]`]
+  );
+  mockChunkPushNotifications.mockClear();
+
+  const res = await request(app)
+    .put(`/api/v1/events/${eventRequestId}/approve`)
+    .set('Authorization', `Bearer ${managerToken}`)
+    .send({ status: 'REJECTED', rejection_reason: 'Copertura sede insufficiente quel giorno' });
+
+  expect(res.status).toBe(200);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  expect(mockChunkPushNotifications).toHaveBeenCalledWith([
+    expect.objectContaining({
+      body: expect.not.stringContaining('Copertura sede insufficiente quel giorno'),
+    }),
+  ]);
+});
+```
+
+- [ ] **Step 7: Eseguire e verificare che passi**
+
+```bash
+cd backend
+npx jest <file-trovato> -t "never includes the rejection reason in the push body for a rejected event"
+```
+
+Expected: PASS, 1 test.
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add backend/src/routes/events.js backend/src/__tests__/<file-trovato>.test.js
@@ -1223,8 +1699,40 @@ describe('pushNotificationsService', () => {
     expect(result).toEqual({ granted: false, canAskAgain: true });
     expect(Notifications.getExpoPushTokenAsync).not.toHaveBeenCalled();
   });
+
+  it('does not throw and still reports granted:true when getExpoPushTokenAsync itself rejects (e.g. no network, missing EAS project id)', async () => {
+    Notifications.getPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true });
+    Notifications.getExpoPushTokenAsync.mockRejectedValue(new Error('Network request failed'));
+
+    await expect(pushNotificationsService.registerForPushNotifications()).resolves.toEqual({ granted: true, canAskAgain: true });
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when setNotificationChannelAsync itself rejects on Android', async () => {
+    const RN = require('react-native');
+    RN.Platform.OS = 'android';
+    Notifications.getPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true });
+    Notifications.setNotificationChannelAsync.mockRejectedValue(new Error('channel error'));
+
+    await expect(pushNotificationsService.registerForPushNotifications()).resolves.toEqual({ granted: true, canAskAgain: true });
+    RN.Platform.OS = 'ios'; // restore default for other tests in this file
+  });
+
+  it('does not attempt to create an Android notification channel on iOS', async () => {
+    const RN = require('react-native');
+    RN.Platform.OS = 'ios';
+    Notifications.getPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true });
+    Notifications.getExpoPushTokenAsync.mockResolvedValue({ data: 'ExponentPushToken[xxxx]' });
+    mockPost.mockResolvedValue({ data: { success: true } });
+
+    await pushNotificationsService.registerForPushNotifications();
+
+    expect(Notifications.setNotificationChannelAsync).not.toHaveBeenCalled();
+  });
 });
 ```
+
+**Nota per l'engineer:** i due test che manipolano `RN.Platform.OS` presumono che `react-native`'s `Platform` sia mutabile a runtime nell'ambiente Jest di questo progetto (comune con `jest-expo`, ma verificare con `grep -n "Platform.OS =" frontend-mobile/src/__tests__/*.test.jsx` se esiste già un altro file che lo fa, e riusare lo stesso approccio esatto — se il progetto usa invece `jest.mock('react-native', ...)` con un oggetto `Platform` dedicato, adattare questi due test a quel pattern anziché alla mutazione diretta).
 
 - [ ] **Step 3: Eseguire il test e verificare che fallisca**
 
@@ -1295,19 +1803,27 @@ async function registerForPushNotifications() {
     return { granted: false, canAskAgain };
   }
 
-  await ensureAndroidChannel();
-
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-  const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
-
+  // Tutto da qui in poi (canale Android, ottenimento token, invio al
+  // backend) è avvolto in un unico try/catch: il permesso di sistema è già
+  // stato concesso a questo punto, quindi la funzione non deve MAI
+  // rigettare per un problema successivo (rete assente, EAS project id
+  // mancante in un build di sviluppo, timeout Expo, ecc.) — un errore non
+  // gestito qui diventerebbe una unhandled promise rejection nel
+  // chiamante (RootNavigator), che non lo cattura a sua volta (decisione 5
+  // della spec: comportamento sempre silenzioso).
   try {
+    await ensureAndroidChannel();
+
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+
     await apiClient.post(ENDPOINTS.NOTIFICATIONS_PUSH_TOKEN, {
       token,
       platform: Platform.OS,
     });
   } catch (err) {
     // Best-effort — il dipendente ha comunque concesso il permesso lato OS,
-    // un fallimento di rete nella registrazione non deve bloccare nulla.
+    // un fallimento qui (rete, token, canale) non deve bloccare nulla.
     // Un prossimo avvio dell'app (o toggle in Impostazioni) può ritentare.
   }
 
@@ -1324,7 +1840,7 @@ cd frontend-mobile
 npx jest src/__tests__/pushNotificationsService.test.js
 ```
 
-Expected: PASS, 4 test.
+Expected: PASS, 7 test.
 
 - [ ] **Step 6: Verificare il `projectId` reale in `app.json`**
 
@@ -1623,7 +2139,27 @@ it('does not show the dialog again once the flag is already set', async () => {
   await new Promise((resolve) => setImmediate(resolve));
   expect(queryByText('🔔 Notifiche')).toBeNull();
 });
+
+it('does not crash and still persists the "shown" flag if pushNotificationsService unexpectedly rejects (defense in depth)', async () => {
+  // pushNotificationsService.registerForPushNotifications è documentata per
+  // non lanciare mai (Task 12) — questo test protegge comunque il
+  // chiamante da una futura regressione di quel contratto: un dialog
+  // accettato con successo non deve mai risultare in una unhandled
+  // rejection o in un flag non salvato.
+  AsyncStorage.getItem.mockResolvedValue(null);
+  secureAuthStorage.getUser.mockResolvedValue({ role: 'employee' });
+  pushNotificationsService.registerForPushNotifications.mockRejectedValue(new Error('unexpected'));
+
+  const { findByText } = render(<RootNavigator />);
+  const acceptButton = await findByText('Attiva');
+
+  await expect(fireEvent.press(acceptButton)).not.toThrow();
+  await new Promise((resolve) => setImmediate(resolve));
+  expect(AsyncStorage.setItem).toHaveBeenCalledWith(STORAGE_KEYS.PUSH_CONSENT_DIALOG_SHOWN, 'true');
+});
 ```
+
+Aggiungere `jest.mock('../services/pushNotificationsService', () => ({ registerForPushNotifications: jest.fn().mockResolvedValue({ granted: true, canAskAgain: true }) }));` in cima al file di test, se non già presente dal Task 14 Step 4, così l'ultimo test può sovrascriverne il comportamento con `.mockRejectedValue(...)` senza toccare la rete reale.
 
 Adattare i mock di `AsyncStorage`/`secureAuthStorage` alle convenzioni già in uso in quel file di test (probabile `jest.mock('@react-native-async-storage/async-storage', ...)` già presente).
 
@@ -1824,3 +2360,9 @@ eas submit --platform ios --latest
 **Scan placeholder:** nessun "TBD"/"TODO" lasciato aperto nel codice dei task — le uniche note "adattare a variabili esistenti" sono istruzioni esplicite per l'engineer su file che il piano non può leggere in anteprima esatta (nomi di variabili di test già scritti da altri), non omissioni di logica.
 
 **Coerenza dei tipi:** `notifyEmployee({ employeeId, clientId, type, inAppMessage, pushTitle, pushBody, shiftDate, newShift, siteId })` usato in modo identico in Task 4 (definizione), 7 (shifts.js), 8 (leaves.js), 9 (events.js) — stessa firma ovunque. `pushNotificationsService.registerForPushNotifications()` restituisce sempre `{ granted, canAskAgain }`, usato coerentemente in Task 12 (definizione/test) e Task 14 (chiamante).
+
+**Rinforzo test (revisione post-approvazione, su richiesta esplicita "riduci il rischio di bug/rotture di dipendenze"):** rilette tutte le 17 task con occhio a due categorie di gap, non solo alla copertura funzionale:
+
+1. **Vincoli/contratti dichiarati ma mai eseguiti da un test.** Aggiunti: un file di test dedicato ai vincoli reali di `device_push_tokens` (CASCADE su employee/client, UNIQUE sul token, CHECK su platform — Task 2 Step 4); scoping `employee_id`+`client_id` della query di lookup token (Task 4); filtro `Expo.isExpoPushToken` su token malformati, incluso il caso "tutti malformati → zero chiamate a Expo" (Task 4); chunking reale con >100 token (Task 4); validazione dei campi mancanti e verifica che il body non possa forzare un `client_id` di un altro tenant (Task 5); idempotenza della pulizia GDPR su un dipendente senza token (Task 6); skip di una cella turno invariata e notifiche multiple per dipendenti diversi nello stesso salvataggio (Task 7); che il corpo del push non contenga mai il motivo di rifiuto anche quando il messaggio in-app lo include — verificato end-to-end mockando `expo-server-sdk` (Task 8/9, decisione 10 della spec); che il manager che approva non riceva mai lui stesso una notifica (Task 8, Non-Goal esplicito della spec); che l'app non tenti di creare un canale Android su iOS (Task 12).
+
+2. **Punti dove un fallimento imprevisto di una dipendenza esterna si sarebbe propagato oltre il confine previsto dalla spec, nonostante il contratto "non lancia mai" fosse solo dichiarato in un commento.** Corretti direttamente nel codice del piano, non solo documentati: `shifts.js`/`leaves.js`/`events.js` avevano perso (nella riscrittura per usare `notifyEmployee`) il `try/catch` che il codice originale aveva attorno all'INSERT diretto — reintrodotto attorno a ogni chiamata, così un'eccezione imprevista in `notifyEmployee` non trasforma mai un salvataggio/un'approvazione già committata sul DB in un 500 fuorviante per l'utente (Task 7/8/9). Lato mobile, `pushNotificationsService.registerForPushNotifications()` lasciava `getExpoPushTokenAsync`/`setNotificationChannelAsync` fuori dal try/catch: un fallimento di rete o un canale Android che rigetta sarebbe diventato una unhandled rejection nel chiamante (`RootNavigator`), che non la cattura — corretto includendo tutta la sequenza post-permesso in un unico try/catch, con test dedicati per entrambi i fallimenti (Task 12) e un test di difesa in profondità sul chiamante stesso, in caso questo contratto regredisse in futuro (Task 14).
