@@ -268,6 +268,13 @@ router.delete('/:id', async (req, res, next) => {
     if (result.rowCount === 0) return next(new NotFoundError('Employee not found', 'EMPLOYEE_NOT_FOUND'));
 
     const emp = result.rows[0];
+
+    // GDPR data minimization: un token push è dato personale legato a un
+    // device fisico di un individuo — non ha motivo di restare in tabella
+    // dopo che il dipendente è stato disattivato (design spec 2026-08-30,
+    // decisione 8).
+    await pool.query('DELETE FROM device_push_tokens WHERE employee_id = $1::uuid', [emp.id]);
+
     await logAudit(pool, {
       action: 'admin_deactivate_employee',
       entity: 'employee',

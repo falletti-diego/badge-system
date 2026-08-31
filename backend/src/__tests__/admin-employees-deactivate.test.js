@@ -121,4 +121,51 @@ describe('DELETE /api/v1/admin/employees/:id — soft deactivation (Task 4)', ()
 
     await pool.query('DELETE FROM employees WHERE id = $1', [employeeId]);
   });
+
+  it('deletes any registered push tokens when deactivating an employee', async () => {
+    if (!dbAvailable) return;
+    const employeeId = await makeEmployee(clientId, 'Has Push Token');
+
+    try {
+      await pool.query(
+        `INSERT INTO device_push_tokens (employee_id, client_id, token, platform)
+         VALUES ($1::uuid, $2::uuid, $3, 'ios')`,
+        [employeeId, clientId, `ExponentPushToken[cleanup-test-${Date.now()}]`]
+      );
+
+      const token = tokenFor({ client_id: clientId, role: 'admin' });
+      const res = await request(app)
+        .delete(`/api/v1/admin/employees/${employeeId}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+
+      const row = await pool.query(
+        'SELECT id FROM device_push_tokens WHERE employee_id = $1::uuid',
+        [employeeId]
+      );
+      expect(row.rows).toHaveLength(0);
+    } finally {
+      await pool.query('DELETE FROM device_push_tokens WHERE employee_id = $1', [employeeId]);
+      await pool.query('DELETE FROM employees WHERE id = $1', [employeeId]);
+    }
+  });
+
+  it('deactivates an employee with no registered push tokens without error (idempotency)', async () => {
+    if (!dbAvailable) return;
+    // Nessun INSERT in device_push_tokens qui — copre il caso più comune (un
+    // dipendente che non ha mai installato la build con push abilitato).
+    const employeeId = await makeEmployee(clientId, 'No Push Token');
+
+    try {
+      const token = tokenFor({ client_id: clientId, role: 'admin' });
+      const res = await request(app)
+        .delete(`/api/v1/admin/employees/${employeeId}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+    } finally {
+      await pool.query('DELETE FROM employees WHERE id = $1', [employeeId]);
+    }
+  });
 });
