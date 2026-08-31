@@ -6,11 +6,18 @@
 
 const express = require('express');
 const pino = require('pino');
+const { z } = require('zod');
 const { pool } = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
+const { ForbiddenError, ValidationError } = require('../utils/errors');
 
 const router = express.Router();
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
+
+const PushTokenSchema = z.object({
+  token: z.string().min(10).max(512),
+  platform: z.enum(['ios', 'android']),
+});
 
 // =====================================================
 // GET /api/notifications — Employee's notifications
@@ -67,6 +74,46 @@ router.put('/read-all', requireAuth, async (req, res, next) => {
     logger.info({ action: 'notifications_marked_read', employee_id: userEmployeeId, updated: result.rowCount });
 
     res.json({ success: true, updated: result.rowCount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =====================================================
+// POST /api/notifications/push-token — Register/upsert a device push token
+// =====================================================
+
+router.post('/push-token', requireAuth, async (req, res, next) => {
+  const userEmployeeId = req.user.employee_id;
+  const clientId = req.user.client_id;
+
+  try {
+    if (!userEmployeeId) {
+      throw new ForbiddenError(
+        'Your account has no employee profile — cannot register a push token',
+        'PUSH_TOKEN_NO_EMPLOYEE_PROFILE'
+      );
+    }
+
+    const parsed = PushTokenSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError('Invalid push token payload', parsed.error.flatten());
+    }
+    const { token, platform } = parsed.data;
+
+    await pool.query(
+      `INSERT INTO device_push_tokens (employee_id, client_id, token, platform)
+       VALUES ($1::uuid, $2::uuid, $3, $4)
+       ON CONFLICT (token) DO UPDATE
+         SET employee_id = EXCLUDED.employee_id,
+             client_id = EXCLUDED.client_id,
+             platform = EXCLUDED.platform,
+             updated_at = NOW()`,
+      [userEmployeeId, clientId, token, platform]
+    );
+
+    logger.info({ action: 'push_token_registered', employee_id: userEmployeeId, platform });
+    res.json({ success: true });
   } catch (err) {
     next(err);
   }
