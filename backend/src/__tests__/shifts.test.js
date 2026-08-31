@@ -41,14 +41,25 @@ jest.mock('../middleware/db-transaction', () => ({
   }),
 }));
 
+// Mocked wholesale (not just the underlying `expo-server-sdk` import it pulls
+// in transitively) so shift-save tests can assert exactly which employees a
+// save notified without also having to stage `device_push_tokens`
+// SELECT/Expo-client mock queues for every changed cell — that behavior is
+// already covered in pushNotifications.test.js.
+jest.mock('../utils/pushNotifications', () => ({
+  notifyEmployee: jest.fn().mockResolvedValue(undefined),
+}));
+
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const app = require('../app');
 const { pool } = require('../db/pool');
+const { notifyEmployee } = require('../utils/pushNotifications');
 
 const CLIENT_ID = '550e8400-e29b-41d4-a716-446655440001';
 const SITE_ID   = '550e8400-e29b-41d4-a716-446655440010';
 const EMP_ID    = '550e8400-e29b-41d4-a716-446655440100';
+const EMP_ID_2  = '550e8400-e29b-41d4-a716-446655440101';
 const OTHER_SITE = '550e8400-e29b-41d4-a716-446655440099';
 
 beforeAll(() => { process.env.DISABLE_AUTH = 'false'; });
@@ -283,9 +294,10 @@ describe('POST /api/shifts/:siteId', () => {
       .mockResolvedValueOnce({ rows: [] })                            // existing shifts → none
       .mockResolvedValueOnce({ rows: [newRecord] })                   // INSERT
       .mockResolvedValueOnce({})                                       // COMMIT
-      .mockResolvedValueOnce({ rows: [{ id: 'audit-1' }] })           // audit log
-      .mockResolvedValueOnce({})                                       // notification emp/date 1
-      .mockResolvedValueOnce({});                                      // notification emp/date 2
+      .mockResolvedValueOnce({ rows: [{ id: 'audit-1' }] });          // audit log
+    // Notifications now go through the mocked notifyEmployee() helper
+    // (see jest.mock('../utils/pushNotifications') above), not a direct
+    // pool.query call — nothing to queue here for the 2 changed cells.
 
     const res = await request(app)
       .post(`/api/v1/shifts/${SITE_ID}`)
@@ -295,6 +307,7 @@ describe('POST /api/shifts/:siteId', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.id).toBe('shift-uuid-1');
     expect(res.body.message).toBe('Shifts planning saved successfully');
+    expect(notifyEmployee).toHaveBeenCalledTimes(2);
   });
 
   test('admin updates existing shift record → 200', async () => {
@@ -307,9 +320,7 @@ describe('POST /api/shifts/:siteId', () => {
       .mockResolvedValueOnce({ rows: [existing] })                    // existing shifts found
       .mockResolvedValueOnce({ rows: [updated] })                     // UPDATE
       .mockResolvedValueOnce({})                                       // COMMIT
-      .mockResolvedValueOnce({ rows: [{ id: 'audit-2' }] })           // audit log
-      .mockResolvedValueOnce({})                                       // notification (changed shift)
-      .mockResolvedValueOnce({});                                      // notification (new date)
+      .mockResolvedValueOnce({ rows: [{ id: 'audit-2' }] });          // audit log
 
     const res = await request(app)
       .post(`/api/v1/shifts/${SITE_ID}`)
@@ -318,6 +329,7 @@ describe('POST /api/shifts/:siteId', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.shifts_data).toEqual(shiftsPayload.shifts_data);
+    expect(notifyEmployee).toHaveBeenCalledTimes(2);
   });
 
   test('manager saves shifts for own site → 200', async () => {
@@ -331,8 +343,7 @@ describe('POST /api/shifts/:siteId', () => {
       .mockResolvedValueOnce({ rows: [] })                             // existing → none
       .mockResolvedValueOnce({ rows: [newRecord] })                    // INSERT
       .mockResolvedValueOnce({})                                        // COMMIT
-      .mockResolvedValueOnce({ rows: [{ id: 'audit-1' }] })           // audit log
-      .mockResolvedValueOnce({});                                       // notification (1 date)
+      .mockResolvedValueOnce({ rows: [{ id: 'audit-1' }] });          // audit log
 
     const res = await request(app)
       .post(`/api/v1/shifts/${SITE_ID}`)
@@ -386,5 +397,100 @@ describe('POST /api/shifts/:siteId', () => {
       .send({ month: 6 }); // missing year and shifts_data
 
     expect(res.status).toBe(400);
+  });
+
+  // =====================================================
+  // Push-notification wiring (Task 7 — notifyEmployee())
+  // =====================================================
+
+  test('does not slow the response down when saving many changed cells (design decision 12)', async () => {
+    const manyShifts = {};
+    for (let day = 1; day <= 25; day += 1) {
+      const dd = String(day).padStart(2, '0');
+      manyShifts[`2026-06-${dd}`] = 'm';
+    }
+    const manyCellsPayload = { month: 6, year: 2026, shifts_data: { [EMP_ID]: manyShifts } };
+    const newRecord = { id: 'shift-uuid-many', shifts_data: manyCellsPayload.shifts_data, updated_at: new Date().toISOString() };
+
+    pool.query
+      .mockResolvedValueOnce({ rows: [{ id: SITE_ID }] })             // site check
+      .mockResolvedValueOnce({ rows: [{ id: EMP_ID }] })              // employee validation
+      .mockResolvedValueOnce({})                                       // BEGIN
+      .mockResolvedValueOnce({ rows: [] })                            // existing shifts → none
+      .mockResolvedValueOnce({ rows: [newRecord] })                   // INSERT
+      .mockResolvedValueOnce({})                                       // COMMIT
+      .mockResolvedValueOnce({ rows: [{ id: 'audit-many' }] });       // audit log
+
+    const start = Date.now();
+    const res = await request(app)
+      .post(`/api/v1/shifts/${SITE_ID}`)
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send(manyCellsPayload);
+
+    expect(res.status).toBe(200);
+    expect(Date.now() - start).toBeLessThan(2000);
+    expect(notifyEmployee).toHaveBeenCalledTimes(25);
+  });
+
+  test('does not call notifyEmployee for a shift cell that did not change', async () => {
+    // Existing plan already has 2026-06-05 = 'm' for EMP_ID; the save below
+    // repeats that same value for that date and adds a genuinely new value
+    // for a different date — only the latter should trigger a notification.
+    const existing = { id: 'shift-uuid-existing', shifts_data: { [EMP_ID]: { '2026-06-05': 'm' } } };
+    const payload = {
+      month: 6,
+      year: 2026,
+      shifts_data: { [EMP_ID]: { '2026-06-05': 'm', '2026-06-06': 'p' } },
+    };
+    const updated = { id: 'shift-uuid-existing', shifts_data: payload.shifts_data, updated_at: new Date().toISOString() };
+
+    pool.query
+      .mockResolvedValueOnce({ rows: [{ id: SITE_ID }] })             // site check
+      .mockResolvedValueOnce({ rows: [{ id: EMP_ID }] })              // employee validation
+      .mockResolvedValueOnce({})                                       // BEGIN
+      .mockResolvedValueOnce({ rows: [existing] })                    // existing shifts found
+      .mockResolvedValueOnce({ rows: [updated] })                     // UPDATE
+      .mockResolvedValueOnce({})                                       // COMMIT
+      .mockResolvedValueOnce({ rows: [{ id: 'audit-unchanged' }] }); // audit log
+
+    const res = await request(app)
+      .post(`/api/v1/shifts/${SITE_ID}`)
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send(payload);
+
+    expect(res.status).toBe(200);
+    expect(notifyEmployee).toHaveBeenCalledTimes(1);
+    expect(notifyEmployee).toHaveBeenCalledWith(expect.objectContaining({ employeeId: EMP_ID, shiftDate: '2026-06-06' }));
+  });
+
+  test('calls notifyEmployee once per employee when multiple employees change shifts in the same save', async () => {
+    const payload = {
+      month: 6,
+      year: 2026,
+      shifts_data: {
+        [EMP_ID]: { '2026-06-10': 'p' },
+        [EMP_ID_2]: { '2026-06-10': 's' },
+      },
+    };
+    const newRecord = { id: 'shift-uuid-multi', shifts_data: payload.shifts_data, updated_at: new Date().toISOString() };
+
+    pool.query
+      .mockResolvedValueOnce({ rows: [{ id: SITE_ID }] })                          // site check
+      .mockResolvedValueOnce({ rows: [{ id: EMP_ID }, { id: EMP_ID_2 }] })        // employee validation
+      .mockResolvedValueOnce({})                                                    // BEGIN
+      .mockResolvedValueOnce({ rows: [] })                                         // existing shifts → none
+      .mockResolvedValueOnce({ rows: [newRecord] })                                // INSERT
+      .mockResolvedValueOnce({})                                                    // COMMIT
+      .mockResolvedValueOnce({ rows: [{ id: 'audit-multi' }] });                  // audit log
+
+    const res = await request(app)
+      .post(`/api/v1/shifts/${SITE_ID}`)
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send(payload);
+
+    expect(res.status).toBe(200);
+    expect(notifyEmployee).toHaveBeenCalledTimes(2);
+    expect(notifyEmployee).toHaveBeenCalledWith(expect.objectContaining({ employeeId: EMP_ID, shiftDate: '2026-06-10' }));
+    expect(notifyEmployee).toHaveBeenCalledWith(expect.objectContaining({ employeeId: EMP_ID_2, shiftDate: '2026-06-10' }));
   });
 });

@@ -13,6 +13,7 @@ const { withTransaction } = require('../middleware/db-transaction');
 const { requireAuth } = require('../middleware/auth');
 const { NotFoundError, ForbiddenError, ValidationError } = require('../utils/errors');
 const { logAudit } = require('../middleware/audit');
+const { notifyEmployee } = require('../utils/pushNotifications');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -356,14 +357,21 @@ router.post('/:siteId', requireAuth, createValidationMiddleware(PostShiftsSchema
         const shiftLabel = SHIFT_LABELS[newShift] || newShift;
         const message = `Turno aggiornato: ${dateFormatted} → ${shiftLabel}`;
 
+        // Best-effort: notifyEmployee() shouldn't be able to turn an already-committed shift save into a 500.
         try {
-          await pool.query(
-            `INSERT INTO notifications (employee_id, client_id, type, message, shift_date, new_shift, site_id)
-             VALUES ($1::uuid, $2::uuid, 'shift_updated', $3, $4, $5, $6::uuid)`,
-            [empId, clientId, message, date, newShift, siteId]
-          );
+          await notifyEmployee({
+            employeeId: empId,
+            clientId,
+            type: 'shift_updated',
+            inAppMessage: message,
+            pushTitle: 'Turno aggiornato',
+            pushBody: message,
+            shiftDate: date,
+            newShift,
+            siteId,
+          });
         } catch (notifErr) {
-          logger.warn({ action: 'notification_create_error', error: notifErr.message, empId, date });
+          logger.warn({ action: 'notify_employee_call_error', error: notifErr.message, empId, date });
         }
       }
     }
