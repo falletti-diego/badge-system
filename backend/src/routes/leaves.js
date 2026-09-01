@@ -17,6 +17,7 @@ const { NotFoundError, ValidationError, ForbiddenError, ConflictError } = requir
 const { lockAbsenceConflictScope, findConflictingEventRange, findConflictingIllnessRange } = require('../utils/eventConflict');
 const { isAdminEquivalent } = require('../utils/roles');
 const { deleteCacheByPattern } = require('../db/redis');
+const { notifyEmployee } = require('../utils/pushNotifications');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -337,6 +338,29 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveLeaveS
 
       return updatedLeave;
     });
+
+    // Best-effort: notifyEmployee() shouldn't be able to turn an already-committed approval into a 500.
+    try {
+      const period = `dal ${new Date(result.start_date).toLocaleDateString('it-IT')} al ${new Date(result.end_date).toLocaleDateString('it-IT')}`;
+      const isApproved = result.status === 'APPROVED';
+      // IMPORTANT: pushBody must never include rejection_reason — it can be
+      // sensitive (e.g. a health-related reason) and would be visible on a
+      // locked phone screen. Only inAppMessage (only visible inside the
+      // unlocked app) may include it.
+      const reasonSuffix = !isApproved && rejection_reason ? ` (${rejection_reason})` : '';
+      await notifyEmployee({
+        employeeId: result.user_id,
+        clientId,
+        type: isApproved ? 'leave_approved' : 'leave_rejected',
+        inAppMessage: `Richiesta ferie ${period} ${isApproved ? 'approvata' : `rifiutata${reasonSuffix}`}.`,
+        pushTitle: 'Richiesta ferie',
+        pushBody: isApproved
+          ? 'La tua richiesta è stata approvata. Apri l\'app per i dettagli.'
+          : 'La tua richiesta è stata rifiutata. Apri l\'app per i dettagli.',
+      });
+    } catch (notifErr) {
+      logger.warn({ action: 'notify_employee_call_error', error: notifErr.message, leave_request_id: result.id });
+    }
 
     logger.info({
       action: 'leave_request_approved',

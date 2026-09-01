@@ -4,6 +4,20 @@
  * Uses mocked database for deterministic testing.
  */
 
+// Overrides the automatic mock at __mocks__/expo-server-sdk.js for this file only,
+// giving inspectable spies on what notifyEmployee actually sends to Expo.
+const mockChunkPushNotifications = jest.fn((messages) => [messages]);
+const mockSendPushNotificationsAsync = jest.fn().mockResolvedValue([{ status: 'ok' }]);
+jest.mock('expo-server-sdk', () => ({
+  Expo: Object.assign(
+    jest.fn().mockImplementation(() => ({
+      chunkPushNotifications: (...args) => mockChunkPushNotifications(...args),
+      sendPushNotificationsAsync: (...args) => mockSendPushNotificationsAsync(...args),
+    })),
+    { isExpoPushToken: () => true }
+  ),
+}));
+
 jest.mock('../middleware/rateLimiter', () => {
   const passThrough = (req, res, next) => next();
   return { apiLimiter: passThrough, authLimiter: passThrough, csvLimiter: passThrough, demoStartLimiter: passThrough, onboardingInviteLimiter: passThrough };
@@ -469,5 +483,146 @@ describe('Leave Request API Endpoints — Security Regression Tests', () => {
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
     });
+  });
+});
+
+describe('Leave Request API Endpoints — Push notification on approve/reject', () => {
+  const originalDisableAuth = process.env.DISABLE_AUTH;
+
+  beforeAll(() => {
+    process.env.DISABLE_AUTH = 'false';
+  });
+
+  afterAll(() => {
+    process.env.DISABLE_AUTH = originalDisableAuth;
+  });
+
+  it('writes an in-app notification (type leave_approved, message contains "approvata") on approval', async () => {
+    const adminToken = makeToken();
+
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [{ // SELECT leave_requests
+        id: TEST_LEAVE_ID, client_id: TEST_CLIENT_ID, user_id: TEST_EMPLOYEE_ID,
+        leave_type: 'FERIE_1', start_date: '2026-06-15', end_date: '2026-06-20',
+        num_days: 6, status: 'PENDING',
+      }] })
+      .mockResolvedValueOnce({ rows: [] }) // SET LOCAL lock_timeout
+      .mockResolvedValueOnce({ rows: [] }) // SELECT pg_advisory_xact_lock
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingEventRange
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingIllnessRange
+      .mockResolvedValueOnce({ rows: [{ // UPDATE leave_requests ... RETURNING *
+        id: TEST_LEAVE_ID, client_id: TEST_CLIENT_ID, user_id: TEST_EMPLOYEE_ID,
+        leave_type: 'FERIE_1', start_date: '2026-06-15', end_date: '2026-06-20',
+        num_days: 6, status: 'APPROVED', approved_by: TEST_ADMIN_ID, approved_at: '2026-06-13T10:00:00Z',
+      }] })
+      .mockResolvedValueOnce({ rows: [] }) // UPDATE leave_saldi
+      .mockResolvedValueOnce({ rows: [] }) // SAVEPOINT audit_log_sp
+      .mockResolvedValueOnce({ rows: [] }) // INSERT INTO audit_log
+      .mockResolvedValueOnce({ rows: [] }) // RELEASE SAVEPOINT audit_log_sp
+      .mockResolvedValueOnce({ rows: [] }) // INSERT INTO notifications (notifyEmployee)
+      .mockResolvedValueOnce({ rows: [] }); // SELECT token FROM device_push_tokens — none registered
+
+    const res = await request(app)
+      .put(`/api/v1/leave/${TEST_LEAVE_ID}/approve`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'APPROVED' });
+
+    expect(res.status).toBe(200);
+
+    const notifCall = mockPool.query.mock.calls.find(([sql]) => sql.includes('INSERT INTO notifications'));
+    expect(notifCall).toBeDefined();
+    const [, params] = notifCall;
+    expect(params[0]).toBe(TEST_EMPLOYEE_ID); // employee_id
+    expect(params[1]).toBe(TEST_CLIENT_ID); // client_id
+    expect(params[2]).toBe('leave_approved'); // type
+    expect(params[3]).toEqual(expect.stringContaining('approvata')); // message
+  });
+
+  it('writes an in-app notification (type leave_rejected, message contains "rifiutata" AND the rejection reason) on rejection', async () => {
+    const adminToken = makeToken();
+    const rejectionReason = 'Copertura turno insufficiente';
+
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [{ // SELECT leave_requests
+        id: TEST_LEAVE_ID, client_id: TEST_CLIENT_ID, user_id: TEST_EMPLOYEE_ID,
+        leave_type: 'FERIE_1', start_date: '2026-06-15', end_date: '2026-06-20',
+        num_days: 6, status: 'PENDING',
+      }] })
+      .mockResolvedValueOnce({ rows: [] }) // SET LOCAL lock_timeout
+      .mockResolvedValueOnce({ rows: [] }) // SELECT pg_advisory_xact_lock
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingEventRange
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingIllnessRange
+      .mockResolvedValueOnce({ rows: [{ // UPDATE leave_requests ... RETURNING *
+        id: TEST_LEAVE_ID, client_id: TEST_CLIENT_ID, user_id: TEST_EMPLOYEE_ID,
+        leave_type: 'FERIE_1', start_date: '2026-06-15', end_date: '2026-06-20',
+        num_days: 6, status: 'REJECTED', approved_by: TEST_ADMIN_ID, approved_at: '2026-06-13T10:00:00Z',
+        rejection_reason: rejectionReason,
+      }] })
+      // status !== 'APPROVED', so no UPDATE leave_saldi query
+      .mockResolvedValueOnce({ rows: [] }) // SAVEPOINT audit_log_sp
+      .mockResolvedValueOnce({ rows: [] }) // INSERT INTO audit_log
+      .mockResolvedValueOnce({ rows: [] }) // RELEASE SAVEPOINT audit_log_sp
+      .mockResolvedValueOnce({ rows: [] }) // INSERT INTO notifications (notifyEmployee)
+      .mockResolvedValueOnce({ rows: [] }); // SELECT token FROM device_push_tokens — none registered
+
+    const res = await request(app)
+      .put(`/api/v1/leave/${TEST_LEAVE_ID}/approve`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'REJECTED', rejection_reason: rejectionReason });
+
+    expect(res.status).toBe(200);
+
+    const notifCall = mockPool.query.mock.calls.find(([sql]) => sql.includes('INSERT INTO notifications'));
+    expect(notifCall).toBeDefined();
+    const [, params] = notifCall;
+    expect(params[2]).toBe('leave_rejected'); // type
+    expect(params[3]).toEqual(expect.stringContaining('rifiutata'));
+    expect(params[3]).toEqual(expect.stringContaining(rejectionReason));
+  });
+
+  it('never includes the rejection reason in the push body, even though it is present in-app (privacy)', async () => {
+    const adminToken = makeToken();
+    const rejectionReason = 'Motivo di salute riservato';
+
+    mockChunkPushNotifications.mockClear();
+    mockSendPushNotificationsAsync.mockClear();
+
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [{ // SELECT leave_requests
+        id: TEST_LEAVE_ID, client_id: TEST_CLIENT_ID, user_id: TEST_EMPLOYEE_ID,
+        leave_type: 'FERIE_1', start_date: '2026-06-15', end_date: '2026-06-20',
+        num_days: 6, status: 'PENDING',
+      }] })
+      .mockResolvedValueOnce({ rows: [] }) // SET LOCAL lock_timeout
+      .mockResolvedValueOnce({ rows: [] }) // SELECT pg_advisory_xact_lock
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingEventRange
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingIllnessRange
+      .mockResolvedValueOnce({ rows: [{ // UPDATE leave_requests ... RETURNING *
+        id: TEST_LEAVE_ID, client_id: TEST_CLIENT_ID, user_id: TEST_EMPLOYEE_ID,
+        leave_type: 'FERIE_1', start_date: '2026-06-15', end_date: '2026-06-20',
+        num_days: 6, status: 'REJECTED', approved_by: TEST_ADMIN_ID, approved_at: '2026-06-13T10:00:00Z',
+        rejection_reason: rejectionReason,
+      }] })
+      .mockResolvedValueOnce({ rows: [] }) // SAVEPOINT audit_log_sp
+      .mockResolvedValueOnce({ rows: [] }) // INSERT INTO audit_log
+      .mockResolvedValueOnce({ rows: [] }) // RELEASE SAVEPOINT audit_log_sp
+      .mockResolvedValueOnce({ rows: [] }) // INSERT INTO notifications (notifyEmployee)
+      .mockResolvedValueOnce({ rows: [{ token: `ExponentPushToken[privacy-test-${Date.now()}]` }] }); // SELECT device_push_tokens — one registered device
+
+    const res = await request(app)
+      .put(`/api/v1/leave/${TEST_LEAVE_ID}/approve`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'REJECTED', rejection_reason: rejectionReason });
+
+    expect(res.status).toBe(200);
+
+    // Let the fire-and-forget push send (not awaited by the route) run.
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mockChunkPushNotifications).toHaveBeenCalledWith([
+      expect.objectContaining({
+        body: expect.not.stringContaining(rejectionReason),
+      }),
+    ]);
   });
 });
