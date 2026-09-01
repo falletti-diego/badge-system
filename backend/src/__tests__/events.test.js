@@ -3,6 +3,20 @@
  * Uses mocked database for deterministic testing — mirrors leaves.test.js.
  */
 
+// Overrides the automatic mock at __mocks__/expo-server-sdk.js for this file only,
+// giving inspectable spies on what notifyEmployee actually sends to Expo.
+const mockChunkPushNotifications = jest.fn((messages) => [messages]);
+const mockSendPushNotificationsAsync = jest.fn().mockResolvedValue([{ status: 'ok' }]);
+jest.mock('expo-server-sdk', () => ({
+  Expo: Object.assign(
+    jest.fn().mockImplementation(() => ({
+      chunkPushNotifications: (...args) => mockChunkPushNotifications(...args),
+      sendPushNotificationsAsync: (...args) => mockSendPushNotificationsAsync(...args),
+    })),
+    { isExpoPushToken: () => true }
+  ),
+}));
+
 jest.mock('../middleware/rateLimiter', () => {
   const passThrough = (req, res, next) => next();
   return { apiLimiter: passThrough, authLimiter: passThrough, csvLimiter: passThrough, demoStartLimiter: passThrough, onboardingInviteLimiter: passThrough };
@@ -411,7 +425,9 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
         .mockResolvedValueOnce({ rows: [] }) // invalidateSignatureIfExists UPDATE
         .mockResolvedValueOnce({ rows: [] }) // logAudit: SAVEPOINT
         .mockResolvedValueOnce({ rows: [] }) // logAudit: INSERT INTO audit_log
-        .mockResolvedValueOnce({ rows: [] }); // logAudit: RELEASE SAVEPOINT
+        .mockResolvedValueOnce({ rows: [] }) // logAudit: RELEASE SAVEPOINT
+        .mockResolvedValueOnce({ rows: [] }) // INSERT INTO notifications (notifyEmployee)
+        .mockResolvedValueOnce({ rows: [] }); // SELECT token FROM device_push_tokens — none registered
 
       const res = await request(app)
         .put(`/api/v1/events/${TEST_EVENT_ID}/approve`)
@@ -419,7 +435,7 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
         .send({ status: 'APPROVED' });
 
       expect(res.status).toBe(200);
-      expect(mockPool.query).toHaveBeenCalledTimes(12);
+      expect(mockPool.query).toHaveBeenCalledTimes(14);
       const invalidateCallSql = mockPool.query.mock.calls[8][0];
       expect(invalidateCallSql).toContain('timesheet_signatures');
       expect(invalidateCallSql).toContain('status = \'invalidated\'');
@@ -504,7 +520,9 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
         }) // UPDATE succeeds
         .mockResolvedValueOnce({ rows: [] }) // logAudit: SAVEPOINT
         .mockResolvedValueOnce({ rows: [] }) // logAudit: INSERT INTO audit_log
-        .mockResolvedValueOnce({ rows: [] }); // logAudit: RELEASE SAVEPOINT
+        .mockResolvedValueOnce({ rows: [] }) // logAudit: RELEASE SAVEPOINT
+        .mockResolvedValueOnce({ rows: [] }) // INSERT INTO notifications (notifyEmployee)
+        .mockResolvedValueOnce({ rows: [] }); // SELECT token FROM device_push_tokens — none registered
 
       const res = await request(app)
         .put(`/api/v1/events/${TEST_EVENT_ID}/approve`)
@@ -512,8 +530,8 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
         .send({ status: 'REJECTED' });
 
       expect(res.status).toBe(200);
-      // Only SELECT + UPDATE + audit log (SAVEPOINT/INSERT/RELEASE) — no timesheet_signatures call in between
-      expect(mockPool.query).toHaveBeenCalledTimes(5);
+      // SELECT + UPDATE + audit log (SAVEPOINT/INSERT/RELEASE) + notifyEmployee (INSERT notifications + SELECT device_push_tokens) — no timesheet_signatures call in between
+      expect(mockPool.query).toHaveBeenCalledTimes(7);
       expect(mockPool.query.mock.calls.some((call) => call[0].includes('timesheet_signatures'))).toBe(false);
     });
 
@@ -599,7 +617,9 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
         })
         .mockResolvedValueOnce({ rows: [] }) // logAudit: SAVEPOINT
         .mockResolvedValueOnce({ rows: [] }) // logAudit: INSERT INTO audit_log
-        .mockResolvedValueOnce({ rows: [] }); // logAudit: RELEASE SAVEPOINT
+        .mockResolvedValueOnce({ rows: [] }) // logAudit: RELEASE SAVEPOINT
+        .mockResolvedValueOnce({ rows: [] }) // INSERT INTO notifications (notifyEmployee)
+        .mockResolvedValueOnce({ rows: [] }); // SELECT token FROM device_push_tokens — none registered
 
       const res = await request(app)
         .put(`/api/v1/events/${TEST_EVENT_ID}/approve`)
@@ -607,7 +627,7 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
         .send({ status: 'REJECTED' });
 
       expect(res.status).toBe(200);
-      expect(mockPool.query).toHaveBeenCalledTimes(5);
+      expect(mockPool.query).toHaveBeenCalledTimes(7);
     });
   });
 
@@ -750,5 +770,136 @@ describe('Event Request API Endpoints — Security Regression Tests', () => {
       expect(res.status).toBe(403);
       expect(mockPool.query).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('Event Request API Endpoints — Push notification on approve/reject', () => {
+  const originalDisableAuth = process.env.DISABLE_AUTH;
+
+  beforeAll(() => {
+    process.env.DISABLE_AUTH = 'false';
+  });
+
+  afterAll(() => {
+    process.env.DISABLE_AUTH = originalDisableAuth;
+  });
+
+  it('writes an in-app notification (type event_approved, message contains "approvata") on approval', async () => {
+    const adminToken = makeToken();
+
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [{ // SELECT event_requests
+        id: TEST_EVENT_ID, client_id: TEST_CLIENT_ID, user_id: TEST_EMPLOYEE_ID,
+        event_date: todayISO(), start_time: '08:00:00', end_time: '18:00:00', status: 'PENDING',
+      }] })
+      .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
+      .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingCheckin — no conflict
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingSmartWorking — no conflict
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingLeaveRange — no conflict
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingIllnessRange — no conflict
+      .mockResolvedValueOnce({ rows: [{ // UPDATE event_requests ... RETURNING *
+        id: TEST_EVENT_ID, client_id: TEST_CLIENT_ID, user_id: TEST_EMPLOYEE_ID,
+        event_date: todayISO(), start_time: '08:00:00', end_time: '18:00:00',
+        status: 'APPROVED', approved_by: TEST_ADMIN_ID, approved_at: '2026-06-13T10:00:00Z',
+      }] })
+      .mockResolvedValueOnce({ rows: [] }) // invalidateSignatureIfExists UPDATE
+      .mockResolvedValueOnce({ rows: [] }) // logAudit: SAVEPOINT
+      .mockResolvedValueOnce({ rows: [] }) // logAudit: INSERT INTO audit_log
+      .mockResolvedValueOnce({ rows: [] }) // logAudit: RELEASE SAVEPOINT
+      .mockResolvedValueOnce({ rows: [] }) // INSERT INTO notifications (notifyEmployee)
+      .mockResolvedValueOnce({ rows: [] }); // SELECT token FROM device_push_tokens — none registered
+
+    const res = await request(app)
+      .put(`/api/v1/events/${TEST_EVENT_ID}/approve`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'APPROVED' });
+
+    expect(res.status).toBe(200);
+
+    const notifCall = mockPool.query.mock.calls.find(([sql]) => sql.includes('INSERT INTO notifications'));
+    expect(notifCall).toBeDefined();
+    const [, params] = notifCall;
+    expect(params[0]).toBe(TEST_EMPLOYEE_ID); // employee_id
+    expect(params[1]).toBe(TEST_CLIENT_ID); // client_id
+    expect(params[2]).toBe('event_approved'); // type
+    expect(params[3]).toEqual(expect.stringContaining('approvata')); // message
+  });
+
+  it('writes an in-app notification (type event_rejected, message contains "rifiutata" AND the rejection reason) on rejection', async () => {
+    const adminToken = makeToken();
+    const rejectionReason = 'Sovrapposizione con altro evento aziendale';
+
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [{ // SELECT event_requests
+        id: TEST_EVENT_ID, client_id: TEST_CLIENT_ID, user_id: TEST_EMPLOYEE_ID,
+        event_date: todayISO(), start_time: '08:00:00', end_time: '18:00:00', status: 'PENDING',
+      }] })
+      .mockResolvedValueOnce({ rows: [{ // UPDATE event_requests ... RETURNING * (rejection skips conflict re-checks)
+        id: TEST_EVENT_ID, client_id: TEST_CLIENT_ID, user_id: TEST_EMPLOYEE_ID,
+        event_date: todayISO(), start_time: '08:00:00', end_time: '18:00:00',
+        status: 'REJECTED', approved_by: TEST_ADMIN_ID, approved_at: '2026-06-13T10:00:00Z',
+        rejection_reason: rejectionReason,
+      }] })
+      .mockResolvedValueOnce({ rows: [] }) // logAudit: SAVEPOINT
+      .mockResolvedValueOnce({ rows: [] }) // logAudit: INSERT INTO audit_log
+      .mockResolvedValueOnce({ rows: [] }) // logAudit: RELEASE SAVEPOINT
+      .mockResolvedValueOnce({ rows: [] }) // INSERT INTO notifications (notifyEmployee)
+      .mockResolvedValueOnce({ rows: [] }); // SELECT token FROM device_push_tokens — none registered
+
+    const res = await request(app)
+      .put(`/api/v1/events/${TEST_EVENT_ID}/approve`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'REJECTED', rejection_reason: rejectionReason });
+
+    expect(res.status).toBe(200);
+
+    const notifCall = mockPool.query.mock.calls.find(([sql]) => sql.includes('INSERT INTO notifications'));
+    expect(notifCall).toBeDefined();
+    const [, params] = notifCall;
+    expect(params[2]).toBe('event_rejected'); // type
+    expect(params[3]).toEqual(expect.stringContaining('rifiutata'));
+    expect(params[3]).toEqual(expect.stringContaining(rejectionReason));
+  });
+
+  it('never includes the rejection reason in the push body, even though it is present in-app (privacy)', async () => {
+    const adminToken = makeToken();
+    const rejectionReason = 'Motivo personale riservato';
+
+    mockChunkPushNotifications.mockClear();
+    mockSendPushNotificationsAsync.mockClear();
+
+    mockPool.query
+      .mockResolvedValueOnce({ rows: [{ // SELECT event_requests
+        id: TEST_EVENT_ID, client_id: TEST_CLIENT_ID, user_id: TEST_EMPLOYEE_ID,
+        event_date: todayISO(), start_time: '08:00:00', end_time: '18:00:00', status: 'PENDING',
+      }] })
+      .mockResolvedValueOnce({ rows: [{ // UPDATE event_requests ... RETURNING *
+        id: TEST_EVENT_ID, client_id: TEST_CLIENT_ID, user_id: TEST_EMPLOYEE_ID,
+        event_date: todayISO(), start_time: '08:00:00', end_time: '18:00:00',
+        status: 'REJECTED', approved_by: TEST_ADMIN_ID, approved_at: '2026-06-13T10:00:00Z',
+        rejection_reason: rejectionReason,
+      }] })
+      .mockResolvedValueOnce({ rows: [] }) // logAudit: SAVEPOINT
+      .mockResolvedValueOnce({ rows: [] }) // logAudit: INSERT INTO audit_log
+      .mockResolvedValueOnce({ rows: [] }) // logAudit: RELEASE SAVEPOINT
+      .mockResolvedValueOnce({ rows: [] }) // INSERT INTO notifications (notifyEmployee)
+      .mockResolvedValueOnce({ rows: [{ token: `ExponentPushToken[privacy-test-${Date.now()}]` }] }); // SELECT device_push_tokens — one registered device
+
+    const res = await request(app)
+      .put(`/api/v1/events/${TEST_EVENT_ID}/approve`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'REJECTED', rejection_reason: rejectionReason });
+
+    expect(res.status).toBe(200);
+
+    // Let the fire-and-forget push send (not awaited by the route) run.
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mockChunkPushNotifications).toHaveBeenCalledWith([
+      expect.objectContaining({
+        body: expect.not.stringContaining(rejectionReason),
+      }),
+    ]);
   });
 });

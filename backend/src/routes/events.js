@@ -20,6 +20,7 @@ const {
   findConflictingLeaveRange, findConflictingIllnessRange,
 } = require('../utils/eventConflict');
 const { NotFoundError, ValidationError, ForbiddenError, ConflictError } = require('../utils/errors');
+const { notifyEmployee } = require('../utils/pushNotifications');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -311,6 +312,27 @@ router.put('/:id/approve', requireAuth, createValidationMiddleware(ApproveEventR
 
       return updatedEvent;
     });
+
+    // Best-effort: notifyEmployee() shouldn't be able to turn an already-committed approval into a 500.
+    try {
+      const eventDateFormatted = new Date(result.event_date).toLocaleDateString('it-IT');
+      const isApproved = result.status === 'APPROVED';
+      // IMPORTANT: pushBody must never include rejection_reason — same
+      // privacy requirement as leaves.js (visible on a locked phone screen).
+      const reasonSuffix = !isApproved && rejection_reason ? ` (${rejection_reason})` : '';
+      await notifyEmployee({
+        employeeId: result.user_id,
+        clientId,
+        type: isApproved ? 'event_approved' : 'event_rejected',
+        inAppMessage: `Richiesta evento del ${eventDateFormatted} ${isApproved ? 'approvata' : `rifiutata${reasonSuffix}`}.`,
+        pushTitle: 'Richiesta evento',
+        pushBody: isApproved
+          ? 'La tua richiesta è stata approvata. Apri l\'app per i dettagli.'
+          : 'La tua richiesta è stata rifiutata. Apri l\'app per i dettagli.',
+      });
+    } catch (notifErr) {
+      logger.warn({ action: 'notify_employee_call_error', error: notifErr.message, event_request_id: result.id });
+    }
 
     logger.info({
       action: 'event_request_approved',
