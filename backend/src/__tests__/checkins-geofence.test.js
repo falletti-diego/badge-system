@@ -29,6 +29,7 @@ jest.mock('../middleware/rateLimiter', () => ({
   csvLimiter: (req, res, next) => next(),
   demoStartLimiter: (req, res, next) => next(),
   onboardingInviteLimiter: (req, res, next) => next(),
+  pushTokenLimiter: (req, res, next) => next(),
 }));
 
 const { pool } = require('../db/pool');

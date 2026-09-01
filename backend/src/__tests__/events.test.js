@@ -19,7 +19,7 @@ jest.mock('expo-server-sdk', () => ({
 
 jest.mock('../middleware/rateLimiter', () => {
   const passThrough = (req, res, next) => next();
-  return { apiLimiter: passThrough, authLimiter: passThrough, csvLimiter: passThrough, demoStartLimiter: passThrough, onboardingInviteLimiter: passThrough };
+  return { apiLimiter: passThrough, authLimiter: passThrough, csvLimiter: passThrough, demoStartLimiter: passThrough, onboardingInviteLimiter: passThrough, pushTokenLimiter: passThrough };
 });
 
 jest.mock('../db/redis', () => ({

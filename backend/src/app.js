@@ -41,7 +41,7 @@ const path = require('path');
 const { pool, closePool } = require('./db/pool');
 const { initializeRedis, closeRedis } = require('./db/redis');
 const { ApiError, RateLimitError } = require('./utils/errors');
-const { apiLimiter, authLimiter, csvLimiter, demoStartLimiter, onboardingInviteLimiter } = require('./middleware/rateLimiter');
+const { apiLimiter, authLimiter, csvLimiter, demoStartLimiter, onboardingInviteLimiter, pushTokenLimiter } = require('./middleware/rateLimiter');
 const { optionalAuth } = require('./middleware/auth');
 const checkRevoked = require('./middleware/checkRevoked');
 const authRouter = require('./routes/auth');
@@ -108,6 +108,12 @@ app.use('/api/v1/demo/start', demoStartLimiter);
 // un nuovo admin che accetta il proprio invito dallo stesso IP di qualcuno
 // che ha appena provato la demo pubblica riceverebbe un 429 ingiustificato.
 app.use('/api/v1/onboarding/invite', onboardingInviteLimiter);
+// Push-token registration is authenticated but re-registers at most once per
+// app install/update per device — a dedicated, tighter limit than apiLimiter
+// stops an authenticated employee from unboundedly growing
+// device_push_tokens via repeated ON CONFLICT upserts (see rateLimiter.js).
+app.use('/api/notifications/push-token', pushTokenLimiter);
+app.use('/api/v1/notifications/push-token', pushTokenLimiter);
 
 // Structured request/response logging (method, path, statusCode, responseTime)
 // Used by CloudWatch metric filters for 5xx rate and slow request alarms

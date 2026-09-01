@@ -14,7 +14,7 @@ jest.mock('../db/redis', () => ({
 
 jest.mock('../middleware/rateLimiter', () => {
   const passThrough = (req, res, next) => next();
-  return { apiLimiter: passThrough, authLimiter: passThrough, csvLimiter: passThrough, demoStartLimiter: passThrough, onboardingInviteLimiter: passThrough };
+  return { apiLimiter: passThrough, authLimiter: passThrough, csvLimiter: passThrough, demoStartLimiter: passThrough, onboardingInviteLimiter: passThrough, pushTokenLimiter: passThrough };
 });
 
 const { pool } = require('../db/pool');

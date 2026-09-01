@@ -149,6 +149,19 @@ describe('POST /api/v1/notifications/push-token', () => {
     expect(res.status).toBe(400);
   });
 
+  it('rejects a non-Expo-shaped token that is otherwise within the length bounds', async () => {
+    // 'x'.repeat(50) passes the .min(10).max(512) length check but matches
+    // neither the ExponentPushToken[...]/ExpoPushToken[...] prefix shape nor
+    // the bare-UUID shape — must be rejected at intake (see isValidExpoPushToken
+    // in src/utils/pushNotifications.js).
+    const res = await request(app)
+      .post('/api/v1/notifications/push-token')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ token: 'x'.repeat(50), platform: 'ios' });
+
+    expect(res.status).toBe(400);
+  });
+
   it('rejects a request missing the platform field', async () => {
     const res = await request(app)
       .post('/api/v1/notifications/push-token')
@@ -156,6 +169,23 @@ describe('POST /api/v1/notifications/push-token', () => {
       .send({ token: 'ExponentPushToken[test-eee]' });
 
     expect(res.status).toBe(400);
+  });
+
+  it('does not 429 across many back-to-back requests in the same Jest process (pushTokenLimiter is skipped under NODE_ENV=test, same as every other named limiter — see rateLimiter.js)', async () => {
+    // pushTokenLimiter's max is 10 req/15min in real traffic. This file alone
+    // already issues 8+ requests against this same route in the same process;
+    // without the shared `skip: NODE_ENV === 'test'` convention, the limiter
+    // would start rejecting the later tests in this suite with 429 instead of
+    // the expected 200/400/403. Real limiter behavior is covered separately
+    // (see demo-start-rate-limit.test.js for the pattern used to exercise a
+    // real, unmocked limiter in isolation).
+    for (let i = 0; i < 12; i++) {
+      const res = await request(app)
+        .post('/api/v1/notifications/push-token')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ token: `ExponentPushToken[test-loop-${i}]`, platform: 'ios' });
+      expect(res.status).toBe(200);
+    }
   });
 
   it("ignores any client_id sent in the body — always uses the authenticated employee's own client_id (tenant isolation)", async () => {

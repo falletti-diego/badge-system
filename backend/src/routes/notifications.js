@@ -10,12 +10,15 @@ const { z } = require('zod');
 const { pool } = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { ForbiddenError, ValidationError } = require('../utils/errors');
+const { isValidExpoPushToken } = require('../utils/pushNotifications');
 
 const router = express.Router();
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
 const PushTokenSchema = z.object({
-  token: z.string().min(10).max(512),
+  token: z.string().min(10).max(512).refine(isValidExpoPushToken, {
+    message: 'Token must be an Expo push token (ExponentPushToken[...]/ExpoPushToken[...]) or a bare UUID',
+  }),
   platform: z.enum(['ios', 'android']),
 });
 

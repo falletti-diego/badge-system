@@ -110,4 +110,4 @@ async function sendPushToTokens(tokens, { title, body, type }) {
   }
 }
 
-module.exports = { notifyEmployee };
+module.exports = { notifyEmployee, isValidExpoPushToken };

@@ -268,10 +268,50 @@ const onboardingInviteLimiter = rateLimit({
   },
 });
 
+/**
+ * Push-token registration rate limiter (10 req/15min per authenticated user)
+ * — a mobile client legitimately calls POST /notifications/push-token once
+ * per app install/update per device, nowhere near apiLimiter's 100 req/min
+ * budget. Because the endpoint does an `ON CONFLICT (token) DO UPDATE`
+ * upsert, without a dedicated limit an authenticated employee could insert
+ * a unique garbage token on every request and unboundedly grow
+ * device_push_tokens. Keyed by user_id (falls back to IP) like apiLimiter/
+ * csvLimiter, since this is an authenticated endpoint.
+ * SKIP in test environment (NODE_ENV === 'test')
+ */
+const PUSH_TOKEN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const pushTokenLimiter = rateLimit({
+  windowMs: PUSH_TOKEN_WINDOW_MS,
+  max: 10,
+  standardHeaders: false,
+  store: createHybridStore('push-token', PUSH_TOKEN_WINDOW_MS),
+  skip: (req) => process.env.NODE_ENV === 'test',
+  keyGenerator: (req) => req.user?.user_id || req.ip,
+  handler: (req, res) => {
+    const retryAfter = Math.ceil(PUSH_TOKEN_WINDOW_MS / 1000);
+
+    logger.warn({
+      action: 'push_token_rate_limit_exceeded',
+      user_id: req.user?.user_id,
+      ip: req.ip,
+      endpoint: req.path,
+    });
+
+    res.set('Retry-After', retryAfter.toString());
+    res.status(429).json({
+      error: 'RATE_LIMIT_EXCEEDED',
+      message: `Too many push-token registration requests, please retry after ${retryAfter} seconds`,
+      statusCode: 429,
+      retryAfter,
+    });
+  },
+});
+
 module.exports = {
   apiLimiter,
   authLimiter,
   csvLimiter,
   demoStartLimiter,
   onboardingInviteLimiter,
+  pushTokenLimiter,
 };
