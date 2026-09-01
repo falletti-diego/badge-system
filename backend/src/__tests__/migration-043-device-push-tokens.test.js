@@ -19,7 +19,7 @@ afterAll(async () => {
 
 async function createClientAndEmployee(suffix) {
   const clientResult = await pool.query(
-    `INSERT INTO clients (name, email) VALUES ($1, $2) RETURNING id`,
+    'INSERT INTO clients (name, email) VALUES ($1, $2) RETURNING id',
     [`Migration 043 Test ${suffix}`, `migration043-${suffix}@example.com`]
   );
   const clientId = clientResult.rows[0].id;
@@ -37,7 +37,7 @@ describe('device_push_tokens constraints', () => {
     const { clientId, employeeId } = await createClientAndEmployee(suffix);
     try {
       await pool.query(
-        `INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, 'ios')`,
+        'INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, \'ios\')',
         [employeeId, clientId, `ExponentPushToken[cascade-emp-${suffix}]`]
       );
 
@@ -55,7 +55,7 @@ describe('device_push_tokens constraints', () => {
     const { clientId, employeeId } = await createClientAndEmployee(suffix);
     try {
       await pool.query(
-        `INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, 'android')`,
+        'INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, \'android\')',
         [employeeId, clientId, `ExponentPushToken[cascade-client-${suffix}]`]
       );
 
@@ -74,12 +74,12 @@ describe('device_push_tokens constraints', () => {
     const token = `ExponentPushToken[unique-${suffix}]`;
     try {
       await pool.query(
-        `INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, 'ios')`,
+        'INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, \'ios\')',
         [employeeId, clientId, token]
       );
 
       await expect(pool.query(
-        `INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, 'ios')`,
+        'INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, \'ios\')',
         [employeeId, clientId, token]
       )).rejects.toThrow(/duplicate key/);
     } finally {
@@ -92,7 +92,7 @@ describe('device_push_tokens constraints', () => {
     const { clientId, employeeId } = await createClientAndEmployee(suffix);
     try {
       await expect(pool.query(
-        `INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, 'windows-phone')`,
+        'INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, \'windows-phone\')',
         [employeeId, clientId, `ExponentPushToken[check-${suffix}]`]
       )).rejects.toThrow(/violates check constraint/);
     } finally {

@@ -39,7 +39,7 @@ afterAll(async () => {
 beforeEach(async () => {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const clientResult = await pool.query(
-    `INSERT INTO clients (name, email) VALUES ($1, $2) RETURNING id`,
+    'INSERT INTO clients (name, email) VALUES ($1, $2) RETURNING id',
     [`Push Token Test ${suffix}`, `push-test-${suffix}@example.com`]
   );
   clientId = clientResult.rows[0].id;
@@ -68,7 +68,7 @@ describe('POST /api/v1/notifications/push-token', () => {
     expect(res.status).toBe(200);
 
     const row = await pool.query(
-      `SELECT employee_id, client_id, platform FROM device_push_tokens WHERE token = $1`,
+      'SELECT employee_id, client_id, platform FROM device_push_tokens WHERE token = $1',
       ['ExponentPushToken[test-aaa]']
     );
     expect(row.rows).toHaveLength(1);
@@ -79,7 +79,7 @@ describe('POST /api/v1/notifications/push-token', () => {
 
   it('upserts (reassigns) an existing token to a new employee', async () => {
     await pool.query(
-      `INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, 'android')`,
+      'INSERT INTO device_push_tokens (employee_id, client_id, token, platform) VALUES ($1::uuid, $2::uuid, $3, \'android\')',
       [employeeId, clientId, 'ExponentPushToken[test-bbb]']
     );
 
@@ -101,7 +101,7 @@ describe('POST /api/v1/notifications/push-token', () => {
 
     expect(res.status).toBe(200);
     const row = await pool.query(
-      `SELECT employee_id FROM device_push_tokens WHERE token = $1`,
+      'SELECT employee_id FROM device_push_tokens WHERE token = $1',
       ['ExponentPushToken[test-bbb]']
     );
     expect(row.rows[0].employee_id).toBe(otherEmployeeId);
@@ -188,10 +188,10 @@ describe('POST /api/v1/notifications/push-token', () => {
     }
   });
 
-  it("ignores any client_id sent in the body — always uses the authenticated employee's own client_id (tenant isolation)", async () => {
+  it('ignores any client_id sent in the body — always uses the authenticated employee\'s own client_id (tenant isolation)', async () => {
     const suffix3 = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const otherClientResult = await pool.query(
-      `INSERT INTO clients (name, email) VALUES ($1, $2) RETURNING id`,
+      'INSERT INTO clients (name, email) VALUES ($1, $2) RETURNING id',
       [`Other Client ${suffix3}`, `other-client-${suffix3}@example.com`]
     );
     const otherClientId = otherClientResult.rows[0].id;
@@ -204,7 +204,7 @@ describe('POST /api/v1/notifications/push-token', () => {
 
       expect(res.status).toBe(200);
       const row = await pool.query(
-        `SELECT client_id FROM device_push_tokens WHERE token = $1`,
+        'SELECT client_id FROM device_push_tokens WHERE token = $1',
         ['ExponentPushToken[test-fff]']
       );
       expect(row.rows[0].client_id).toBe(clientId);

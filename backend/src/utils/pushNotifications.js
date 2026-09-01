@@ -64,7 +64,7 @@ async function notifyEmployee({
   let tokens;
   try {
     const tokenResult = await pool.query(
-      `SELECT token FROM device_push_tokens WHERE employee_id = $1::uuid AND client_id = $2::uuid`,
+      'SELECT token FROM device_push_tokens WHERE employee_id = $1::uuid AND client_id = $2::uuid',
       [employeeId, clientId]
     );
     tokens = tokenResult.rows.map((r) => r.token);
