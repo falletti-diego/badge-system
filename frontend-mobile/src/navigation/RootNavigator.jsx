@@ -11,6 +11,8 @@ import { navigationRef } from '../utils/navigationRef';
 import apiClient from '../services/apiClient';
 import { flushQueue } from '../services/offlineQueue';
 import secureAuthStorage from '../services/secureAuthStorage';
+import PushConsentDialog from '../components/PushConsentDialog';
+import pushNotificationsService from '../services/pushNotificationsService';
 
 // Single source of truth for manager pending-leave badge count.
 // ManagerLeaveApprovalScreen updates this via context after every load.
@@ -93,6 +95,38 @@ function MainTabs() {
       });
   }, []);
 
+  const [showPushConsent, setShowPushConsent] = useState(false);
+
+  // Shown once per device, only to employees — managers/admins never
+  // receive a push notification under this feature's design, so there's
+  // no reason to interrupt them with this dialog.
+  useEffect(() => {
+    if (role !== 'employee') return;
+    AsyncStorage.getItem(STORAGE_KEYS.PUSH_CONSENT_DIALOG_SHOWN).then((value) => {
+      if (value !== 'true') setShowPushConsent(true);
+    });
+  }, [role]);
+
+  const handlePushConsentAccept = async () => {
+    setShowPushConsent(false);
+    try {
+      await pushNotificationsService.registerForPushNotifications();
+    } catch (err) {
+      // Defense-in-depth: registerForPushNotifications is documented to
+      // never reject once permission is granted or denied (see its own
+      // internal try/catch), but a caught error here must never skip
+      // persisting the "shown" flag below — that would re-show the dialog
+      // on every subsequent launch.
+      console.warn('registerForPushNotifications unexpectedly rejected:', err);
+    }
+    await AsyncStorage.setItem(STORAGE_KEYS.PUSH_CONSENT_DIALOG_SHOWN, 'true');
+  };
+
+  const handlePushConsentDecline = async () => {
+    setShowPushConsent(false);
+    await AsyncStorage.setItem(STORAGE_KEYS.PUSH_CONSENT_DIALOG_SHOWN, 'true');
+  };
+
   // Fetch initial badge count when manager logs in.
   // The child screen (ManagerLeaveApprovalScreen) calls setPendingCount after every load
   // via PendingLeaveContext — so the badge stays accurate after approve/reject.
@@ -125,6 +159,12 @@ function MainTabs() {
   return (
     <PendingLeaveContext.Provider value={{ setPendingCount }}>
     <PendingEventContext.Provider value={{ setPendingCount: setPendingEventCount }}>
+    <>
+      <PushConsentDialog
+        visible={showPushConsent}
+        onAccept={handlePushConsentAccept}
+        onDecline={handlePushConsentDecline}
+      />
     <Tab.Navigator
       key={role}
       screenOptions={({ route }) => ({
@@ -169,6 +209,7 @@ function MainTabs() {
 
       <Tab.Screen name="Profilo" component={SettingsStackNavigator} />
     </Tab.Navigator>
+    </>
     </PendingEventContext.Provider>
     </PendingLeaveContext.Provider>
   );

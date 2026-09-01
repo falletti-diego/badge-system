@@ -1,7 +1,8 @@
 import React from 'react';
-import { render, waitFor, act } from '@testing-library/react-native';
+import { render, waitFor, act, fireEvent } from '@testing-library/react-native';
 import { STORAGE_KEYS } from '../config/endpoints';
 import { interopDefault } from './helpers/rntl';
+import { navigationRef } from '../utils/navigationRef';
 
 // RootNavigator transitively imports 11+ screens. Stub every single one to a
 // trivial component so this test only exercises RootNavigator's own top-level
@@ -31,11 +32,17 @@ jest.mock('../screens/settings/ChangePasswordScreen', () => () => null);
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   multiRemove: jest.fn(),
+  getItem: jest.fn(),
+  setItem: jest.fn(),
 }));
 
 jest.mock('../services/secureAuthStorage', () => ({
   clearSession: jest.fn(),
   getUser: jest.fn(),
+}));
+
+jest.mock('../services/pushNotificationsService', () => ({
+  registerForPushNotifications: jest.fn(),
 }));
 
 jest.mock('@react-native-community/netinfo', () => ({
@@ -56,6 +63,7 @@ const secureAuthStorage = interopDefault(require('../services/secureAuthStorage'
 const NetInfo = require('@react-native-community/netinfo');
 const { AppState } = require('react-native');
 const { flushQueue } = interopDefault(require('../services/offlineQueue'));
+const pushNotificationsService = interopDefault(require('../services/pushNotificationsService'));
 
 const RootNavigator = require('../navigation/RootNavigator').default;
 
@@ -70,13 +78,27 @@ describe('RootNavigator', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     AsyncStorage.multiRemove.mockResolvedValue(undefined);
+    AsyncStorage.getItem.mockResolvedValue(null);
+    AsyncStorage.setItem.mockResolvedValue(undefined);
     secureAuthStorage.clearSession.mockResolvedValue(undefined);
     // Simulate a still-valid stored session: the regression this guards against
     // is a code path that peeks at this and skips the force-Login behavior.
     secureAuthStorage.getUser.mockResolvedValue({ role: 'employee' });
+    pushNotificationsService.registerForPushNotifications.mockResolvedValue({ granted: true, canAskAgain: true });
     NetInfo.addEventListener.mockReturnValue(jest.fn());
     AppState.addEventListener.mockReturnValue({ remove: jest.fn() });
   });
+
+  // MainTabs only mounts once navigation actually moves to the "Main" route
+  // (RootStack's initialRouteName is always "Login" on cold start — see the
+  // regression guard test above). Drive that transition directly through the
+  // same navigationRef the real app uses after a successful login.
+  async function renderMainTabs() {
+    const utils = await renderNavigator();
+    await utils.findByText('LOGIN_SCREEN_STUB');
+    await act(async () => navigationRef.navigate('Main'));
+    return utils;
+  }
 
   test('regression guard: cold start clears the secure session and the 2 cache keys (never OFFLINE_QUEUE or auth keys via AsyncStorage), and Login is always forced, even when a session already exists', async () => {
     const { findByText } = await renderNavigator();
@@ -147,5 +169,48 @@ describe('RootNavigator', () => {
 
     await act(async () => onAppStateChange('active'));
     expect(flushQueue).toHaveBeenCalledTimes(1);
+  });
+
+  test('shows the push consent dialog once for an employee who has not seen it yet', async () => {
+    AsyncStorage.getItem.mockResolvedValue(null);
+    secureAuthStorage.getUser.mockResolvedValue({ role: 'employee' });
+
+    const { findByText } = await renderMainTabs();
+
+    expect(await findByText('🔔 Notifiche')).toBeTruthy();
+  });
+
+  test('does not show the push consent dialog for a manager', async () => {
+    secureAuthStorage.getUser.mockResolvedValue({ role: 'manager' });
+
+    const { queryByText } = await renderMainTabs();
+    await act(async () => await Promise.resolve());
+
+    expect(queryByText('🔔 Notifiche')).toBeNull();
+  });
+
+  test('does not show the dialog again once the flag is already set', async () => {
+    AsyncStorage.getItem.mockResolvedValue('true');
+    secureAuthStorage.getUser.mockResolvedValue({ role: 'employee' });
+
+    const { queryByText } = await renderMainTabs();
+    await act(async () => await Promise.resolve());
+
+    expect(queryByText('🔔 Notifiche')).toBeNull();
+  });
+
+  test('does not crash and still persists the "shown" flag if pushNotificationsService unexpectedly rejects (defense in depth)', async () => {
+    AsyncStorage.getItem.mockResolvedValue(null);
+    secureAuthStorage.getUser.mockResolvedValue({ role: 'employee' });
+    pushNotificationsService.registerForPushNotifications.mockRejectedValue(new Error('boom'));
+
+    const { findByText } = await renderMainTabs();
+
+    const acceptButton = await findByText('Attiva');
+    fireEvent.press(acceptButton);
+
+    await waitFor(() =>
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith(STORAGE_KEYS.PUSH_CONSENT_DIALOG_SHOWN, 'true')
+    );
   });
 });
