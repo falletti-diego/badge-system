@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Switch, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Switch, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import authService from '../../services/authService';
 import apiClient from '../../services/apiClient';
 import secureAuthStorage from '../../services/secureAuthStorage';
@@ -17,6 +18,7 @@ function getInitials(name) {
 export default function SettingsScreen({ navigation }) {
   const [user, setUser] = useState(null);
   const [faceIdEnabled, setFaceIdEnabled] = useState(true);
+  const [pushPermission, setPushPermission] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -24,6 +26,14 @@ export default function SettingsScreen({ navigation }) {
       AsyncStorage.getItem(STORAGE_KEYS.FACE_ID_ENABLED).then((value) => {
         setFaceIdEnabled(value !== 'false'); // default true when unset
       });
+    }, []),
+  );
+
+  // Separate effect (not merged with the profile-loading one above) so a
+  // failure reading push permission status can't block face-id/profile refresh.
+  useFocusEffect(
+    useCallback(() => {
+      Notifications.getPermissionsAsync().then(setPushPermission).catch(() => setPushPermission(null));
     }, []),
   );
 
@@ -118,6 +128,18 @@ export default function SettingsScreen({ navigation }) {
             trackColor={{ false: COLORS.bone, true: COLORS.navy500 }}
           />
         </View>
+        {pushPermission && (
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>
+              {pushPermission.status === 'granted' ? 'Notifiche attive' : 'Notifiche disattivate'}
+            </Text>
+            {pushPermission.status !== 'granted' && !pushPermission.canAskAgain && (
+              <TouchableOpacity onPress={() => Linking.openSettings()}>
+                <Text style={styles.rowLabelLink}>Apri Impostazioni</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
         {user?.gps_consent_given === true && (
           <TouchableOpacity style={styles.row} onPress={handleRevokeGpsConsent}>
             <Text style={styles.rowLabel}>Revoca consenso posizione</Text>
@@ -178,6 +200,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: 1, borderTopColor: COLORS.linen,
   },
   rowLabel: { fontFamily: FONTS.body, fontSize: 14, color: COLORS.ink },
+  rowLabelLink: { fontFamily: FONTS.body, fontSize: 14, color: COLORS.navy500 },
   rowLabelDisabled: { fontFamily: FONTS.body, fontSize: 14, color: COLORS.dust },
   rowValue: { fontFamily: FONTS.body, fontSize: 13, color: COLORS.stone },
   chevron: { fontSize: 18, color: COLORS.bone },

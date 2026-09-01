@@ -1,13 +1,19 @@
 import React from 'react';
-import { View, Text, Alert } from 'react-native';
+import { View, Text, Alert, Linking } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
+import * as Notifications from 'expo-notifications';
 
 jest.mock('../services/authService', () => ({ getUser: jest.fn(), logout: jest.fn() }));
 jest.mock('@react-native-async-storage/async-storage', () => ({ getItem: jest.fn(), setItem: jest.fn() }));
 jest.mock('../services/apiClient', () => ({ post: jest.fn() }));
 jest.mock('../services/secureAuthStorage', () => ({ setUser: jest.fn() }));
+// Default resolved value so describe blocks that don't touch push
+// permissions (Guida, GPS consent) still render without throwing.
+jest.mock('expo-notifications', () => ({
+  getPermissionsAsync: jest.fn().mockResolvedValue({ status: 'undetermined', canAskAgain: true }),
+}));
 jest.mock('react-native/Libraries/Alert/Alert', () => ({
   alert: jest.fn((title, message, buttons) => {
     const revokeButton = buttons?.find(b => b.text === 'Revoca');
@@ -85,5 +91,39 @@ describe('SettingsScreen — revoca consenso posizione', () => {
 
     const { getByText } = await renderInNavigator();
     await waitFor(() => expect(getByText('Revoca consenso posizione')).toBeTruthy());
+  });
+});
+
+describe('SettingsScreen — riga Notifiche', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authService.getUser.mockResolvedValue({ name: 'Test User', email: 'test@example.com', role: 'employee' });
+    AsyncStorage.getItem.mockResolvedValue(null);
+  });
+
+  it('shows "Notifiche attive" with no action when permission is already granted', async () => {
+    Notifications.getPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true });
+    const { findByText, queryByText } = await renderInNavigator();
+
+    expect(await findByText('Notifiche attive')).toBeTruthy();
+    expect(queryByText('Apri Impostazioni')).toBeNull();
+  });
+
+  it('shows "Notifiche disattivate" with an "Apri Impostazioni" recovery button when permanently denied', async () => {
+    Notifications.getPermissionsAsync.mockResolvedValue({ status: 'denied', canAskAgain: false });
+    const { findByText } = await renderInNavigator();
+
+    expect(await findByText('Notifiche disattivate')).toBeTruthy();
+    expect(await findByText('Apri Impostazioni')).toBeTruthy();
+  });
+
+  it('opens system settings when "Apri Impostazioni" is tapped', async () => {
+    Notifications.getPermissionsAsync.mockResolvedValue({ status: 'denied', canAskAgain: false });
+    const openSettingsSpy = jest.spyOn(Linking, 'openSettings').mockImplementation(() => {});
+    const { findByText } = await renderInNavigator();
+
+    fireEvent.press(await findByText('Apri Impostazioni'));
+
+    expect(openSettingsSpy).toHaveBeenCalledTimes(1);
   });
 });
