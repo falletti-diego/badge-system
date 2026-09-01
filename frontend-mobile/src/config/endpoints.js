@@ -46,6 +46,9 @@ export const ENDPOINTS = {
 
   // Health
   HEALTH: '/health',
+
+  // Push notifications
+  NOTIFICATIONS_PUSH_TOKEN: '/api/v1/notifications/push-token',
 };
 
 // Leave types — all three shown
@@ -124,6 +127,8 @@ export const STORAGE_KEYS = {
   // GEOFENCE_COORDINATES_REQUIRED) — usato per decidere se bloccare l'accodamento
   // offline di un check-in su una sede nota (o sconosciuta) come geofenced.
   CACHE_GEOFENCING_STATUS: 'badge_cache_geofencing_status',
+  // Push notifications: shown once after the employee accepts, not on every login.
+  PUSH_CONSENT_DIALOG_SHOWN: 'badge_push_consent_dialog_shown',
 };
 
 // Offline mode (docs/superpowers/plans/2026-07-19-offline-mode.md, Phase B)
