@@ -1,3 +1,63 @@
+# Badge System — Session 119 Handoff
+
+**Date:** 2026-09-01
+**Session:** 119 — Notifiche push (Expo Push Service) progettate, pianificate e implementate end-to-end via `/superpowers:subagent-driven-development` in worktree isolato, mergiata su `main` in locale
+**Status:** ✅ **Implementazione completa e mergiata su `main` (`0130451`)**, tutte le suite verdi (backend 970/984 — 14 skip; mobile 181/181; frontend-web 343/344 — 1 skip preesistente, invariato). ⚠️ **Non ancora pushata su `origin`/non deployata** — nessun `git push`, nessun deploy EC2 eseguito in questa sessione, solo merge locale. Due follow-up restano esplicitamente manuali (vedi Next Steps).
+
+## Goal (Session 119)
+
+Prima feature di notifiche push per il Badge System, richiesta e brainstormata nella parte iniziale di questa sessione (riassunta, non ripetuta qui): fino a questa sessione l'unico segnale di notifica esistente era una riga nella tabella `notifications`, mostrata solo in-app sul web (`NotificationBell`), generata solo dal cambio turno. Nessuna notifica per approvazione/rifiuto ferie, malattia, eventi; nessuna notifica su mobile. Spec e piano approvati dall'utente prima dell'esecuzione: `docs/superpowers/specs/2026-08-30-push-notifications-design.md`, `docs/superpowers/plans/2026-08-31-push-notifications.md` (17 task TDD).
+
+## Current Progress
+
+**Esecuzione** (`/superpowers:subagent-driven-development`, worktree isolato nativo `EnterWorktree`, branch `worktree-push-notifications`, un subagent implementatore + due review indipendenti — spec-compliance poi code-quality — per task, in sequenza su 17 task):
+
+1. **Migration 043** — nuova tabella `device_push_tokens` (token Expo per employee/piattaforma), 4 test di vincolo.
+2. **`backend/src/utils/pushNotifications.js`** — `notifyEmployee()` (fire-and-forget, wrappato internamente in `.catch()`, contratto "non lancia mai") + `sendPushToTokens()` + `isValidExpoPushToken()` (reimplementata a mano perché il mock di test di `expo-server-sdk` non esponeva il metodo statico reale `Expo.isExpoPushToken`, verificata byte-per-byte identica alla regex reale dal reviewer).
+3. **`POST /api/v1/notifications/push-token`** — upsert `ON CONFLICT (token)`, fail-closed 403 `PUSH_TOKEN_NO_EMPLOYEE_PROFILE` se il chiamante non ha un profilo employee. La bozza del piano aveva 3 dettagli sbagliati (mount path, campo dell'errore, un helper `signAccessToken` inesistente) — l'implementatore li ha corretti investigando il codice reale, verificato indipendentemente dal reviewer.
+4. **Wiring in `shifts.js`/`leaves.js`/`events.js`** (approvazione) — stesso pattern ovunque: chiamata fire-and-forget + try/catch difensivo al call site anche se la funzione è documentata per non lanciare mai. **Disciplina privacy verificata con mutation-test**: il corpo della push (`pushBody`) non contiene mai `rejection_reason` o altro dato sensibile leggibile su un telefono bloccato — solo il messaggio in-app (`inAppMessage`) può includerlo; il test è stato deliberatamente rotto e ripristinato per confermare che intercetta davvero la regressione, non solo che passa per caso.
+5. **Lato mobile** — `app.json` (plugin `expo-notifications`), `pushNotificationsService.js` (permessi + registrazione token, un solo try/catch attorno a tutto il post-permesso), `PushConsentDialog.jsx` (opt-in esplicito, mostrato una sola volta, mirror di `GPSConsentDialog.jsx`), wiring in `RootNavigator.jsx` (gate per ruolo, stato `showPushConsent`), riga "Notifiche attive/disattivate" in `SettingsScreen.jsx` con percorso di recupero se l'utente ha negato il permesso.
+
+**Bug collaterali risolti durante l'esecuzione:**
+- `expo-server-sdk` (pacchetto ESM-only) rompeva il `require` transitivo di **~70 file di test** non correlati non appena `shifts.js` cominciava a importarlo — risolto con un automatic Jest mock (`backend/__mocks__/expo-server-sdk.js`), verificato da due reviewer indipendenti che non interferisce con i 3 override espliciti `jest.mock('expo-server-sdk', ...)` già presenti in test specifici (ogni file di test ha il proprio registro moduli).
+- Un commento di 6 righe in italiano, verboso, copiato letteralmente dal piano (che è in italiano) in `shifts.js` altrimenti tutto-inglese-terso — colpa mia (piano scritto in italiano, l'implementatore lo ha copiato senza controllare la convenzione del file) — corretto a una riga in inglese; lo stesso fix di naming del log action (`notification_create_error` → `notify_employee_call_error`) propagato correttamente dagli implementatori successivi nei Task 8/9 senza bisogno di ripeterlo.
+- Un test del Task 4 mockava solo la prima chiamata `pool.query` lasciando la seconda (lookup token) fallire per un motivo estraneo — gap di isolamento del test trovato dalla code-quality review, corretto.
+- Il mock factory suggerito dal piano per il Task 15 (`jest.fn()` senza default) rompeva 2 describe block preesistenti in `SettingsScreen.test.jsx` — fix con un default `mockResolvedValue`, la cui necessità è stata verificata EMPIRICAMENTE dal reviewer (ha temporaneamente ripristinato la versione rotta, osservato il fallimento esatto, poi ripristinato il fix).
+
+**Rate limit su un subagent implementatore** durante il Task 7 (`shifts.js`), interrotto subito dopo aver creato il mock `__mocks__/expo-server-sdk.js` non ancora committato — invece di ripartire da zero, ho ispezionato `git status`/`git log`, confermato che il commit della feature era già landed e che il mock file era genuinamente necessario, poi ripreso lo stesso subagent via `SendMessage` per fargli committare il mock e rieseguire la suite completa.
+
+**Su richiesta esplicita dell'utente**, `/test-all` + `/code-review` (`code-reviewer` + `senior-backend`) ripetuti sull'intero diff prima di chiudere la sessione:
+- **PR analyzer + code quality checker** (strumenti deterministici): 4 finding "critical" hardcoded-secret e 1 smell "94 righe" — **tutti falsi positivi verificati manualmente** (stringhe fixture `ExponentPushToken[...]` nei test, il nome della costante `NOTIFICATIONS_PUSH_TOKEN` contenente "TOKEN", e un naive brace-counter che confonde le `{}` di espressioni JSX in `RootNavigator.jsx` per corpo di funzione).
+- **Revisione con lente `senior-backend` (subagent dedicato)** — ha trovato 3 problemi reali, non catturati dalle review a task:
+  - 🟠 **Medium**: nessun rate limit dedicato su `POST /notifications/push-token` — un dipendente autenticato poteva far crescere `device_push_tokens` senza limite. **Fixato**: nuovo `pushTokenLimiter` (10 req/15min, stesso pattern degli altri limiter nominati).
+  - 🟡 **Low**: nessuna validazione del formato token in ingresso (solo al momento dell'invio Expo). **Fixato**: schema Zod ora usa `.refine(isValidExpoPushToken)` (esportata dal Task 4).
+  - 🟡 **Low residuo, deliberatamente non fixato**: riassegnazione cross-tenant di un token via upsert incondizionato; nessun timeout sulla chiamata Expo — entrambi richiedono una decisione di prodotto/architettura, non un fix meccanico, documentati come follow-up.
+- Il fix del rate limiter ha richiesto di aggiungere `pushTokenLimiter: passThrough` al mock factory di **30 file di test** che mockano l'intero modulo `rateLimiter` (ogni file che lo mocka deve fornire ogni export nominato, altrimenti la destructuring a require-time in `app.js` lancia). **Un file legacy fuori da `src/__tests__/` è stato dimenticato dal subagent fix** (`backend/__tests__/middleware-checkRevoked.test.js`, 16 fallimenti) — il report finale del subagent era anomalo ("aspetterò la notifica del Monitor..."), non mi sono fidato, ho rieseguito la suite completa io stesso, trovato il file mancante, corretto con un `Edit` diretto, verificato con un grep comprensivo che nessun altro file fosse stato dimenticato.
+
+**Merge**: dopo il rebase iniziale su `main` (il worktree era stato creato prima che 4 commit di documentazione atterrassero su `main` — rebase pulito, zero conflitti), merge locale finale pulito su `main` (fast-forward, zero conflitti, 57 file). **`node_modules` di `frontend-mobile` nella repo principale era disallineato** dal `package-lock.json` appena mergeato (mancavano `expo-notifications`, nuovo, e `expo-location`, preesistente ma mai installato in questo checkout) — causava 3 suite fallite con "Cannot find module"; risolto con `npm install`, suite mobile riverificata verde sul risultato mergeato (23/23 suite, 181/181 test). Backend riverificato verde sul risultato mergeato (entrambi i batch passati). Branch `worktree-push-notifications` e il worktree su disco (`.claude/worktrees/push-notifications`) **lasciati intatti** — gestiti dall'harness (`EnterWorktree`/`ExitWorktree`), non da Superpowers, non rimossi per policy (`git branch -d` si è anche rifiutato mentre il worktree esiste ancora).
+
+## What Worked
+
+- **Non fidarsi del report anomalo di un subagent** e rieseguire la suite completa io stesso ha trovato una regressione reale (il file di test legacy dimenticato) che sarebbe altrimenti finita mergiata su `main` rotta.
+- **Automatic Jest mock come fix idiomatico** per un pacchetto ESM-only che rompe `require` transitivo — più pulito e meno fragile di mockare `expo-server-sdk` in ogni singolo file di test toccato indirettamente.
+- **Mutation-testing la disciplina privacy** (rompere deliberatamente l'invariante "niente dati sensibili nel corpo della push" per verificare che il test lo catturi) invece di fidarsi che il test verde bastasse.
+- **La lente `senior-backend` ha trovato problemi genuinamente nuovi** (rate limit mancante, validazione formato mancante) che né la review a task né gli strumenti deterministici avevano segnalato — un angolo di revisione diverso, non ridondante con quanto già fatto.
+
+## What Didn't Work / Da tenere a mente
+
+- Il piano scritto in italiano ha causato un commento in italiano copiato letteralmente in un file altrimenti tutto-inglese — se il piano è in italiano, ricordare esplicitamente all'implementatore di tradurre/adattare i commenti alla lingua del file, non solo alla logica.
+- `node_modules` locale della repo principale può disallinearsi silenziosamente dal `package-lock.json` dopo un merge da un worktree che ha girato il proprio `npm install` — sempre rieseguire l'installazione e la suite dopo un merge che tocca `package.json`/`package-lock.json`, non fidarsi che "i test passavano nel worktree" implichi che passino anche nella repo principale.
+
+## Next Steps
+
+1. **Push su `origin/main`** e deploy — non ancora fatto in questa sessione (l'utente ha chiesto solo il merge locale). Prima del push, considerare se pulire branch/worktree `push-notifications` residui.
+2. **Task 1 del piano (manuale, fuori scope codice)**: setup Firebase/FCM per il push su Android — richiesto da Expo Push Service per la consegna reale su dispositivi Android, mai eseguito in questa sessione.
+3. **Task 17 del piano (manuale, fuori scope codice)**: build EAS + submission TestFlight per portare la feature su un device reale.
+4. **Follow-up Low deliberatamente rimandati** (vedi sopra): decisione di prodotto su riassegnazione cross-tenant del token via upsert; timeout sulla chiamata Expo.
+5. Backlog invariato dalle sessioni precedenti (outreach commerciale, S.27/S.28/S.29 legali, Auth0 reale).
+
+---
+
 # Badge System — Session 118 Handoff
 
 **Date:** 2026-08-30
