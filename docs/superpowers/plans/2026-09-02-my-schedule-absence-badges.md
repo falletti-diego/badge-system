@@ -204,7 +204,9 @@ git commit -m "feat: add resolveAbsenceBadge pure logic for My Schedule absence 
 - `ENDPOINTS.LEAVES_LIST` = `/api/v1/leave/my-requests` — **no query params supported** (returns up to 100 most recent rows of the calling employee's own leave requests, any status, all time — do NOT pass a `params` object with date filters, they're silently ignored server-side). Response: `{ data: [...] }`, rows have `status`, `start_date`, `end_date`.
 - `ENDPOINTS.EVENTS_LIST` = `/api/v1/events/my-requests` — query params `date_from`, `date_to`, both optional, format `YYYY-MM-DD` (validated by `GetMyEventRequestsSchema`, regex `/^\d{4}-\d{2}-\d{2}$/`). Response: `{ data: [...] }`, rows have `status`, `event_date` (already `::text`-cast to plain `YYYY-MM-DD` server-side).
 
-- [ ] **Step 1: Update `MyScheduleScreen.test.jsx`'s 3 existing tests for the new 4-call fetch, and add 2 new tests for the absence-badge behavior**
+**Known limitation, accepted (not fixed by this plan):** `LEAVES_LIST` returns only the 100 most recent leave requests, not scoped by date. An employee with more than 100 historical leave requests could scroll back far enough in the calendar that a genuinely approved old leave falls outside that window and its badge silently doesn't show. Not fixable without a backend change to add date filtering to this endpoint (out of scope — see spec Non-Goals). Realistic impact is very low for a retail employee's actual leave-request volume; documented here so it isn't mistaken for a new bug if ever noticed.
+
+- [ ] **Step 1: Update `MyScheduleScreen.test.jsx`'s 3 existing tests for the new 4-call fetch, and add 6 new tests covering the absence-badge behavior, the shift-wins integration path, the exact per-endpoint request contract, the refactored hard-error path, and the abort/race-condition fix**
 
 Replace the entire contents of `frontend-mobile/src/__tests__/MyScheduleScreen.test.jsx` with:
 
@@ -213,7 +215,7 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { render, waitFor, act } from '@testing-library/react-native';
+import { render, waitFor, act, fireEvent } from '@testing-library/react-native';
 import { makeNetworkError } from './helpers/networkErrors';
 import { ENDPOINTS } from '../config/endpoints';
 
@@ -397,13 +399,154 @@ describe('MyScheduleScreen', () => {
     expect(queryByText(/Errore caricamento/)).toBeNull();
     expect(queryByText(/Sei offline/)).toBeNull();
   });
+
+  test('un giorno con turno assegnato mostra il turno, non il badge di malattia, anche se coperto da una malattia approvata', async () => {
+    // Component-level guard for spec Decision 3 ("shift wins") — the pure
+    // resolveAbsenceBadge() unit tests (absenceBadges.test.js) already prove
+    // the function returns null when shiftValue is truthy, but that alone
+    // doesn't prove the JSX branch order in MyScheduleScreen.jsx is correct
+    // (e.g. an accidental `absenceBadge ? ... : shift ? ...` swap would pass
+    // every absenceBadges.test.js assertion while still showing the wrong
+    // badge on screen).
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const day = `${y}-${m}-05`;
+
+    apiClient.get.mockImplementation((url) => {
+      if (url === ENDPOINTS.SHIFTS_MY_SCHEDULE) {
+        return Promise.resolve({ data: { data: { shifts_data: { [day]: 'm' } } } });
+      }
+      if (url === ENDPOINTS.ILLNESS_LIST) {
+        return Promise.resolve({
+          data: { data: [{ start_date: `${day}T00:00:00.000Z`, end_date: `${day}T00:00:00.000Z` }] },
+        });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    const { getAllByText, queryAllByText } = await renderInNavigator();
+
+    await waitFor(() => expect(getAllByText('Mattino').length).toBeGreaterThan(0));
+    expect(queryAllByText('Malattia').length).toBe(0);
+  });
+
+  test('invia i parametri corretti alle 3 fetch di assenza per il mese visualizzato', async () => {
+    mockShiftsOnly({});
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+    const firstDate = `${y}-${m}-01`;
+    const lastDate = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+
+    await renderInNavigator();
+    await waitFor(() => expect(apiClient.get).toHaveBeenCalledTimes(4));
+
+    expect(apiClient.get).toHaveBeenCalledWith(
+      ENDPOINTS.ILLNESS_LIST,
+      expect.objectContaining({ params: { start_date: firstDate, end_date: lastDate } }),
+    );
+    expect(apiClient.get).toHaveBeenCalledWith(
+      ENDPOINTS.EVENTS_LIST,
+      expect.objectContaining({ params: { date_from: firstDate, date_to: lastDate } }),
+    );
+    // LEAVES_LIST supports no date params server-side (see the "Known
+    // limitation" note above this task) — asserting their absence here
+    // guards against a future change silently adding params that the
+    // backend would just ignore, masking a real gap behind an illusion of
+    // date-scoping.
+    const leavesCall = apiClient.get.mock.calls.find(([url]) => url === ENDPOINTS.LEAVES_LIST);
+    expect(leavesCall).toBeDefined();
+    expect(leavesCall[1].params).toBeUndefined();
+  });
+
+  test('errore reale del server (con response, non di rete): mostra il banner di errore', async () => {
+    // Distinguishes the two error branches inside the async/await rewrite of
+    // fetchSchedule: this is the "hard error, no cache fallback" path
+    // (e.response present, e.g. a 500), never exercised by the pre-existing
+    // "errore di rete" test above (which relies on e.response being absent).
+    // Rewriting the original .then/.catch chain into async/await (Decision 6)
+    // makes it easy to accidentally drop the setLoading(false) in this one
+    // branch, which would leave the spinner stuck forever — this test would
+    // fail (timeout waiting for the error text, since the FlatList/error view
+    // are both gated by conditions that never observably change without it)
+    // if that regressed.
+    const serverError = { response: { status: 500, data: { message: 'Errore interno del server' } } };
+    apiClient.get.mockImplementation((url) => {
+      if (url === ENDPOINTS.SHIFTS_MY_SCHEDULE) {
+        return Promise.reject(serverError);
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    const { getByText } = await renderInNavigator();
+
+    await waitFor(() => expect(getByText('Errore interno del server')).toBeTruthy());
+  });
+
+  test('cambio mese rapido: una fetch precedente in volo, se risolve dopo, non sovrascrive i dati del mese corrente', async () => {
+    // Guards the fix in this rewrite where the abort check now reads the
+    // signal captured by THIS invocation's own closure, instead of the
+    // original code's `abortControllerRef.current?.signal.aborted` — which
+    // checks whatever controller is CURRENT at the time the check runs, not
+    // the one that belonged to the specific in-flight request. After a second
+    // fetchSchedule() call replaces the ref, that original pattern would have
+    // let a late-resolving, already-superseded first request's data through.
+    const now = new Date();
+    const y = now.getFullYear();
+    const m1 = String(now.getMonth() + 1).padStart(2, '0');
+    let m2Num = now.getMonth() + 2;
+    let y2 = y;
+    if (m2Num > 12) { m2Num = 1; y2 += 1; }
+    const m2 = String(m2Num).padStart(2, '0');
+
+    let resolveFirstShifts;
+    const firstShiftsPromise = new Promise((resolve) => { resolveFirstShifts = resolve; });
+    let shiftsCallCount = 0;
+
+    apiClient.get.mockImplementation((url) => {
+      if (url === ENDPOINTS.SHIFTS_MY_SCHEDULE) {
+        shiftsCallCount += 1;
+        if (shiftsCallCount === 1) {
+          // First invocation (current month): resolves LATE, after the second.
+          return firstShiftsPromise.then(() => ({
+            data: { data: { shifts_data: { [`${y}-${m1}-01`]: 'p' } } },
+          }));
+        }
+        // Second invocation (next month, triggered by tapping "›"): resolves immediately.
+        return Promise.resolve({ data: { data: { shifts_data: { [`${y2}-${m2}-01`]: 'm' } } } });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    const { getByText, queryAllByText } = await renderInNavigator();
+    await waitFor(() => expect(apiClient.get).toHaveBeenCalledTimes(4));
+
+    // Tap "next month" before the first fetch has resolved — this aborts the
+    // in-flight first fetch and starts a second one for the new month.
+    await act(async () => {
+      fireEvent.press(getByText('›'));
+    });
+    await waitFor(() => expect(apiClient.get).toHaveBeenCalledTimes(8));
+
+    // Now let the FIRST (superseded) fetch resolve, late.
+    await act(async () => {
+      resolveFirstShifts();
+    });
+
+    // The stale 'Pomeriggio' badge from the first (aborted) month must never
+    // appear — only the second month's 'Mattino' badge should be visible.
+    await waitFor(() => expect(queryAllByText('Mattino').length).toBeGreaterThan(0));
+    expect(queryAllByText('Pomeriggio').length).toBe(0);
+  });
 });
 ```
 
 - [ ] **Step 2: Run tests to verify the new/updated ones fail**
 
 Run: `cd frontend-mobile && npx jest src/__tests__/MyScheduleScreen.test.jsx`
-Expected: FAIL — the call-count assertions (`toHaveBeenCalledTimes(4)`/`(8)`) fail because the component still only calls `apiClient.get` once per fetch; the new "Malattia" test fails because `getAllByText('Malattia')` finds nothing.
+Expected: FAIL — most of the 9 tests fail against the still-unmodified component: the call-count assertions (`toHaveBeenCalledTimes(4)`/`(8)`) fail because it still calls `apiClient.get` once per fetch; the "Malattia" and "turno vince" tests fail because there's no badge rendering yet; the params-contract test fails (no illness/leave/event calls exist to assert on); the rapid-month-change test fails on the call-count wait. The pre-existing "errore di rete" test and the new "errore reale del server" test may already pass unchanged (the shifts-only error paths aren't touched by this step) — that's expected, not a problem.
 
 - [ ] **Step 3: Rewrite `MyScheduleScreen.jsx` to fetch absences in parallel and render the badge**
 
@@ -691,7 +834,7 @@ const styles = StyleSheet.create({
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `cd frontend-mobile && npx jest src/__tests__/MyScheduleScreen.test.jsx`
-Expected: PASS — all 5 tests green.
+Expected: PASS — all 9 tests green.
 
 - [ ] **Step 5: Run lint**
 
@@ -727,6 +870,15 @@ Expected: 0 errors (pre-existing warnings, if any, are acceptable — do not int
 Re-read `docs/superpowers/specs/2026-09-02-my-schedule-absence-badges-design.md` end to end and confirm each Decision (1 through 6) and each Non-Goal has a corresponding implemented behavior or explicit exclusion in the code from Tasks 1-2. No code change expected in this step — if a gap is found, go back and add a task to close it before considering this plan done.
 
 ---
+
+## Critical Analysis (post-approval, user-requested)
+
+After the plan above was first written, a dedicated critical pass checked for interactions with the rest of the codebase and for test coverage gaps, without changing the planned behavior:
+
+- **Verified safe, no action needed:** `RootNavigator.test.jsx` mocks `MyScheduleScreen` entirely (`() => null`) — untouched by this plan. `QRScannerScreen.jsx`'s only reference to `MyScheduleScreen` is a comment, not an import. The Maestro E2E smoke flow (`maestro/navigation-smoke.yaml`) only asserts the screen title "I Miei Turni" (unchanged), never shift/badge content. The general API rate limiter (100 req/min per authenticated user) has ample headroom for 4 calls per screen focus/month change.
+- **Real correctness detail found in the already-written Task 2 code, now covered by a test:** the rewrite reads the AbortController's `signal` from this invocation's own closure, not `abortControllerRef.current?.signal.aborted` (the original code's pattern). This is a deliberate improvement — the original pattern checks whichever controller is *current* at the time an in-flight request's callback runs, not the one that request actually belongs to, which is a latent race window on rapid month changes. Added the "cambio mese rapido" test above to lock this in.
+- **Coverage gaps closed** (no bug found, but nothing was guarding against a future regression): shift-wins-over-absence-badge precedence was previously proven only at the pure-function level (`absenceBadges.test.js`), not at the component/JSX-wiring level — added a dedicated component test. The exact request parameters sent to each of the 3 new endpoints (easy to get wrong — three different shapes) had no test — added one. The hard-error (non-network, e.g. HTTP 500) path through the rewritten `async`/`await` `fetchSchedule` had no test, and a rewrite from promise-chaining is exactly the kind of change that can silently drop a `setLoading(false)` in an untested branch — added one.
+- **Known limitation documented, deliberately not fixed:** `LEAVES_LIST` returns only the 100 most recent leave requests with no server-side date filter — see the note in Task 2's endpoint context above. Out of scope (would require a backend change); low real-world impact.
 
 ## Self-Review (already performed while writing this plan)
 
