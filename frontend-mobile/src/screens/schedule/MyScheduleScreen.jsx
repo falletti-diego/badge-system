@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../services/apiClient';
 import { ENDPOINTS, SHIFTS_CONFIG, STORAGE_KEYS } from '../../config/endpoints';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { resolveAbsenceBadge } from '../../utils/absenceBadges';
 
 const { LABELS: SHIFT_LABELS, COLORS: SHIFT_COLORS, ICONS: SHIFT_ICONS } = SHIFTS_CONFIG;
 
@@ -25,57 +26,81 @@ export default function MyScheduleScreen({ navigation }) {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [shiftsData, setShiftsData] = useState({});
+  const [absences, setAbsences] = useState({ illnesses: [], leaves: [], events: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [offlineBanner, setOfflineBanner] = useState(null);
   const abortControllerRef = useRef(null);
 
-  const fetchSchedule = useCallback((m = month, y = year) => {
+  const fetchSchedule = useCallback(async (m = month, y = year) => {
     abortControllerRef.current?.abort();
-    abortControllerRef.current = new AbortController();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const { signal } = controller;
 
     setLoading(true);
     setError(null);
     setOfflineBanner(null);
 
-    apiClient.get(ENDPOINTS.SHIFTS_MY_SCHEDULE, {
-      params: { month: m, year: y },
-      signal: abortControllerRef.current.signal,
-    })
-      .then(r => {
-        if (!abortControllerRef.current?.signal.aborted) {
-          const data = r.data.data?.shifts_data ?? {};
-          setShiftsData(data);
-          AsyncStorage.setItem(
-            STORAGE_KEYS.CACHE_SHIFTS,
-            JSON.stringify({ savedAt: Date.now(), month: m, year: y, shiftsData: data }),
-          ).catch(() => {});
-        }
-      })
-      .catch(async e => {
-        if (abortControllerRef.current?.signal.aborted) return;
+    const daysInRange = getDaysInMonth(m, y);
+    const startDate = daysInRange[0];
+    const endDate = daysInRange[daysInRange.length - 1];
 
-        if (!e.response) {
-          try {
-            const raw = await AsyncStorage.getItem(STORAGE_KEYS.CACHE_SHIFTS);
-            const cached = raw ? JSON.parse(raw) : null;
-            if (cached && cached.month === m && cached.year === y) {
-              setShiftsData(cached.shiftsData ?? {});
-              setOfflineBanner({ savedAt: cached.savedAt });
-              return;
-            }
-          } catch (cacheErr) {
-            // corrupt cache or storage failure — fall through to normal error
+    // Absence data is best-effort/display-only (spec Decision 4 — silent
+    // degradation): a failure here must never block or error out the shifts
+    // fetch below, which is the operationally critical data. Promise.allSettled
+    // (not Promise.all) so one failing endpoint doesn't drop the other two.
+    const absencesPromise = Promise.allSettled([
+      apiClient.get(ENDPOINTS.ILLNESS_LIST, { params: { start_date: startDate, end_date: endDate }, signal }),
+      apiClient.get(ENDPOINTS.LEAVES_LIST, { signal }),
+      apiClient.get(ENDPOINTS.EVENTS_LIST, { params: { date_from: startDate, date_to: endDate }, signal }),
+    ]).then(([illnessResult, leavesResult, eventsResult]) => ({
+      illnesses: illnessResult.status === 'fulfilled' ? (illnessResult.value.data.data ?? []) : [],
+      leaves: leavesResult.status === 'fulfilled' ? (leavesResult.value.data.data ?? []) : [],
+      events: eventsResult.status === 'fulfilled' ? (eventsResult.value.data.data ?? []) : [],
+    }));
+
+    let shiftsResult;
+    let offline = null;
+    try {
+      const r = await apiClient.get(ENDPOINTS.SHIFTS_MY_SCHEDULE, { params: { month: m, year: y }, signal });
+      shiftsResult = r.data.data?.shifts_data ?? {};
+      AsyncStorage.setItem(
+        STORAGE_KEYS.CACHE_SHIFTS,
+        JSON.stringify({ savedAt: Date.now(), month: m, year: y, shiftsData: shiftsResult }),
+      ).catch(() => {});
+    } catch (e) {
+      if (signal.aborted) return;
+
+      if (!e.response) {
+        try {
+          const raw = await AsyncStorage.getItem(STORAGE_KEYS.CACHE_SHIFTS);
+          const cached = raw ? JSON.parse(raw) : null;
+          if (cached && cached.month === m && cached.year === y) {
+            shiftsResult = cached.shiftsData ?? {};
+            offline = { savedAt: cached.savedAt };
           }
+        } catch (cacheErr) {
+          // corrupt cache or storage failure — fall through to normal error
         }
+      }
 
-        setError(e.response?.data?.message || 'Errore caricamento turni');
-      })
-      .finally(() => {
-        if (!abortControllerRef.current?.signal.aborted) {
+      if (shiftsResult === undefined) {
+        if (!signal.aborted) {
+          setError(e.response?.data?.message || 'Errore caricamento turni');
           setLoading(false);
         }
-      });
+        return;
+      }
+    }
+
+    const absencesData = await absencesPromise;
+    if (signal.aborted) return;
+
+    setShiftsData(shiftsResult);
+    setAbsences(absencesData);
+    if (offline) setOfflineBanner(offline);
+    setLoading(false);
   }, [month, year]);
 
   // useFocusEffect (not plain useEffect) so returning to this tab re-attempts the
@@ -163,6 +188,7 @@ export default function MyScheduleScreen({ navigation }) {
             const dayName = dayObj.toLocaleDateString('it-IT', { weekday: 'short' });
             const isWeekend = dayObj.getDay() === 0 || dayObj.getDay() === 6;
             const isToday = date === now.toISOString().split('T')[0];
+            const absenceBadge = resolveAbsenceBadge(date, shift, absences.illnesses, absences.leaves, absences.events);
 
             return (
               <View style={[styles.dayRow, isWeekend && styles.weekend, isToday && styles.today]}>
@@ -175,6 +201,13 @@ export default function MyScheduleScreen({ navigation }) {
                     <Text style={styles.shiftIcon}>{SHIFT_ICONS[shift]}</Text>
                     <Text style={[styles.shiftLabel, { color: SHIFT_COLORS[shift] }]}>
                       {SHIFT_LABELS[shift]}
+                    </Text>
+                  </View>
+                ) : absenceBadge ? (
+                  <View style={[styles.shiftBadge, { backgroundColor: absenceBadge.color + '20' }]}>
+                    <Text style={styles.shiftIcon}>{absenceBadge.icon}</Text>
+                    <Text style={[styles.shiftLabel, { color: absenceBadge.color }]}>
+                      {absenceBadge.label}
                     </Text>
                   </View>
                 ) : (
