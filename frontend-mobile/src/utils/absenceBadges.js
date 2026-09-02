@@ -26,6 +26,16 @@ function toDateOnly(value) {
   return String(value).slice(0, 10);
 }
 
+// Checks if a date falls within a date range (inclusive on both ends).
+function coversDate(date, startRaw, endRaw) {
+  return date >= toDateOnly(startRaw) && date <= toDateOnly(endRaw);
+}
+
+// Checks if a leave/event status is active (approved or pending).
+function isActiveStatus(status) {
+  return status === 'PENDING' || status === 'APPROVED';
+}
+
 /**
  * Returns the badge to show for `date` (a 'YYYY-MM-DD' string), or null if
  * none applies.
@@ -41,23 +51,17 @@ function toDateOnly(value) {
 export function resolveAbsenceBadge(date, shiftValue, illnesses, leaves, events) {
   if (shiftValue) return null;
 
-  const hasIllness = illnesses.some((i) => {
-    const start = toDateOnly(i.start_date);
-    const end = toDateOnly(i.end_date);
-    return date >= start && date <= end;
-  });
+  const hasIllness = illnesses.some((i) => coversDate(date, i.start_date, i.end_date));
   if (hasIllness) return ABSENCE_BADGES.illness;
 
   const leave = leaves.find((l) => {
-    if (l.status !== 'PENDING' && l.status !== 'APPROVED') return false;
-    const start = toDateOnly(l.start_date);
-    const end = toDateOnly(l.end_date);
-    return date >= start && date <= end;
+    if (!isActiveStatus(l.status)) return false;
+    return coversDate(date, l.start_date, l.end_date);
   });
   if (leave) return leave.status === 'APPROVED' ? ABSENCE_BADGES.leaveApproved : ABSENCE_BADGES.leavePending;
 
   const event = events.find((e) => {
-    if (e.status !== 'PENDING' && e.status !== 'APPROVED') return false;
+    if (!isActiveStatus(e.status)) return false;
     return toDateOnly(e.event_date) === date;
   });
   if (event) return event.status === 'APPROVED' ? ABSENCE_BADGES.eventApproved : ABSENCE_BADGES.eventPending;

@@ -11,6 +11,12 @@ describe('resolveAbsenceBadge', () => {
     expect(resolveAbsenceBadge('2026-09-04', null, illnesses, [], [])).toEqual(ABSENCE_BADGES.illness);
   });
 
+  test('returns null for a date just outside an illness range (boundary check)', () => {
+    const illnesses = [{ start_date: '2026-09-04T00:00:00.000Z', end_date: '2026-09-05T00:00:00.000Z' }];
+    expect(resolveAbsenceBadge('2026-09-03', null, illnesses, [], [])).toBeNull();
+    expect(resolveAbsenceBadge('2026-09-06', null, illnesses, [], [])).toBeNull();
+  });
+
   test('illness takes priority over an approved leave on the same date', () => {
     const illnesses = [{ start_date: '2026-09-04T00:00:00.000Z', end_date: '2026-09-04T00:00:00.000Z' }];
     const leaves = [{ status: 'APPROVED', start_date: '2026-09-04T00:00:00.000Z', end_date: '2026-09-04T00:00:00.000Z' }];
