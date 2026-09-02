@@ -151,7 +151,11 @@ describe('Event Request API Endpoints — Conflict Detection', () => {
       .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] }) // employee lookup
       .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
       .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
-      .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }); // conflict found
+      .mockResolvedValueOnce({ rows: [{ id: 'checkin-1', timestamp: new Date(), type: 'IN' }] }) // findConflictingCheckin — conflict found
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingSmartWorking
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingEvent
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingLeaveRange
+      .mockResolvedValueOnce({ rows: [] }); // findConflictingIllnessRange
 
     const res = await request(app)
       .post('/api/v1/events/request')
@@ -169,7 +173,11 @@ describe('Event Request API Endpoints — Conflict Detection', () => {
       .mockResolvedValueOnce({ rows: [{ id: TEST_EMPLOYEE_ID, client_id: TEST_CLIENT_ID }] }) // employee lookup
       .mockResolvedValueOnce({}) // SET LOCAL lock_timeout
       .mockResolvedValueOnce({ rows: [] }) // pg_advisory_xact_lock
-      .mockResolvedValueOnce({ rows: [] }) // no conflict
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingCheckin — no conflict
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingSmartWorking
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingEvent
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingLeaveRange
+      .mockResolvedValueOnce({ rows: [] }) // findConflictingIllnessRange
       .mockResolvedValueOnce({ rows: [{ id: TEST_EVENT_ID, status: 'PENDING' }] }); // insert
 
     const res = await request(app)

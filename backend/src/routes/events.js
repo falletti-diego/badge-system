@@ -16,7 +16,7 @@ const { requireAuth } = require('../middleware/auth');
 const { invalidateSignatureIfExists } = require('../utils/timesheetSignature');
 const { isAdminEquivalent } = require('../utils/roles');
 const {
-  lockEventConflictScope, findConflictingCheckin, findConflictingSmartWorking,
+  lockEventConflictScope, findConflictingCheckin, findConflictingSmartWorking, findConflictingEvent,
   findConflictingLeaveRange, findConflictingIllnessRange,
 } = require('../utils/eventConflict');
 const { NotFoundError, ValidationError, ForbiddenError, ConflictError } = require('../utils/errors');
@@ -49,25 +49,28 @@ router.post('/request', requireAuth, createValidationMiddleware(PostEventRequest
       // 2. Conflict check: block if the employee already has any presence/absence
       // record for this date (checkin, pending/approved leave, active illness,
       // smart-working day, or another pending/approved event request).
+      //
+      // Delegates to the same shared, timezone-safe helpers the approval path
+      // (PUT /:id/approve, below) already uses, instead of an inline UNION
+      // query. The inline query this replaced cast checkins.timestamp
+      // (TIMESTAMPTZ) with a raw ::date, which evaluates in the DB session's
+      // timezone (UTC on AWS RDS by default) and silently disagrees with the
+      // Europe/Rome calendar date during the ~00:00-02:00 window — found live
+      // in production 2026-09-02 as a false-positive EVENT_DATE_CONFLICT for
+      // a date with no visible checkin. Same bug class as CLAUDE.md Pattern 6
+      // (checkins.js, commit 615fcbf) and the same fix as findConflictingCheckin
+      // (eventConflict.js). Using the shared helpers directly (rather than
+      // re-patching the inline cast) also brings this call site into line
+      // with CLAUDE.md Pattern 7 (no ad-hoc conflict queries).
       await lockEventConflictScope(client, { clientId, employeeId: userId, date: event_date });
-      const conflictResult = await client.query(
-        `SELECT 1 FROM checkins WHERE employee_id = $1::uuid AND timestamp::date = $2::date
-         UNION ALL
-         SELECT 1 FROM leave_requests WHERE user_id = $1::uuid AND status IN ('PENDING', 'APPROVED')
-           AND $2::date BETWEEN start_date AND end_date
-         UNION ALL
-         SELECT 1 FROM illnesses WHERE employee_id = $1::uuid AND cancelled_at IS NULL
-           AND $2::date BETWEEN start_date AND end_date
-         UNION ALL
-         SELECT 1 FROM smart_working_days WHERE employee_id = $1::uuid AND date = $2::date
-         UNION ALL
-         SELECT 1 FROM event_requests WHERE user_id = $1::uuid AND status IN ('PENDING', 'APPROVED')
-           AND event_date = $2::date
-         LIMIT 1`,
-        [userId, event_date]
-      );
+      const conflictingCheckin = await findConflictingCheckin(client, { clientId, employeeId: userId, date: event_date });
+      const conflictingSmartWorking = await findConflictingSmartWorking(client, { clientId, employeeId: userId, date: event_date });
+      const conflictingEvent = await findConflictingEvent(client, { clientId, employeeId: userId, date: event_date });
+      const conflictingLeaves = await findConflictingLeaveRange(client, { clientId, employeeId: userId, startDate: event_date, endDate: event_date });
+      const conflictingIllnesses = await findConflictingIllnessRange(client, { clientId, employeeId: userId, startDate: event_date, endDate: event_date });
 
-      if (conflictResult.rows.length > 0) {
+      if (conflictingCheckin || conflictingSmartWorking || conflictingEvent
+          || conflictingLeaves.length > 0 || conflictingIllnesses.length > 0) {
         throw new ConflictError('Esiste già una presenza o un\'assenza registrata per questa data', 'EVENT_DATE_CONFLICT');
       }
 
