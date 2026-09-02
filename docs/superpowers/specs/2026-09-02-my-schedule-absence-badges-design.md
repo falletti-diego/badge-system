@@ -3,6 +3,8 @@
 **Data:** 2026-09-02
 **Status:** Approvato via `/superpowers:brainstorming`, pronto per il piano di implementazione
 
+**Revisione critica UX post-approvazione (stesso giorno)**: su richiesta esplicita dell'utente, analisi critica usability della spec appena scritta. Trovati e corretti 3 problemi reali: colore "Malattia" troppo vicino al rosso di errore già usato altrove nel file (Decisione 2, ora `#EA580C` invece di `#DC2626`); comportamento di caricamento non specificato, rischio di "flash" visivo tra `—` e badge (Decisione 6, nuova); assenza di un non-goal esplicito sulla navigazione al dettaglio dal badge (ora in Non-Goals). Un quarto punto trovato — priorità che nasconde una seconda richiesta PENDING concorrente sullo stesso giorno — è stato esaminato e **deliberatamente non affrontato** su decisione dell'utente: resta un rischio accettato, non documentato oltre questa nota.
+
 ## Problema
 
 `MyScheduleScreen.jsx` (mobile, schermata "I Miei Turni") interroga solo `GET /api/v1/shifts/my-schedule` (tabella `shifts`). Un giorno in cui il dipendente ha una malattia, una ferie o un evento approvato/in attesa, ma **nessun turno assegnato**, mostra semplicemente `—` — visivamente identico a "giorno non ancora pianificato".
@@ -17,6 +19,7 @@ Il backend possiede già il dato corretto; il gap è puramente di visualizzazion
 - **Cache offline per le assenze.** A differenza dei turni (`AsyncStorage.CACHE_SHIFTS`, dato operativo critico), le assenze mostrate qui sono di sola consultazione. Se il dipendente è offline, vede solo i turni in cache, senza badge assenza, fino alla prossima connessione.
 - **Nuovi endpoint backend.** Tutti i dati necessari sono già esposti da endpoint self-service esistenti (vedi sotto). Nessuna modifica lato backend.
 - **Risoluzione del caso limite "turno assegnato sopra un'assenza approvata".** Oggi nulla impedisce a un manager di assegnare un turno in un giorno con ferie/malattia/evento già approvati (la mutua esclusione esiste solo tra ferie/malattia/evento tra loro — vedi CLAUDE.md Pattern 7 — non verso i turni). Questa spec non introduce un vincolo lato backend per impedirlo; definisce solo cosa mostrare in quel caso (vedi Decisione 3).
+- **Navigazione al dettaglio della richiesta dal badge.** Toccare il badge di assenza non naviga da nessuna parte in questa iterazione — nessuna azione, nessun feedback al tap, esattamente come i badge turno esistenti oggi. Scelta deliberata (YAGNI): il dipendente che vuole vedere/annullare una richiesta usa la tab dedicata (Ferie/Malattia/Eventi). Se in futuro emergesse la necessità di un accesso rapido al dettaglio da qui, è un piano a parte.
 
 ## Decisioni di design
 
@@ -38,7 +41,7 @@ Se il giorno **non ha un turno assegnato** ed esiste almeno un'assenza, si appli
 
 | Priorità | Tipo | Stato | Label | Icona | Colore |
 |---|---|---|---|---|---|
-| 1 (massima) | Malattia | (sempre attiva, nessun concetto di PENDING) | "Malattia" | 🤒 | `#DC2626` |
+| 1 (massima) | Malattia | (sempre attiva, nessun concetto di PENDING) | "Malattia" | 🤒 | `#EA580C` |
 | 2 | Ferie | APPROVED | "Ferie" | 🏖️ | `#059669` |
 | 2 | Ferie | PENDING | "Ferie (in attesa)" | 🏖️ | `#059669` |
 | 3 (minima) | Evento | APPROVED | "Evento" | 📅 | `#7C3AED` |
@@ -60,10 +63,14 @@ Se una o più delle 3 nuove fetch falliscono (es. problema di rete), i turni res
 
 La logica "dato un giorno, uno `shiftValue`, e le 3 liste di assenze del mese, quale badge mostrare (se c'è)" va estratta in una funzione pura (es. `resolveAbsenceBadge(date, shiftValue, illnesses, leaves, events)` in un nuovo file `src/utils/absenceBadges.js`), separata dal componente — testabile in isolamento senza montare l'intero screen, seguendo la stessa filosofia di file piccoli e a responsabilità unica già osservata nel resto del progetto.
 
+### 6. Caricamento: attesa unificata, nessun "flash" tra `—` e badge
+
+Le 4 fetch (turni + malattie + ferie + eventi) partono in parallelo, ma lo `loading` che controlla lo spinner resta `true` finché **tutte e 4** non sono risolte (successo o fallimento). Solo allora si costruisce e mostra la lista completa, badge di assenza già corretti dal primo render. Scelta deliberata rispetto all'alternativa "mostra i turni appena pronti, i badge quando arrivano": quest'ultima avrebbe introdotto un breve stato intermedio in cui un giorno mostra `—` per poi "scattare" a un badge di assenza pochi istanti dopo — percepibile come un glitch di rendering più che come caricamento progressivo, specialmente su connessioni lente. Il costo (uno spinner leggermente più lungo, dato che le 4 fetch sono comunque in parallelo e non in sequenza) è preferibile a un'esperienza visivamente incoerente.
+
 ## Testing
 
 - **Unit test** su `resolveAbsenceBadge()`: priorità malattia > ferie > evento; PENDING vs APPROVED per ferie/evento; nessun badge se il giorno ha un turno; nessun badge se nessuna assenza copre quella data; una ferie/evento `REJECTED`/`WITHDRAWN` non genera badge.
-- **Component test** su `MyScheduleScreen.jsx`: rendering del badge corretto per un giorno con malattia (mock delle 3 fetch); degrado silenzioso quando una fetch assenze fallisce ma quella turni ha successo (i turni restano visibili, nessun banner d'errore, i giorni coinvolti restano `—`).
+- **Component test** su `MyScheduleScreen.jsx`: rendering del badge corretto per un giorno con malattia (mock delle 3 fetch); degrado silenzioso quando una fetch assenze fallisce ma quella turni ha successo (i turni restano visibili, nessun banner d'errore, i giorni coinvolti restano `—`); lo spinner resta attivo finché tutte e 4 le fetch non sono risolte (nessun render intermedio con badge assenza mancanti).
 
 ## Compatibilità / rollback
 
