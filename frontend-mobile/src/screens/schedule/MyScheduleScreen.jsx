@@ -65,10 +65,12 @@ export default function MyScheduleScreen({ navigation }) {
     try {
       const r = await apiClient.get(ENDPOINTS.SHIFTS_MY_SCHEDULE, { params: { month: m, year: y }, signal });
       shiftsResult = r.data.data?.shifts_data ?? {};
-      AsyncStorage.setItem(
-        STORAGE_KEYS.CACHE_SHIFTS,
-        JSON.stringify({ savedAt: Date.now(), month: m, year: y, shiftsData: shiftsResult }),
-      ).catch(() => {});
+      if (!signal.aborted) {
+        AsyncStorage.setItem(
+          STORAGE_KEYS.CACHE_SHIFTS,
+          JSON.stringify({ savedAt: Date.now(), month: m, year: y, shiftsData: shiftsResult }),
+        ).catch(() => {});
+      }
     } catch (e) {
       if (signal.aborted) return;
 
