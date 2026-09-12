@@ -18,10 +18,10 @@ function normEmail(v) {
   const s = norm(v);
   return s ? s.toLowerCase() : null;
 }
-function normInt(v) {
+function normDecimal(v) {
   if (v === null || v === undefined || String(v).trim() === '') return 0;
   const n = Number(v);
-  return Number.isFinite(n) ? Math.round(n) : NaN;
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
 }
 
 // Robustly extract a cell's value across exceljs cell types. A plain value
@@ -98,9 +98,9 @@ async function parseWorkbook(fileOrBuffer) {
     ruolo: (norm(d.ruolo) || '').toLowerCase() || null,
     sede: norm(d.sede),
     matricola: norm(d.matricola),
-    ferie_giorni: normInt(d.ferie_giorni),
-    permessi_giorni: normInt(d.permessi_giorni),
-    exfestivita_giorni: normInt(d.exfestivita_giorni),
+    ferie_giorni: normDecimal(d.ferie_giorni),
+    permessi_giorni: normDecimal(d.permessi_giorni),
+    exfestivita_giorni: normDecimal(d.exfestivita_giorni),
   }));
 
   return { azienda, sedi, dipendenti };
