@@ -335,4 +335,21 @@ describe('PUT /api/v1/leave/:id/approve — event/illness conflict guard', () =>
     expect(res.status).toBe(200);
     expect(res.body.data.status).toBe('APPROVED');
   });
+
+  it('a half-day request still conflicts with a PENDING event the same day (duration is irrelevant to the day-level exclusion rule)', async () => {
+    if (!dbAvailable) return;
+    clientId = await makeClient();
+    const employeeId = await makeEmployee(clientId);
+    await makeSaldo(clientId, employeeId, 'FERIE_1', 2026);
+    await makeEventRequest(clientId, employeeId, '2026-09-20', 'PENDING');
+    const token = tokenFor({ client_id: clientId, role: 'employee', employee_id: employeeId });
+
+    const res = await request(app)
+      .post('/api/v1/leave/request')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ leave_type: 'FERIE_1', start_date: '2026-09-20', end_date: '2026-09-20', half_day: true });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('EVENT_DATE_CONFLICT');
+  });
 });
