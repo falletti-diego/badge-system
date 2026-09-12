@@ -74,6 +74,12 @@ vi.mock('../components/LeaveCalendar', () => ({
       >
         Seleziona date
       </button>
+      <button
+        type="button"
+        onClick={() => onDateChange({ startDate: '2026-07-15', endDate: '2026-07-15' })}
+      >
+        Seleziona singolo giorno
+      </button>
     </div>
   ),
 }));
@@ -283,6 +289,49 @@ describe('EmployeeLeaveRequest Page', () => {
         // After successful submit, form is reset — combobox shows placeholder (empty)
         expect(getLeaveTypeSelect()).not.toHaveTextContent('Ferie 1');
       });
+    });
+  });
+
+  describe('Half-day toggle', () => {
+    it('shows the half-day toggle only when start and end date are the same day', async () => {
+      renderWithRouter(<EmployeeLeaveRequest />);
+      await waitFor(() => screen.getByText('Seleziona date'));
+
+      fireEvent.click(screen.getByText('Seleziona date'));
+      expect(screen.queryByLabelText(/mezza giornata/i)).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('Seleziona singolo giorno'));
+      expect(screen.getByLabelText(/mezza giornata/i)).toBeInTheDocument();
+    });
+
+    it('sends half_day=true when the toggle is checked on a single-day request', async () => {
+      renderWithRouter(<EmployeeLeaveRequest />);
+      await waitFor(() => screen.getByText('Seleziona date'));
+
+      fireEvent.click(screen.getByText('Seleziona singolo giorno'));
+      fireEvent.click(screen.getByLabelText(/mezza giornata/i));
+
+      const leaveTypeSelect = getLeaveTypeSelect();
+      fireEvent.mouseDown(leaveTypeSelect);
+      fireEvent.click(await screen.findByRole('option', { name: 'Ferie 1' }));
+
+      const submitButton = screen.getByRole('button', { name: /^Richiedi$/i });
+      fireEvent.click(submitButton);
+
+      await waitFor(() => {
+        expect(mockCreateRequest).toHaveBeenCalledWith(
+          'FERIE_1', '2026-07-15', '2026-07-15', '', true
+        );
+      });
+    });
+  });
+
+  describe('Num days from API', () => {
+    it('shows num_days from the API in the Giorni column instead of recalculating from dates', async () => {
+      renderWithRouter(<EmployeeLeaveRequest />);
+      await waitFor(() => screen.getByText('Ferie 1'));
+      // mockGetMyRequests row: start_date 2026-07-01, end_date 2026-07-05, num_days: 5
+      expect(screen.getByText('5')).toBeInTheDocument();
     });
   });
 

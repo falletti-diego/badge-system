@@ -24,10 +24,13 @@ import {
   Pagination,
   Stack,
   CircularProgress,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { LeaveCalendar } from '../components/LeaveCalendar';
 import { useLeave } from '../hooks/useLeave';
+import { formatLeaveDays } from '../../../utils/formatLeaveDays';
 
 const LEAVE_TYPES = [
   { value: 'FERIE_1', label: 'Ferie 1' },
@@ -58,6 +61,7 @@ export const EmployeeLeaveRequest = () => {
     startDate: null,
     endDate: null,
     motivation: '',
+    halfDay: false,
   });
 
   const [requests, setRequests] = useState([]);
@@ -111,7 +115,12 @@ export const EmployeeLeaveRequest = () => {
       ...prev,
       startDate,
       endDate,
+      halfDay: false,
     }));
+  };
+
+  const handleHalfDayChange = (e) => {
+    setFormData((prev) => ({ ...prev, halfDay: e.target.checked }));
   };
 
   const handleMotivationChange = (e) => {
@@ -123,6 +132,19 @@ export const EmployeeLeaveRequest = () => {
       }));
     }
   };
+
+  const formatDateForApi = (date) => {
+    if (!date) return null;
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const isSingleDaySelected =
+    formData.startDate && formData.endDate &&
+    formatDateForApi(formData.startDate) === formatDateForApi(formData.endDate);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -146,7 +168,8 @@ export const EmployeeLeaveRequest = () => {
         formData.leave_type,
         formatDate(formData.startDate),
         formatDate(formData.endDate),
-        formData.motivation
+        formData.motivation,
+        formData.halfDay
       );
 
       setSuccessMessage('Richiesta di ferie inviata con successo!');
@@ -155,6 +178,7 @@ export const EmployeeLeaveRequest = () => {
         startDate: null,
         endDate: null,
         motivation: '',
+        halfDay: false,
       });
 
       reloadTimeoutRef.current = setTimeout(() => {
@@ -171,6 +195,7 @@ export const EmployeeLeaveRequest = () => {
       startDate: null,
       endDate: null,
       motivation: '',
+      halfDay: false,
     });
     clearError();
   };
@@ -311,6 +336,18 @@ export const EmployeeLeaveRequest = () => {
                     endDate={formData.endDate}
                     onDateChange={handleCalendarChange}
                   />
+                  {isSingleDaySelected && (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={formData.halfDay}
+                          onChange={handleHalfDayChange}
+                          inputProps={{ 'aria-label': 'Mezza giornata' }}
+                        />
+                      }
+                      label="Mezza giornata"
+                    />
+                  )}
                 </Box>
 
                 {/* Motivation */}
@@ -413,8 +450,6 @@ export const EmployeeLeaveRequest = () => {
                       const leaveType = LEAVE_TYPES.find((t) => t.value === req.leave_type);
                       const startDate = new Date(req.start_date);
                       const endDate = new Date(req.end_date);
-                      const numDays =
-                        Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
                       const createdDate = new Date(req.created_at);
 
                       return (
@@ -422,7 +457,7 @@ export const EmployeeLeaveRequest = () => {
                           <TableCell>{leaveType?.label || req.leave_type}</TableCell>
                           <TableCell>{startDate.toLocaleDateString('it-IT')}</TableCell>
                           <TableCell>{endDate.toLocaleDateString('it-IT')}</TableCell>
-                          <TableCell align="center">{numDays}</TableCell>
+                          <TableCell align="center">{formatLeaveDays(req.num_days)}</TableCell>
                           <TableCell>
                             <Chip
                               label={req.status}
