@@ -22,6 +22,7 @@
 3. **Migrazione dati produzione**: nessun backfill/dry-run separato necessario. `INT → NUMERIC(6,2)` è un widening sicuro (nessun valore esistente può essere troncato); la migration standard, testata su CI con Postgres reale, è sufficiente.
 4. **Display**: valori decimali mostrati con 1 decimale solo se necessario (`20` resta `"20"`, `19.5` diventa `"19,5"`) — non sempre 2 decimali fissi.
 5. **Onboarding**: il foglio saldi del template Excel può già contenere valori decimali (es. saldo residuo 19,5 giorni migrato da un sistema precedente) — la granularità qui non è vincolata a step di 0.5 come nel form dipendente, può essere un decimale arbitrario entro `NUMERIC(6,2)`.
+6. **Planning Page**: nessuna modifica in questo lavoro. Un giorno di mezza ferie blocca comunque l'intera cella turno (limitazione nota, accettata esplicitamente — vedi punto 7 sotto). Da rivalutare separatamente se diventa un problema reale.
 
 ## Problemi trovati durante l'analisi (non nella bozza originale di TASKS.md)
 
@@ -50,6 +51,14 @@ Con questa normalizzazione centralizzata, il frontend non ha bisogno di alcun `N
 ### 5. App mobile ha form indipendenti (nessun pacchetto condiviso con il web)
 
 `frontend-mobile/src/screens/leave/LeaveRequestScreen.jsx` e `ManagerLeaveApprovalScreen.jsx` sono implementazioni separate, non derivate dal codice web. Decisione: includere il toggle mezza giornata anche su mobile in questo stesso lavoro (non rimandato), per mantenere i due frontend allineati ed evitare un bug di plurale già identificato (`r.num_days !== 1`, che con `num_days` come stringa sarebbe sempre vero) — bug che si risolve comunque automaticamente con la normalizzazione centralizzata lato backend (punto 2).
+
+### 6. Il controllo di mutua esclusione (Pattern 7) è basato solo su range di date, non su durata — nessun cambio richiesto, ma serve un test di blocco
+
+Verificato che `findConflictingEventRange`/`findConflictingLeaveRange`/`findConflictingIllnessRange` (`backend/src/utils/eventConflict.js`) confrontano solo `start_date`/`end_date`, mai `num_days`. Una richiesta di mezza giornata continuerà quindi a generare conflitto con un evento/malattia lo stesso giorno esattamente come una ferie intera — **nessuna modifica di codice necessaria**. Proprio perché non è ovvio dal codice (chi legge potrebbe assumere che "mezza giornata" implichi "mezzo giorno libero da conflitti"), serve un test di regressione esplicito che blocchi questa assunzione futura.
+
+### 7. Planning Page blocca l'intero giorno in modo binario, anche per mezza giornata — limitazione nota, accettata
+
+`PlanningPage.jsx`'s `isDateBlocked`/`getLeaveInfo` verificano solo la presenza di una ferie approvata che copre quella data (`inDateRange`), senza distinguere mezza giornata da giornata intera. Un manager non potrà quindi assegnare alcun turno nemmeno per la metà lavorata. **Decisione esplicita dell'utente**: accettare questa limitazione per ora, nessuna modifica a `PlanningPage.jsx` in questo lavoro — comportamento conservativo, da rivalutare come lavoro separato se diventa un problema reale per i clienti. Serve comunque un test di regressione che fissi questo comportamento come intenzionale, non come bug dimenticato.
 
 ## Design tecnico
 
@@ -112,8 +121,11 @@ function formatLeaveDays(value) {
 
 - Migration: test real-Postgres che verifica lo schema post-migration (`information_schema` su tipo colonna, come già fa `leaves-schema.test.js` per la generated column) — scritto RED prima della migration, GREEN dopo
 - `leaves.js`: test che una richiesta `half_day=true` con `start_date !== end_date` → 400; `half_day=true` con `leave_type=MALATTIA` → 400; `half_day=true` valido → `num_days=0.5` in DB e in risposta; risposta con `typeof remaining_days === 'number'` (non stringa) — regressione esplicita sul punto 2
+- **Regressione Pattern 7**: una richiesta `half_day=true` genera comunque conflitto (`EVENT_DATE_CONFLICT`) con un evento/malattia approvato lo stesso giorno, e viceversa — in `event-leave-illness-conflict.test.js`/`leave-event-illness-conflict.test.js` (punto 6 sopra)
+- **Regressione Planning Page**: un giorno con ferie a mezza giornata approvata blocca comunque l'intera cella turno — fissa esplicitamente la limitazione accettata al punto 7 come intenzionale
 - `parseWorkbook.js`: test che un saldo `19.5` nel foglio Excel sopravvive intatto fino a `parseWorkbook()` (RED prima del fix con `normInt`, GREEN dopo con `normDecimal`)
-- Frontend: test che il toggle mezza giornata appare/scompare in base a `startDate === endDate`; test che la colonna "Giorni" mostra `req.num_days` (non il ricalcolo rimosso)
+- `onboarding-apply.test.js`: un saldo decimale (es. `19.5`) nel payload di `apply()` arriva intatto nei parametri dell'INSERT su `leave_saldi`, non troncato (mock-based, coerente con lo stile esistente del file)
+- Frontend: test che il toggle mezza giornata appare/scompare in base a `startDate === endDate`; test che la colonna "Giorni" mostra `req.num_days` (non il ricalcolo rimosso) sia per il nuovo caso mezza-giornata sia per il caso esistente multi-giorno (nessuna regressione sul comportamento invariato)
 
 ## Fuori scope (esplicito)
 
