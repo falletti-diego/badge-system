@@ -1248,6 +1248,26 @@ Valutazione richiesta esplicitamente dall'utente dopo l'apertura della PR #3 (`w
 
 ---
 
+## ✅ RISOLTO — INFRASTRUCTURE / AWS LIFECYCLE
+
+### AWS.1 — ✅ Upgrade RDS PostgreSQL 14 → 16 completato (2026-09-12)
+
+**Trovato:** Session 121 (2026-09-09), notifica AWS Health ricevuta via email (`AWS_RDS_PLANNED_LIFECYCLE_EVENT`, account `125579685235`, regione `eu-west-1`).
+
+**Problema originale:** PostgreSQL 14 esce dal supporto community a Novembre 2026; AWS RDS chiudeva il supporto standard il 28 Febbraio 2027, dopodiché sarebbe scattato l'Extended Support a pagamento (~$146/mese anni 1-2, ~$292/mese anno 3+, su questa istanza da 2 vCPU).
+
+**Risoluzione (2026-09-12):**
+- [x] Creata istanza di test da snapshot (`badge-system-db-test-pg-upgrade`, snapshot `rds:badge-system-db-2026-09-12-02-12`)
+- [x] Upgrade di test verificato: PG 14.22 → 16.15, completato senza errori
+- [x] Upgrade eseguito su produzione (`badge-system-db`): PG 14.22 → **16.15**, completato senza errori
+- [x] App verificata funzionante contro produzione post-upgrade (login, check-in)
+- [x] Istanza di test eliminata (nessun costo residuo)
+- [x] Costo totale sostenuto: ~$2-3 una tantum. Extended Support 2027 evitato definitivamente.
+
+**Non ancora allineato** (nessun impatto sulla produzione, da fare quando comodo): `docker-compose` locale, `.github/workflows/ci.yml` e `infrastructure/README.md` puntano ancora a `postgres:14` — drift dev/CI vs produzione (ora 16.15). Da allineare in una sessione successiva.
+
+---
+
 ## 🔲 TODO — LOW PRIORITY / PHASE 2
 
 ### Auth0 Migration (~5h)
