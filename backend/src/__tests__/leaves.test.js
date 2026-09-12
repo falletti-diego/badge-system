@@ -130,6 +130,34 @@ describe('Leave Request API Endpoints — Validation', () => {
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('Validation Error');
     });
+
+    it('should return 400 for half_day=true on a multi-day range', async () => {
+      const res = await request(app)
+        .post('/api/v1/leave/request')
+        .send({
+          leave_type: 'FERIE_1',
+          start_date: '2026-06-15',
+          end_date: '2026-06-20',
+          half_day: true,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation Error');
+    });
+
+    it('should return 400 for half_day=true on MALATTIA', async () => {
+      const res = await request(app)
+        .post('/api/v1/leave/request')
+        .send({
+          leave_type: 'MALATTIA',
+          start_date: '2026-06-15',
+          end_date: '2026-06-15',
+          half_day: true,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation Error');
+    });
   });
 
   describe('PUT /api/v1/leave/:id/approve', () => {

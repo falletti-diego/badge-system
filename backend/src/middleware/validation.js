@@ -635,11 +635,20 @@ const PostLeaveRequestSchema = z.object({
     }),
     start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'start_date must be in YYYY-MM-DD format'),
     end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'end_date must be in YYYY-MM-DD format'),
+    half_day: z.boolean().optional(),
     motivation: z.string().max(500, 'motivation must be at most 500 characters').optional().nullable(),
   })
     .refine(
       (data) => new Date(data.end_date) >= new Date(data.start_date),
       { message: 'end_date must be on or after start_date', path: ['end_date'] }
+    )
+    .refine(
+      (data) => !data.half_day || data.start_date === data.end_date,
+      { message: 'half_day can only be used for a single-day request (start_date must equal end_date)', path: ['half_day'] }
+    )
+    .refine(
+      (data) => !data.half_day || ['FERIE_1', 'FERIE_2', 'FERIE_3'].includes(data.leave_type),
+      { message: 'half_day is only supported for FERIE_1, FERIE_2, FERIE_3', path: ['half_day'] }
     ),
 });
 
