@@ -59,4 +59,28 @@ describe('apply', () => {
     const touchedPassword = db.query.mock.calls.some((c) => /password_hash/.test(c[0]) && /UPDATE employees/.test(c[0]));
     expect(touchedPassword).toBe(false);
   });
+
+  it('passes a decimal ferie_giorni value through to the leave_saldi INSERT unchanged', async () => {
+    const db = mockClient([
+      ['INSERT INTO clients', { rows: [{ id: 'client-1' }] }],
+      ['SELECT id FROM sites', { rows: [] }],
+      ['INSERT INTO sites', { rows: [{ id: 'site-1' }] }],
+      ['SELECT id FROM employees', { rows: [] }],
+      ['INSERT INTO employees', { rows: [{ id: 'emp-1' }] }],
+      ['INTO leave_saldi', { rowCount: 1, rows: [] }],
+    ]);
+    const decimalData = {
+      azienda: { ragione_sociale: 'X SRL', email_referente: 'admin@x.it', ore_min_buono_pasto: 5 },
+      sedi: [{ _row: 2, nome_sede: 'Milano', indirizzo: 'Via 1', latitudine: null, longitudine: null, raggio_geofence_m: null }],
+      dipendenti: [
+        { _row: 2, nome_completo: 'Mario Rossi', email: 'mario@x.it', telefono: null, ruolo: 'responsabile', sede: 'Milano', matricola: 'M1', ferie_giorni: 19.5, permessi_giorni: 8, exfestivita_giorni: 4 },
+      ],
+    };
+    await apply(db, decimalData, { clientId: null, year: 2026 });
+    const saldoCalls = db.query.mock.calls.filter((c) => c[0].includes('INTO leave_saldi'));
+    expect(saldoCalls.length).toBeGreaterThan(0);
+    const ferieSaldoCall = saldoCalls.find((c) => c[1].includes(19.5));
+    expect(ferieSaldoCall).toBeDefined();
+    expect(ferieSaldoCall[1]).toContain(19.5);
+  });
 });
