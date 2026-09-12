@@ -1,3 +1,8 @@
+---
+name: deploy
+description: Deploy the Badge System frontend to Netlify, verify HTTPS certificate, and test API endpoints for CORS issues from production
+---
+
 # /deploy — Badge System Deploy & Verify
 
 Deploy the Badge System frontend to Netlify, verify the HTTPS certificate, and test all API endpoints for CORS issues from the production origin.
