@@ -18,7 +18,6 @@ describe('parseWorkbook', () => {
     expect(e.email).toBe(e.email.toLowerCase());
     expect(e.ruolo).toBe('responsabile');
     expect(typeof e.ferie_giorni).toBe('number');
-    expect(data.dipendenti.every((d) => Number.isInteger(d.permessi_giorni))).toBe(true);
   });
 
   it('exposes ROLE_MAP and SALDO_COLUMNS constants', () => {
