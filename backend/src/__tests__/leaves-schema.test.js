@@ -92,7 +92,7 @@ describe('Leave Management Schema — Database Validation', () => {
       }
 
       // information_schema.columns queries
-      if (sql.includes('information_schema.columns') && sql.includes('remaining_days')) {
+      if (sql.includes('information_schema.columns') && sql.includes("column_name = 'remaining_days'")) {
         return Promise.resolve({
           rows: [
             {
@@ -231,6 +231,18 @@ describe('Leave Management Schema — Database Validation', () => {
       `);
       expect(result.rows.length).toBeGreaterThanOrEqual(1);
     });
+
+    it('should have num_days as NUMERIC(6,2) (half-day support)', async () => {
+      const result = await pool.query(`
+        SELECT data_type, numeric_precision, numeric_scale
+        FROM information_schema.columns
+        WHERE table_name = 'leave_requests' AND column_name = 'num_days'
+      `);
+      expect(result.rows).toHaveLength(1);
+      expect(result.rows[0].data_type).toBe('numeric');
+      expect(result.rows[0].numeric_precision).toBe(6);
+      expect(result.rows[0].numeric_scale).toBe(2);
+    });
   });
 
   describe('leave_saldi table', () => {
@@ -281,6 +293,20 @@ describe('Leave Management Schema — Database Validation', () => {
       expect(result.rows[0].is_generated).toBe('ALWAYS');
       expect(result.rows[0].generation_expression).toContain('total_days');
       expect(result.rows[0].generation_expression).toContain('used_days');
+    });
+
+    it('should have total_days/used_days/remaining_days as NUMERIC(6,2) (half-day support)', async () => {
+      const result = await pool.query(`
+        SELECT column_name, data_type, numeric_precision, numeric_scale
+        FROM information_schema.columns
+        WHERE table_name = 'leave_saldi' AND column_name IN ('total_days', 'used_days', 'remaining_days')
+      `);
+      expect(result.rows).toHaveLength(3);
+      for (const row of result.rows) {
+        expect(row.data_type).toBe('numeric');
+        expect(row.numeric_precision).toBe(6);
+        expect(row.numeric_scale).toBe(2);
+      }
     });
   });
 
