@@ -158,3 +158,6 @@ badge-system/
 
 # Local mobile build artifacts (rigenerabili, non versionare binari)
 *.apk
+
+# macOS Finder metadata (mai utile in un repo, cambia ad ogni apertura Finder)
+.DS_Store
