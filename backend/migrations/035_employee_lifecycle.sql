@@ -19,6 +19,12 @@ ALTER TABLE employees
 -- Backfill dipendenti esistenti: hiring_date approssimata a created_at
 -- (non è la vera data di assunzione - il cliente potrà correggerla ricaricando
 -- il wizard con la colonna "Data Assunzione" modificata per quella riga).
-UPDATE employees SET hiring_date = created_at::date WHERE hiring_date IS NULL;
+--
+-- created_at è TIMESTAMPTZ; created_at::date valuterebbe la data nel timezone
+-- di SESSIONE (UTC su AWS RDS di default), non Europe/Rome — durante la
+-- finestra ~00:00-02:00 ora di Roma un dipendente creato "oggi" prenderebbe
+-- silenziosamente "ieri" come hiring_date (CLAUDE.md Pattern 6, trovato
+-- 2026-09-12 durante la progettazione del check CI dedicato).
+UPDATE employees SET hiring_date = (created_at AT TIME ZONE 'Europe/Rome')::date WHERE hiring_date IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_employees_active ON employees(client_id, active);

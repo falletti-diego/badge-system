@@ -68,22 +68,24 @@ describe('migration 035 — employee lifecycle columns', () => {
   // itself creates and cleans up — asserting what migration 035 actually
   // guarantees (the UPDATE statement's own behavior), not a permanent
   // property of a live, continuously-written-to shared table.
-  it('backfill UPDATE sets hiring_date to created_at::date for a row with hiring_date IS NULL', async () => {
+  it('backfill UPDATE sets hiring_date to the Europe/Rome calendar date of created_at, for a row with hiring_date IS NULL', async () => {
     if (!dbAvailable) return;
     const clientId = await makeClient(pool);
     try {
       const employeeId = await makeEmployeeWithHiringDate(pool, clientId, null);
 
-      // Exact statement from migrations/035_employee_lifecycle.sql, scoped to
-      // this test's own client so it can never touch another test's data.
+      // Exact statement from migrations/035_employee_lifecycle.sql (fixed
+      // 2026-09-12, see CLAUDE.md Pattern 6), scoped to this test's own
+      // client so it can never touch another test's data.
       await pool.query(
-        `UPDATE employees SET hiring_date = created_at::date
+        `UPDATE employees SET hiring_date = (created_at AT TIME ZONE 'Europe/Rome')::date
          WHERE hiring_date IS NULL AND client_id = $1`,
         [clientId]
       );
 
       const res = await pool.query(
-        'SELECT hiring_date, created_at::date AS created_date FROM employees WHERE id = $1',
+        `SELECT hiring_date, (created_at AT TIME ZONE 'Europe/Rome')::date AS created_date
+         FROM employees WHERE id = $1`,
         [employeeId]
       );
       expect(res.rows[0].hiring_date).not.toBeNull();
@@ -101,7 +103,7 @@ describe('migration 035 — employee lifecycle columns', () => {
       const employeeId = await makeEmployeeWithHiringDate(pool, clientId, explicitHiringDate);
 
       await pool.query(
-        `UPDATE employees SET hiring_date = created_at::date
+        `UPDATE employees SET hiring_date = (created_at AT TIME ZONE 'Europe/Rome')::date
          WHERE hiring_date IS NULL AND client_id = $1`,
         [clientId]
       );
@@ -113,6 +115,49 @@ describe('migration 035 — employee lifecycle columns', () => {
       expect(res.rows[0].hiring_date).toBe(explicitHiringDate);
     } finally {
       await pool.query('DELETE FROM clients WHERE id = $1', [clientId]);
+    }
+  });
+
+  // Regression test for the timezone bug found 2026-09-12 while designing
+  // the CI check for CLAUDE.md Pattern 6: the original migration cast
+  // created_at (TIMESTAMPTZ) to ::date with NO explicit timezone, which
+  // evaluates in the DB SESSION's timezone (UTC on AWS RDS by default) —
+  // not Europe/Rome, the calendar an employee's "creation day" is actually
+  // meant in. During the ~00:00-02:00 Europe/Rome window this silently
+  // backdated hiring_date by one day. Forces the session to UTC explicitly,
+  // matching production, so it reproduces (and proves the fix for) the bug
+  // regardless of the local machine's own timezone (same technique as
+  // eventConflict-timezone.test.js and queryScope-timezone.test.js).
+  it('backfill UPDATE uses the Europe/Rome calendar day, not the UTC one, for an employee created just after Rome midnight', async () => {
+    if (!dbAvailable) return;
+    const client = await pool.connect();
+    let clientId;
+    try {
+      await client.query('SET timezone = \'UTC\'');
+      clientId = await makeClient(client);
+
+      // 2026-08-22T00:30:00+02:00 (Rome, CEST) == 2026-08-21T22:30:00Z. A
+      // UTC-session `created_at::date` cast would wrongly backdate this to
+      // 2026-08-21.
+      const employeeResult = await client.query(
+        `INSERT INTO employees (client_id, email, name, role, active, hiring_date, created_at)
+         VALUES ($1, $2, 'Migration 035 TZ Regression Employee', 'employee', true, NULL, '2026-08-22T00:30:00+02:00'::timestamptz)
+         RETURNING id`,
+        [clientId, `migration-035-tz-${Date.now()}-${Math.random().toString(36).slice(2)}@example.invalid`]
+      );
+      const employeeId = employeeResult.rows[0].id;
+
+      await client.query(
+        `UPDATE employees SET hiring_date = (created_at AT TIME ZONE 'Europe/Rome')::date
+         WHERE hiring_date IS NULL AND client_id = $1`,
+        [clientId]
+      );
+
+      const res = await client.query('SELECT hiring_date::text AS hiring_date FROM employees WHERE id = $1', [employeeId]);
+      expect(res.rows[0].hiring_date).toBe('2026-08-22');
+    } finally {
+      if (clientId) await client.query('DELETE FROM clients WHERE id = $1', [clientId]);
+      client.release();
     }
   });
 });

@@ -102,16 +102,42 @@ function buildScopedFilters(user, filters = {}, alias = 'c') {
   }
 
   // ─── Optional: date range (applied to all roles) ──────────────────
+  //
+  // ${alias}.timestamp is TIMESTAMPTZ; comparing it against a bare DATE
+  // parameter relies on Postgres's implicit DATE→TIMESTAMPTZ cast, which
+  // interprets midnight in the DB SESSION's timezone (UTC on AWS RDS by
+  // default, never overridden anywhere in this codebase) — not Europe/Rome,
+  // the calendar the dateFrom/dateTo query params are actually expressed in.
+  // During the ~00:00-02:00 Europe/Rome window this silently drops/admits
+  // the wrong rows. Same bug class already fixed twice elsewhere (commit
+  // 615fcbf, 2026-08-18; commit 89986b3, 2026-08-22) — here the boundary
+  // itself is built as an explicit Europe/Rome instant.
+  //
+  // IMPORTANT: `date AT TIME ZONE zone` alone does NOT do what it looks
+  // like it does — Postgres first implicitly casts the bare DATE to
+  // TIMESTAMPTZ (interpreting midnight in the SESSION timezone, the exact
+  // bug we're fixing), then AT TIME ZONE converts that instant to `zone`'s
+  // wall-clock as a plain timestamp. The explicit `::timestamp` cast in
+  // between is required: it produces a timezone-naive midnight first, which
+  // AT TIME ZONE then correctly reinterprets as Europe/Rome wall-clock and
+  // converts to a real instant (verified manually against a live session
+  // with timezone=UTC — omitting the `::timestamp` cast silently reproduces
+  // the original bug instead of fixing it).
+  //
+  // Keeps the comparison index-friendly (the column itself is never
+  // wrapped in a function, unlike eventConflict.js's
+  // `(c.timestamp AT TIME ZONE ...)::date` point-lookup — this filter scans
+  // ranges on checkins/export, where an index on `timestamp` matters).
 
   if (dateFrom) {
     paramCount++;
-    whereClauses.push(`${alias}.timestamp >= $${paramCount}::date`);
+    whereClauses.push(`${alias}.timestamp >= ($${paramCount}::date::timestamp AT TIME ZONE 'Europe/Rome')`);
     params.push(dateFrom);
   }
 
   if (dateTo) {
     paramCount++;
-    whereClauses.push(`${alias}.timestamp < $${paramCount}::date + INTERVAL '1 day'`);
+    whereClauses.push(`${alias}.timestamp < (($${paramCount}::date + INTERVAL '1 day')::timestamp AT TIME ZONE 'Europe/Rome')`);
     params.push(dateTo);
   }
 
