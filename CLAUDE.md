@@ -291,6 +291,33 @@ If asked to "resume", read TASKS.md + recent `git log --oneline -10` instead of 
 
 ---
 
+## ⚖️ Peso del Workflow: Leggero vs Pesante
+
+**Decisa il 2026-09-12** dopo un grilling che ha smontato una proposta di skill dedicata: la decisione "quanto ciclo di processo serve?" va presa **prima** di scrivere codice, quindi deve vivere in un file già sempre in contesto (questo), non in una skill che richiederebbe un'invocazione esplicita a decisione già presa.
+
+**Criterio:**
+
+| Situazione | Percorso |
+|---|---|
+| Sai enunciare il criterio di accettazione in una frase, senza dover chiedere nulla | **Leggero**: TDD diretto → implementazione → test → commit. Niente spec/piano separati, niente subagent-driven-development. |
+| Ci sono decisioni di prodotto/UX aperte, o il design non è ovvio | **Pesante**: `/superpowers:brainstorming` → spec → piano → `/superpowers:subagent-driven-development`, con revisione a due stadi per task. |
+| **Override — sempre pesante indipendentemente da quanto sembra ovvio**: auth/RBAC, isolamento multi-tenant (`client_id` scoping), export paghe (Zucchetti/TeamSystem), saldi ferie (`leave_saldi`) | Queste sono le quattro aree dove questo progetto ha già pagato bug reali con un design che "sembrava ovvio" (vedi Pattern 1, 5, 6, e la cronologia RBAC in PROJECT_DECISIONS.md Sessioni 116-118). |
+
+**⚠️ Il peso varia la CERIMONIA, mai la disciplina di test.** "Leggero" significa saltare spec/piano/subagent/doppia-review — non significa meno test, meno TDD, o meno verifica. Un fix da una riga leggero ha lo stesso obbligo di test di regressione di una feature pesante da 17 task. Vedi la sezione successiva per la periodicità.
+
+---
+
+## 🧪 Periodicità dei Test (backend + frontend)
+
+- **Durante lo sviluppo**: TDD — scrivi il test prima, verifica che fallisca per il motivo giusto (RED), poi implementa (GREEN). Vale sia per percorso leggero che pesante.
+- **Prima di ogni commit**: suite del progetto toccato (`backend`: `npm test`; `frontend-web`/`frontend-mobile`: `npm test -- --run`).
+- **Ad ogni push**: CI completa — `backend`, `mobile`, **`frontend-web`** (aggiunto 2026-09-12: prima di questa data `frontend-web` non girava mai in CI, ~343 test protetti solo se qualcuno lanciava `/test-all` a mano), `security-check`.
+- **Prima di un merge su `main`**: suite completa di tutti e tre i progetti (prassi già seguita di fatto in ogni sessione precedente, mai scritta esplicitamente fino ad ora).
+- **Dopo un merge che tocca `package.json`/`package-lock.json`**: `npm install` + rerun della suite nella working copy di destinazione — non fidarsi che "passava nel worktree" (lezione Session 119: `node_modules` disallineato dopo merge da worktree ha fatto fallire 3 suite).
+- **Per un nuovo check CI deterministico** (script tipo `check-faq-sync.js`/`check-timestamptz-casts.js`): lo script E il suo test unitario, entrambi wired in CI — uno script senza test proprio dà falsa sicurezza (scoperto 2026-09-12: `check-faq-sync.test.js` esisteva da tempo ma non girava mai in CI, solo lo script stesso; corretto insieme a questo lavoro).
+
+---
+
 **Last Updated:** 28 Maggio 2026  
 **Approved By:** Diego Falletti  
 **Status:** APPROVED ✅ — Ready for Development
@@ -390,12 +417,20 @@ req.user = {
 ### Pattern 6: Timezone-Naive `::date` Casts on TIMESTAMPTZ Columns
 **Files:** any SQL comparing a `TIMESTAMPTZ` column against a calendar date (`checkins.timestamp`, `events.event_date`-adjacent joins, etc.)
 
-**Risk:** `some_timestamptz_column::date` (or any bare date cast) evaluates in the DB session's timezone — UTC by default on AWS RDS, but coincidentally `Europe/Rome` on most developers' local Postgres (inherited from OS default), which **masks the bug in local testing**. During the ~00:00–02:00 Europe/Rome window, the UTC calendar date and the Europe/Rome calendar date differ, so the raw cast silently matches/misses the wrong day. This exact bug class has now shipped twice: `checkins.js` (fixed in commit `615fcbf`, 2026-08-18) and `eventConflict.js` (fixed in commit `89986b3`, 2026-08-22, found via `/code-review:code-review` on PR #7).
+**Risk:** `some_timestamptz_column::date` (or any bare date cast — including casting the *other side* of a comparison, e.g. `column >= $1::date`) evaluates in the DB session's timezone — UTC by default on AWS RDS, but coincidentally `Europe/Rome` on most developers' local Postgres (inherited from OS default), which **masks the bug in local testing**. During the ~00:00–02:00 Europe/Rome window, the UTC calendar date and the Europe/Rome calendar date differ, so the raw cast silently matches/misses the wrong day.
+
+This exact bug class has now shipped **five times**: `checkins.js` (commit `615fcbf`, 2026-08-18), `eventConflict.js` (commit `89986b3`, 2026-08-22, found via `/code-review:code-review` on PR #7), `queryScope.js`'s `dateFrom`/`dateTo` range filter (2026-09-12, found designing the automated check below — the parameter was cast, not the column, which the check's first draft also missed), and `migrations/035_employee_lifecycle.sql`'s `hiring_date` backfill (2026-09-12, same session — a one-time migration, so already-applied production rows created 00:00-02:00 Europe/Rome may have a `hiring_date` off by one day; not retroactively corrected, out of scope of the code fix).
+
+**⚠️ `date AT TIME ZONE zone` alone is a trap, not a fix.** Postgres first implicitly casts the bare `date` to `timestamptz` (interpreting midnight in the *session* timezone — the exact bug), then `AT TIME ZONE` converts that instant to `zone`'s wall-clock. The cast must go through a timezone-naive `timestamp` first: `date::timestamp AT TIME ZONE 'Europe/Rome'` (verified manually against a live session with `timezone=UTC` while fixing `queryScope.js` — omitting the `::timestamp` step silently reproduces the bug instead of fixing it).
+
+**Automated enforcement (added 2026-09-12):** `backend/scripts/check-timestamptz-casts.js`, wired into CI right after migrations are applied (`.github/workflows/ci.yml`). Column list is derived from `information_schema` against the live test DB — **not hardcoded** (a hardcoded list is exactly the anti-pattern that caused the `isAdminEquivalent()` regression, Session 116/117 — it marches silently as the schema evolves). Blocks the build; escape with an inline `// tz-safe: <reason>` (JS) or `-- tz-safe: <reason>` (SQL) comment for genuinely innocuous cases. Its own test: `backend/scripts/__tests__/check-timestamptz-casts.test.js`.
+
+**Falsifiable criterion for this check** (review it if any of these happens): (1) a 6th occurrence ships despite the check passing — the detection heuristic has a gap; (2) the `tz-safe` escape is used more than 2-3 times without a solid, reviewed reason — the check is probably mistuned; (3) full brainstorm→spec→plan ceremony is still applied to one-line fixes despite the workflow-weight table below — that table failed, not this check.
 
 **Prevention Checklist:**
-- [ ] Any new `::date` cast (or `DATE()`/`date_trunc('day', ...)`) on a TIMESTAMPTZ column uses `(column AT TIME ZONE 'Europe/Rome')::date`, matching the JS-side `dateInTimeZone()`/`todayInTimeZone()` helpers (`backend/src/utils/date.js`)
-- [ ] Grep check before merging: `grep -rn '::date' backend/src/**/*.js` — every match either isn't a TIMESTAMPTZ column or has an adjacent `AT TIME ZONE 'Europe/Rome'`
-- [ ] If the fix touches query logic, add a regression test that explicitly runs `SET timezone = 'UTC'` on the test connection before asserting (see `backend/src/__tests__/eventConflict-timezone.test.js`) — otherwise the test passes by the same local-timezone coincidence that hid the bug in the first place
+- [ ] Any new `::date` cast (or `DATE()`/`date_trunc('day', ...)`) on a TIMESTAMPTZ column, on EITHER side of a comparison, uses `(column AT TIME ZONE 'Europe/Rome')::date` for a point-lookup, or `date::timestamp AT TIME ZONE 'Europe/Rome'` for a range boundary (index-friendly — see `queryScope.js` for the worked example) — matching the JS-side `dateInTimeZone()`/`todayInTimeZone()` helpers (`backend/src/utils/date.js`)
+- [ ] `node backend/scripts/check-timestamptz-casts.js` passes (also runs automatically in CI) — this supersedes the old manual `grep -rn '::date'` instruction, which only caught the column-cast shape, not the parameter-cast shape
+- [ ] If the fix touches query logic, add a regression test that explicitly runs `SET timezone = 'UTC'` on the test connection before asserting (see `backend/src/__tests__/eventConflict-timezone.test.js`, `queryScope-timezone.test.js`) — otherwise the test passes by the same local-timezone coincidence that hid the bug in the first place
 
 ---
 
