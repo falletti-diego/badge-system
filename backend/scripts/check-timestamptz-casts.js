@@ -147,6 +147,13 @@ async function run() {
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || 'postgres',
     database: process.env.DB_NAME || 'badge_system_test',
+    // Mirrors src/db/pool.js — this only runs against a local/CI Postgres
+    // today (no SSL needed there), but would otherwise fail the same way
+    // run-migrations.js did against the real RDS instance if ever pointed
+    // at it (see 2026-09-13 fix there for the full story).
+    ssl: process.env.NODE_ENV === 'production'
+      ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
+      : false,
   });
 
   try {

@@ -31,6 +31,14 @@ const pool = new Pool({
   database: process.env.DB_NAME || 'badge_system',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD,
+  // Must mirror src/db/pool.js's SSL logic — RDS's default.postgres16
+  // parameter group enforces rds.force_ssl=1 (found 2026-09-13: this
+  // migration runner has no SSL config at all, so the container's bootstrap
+  // migration step got rejected with "no pg_hba.conf entry ... no
+  // encryption" the first time it connected to the upgraded PG16 instance).
+  ssl: process.env.NODE_ENV === 'production'
+    ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
+    : false,
 });
 
 const logger = console; // In production, use Pino

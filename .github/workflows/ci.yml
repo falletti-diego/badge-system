@@ -128,7 +128,11 @@ jobs:
         run: node scripts/check-faq-sync.js
 
       - name: Run top-level scripts/ tests (node:test — never wired into CI before)
-        run: node --test "scripts/__tests__/*.test.js"
+        # Unquoted so bash expands the glob before node sees it — node:test's
+        # own glob support in the CLI arg differs across Node versions
+        # (worked locally on Node 25, failed on CI's Node 20 with "Could not
+        # find" the literal glob string).
+        run: node --test scripts/__tests__/*.test.js
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v5
