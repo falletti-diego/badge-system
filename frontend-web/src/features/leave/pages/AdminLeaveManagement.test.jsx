@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { AdminLeaveManagement } from './AdminLeaveManagement';
 import * as authService from '../../../services/authService';
@@ -20,6 +20,12 @@ vi.mock('../hooks/useLeave', () => ({
         leave_type: 'FERIE_1',
         start_date: '2026-07-01',
         end_date: '2026-07-05',
+        // 4.5, not 5: the 2026-07-01..2026-07-05 range is a 5-calendar-day
+        // span, so a date-diff recalculation (the old deleted calculateDays)
+        // would always produce 5. Using 4.5 here (e.g. a trailing half-day)
+        // makes the test fail if calculateDays is ever reintroduced instead
+        // of trusting the API's num_days.
+        num_days: 4.5,
         status: 'APPROVED',
         created_at: '2026-06-13T10:00:00Z',
         motivation: 'Vacanza estiva',
@@ -31,6 +37,7 @@ vi.mock('../hooks/useLeave', () => ({
         leave_type: 'MALATTIA',
         start_date: '2026-06-20',
         end_date: '2026-06-20',
+        num_days: 1,
         status: 'PENDING',
         created_at: '2026-06-13T11:00:00Z',
         motivation: 'Influenza',
@@ -126,6 +133,24 @@ describe('AdminLeaveManagement Page', () => {
         expect(screen.getByText('Employee emp-003-')).toBeInTheDocument();
       });
     });
+  });
+
+  it('shows num_days from the API instead of recalculating from dates, and formats decimals with a comma', async () => {
+    render(<BrowserRouter><AdminLeaveManagement /></BrowserRouter>);
+    // Luigi Bianchi's request is PENDING (1 day) — visible on the default
+    // "In Sospeso" tab, which renders days with "giorno"/"giorni" pluralization.
+    await waitFor(() => screen.getByText('Luigi Bianchi'));
+    expect(screen.getAllByText(/1 giorno\b/).length).toBeGreaterThanOrEqual(1);
+
+    // Maria Rossi's request is APPROVED (num_days: 4.5) — only visible on
+    // the "Approvate" tab, which renders days as a plain formatted number
+    // (no "giorno/giorni" suffix there). Her date range (2026-07-01 to
+    // 2026-07-05) spans 5 calendar days, so a date-diff recalculation
+    // (the old deleted calculateDays) would show "5", not "4,5" — this
+    // assertion only passes if the component reads num_days from the API.
+    fireEvent.click(screen.getByRole('tab', { name: 'Approvate' }));
+    const mariaRow = (await screen.findByText('Maria Rossi')).closest('tr');
+    expect(within(mariaRow).getByText('4,5')).toBeInTheDocument();
   });
 
   describe('Integration', () => {

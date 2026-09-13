@@ -87,6 +87,19 @@ describe('PlanningPage Leave Blocking Logic', () => {
       expect(isDateBlocked('emp-001', '2026-06-16', approvedLeaves)).toBe(false);
     });
 
+    it('blocks the entire day even when the approved leave is a half-day (num_days=0.5) — known limitation, accepted for now (see design spec finding #7, not fixed in this work)', () => {
+      const approvedLeaves = [
+        {
+          user_id: 'emp-001',
+          start_date: '2026-09-20',
+          end_date: '2026-09-20',
+          num_days: 0.5,
+        },
+      ];
+
+      expect(isDateBlocked('emp-001', '2026-09-20', approvedLeaves)).toBe(true);
+    });
+
     it('should handle empty leave list', () => {
       const approvedLeaves = [];
 

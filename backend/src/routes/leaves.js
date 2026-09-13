@@ -22,12 +22,29 @@ const logger = require('../utils/logger');
 
 const router = express.Router();
 
+// leave_saldi.total_days/used_days/remaining_days and leave_requests.num_days
+// are NUMERIC(6,2) (half-day support, ONB.2) — node-postgres returns NUMERIC
+// as a string to avoid silent precision loss. Every response that includes
+// one of these fields must go through this before res.json(), so every
+// frontend consumer (web + mobile) can trust it's a real number without
+// re-deriving the same fix at each call site.
+function normalizeLeaveNumerics(row) {
+  if (!row) return row;
+  const normalized = { ...row };
+  for (const field of ['total_days', 'used_days', 'remaining_days', 'num_days']) {
+    if (normalized[field] !== undefined && normalized[field] !== null) {
+      normalized[field] = Number(normalized[field]);
+    }
+  }
+  return normalized;
+}
+
 // =====================================================
 // POST /api/v1/leave/request — Create leave request
 // =====================================================
 
 router.post('/request', requireAuth, createValidationMiddleware(PostLeaveRequestSchema), async (req, res, next) => {
-  const { leave_type, start_date, end_date, motivation } = req.validated.body;
+  const { leave_type, start_date, end_date, motivation, half_day } = req.validated.body;
   const userId = req.user.user_id;
   const clientId = req.user.client_id;
 
@@ -36,9 +53,10 @@ router.post('/request', requireAuth, createValidationMiddleware(PostLeaveRequest
     const startDate = new Date(start_date);
     const endDate = new Date(end_date);
 
-    // Calculate num_days (inclusive: from start to end inclusive)
+    // Calculate num_days (inclusive: from start to end inclusive). half_day
+    // is only valid for a single-day request (enforced by PostLeaveRequestSchema).
     const timeDiff = endDate.getTime() - startDate.getTime();
-    const numDays = Math.floor(timeDiff / (1000 * 60 * 60 * 24)) + 1;
+    const numDays = half_day ? 0.5 : Math.floor(timeDiff / (1000 * 60 * 60 * 24)) + 1;
 
     const result = await withTransaction(async (client) => {
       // 1. Verify user exists and belongs to this client
@@ -139,7 +157,7 @@ router.post('/request', requireAuth, createValidationMiddleware(PostLeaveRequest
       num_days: numDays,
     });
 
-    res.status(201).json({ data: result });
+    res.status(201).json({ data: normalizeLeaveNumerics(result) });
   } catch (error) {
     next(error);
   }
@@ -190,7 +208,7 @@ router.get('/pending', requireAuth, async (req, res, next) => {
       count: result.rows.length,
     });
 
-    res.status(200).json({ data: result.rows });
+    res.status(200).json({ data: result.rows.map(normalizeLeaveNumerics) });
   } catch (error) {
     next(error);
   }
@@ -399,7 +417,7 @@ router.get('/my-requests', requireAuth, async (req, res, next) => {
       count: result.rows.length,
     });
 
-    res.status(200).json({ data: result.rows });
+    res.status(200).json({ data: result.rows.map(normalizeLeaveNumerics) });
   } catch (error) {
     next(error);
   }
@@ -452,7 +470,7 @@ router.get('/approved', requireAuth, async (req, res, next) => {
       count: result.rows.length,
     });
 
-    res.status(200).json({ data: result.rows });
+    res.status(200).json({ data: result.rows.map(normalizeLeaveNumerics) });
   } catch (error) {
     next(error);
   }
@@ -525,7 +543,7 @@ router.get('/all', requireAuth, async (req, res, next) => {
       count: result.rows.length,
     });
 
-    res.status(200).json({ data: result.rows });
+    res.status(200).json({ data: result.rows.map(normalizeLeaveNumerics) });
   } catch (error) {
     next(error);
   }
@@ -563,7 +581,7 @@ router.get('/admin/saldi', requireAuth, async (req, res, next) => {
         saldiByEmployee[row.user_id] = { name: row.employee_name };
       }
       // Use remaining_days for current year; aggregate all years
-      saldiByEmployee[row.user_id][row.leave_type] = row.remaining_days;
+      saldiByEmployee[row.user_id][row.leave_type] = Number(row.remaining_days);
     });
 
     logger.info({
@@ -605,7 +623,7 @@ router.get('/balance', requireAuth, async (req, res, next) => {
       count: result.rows.length,
     });
 
-    res.status(200).json({ data: result.rows });
+    res.status(200).json({ data: result.rows.map(normalizeLeaveNumerics) });
   } catch (error) {
     next(error);
   }

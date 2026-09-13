@@ -6,7 +6,7 @@ export const useLeave = () => {
   const [error, setError] = useState(null);
 
   const createRequest = useCallback(
-    async (leave_type, start_date, end_date, motivation) => {
+    async (leave_type, start_date, end_date, motivation, half_day) => {
       setLoading(true);
       setError(null);
 
@@ -15,6 +15,7 @@ export const useLeave = () => {
           leave_type,
           start_date,
           end_date,
+          half_day: half_day || undefined,
           motivation: motivation || undefined,
         });
 

@@ -18,13 +18,37 @@ describe('parseWorkbook', () => {
     expect(e.email).toBe(e.email.toLowerCase());
     expect(e.ruolo).toBe('responsabile');
     expect(typeof e.ferie_giorni).toBe('number');
-    expect(data.dipendenti.every((d) => Number.isInteger(d.permessi_giorni))).toBe(true);
   });
 
   it('exposes ROLE_MAP and SALDO_COLUMNS constants', () => {
     expect(ROLE_MAP.dipendente).toBe('employee');
     expect(ROLE_MAP.responsabile).toBe('manager');
     expect(SALDO_COLUMNS.ferie_giorni).toBe('FERIE_1');
+  });
+
+  it('preserves a decimal Ferie balance (19.5) instead of rounding it to a whole number', async () => {
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+
+    const wsAzienda = workbook.addWorksheet('Azienda');
+    wsAzienda.addRow(['ragione_sociale', 'email_referente']);
+    wsAzienda.addRow(['Test Co', 'test@example.invalid']);
+
+    const wsSedi = workbook.addWorksheet('Sedi');
+    wsSedi.addRow(['nome_sede', 'indirizzo']);
+    wsSedi.addRow(['Sede Test', 'Via Roma 1']);
+
+    const wsDipendenti = workbook.addWorksheet('Dipendenti');
+    wsDipendenti.addRow([
+      'nome_completo', 'email', 'ruolo', 'sede', 'matricola',
+      'ferie_giorni', 'permessi_giorni', 'exfestivita_giorni',
+    ]);
+    wsDipendenti.addRow(['Mario Rossi', 'mario@example.invalid', 'dipendente', 'Sede Test', '', 19.5, 8, 4]);
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const data = await parseWorkbook(buffer);
+
+    expect(data.dipendenti[0].ferie_giorni).toBe(19.5);
   });
 });
 

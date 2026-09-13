@@ -185,7 +185,7 @@ describe('POST /api/v1/illnesses/report — "malattia vince sempre" cascade', ()
       'SELECT used_days FROM leave_saldi WHERE user_id = $1 AND leave_type = $2 AND year = $3',
       [employeeId, 'FERIE_1', year]
     );
-    expect(saldoCheck.rows[0].used_days).toBe(0); // 3 - 3 = 0, reversed correctly
+    expect(Number(saldoCheck.rows[0].used_days)).toBe(0); // 3 - 3 = 0, reversed correctly
   });
 
   it('auto-rejects a PENDING future leave without touching the saldo (nothing was ever decremented for a PENDING request)', async () => {
@@ -213,7 +213,7 @@ describe('POST /api/v1/illnesses/report — "malattia vince sempre" cascade', ()
       'SELECT used_days FROM leave_saldi WHERE user_id = $1 AND leave_type = $2 AND year = $3',
       [employeeId, 'FERIE_1', year]
     );
-    expect(saldoCheck.rows[0].used_days).toBe(0); // untouched — the status !== 'APPROVED' guard skipped the decrement
+    expect(Number(saldoCheck.rows[0].used_days)).toBe(0); // untouched — the status !== 'APPROVED' guard skipped the decrement
   });
 
   it('never touches an approved leave that is entirely in the past', async () => {
@@ -275,7 +275,7 @@ describe('POST /api/v1/illnesses/report — "malattia vince sempre" cascade', ()
       'SELECT used_days FROM leave_saldi WHERE user_id = $1 AND leave_type = $2 AND year = $3',
       [employeeId, 'FERIE_1', year]
     );
-    expect(saldoCheck.rows[0].used_days).toBe(3); // untouched
+    expect(Number(saldoCheck.rows[0].used_days)).toBe(3); // untouched
   });
 
   it('rejects an approved leave that spans past-to-future, when the illness overlaps only its future portion', async () => {
@@ -308,7 +308,7 @@ describe('POST /api/v1/illnesses/report — "malattia vince sempre" cascade', ()
       'SELECT used_days FROM leave_saldi WHERE user_id = $1 AND leave_type = $2 AND year = $3',
       [employeeId, 'FERIE_1', year]
     );
-    expect(saldoCheck.rows[0].used_days).toBe(0); // 7 - 7 = 0, reversed in full
+    expect(Number(saldoCheck.rows[0].used_days)).toBe(0); // 7 - 7 = 0, reversed in full
   });
 
   it('writes an audit log entry for each auto-rejected record', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { ManagerLeaveApprovalPanel } from './ManagerLeaveApprovalPanel';
 import * as authService from '../../../services/authService';
@@ -11,14 +11,14 @@ vi.mock('../../../services/authService', () => ({
 }));
 
 vi.mock('../hooks/useLeave', () => ({
-  useLeave: () => ({
+  useLeave: vi.fn(() => ({
     getPendingRequests: vi.fn(async () => []),
     approveRequest: vi.fn(async () => ({})),
     rejectRequest: vi.fn(async () => ({})),
     loading: false,
     error: null,
     clearError: vi.fn(),
-  }),
+  })),
 }));
 
 const renderWithRouter = (component) => {
@@ -76,6 +76,36 @@ describe('ManagerLeaveApprovalPanel', () => {
     it('should integrate with useLeave hook', () => {
       renderWithRouter(<ManagerLeaveApprovalPanel />);
       expect(screen.getByText(/Richieste di Ferie in Sospeso/i)).toBeTruthy();
+    });
+
+    it('shows num_days from the API in the pending request card', async () => {
+      const { useLeave } = await import('../hooks/useLeave');
+      useLeave.mockReturnValueOnce({
+        getPendingRequests: vi.fn(async () => [
+          {
+            id: 'req-1',
+            employee_name: 'Maria Rossi',
+            leave_type: 'FERIE_1',
+            start_date: '2026-07-01',
+            end_date: '2026-07-01',
+            // 0.5, not 1: same-day start/end would make the old deleted
+            // calculateDays(start, end) always produce 1. Using 0.5 here
+            // makes the test fail if calculateDays is ever reintroduced
+            // instead of trusting the API's num_days.
+            num_days: 0.5,
+            status: 'PENDING',
+          },
+        ]),
+        approveRequest: vi.fn(),
+        rejectRequest: vi.fn(),
+        loading: false,
+        error: null,
+        clearError: vi.fn(),
+      });
+
+      renderWithRouter(<ManagerLeaveApprovalPanel />);
+      await waitFor(() => screen.getByText('Maria Rossi'));
+      expect(screen.getByText(/0,5 giorni/)).toBeInTheDocument();
     });
   });
 });

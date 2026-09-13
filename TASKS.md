@@ -697,22 +697,22 @@ Template Excel multi-foglio (Azienda / Sedi / Dipendenti) compilato dal cliente,
 - [x] Output: CSV credenziali iniziali (post-commit, gitignored) da restituire al cliente ✅
 - [x] **Riverificato E2E in Session 118** (2026-08-30) su richiesta dell'utente ("arruolamento nuovo cliente con ore ferie già presenti") — nessun gap trovato, nessuno sviluppo necessario. Test con 5 dipendenti a saldi diversi (30/20/4/26/15 ferie + permessi/ex-festività variabili), dry-run + apply reali contro Postgres locale, confermato l'allineamento corretto per dipendente sia in `leave_saldi` sia nella forma restituita da `GET /admin/saldi` ✅
 
-### ONB.2 — 🟡 Saldi: supporto mezze giornate / Permessi-ROL in ore (cambio schema)
-**Oggi i saldi sono in GIORNI INTERI.** Per mezze giornate (ferie) e Permessi/ROL contati in ore servono questi cambi precisi:
+### ONB.2 — ✅ Saldi: mezze giornate Ferie (COMPLETO, 2026-09-13)
 
-1. **Nuova migration** (NON editare la 020 già applicata in prod) — es. `migrations/022_leave_numeric_units.sql`:
-   - `leave_saldi.total_days` / `used_days`: `INT` → `NUMERIC(6,2)`
-   - `leave_saldi.remaining_days`: è `GENERATED ALWAYS AS (total_days - used_days) STORED` → va **droppata e ricreata** come NUMERIC (non si altera il tipo di una generated column)
-   - `leave_requests.num_days`: `INT` → `NUMERIC(6,2)`
-   - (opz. per ROL-in-ore) aggiungere `leaves.unit VARCHAR(10) DEFAULT 'days'` con `'days'|'hours'` per distinguere Permessi/ROL (ore) da Ferie/ex-Festività (giorni)
-2. **Backend** `src/routes/leaves.js`:
-   - riga ~38: `numDays = Math.floor(diff/86400000)+1` calcola solo giorni interi → aggiungere flag `half_day` o campo `hours` nella richiesta
-   - righe ~61 (confronto saldo) e ~252 (`used_days = used_days + $1`): funzionano già con NUMERIC, nessuna logica da cambiare
-3. **Validazione** `src/middleware/validation.js`: schema Zod richiesta ferie → ammettere decimali (`z.number()` invece di `.int()`) o campo `hours`
-4. **Frontend** `EmployeeLeaveRequest.jsx`: toggle mezza giornata / input ore; mostrare saldi con decimali
-5. **Template onboarding**: colonne saldo decimali; se `unit=hours` per Permessi, il foglio Dipendenti accetta ore
+Implementato secondo design spec `docs/superpowers/specs/2026-09-12-onb2-half-day-leave-balances-design.md` e piano `docs/superpowers/plans/2026-09-13-onb2-half-day-leave-balances.md`. Scope: solo mezze giornate su FERIE_1/2/3 (0.5), non Permessi/ROL in ore.
 
-Sforzo stimato: 3-5h. Priorità: dopo il primo cliente pilota (MVP parte a giorni interi).
+- Migration 044: `leave_saldi.total_days/used_days/remaining_days` e `leave_requests.num_days` → `NUMERIC(6,2)`
+- Backend: flag `half_day` (solo su richiesta di un singolo giorno, solo Ferie), normalizzazione centralizzata NUMERIC→Number in `leaves.js`
+- Fix bug reale trovato durante l'analisi: `parseWorkbook.js` arrotondava silenziosamente i saldi decimali importati (`normInt` → `normDecimal`)
+- Toggle mezza giornata su 3 form di richiesta (web dipendente, web manager, mobile) — rimossi 4 ricalcoli client-side duplicati del conteggio giorni, ora tutti usano `num_days` dal backend
+- Regression test espliciti: mezza giornata continua a generare conflitto Evento/Malattia (Pattern 7, nessuna modifica di codice necessaria); Planning Page blocca comunque l'intero giorno per mezza ferie (limitazione nota, accettata esplicitamente — non risolta in questo lavoro)
+- Primi test screen-level mai scritti per `LeaveRequestScreen.jsx`/`ManagerLeaveApprovalScreen.jsx` (mobile)
+- **Bug reale di produzione trovato e fixato durante l'esecuzione** (non nello scope originale): `ManagerLeaveApprovalScreen.jsx` (mobile) costruiva il plurale italiano concatenando "giorno"+"i" invece di scegliere tra le due parole complete "giorno"/"giorni" — ogni richiesta ferie multi-giorno mostrava "3 giornoi" invece di "3 giorni" ai manager, mai scoperto prima perché nessun test verificava il testo pluralizzato. Corretto con un ternario tra parole complete.
+- **Follow-up non bloccante identificato**: `PUT /api/v1/leave/:id/approve` non normalizza ancora `num_days` (resta stringa NUMERIC grezza) — non visibile oggi (nessun consumer frontend legge questa risposta direttamente, tutti rifanno fetch da endpoint già normalizzati), ma un futuro consumer diretto rischierebbe lo stesso bug. Candidato per un piccolo task futuro.
+- **Regressione trovata e fixata durante la verifica finale (Task 16)**: la migration 044 ha reso `leave_saldi.used_days` una stringa NUMERIC grezza quando letta via query SQL diretta (non attraverso `leaves.js`, già normalizzato) — `illness-cascade-conflict.test.js` confrontava il valore con `.toBe(0)`/`.toBe(3)` numerici e falliva ricevendo `"0.00"`/`"3.00"`. Corretto avvolgendo le 4 asserzioni in `Number(...)`.
+- **Trovato ma NON fixato (pre-esistente, fuori scope)**: `backend/src/__tests__/events-request-timezone.test.js` fallisce con `400` invece di `409`/`201` — causa: usa una data hardcoded (`2026-09-05`) ormai nel passato rispetto a oggi (2026-09-13), non un difetto di questo lavoro. File identico al commit base, nessuna dipendenza (`events.js`, `eventConflict.js`, `checkins.js`, `date.js`) toccata da questo piano. Da aggiornare con date relative o spostate nel futuro in un task dedicato.
+
+**ONB.2b (futuro, non iniziato)**: Permessi/ROL in ore — richiede un nuovo tipo di assenza da zero (oggi `leaves` ha solo 4 codici), non è un'estensione di questo lavoro.
 
 ---
 

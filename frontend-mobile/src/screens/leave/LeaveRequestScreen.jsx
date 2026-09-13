@@ -8,6 +8,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import apiClient from '../../services/apiClient';
 import { ENDPOINTS, LEAVE_TYPES } from '../../config/endpoints';
 import { toISO, formatDateIT, today } from '../../utils/dateUtils';
+import { formatLeaveDays } from '../../utils/formatLeaveDays';
 
 const STATUS_COLORS = { PENDING: '#B45309', APPROVED: '#166534', REJECTED: '#991B1B' };
 const STATUS_LABELS = { PENDING: 'In attesa', APPROVED: 'Approvata', REJECTED: 'Rifiutata' };
@@ -21,6 +22,7 @@ export default function LeaveRequestScreen() {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [reason, setReason] = useState('');
+  const [halfDay, setHalfDay] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [requests, setRequests] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -65,10 +67,12 @@ export default function LeaveRequestScreen() {
         leave_type: leaveType,
         start_date: toISO(startDate),
         end_date: toISO(endDate),
+        half_day: halfDay || undefined,
         motivation: reason.trim() || null,
       });
       Alert.alert('✅ Richiesta inviata', 'La tua richiesta di ferie è stata inviata al manager per approvazione.');
       setReason('');
+      setHalfDay(false);
       setStartDate(today());
       setEndDate(today());
       loadBalance();
@@ -107,7 +111,7 @@ export default function LeaveRequestScreen() {
                     onPress={() => setLeaveType(b.leave_type)}
                   >
                     <Text style={[styles.balanceDays, isActive && styles.balanceDaysActive]}>
-                      {b.remaining_days ?? '—'}
+                      {formatLeaveDays(b.remaining_days)}
                     </Text>
                     <Text style={[styles.balanceLabel, isActive && styles.balanceLabelActive]}>
                       {type?.label ?? b.leave_type}
@@ -143,6 +147,7 @@ export default function LeaveRequestScreen() {
         {showStartPicker && (
           <View style={styles.pickerContainer}>
             <DateTimePicker
+              testID="start-date-picker"
               value={startDate}
               mode="date"
               display="spinner"
@@ -171,6 +176,7 @@ export default function LeaveRequestScreen() {
           {showEndPicker && (
             <View style={styles.pickerContainer}>
               <DateTimePicker
+                testID="end-date-picker"
                 value={endDate}
                 mode="date"
                 display="spinner"
@@ -185,6 +191,18 @@ export default function LeaveRequestScreen() {
             </View>
           )}
         </View>
+
+        {toISO(startDate) === toISO(endDate) && (
+          <TouchableOpacity
+            style={styles.halfDayRow}
+            onPress={() => setHalfDay((v) => !v)}
+          >
+            <View style={[styles.checkbox, halfDay && styles.checkboxChecked]}>
+              {halfDay && <Text style={styles.checkboxMark}>✓</Text>}
+            </View>
+            <Text style={styles.halfDayLabel}>Mezza giornata</Text>
+          </TouchableOpacity>
+        )}
 
         <Text style={styles.label}>Motivazione (opzionale)</Text>
         <TextInput
@@ -256,6 +274,14 @@ const styles = StyleSheet.create({
   balanceLabel: { fontSize: 11, color: '#9CA3AF', textAlign: 'center', marginTop: 4 },
   balanceLabelActive: { color: '#1E3A5F', fontWeight: '600' },
   label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8, marginTop: 20 },
+  halfDayRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
+  checkbox: {
+    width: 22, height: 22, borderRadius: 4, borderWidth: 1.5, borderColor: '#D1D5DB',
+    alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF',
+  },
+  checkboxChecked: { backgroundColor: '#1E3A5F', borderColor: '#1E3A5F' },
+  checkboxMark: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  halfDayLabel: { fontSize: 14, color: '#374151', fontWeight: '500' },
   typeRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   typeChip: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,

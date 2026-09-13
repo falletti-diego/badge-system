@@ -8,6 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import apiClient from '../../services/apiClient';
 import { ENDPOINTS } from '../../config/endpoints';
 import { formatDateIT } from '../../utils/dateUtils';
+import { formatLeaveDays } from '../../utils/formatLeaveDays';
 import { PendingLeaveContext } from '../../navigation/RootNavigator';
 
 const LEAVE_LABELS = {
@@ -101,7 +102,7 @@ export default function ManagerLeaveApprovalScreen() {
 
                   <Text style={styles.dates}>
                     {formatDateIT(r.start_date)} → {formatDateIT(r.end_date)}
-                    {'  ·  '}{r.num_days} giorno{r.num_days !== 1 ? 'i' : ''}
+                    {'  ·  '}{formatLeaveDays(r.num_days)} {Number.isInteger(r.num_days) && r.num_days === 1 ? 'giorno' : 'giorni'}
                   </Text>
 
                   {r.motivation ? (
