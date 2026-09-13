@@ -33,6 +33,7 @@ import {
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useLeave } from '../hooks/useLeave';
+import { formatLeaveDays } from '../../../utils/formatLeaveDays';
 
 const LEAVE_TYPE_LABELS = {
   FERIE_1: 'Ferie 1',
@@ -152,12 +153,6 @@ export const AdminLeaveManagement = () => {
     setSuccessMessage(null);
   };
 
-  const calculateDays = (startDate, endDate) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    return Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-  };
-
   const filteredByTab = useMemo(() => {
     if (tabValue === 0) return allRequests.filter((r) => r.status === 'PENDING');
     if (tabValue === 1) return allRequests.filter((r) => r.status === 'APPROVED');
@@ -239,7 +234,7 @@ export const AdminLeaveManagement = () => {
           ) : (
             <Stack spacing={2}>
               {filteredByTab.map((request) => {
-                const numDays = calculateDays(request.start_date, request.end_date);
+                const numDays = request.num_days;
                 const startDate = new Date(request.start_date);
                 const endDate = new Date(request.end_date);
 
@@ -265,7 +260,7 @@ export const AdminLeaveManagement = () => {
                             {request.employee_name}
                           </Typography>
                           <Typography variant="caption" sx={{ color: '#6B625A' }}>
-                            {LEAVE_TYPE_LABELS[request.leave_type]} • {numDays}{' '}
+                            {LEAVE_TYPE_LABELS[request.leave_type]} • {formatLeaveDays(numDays)}{' '}
                             {numDays === 1 ? 'giorno' : 'giorni'}
                           </Typography>
                         </Box>
@@ -355,7 +350,7 @@ export const AdminLeaveManagement = () => {
                 </TableHead>
                 <TableBody>
                   {filteredByTab.map((request) => {
-                    const numDays = calculateDays(request.start_date, request.end_date);
+                    const numDays = request.num_days;
                     const startDate = new Date(request.start_date);
                     const endDate = new Date(request.end_date);
                     const createdDate = new Date(request.created_at);
@@ -366,7 +361,7 @@ export const AdminLeaveManagement = () => {
                         <TableCell>{LEAVE_TYPE_LABELS[request.leave_type]}</TableCell>
                         <TableCell>{startDate.toLocaleDateString('it-IT')}</TableCell>
                         <TableCell>{endDate.toLocaleDateString('it-IT')}</TableCell>
-                        <TableCell align="center">{numDays}</TableCell>
+                        <TableCell align="center">{formatLeaveDays(numDays)}</TableCell>
                         <TableCell>{createdDate.toLocaleDateString('it-IT')}</TableCell>
                       </TableRow>
                     );
@@ -402,7 +397,7 @@ export const AdminLeaveManagement = () => {
                 </TableHead>
                 <TableBody>
                   {filteredByTab.map((request) => {
-                    const numDays = calculateDays(request.start_date, request.end_date);
+                    const numDays = request.num_days;
                     const startDate = new Date(request.start_date);
                     const endDate = new Date(request.end_date);
                     const createdDate = new Date(request.created_at);
@@ -413,7 +408,7 @@ export const AdminLeaveManagement = () => {
                         <TableCell>{LEAVE_TYPE_LABELS[request.leave_type]}</TableCell>
                         <TableCell>{startDate.toLocaleDateString('it-IT')}</TableCell>
                         <TableCell>{endDate.toLocaleDateString('it-IT')}</TableCell>
-                        <TableCell align="center">{numDays}</TableCell>
+                        <TableCell align="center">{formatLeaveDays(numDays)}</TableCell>
                         <TableCell>{createdDate.toLocaleDateString('it-IT')}</TableCell>
                       </TableRow>
                     );
@@ -450,7 +445,7 @@ export const AdminLeaveManagement = () => {
                 </TableHead>
                 <TableBody>
                   {allRequests.map((request) => {
-                    const numDays = calculateDays(request.start_date, request.end_date);
+                    const numDays = request.num_days;
                     const startDate = new Date(request.start_date);
                     const endDate = new Date(request.end_date);
                     const createdDate = new Date(request.created_at);
@@ -461,7 +456,7 @@ export const AdminLeaveManagement = () => {
                         <TableCell>{LEAVE_TYPE_LABELS[request.leave_type]}</TableCell>
                         <TableCell>{startDate.toLocaleDateString('it-IT')}</TableCell>
                         <TableCell>{endDate.toLocaleDateString('it-IT')}</TableCell>
-                        <TableCell align="center">{numDays}</TableCell>
+                        <TableCell align="center">{formatLeaveDays(numDays)}</TableCell>
                         <TableCell>
                           <Chip
                             label={STATUS_LABELS[request.status]}
@@ -519,10 +514,10 @@ export const AdminLeaveManagement = () => {
                     return (
                       <TableRow key={empId} hover>
                         <TableCell>{empName}</TableCell>
-                        <TableCell align="center">{saldiData.FERIE_1 || 0}</TableCell>
-                        <TableCell align="center">{saldiData.FERIE_2 || 0}</TableCell>
-                        <TableCell align="center">{saldiData.FERIE_3 || 0}</TableCell>
-                        <TableCell align="center">{saldiData.MALATTIA || 0}</TableCell>
+                        <TableCell align="center">{formatLeaveDays(saldiData.FERIE_1 || 0)}</TableCell>
+                        <TableCell align="center">{formatLeaveDays(saldiData.FERIE_2 || 0)}</TableCell>
+                        <TableCell align="center">{formatLeaveDays(saldiData.FERIE_3 || 0)}</TableCell>
+                        <TableCell align="center">{formatLeaveDays(saldiData.MALATTIA || 0)}</TableCell>
                       </TableRow>
                     );
                   })}
