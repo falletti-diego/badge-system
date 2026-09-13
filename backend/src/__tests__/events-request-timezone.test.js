@@ -47,6 +47,19 @@ function uniqueEmail(label) {
   return `${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.invalid`;
 }
 
+// Always relative to "today" — a hardcoded fixed date eventually falls into
+// the past and starts failing the event_date >= 7-days-ago validation for
+// reasons unrelated to what this file actually tests (found 2026-09-13: a
+// date hardcoded during authoring silently expired).
+function futureDateStr(daysFromNow) {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromNow);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function tokenFor({ user_id, client_id, role }) {
   const privateKey = process.env.JWT_PRIVATE_KEY.replace(/\\n/g, '\n');
   return jwt.sign({ user_id, client_id, role, name: 'Test' }, privateKey, { algorithm: 'RS256', expiresIn: '1h' });
@@ -107,13 +120,14 @@ describe('POST /api/v1/events/request — conflict check via shared helpers (pos
     const { clientId, employeeId } = await makeClientAndEmployee(suffix);
     try {
       const siteId = await makeSite(clientId);
-      await makeCheckin(employeeId, siteId, clientId, '2026-09-05T10:00:00+02:00');
+      const eventDate = futureDateStr(30);
+      await makeCheckin(employeeId, siteId, clientId, `${eventDate}T10:00:00+02:00`);
 
       const token = tokenFor({ user_id: employeeId, client_id: clientId, role: 'employee' });
       const res = await request(app)
         .post('/api/v1/events/request')
         .set('Authorization', `Bearer ${token}`)
-        .send({ event_date: '2026-09-05', start_time: '08:00', end_time: '18:00', description: 'Regression test' });
+        .send({ event_date: eventDate, start_time: '08:00', end_time: '18:00', description: 'Regression test' });
 
       expect(res.status).toBe(409);
       expect(res.body.error).toBe('EVENT_DATE_CONFLICT');
@@ -128,13 +142,13 @@ describe('POST /api/v1/events/request — conflict check via shared helpers (pos
     const { clientId, employeeId } = await makeClientAndEmployee(suffix);
     try {
       const siteId = await makeSite(clientId);
-      await makeCheckin(employeeId, siteId, clientId, '2026-09-01T10:00:00+02:00');
+      await makeCheckin(employeeId, siteId, clientId, `${futureDateStr(26)}T10:00:00+02:00`);
 
       const token = tokenFor({ user_id: employeeId, client_id: clientId, role: 'employee' });
       const res = await request(app)
         .post('/api/v1/events/request')
         .set('Authorization', `Bearer ${token}`)
-        .send({ event_date: '2026-09-05', start_time: '08:00', end_time: '18:00', description: 'Regression test' });
+        .send({ event_date: futureDateStr(30), start_time: '08:00', end_time: '18:00', description: 'Regression test' });
 
       expect(res.status).toBe(201);
     } finally {
