@@ -20,6 +20,7 @@ import {
   Badge,
 } from '@mui/material';
 import { useLeave } from '../hooks/useLeave';
+import { formatLeaveDays } from '../../../utils/formatLeaveDays';
 
 const LEAVE_TYPE_LABELS = {
   FERIE_1: 'Ferie 1',
@@ -103,12 +104,6 @@ export const ManagerLeaveApprovalPanel = () => {
     setSuccessMessage(null);
   };
 
-  const calculateDays = (startDate, endDate) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    return Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-  };
-
   return (
     <Card sx={{ boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)' }}>
       <CardHeader
@@ -138,7 +133,7 @@ export const ManagerLeaveApprovalPanel = () => {
         ) : (
           <Stack spacing={2}>
             {pendingRequests.map((request) => {
-              const numDays = calculateDays(request.start_date, request.end_date);
+              const numDays = request.num_days;
               const startDate = new Date(request.start_date);
               const endDate = new Date(request.end_date);
 
@@ -160,7 +155,7 @@ export const ManagerLeaveApprovalPanel = () => {
                           {request.employee_name}
                         </Typography>
                         <Typography variant="caption" sx={{ color: '#6B625A' }}>
-                          {LEAVE_TYPE_LABELS[request.leave_type]} • {numDays}{' '}
+                          {LEAVE_TYPE_LABELS[request.leave_type]} • {formatLeaveDays(numDays)}{' '}
                           {numDays === 1 ? 'giorno' : 'giorni'}
                         </Typography>
                       </Box>
