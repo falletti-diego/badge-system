@@ -85,4 +85,27 @@ describe('LeaveRequestScreen — half-day toggle', () => {
       );
     });
   });
+
+  it('hides the half-day toggle once start and end date differ', async () => {
+    const { findByText, findByTestId, getAllByText, queryByText } = await render(<LeaveRequestScreen />);
+    await findByText('Saldo disponibile');
+
+    // Both date buttons render as "📅  <ISO date>" and start out identical
+    // (startDate === endDate === today()), so they can't be told apart by
+    // text alone. The screen renders "Data inizio" first, then "Data fine",
+    // so the second 📅-labeled button (index 1) is the end-date button.
+    const dateButtons = getAllByText(/📅/);
+    fireEvent.press(dateButtons[1]);
+
+    // Opening the end-date picker (showEndPicker=true) mounts the real
+    // DateTimePicker with testID="end-date-picker"; pressing the mock fires
+    // onChange with a fixed date (2026-09-20), distinct from today(), so
+    // startDate and endDate now differ and the toggle should disappear.
+    const picker = await findByTestId('end-date-picker');
+    fireEvent.press(picker);
+
+    await waitFor(() => {
+      expect(queryByText('Mezza giornata')).toBeFalsy();
+    });
+  });
 });
