@@ -58,7 +58,7 @@ describe('ManagerLeaveApprovalScreen — half-day display', () => {
     jest.clearAllMocks();
   });
 
-  it('shows "0,5 giorno" (singular, comma-decimal) for a half-day pending request', async () => {
+  it('shows "0,5 giorni" (plural, comma-decimal) for a half-day pending request', async () => {
     apiClient.get.mockResolvedValue({ data: { data: [{
       id: 'req-1',
       employee_name: 'Maria Rossi',
@@ -70,7 +70,22 @@ describe('ManagerLeaveApprovalScreen — half-day display', () => {
     }] } });
 
     const { findByText } = await renderScreen();
-    expect(await findByText(/0,5 giorno\b/)).toBeTruthy();
+    expect(await findByText(/0,5 giorni\b/)).toBeTruthy();
+  });
+
+  it('shows "3 giorni" (plural) for a multi-day pending request, not the malformed "giornoi"', async () => {
+    apiClient.get.mockResolvedValue({ data: { data: [{
+      id: 'req-3',
+      employee_name: 'Anna Verdi',
+      leave_type: 'FERIE_1',
+      start_date: '2026-09-22',
+      end_date: '2026-09-24',
+      num_days: 3,
+      motivation: null,
+    }] } });
+
+    const { findByText } = await renderScreen();
+    expect(await findByText(/3 giorni\b/)).toBeTruthy();
   });
 
   it('shows "1 giorno" (singular) for a full single day, not "1 giorni"', async () => {

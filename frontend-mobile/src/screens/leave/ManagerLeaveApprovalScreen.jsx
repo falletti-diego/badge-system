@@ -102,7 +102,7 @@ export default function ManagerLeaveApprovalScreen() {
 
                   <Text style={styles.dates}>
                     {formatDateIT(r.start_date)} → {formatDateIT(r.end_date)}
-                    {'  ·  '}{formatLeaveDays(r.num_days)} giorno{Number.isInteger(r.num_days) && r.num_days !== 1 ? 'i' : ''}
+                    {'  ·  '}{formatLeaveDays(r.num_days)} {Number.isInteger(r.num_days) && r.num_days === 1 ? 'giorno' : 'giorni'}
                   </Text>
 
                   {r.motivation ? (
