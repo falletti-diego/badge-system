@@ -92,7 +92,7 @@ describe('Leave Management Schema — Database Validation', () => {
       }
 
       // information_schema.columns queries
-      if (sql.includes('information_schema.columns') && sql.includes("column_name = 'remaining_days'")) {
+      if (sql.includes('information_schema.columns') && sql.includes('column_name = \'remaining_days\'')) {
         return Promise.resolve({
           rows: [
             {
@@ -105,7 +105,7 @@ describe('Leave Management Schema — Database Validation', () => {
         });
       }
 
-      if (sql.includes('information_schema.columns') && sql.includes("table_name = 'leave_requests' AND column_name = 'num_days'")) {
+      if (sql.includes('information_schema.columns') && sql.includes('table_name = \'leave_requests\' AND column_name = \'num_days\'')) {
         return Promise.resolve({
           rows: [
             {
@@ -117,7 +117,7 @@ describe('Leave Management Schema — Database Validation', () => {
           rowCount: 1,
         });
       }
-      if (sql.includes('information_schema.columns') && sql.includes("table_name = 'leave_saldi' AND column_name IN ('total_days', 'used_days', 'remaining_days')")) {
+      if (sql.includes('information_schema.columns') && sql.includes('table_name = \'leave_saldi\' AND column_name IN (\'total_days\', \'used_days\', \'remaining_days\')')) {
         return Promise.resolve({
           rows: [
             { column_name: 'total_days', data_type: 'numeric', numeric_precision: 6, numeric_scale: 2 },
