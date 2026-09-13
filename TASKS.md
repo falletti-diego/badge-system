@@ -420,7 +420,9 @@ Duplicate migration numbering fixed (011 → 013 → 014). Integrates into Docke
 
 ---
 
-### Task 11 — 🟡 Leave Management QA & Frontend Testing (PRIORITY: High)
+### Task 11 — ✅ Leave Management QA & Frontend Testing (COMPLETATO)
+
+**Nota (2026-09-12):** header corretto da 🟡 a ✅ — il corpo della voce sottostante era già completo dal Session 39 (giugno 2026), l'etichetta era rimasta stale. Da allora la copertura è stata ulteriormente rafforzata da 5 suite automatiche real-Postgres (`leaves.test.js`, `leaves.balance.test.js`, `illnesses.test.js`, `leave-event-illness-conflict.test.js`, `event-leave-illness-conflict.test.js`, 48/48 test PASS) più le suite frontend (`AdminLeaveManagement`, `EmployeeLeaveRequest`, `ManagerLeaveRequest`, `ManagerLeaveApprovalPanel`, `LeaveCalendar`, `useLeave`) — il test plan manuale sotto è stato di fatto superato da test automatizzati permanenti. Nessuna azione residua.
 
 **Goal:** Complete comprehensive testing of Leave Management (Ferie & Malattia) with full test data setup, test plan execution, and frontend verification on localhost.
 
