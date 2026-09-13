@@ -20,7 +20,12 @@ vi.mock('../hooks/useLeave', () => ({
         leave_type: 'FERIE_1',
         start_date: '2026-07-01',
         end_date: '2026-07-05',
-        num_days: 5,
+        // 4.5, not 5: the 2026-07-01..2026-07-05 range is a 5-calendar-day
+        // span, so a date-diff recalculation (the old deleted calculateDays)
+        // would always produce 5. Using 4.5 here (e.g. a trailing half-day)
+        // makes the test fail if calculateDays is ever reintroduced instead
+        // of trusting the API's num_days.
+        num_days: 4.5,
         status: 'APPROVED',
         created_at: '2026-06-13T10:00:00Z',
         motivation: 'Vacanza estiva',
@@ -137,12 +142,15 @@ describe('AdminLeaveManagement Page', () => {
     await waitFor(() => screen.getByText('Luigi Bianchi'));
     expect(screen.getAllByText(/1 giorno\b/).length).toBeGreaterThanOrEqual(1);
 
-    // Maria Rossi's request is APPROVED (5 days) — only visible on the
-    // "Approvate" tab, which renders days as a plain formatted number
-    // (no "giorno/giorni" suffix there).
+    // Maria Rossi's request is APPROVED (num_days: 4.5) — only visible on
+    // the "Approvate" tab, which renders days as a plain formatted number
+    // (no "giorno/giorni" suffix there). Her date range (2026-07-01 to
+    // 2026-07-05) spans 5 calendar days, so a date-diff recalculation
+    // (the old deleted calculateDays) would show "5", not "4,5" — this
+    // assertion only passes if the component reads num_days from the API.
     fireEvent.click(screen.getByRole('tab', { name: 'Approvate' }));
     const mariaRow = (await screen.findByText('Maria Rossi')).closest('tr');
-    expect(within(mariaRow).getByText('5')).toBeInTheDocument();
+    expect(within(mariaRow).getByText('4,5')).toBeInTheDocument();
   });
 
   describe('Integration', () => {
