@@ -54,7 +54,7 @@ async function runOnboarding(buffer, { clientId, commit }) {
 
 function validateClientId(req, next) {
   if (req.user.role === 'superadmin' && req.body.client_id) {
-    const uuidCheck = z.string().uuid().safeParse(req.body.client_id);
+    const uuidCheck = z.string().guid().safeParse(req.body.client_id);
     if (!uuidCheck.success) {
       next(new ValidationError('Invalid client_id'));
       return null;

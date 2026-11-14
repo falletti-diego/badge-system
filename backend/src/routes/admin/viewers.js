@@ -64,7 +64,7 @@ router.get('/', async (req, res, next) => {
     const params = [];
     let where = 'WHERE e.role = \'viewer\' AND e.active = true';
     if (client_id) {
-      const uuidCheck = z.string().uuid().safeParse(client_id);
+      const uuidCheck = z.string().guid().safeParse(client_id);
       if (!uuidCheck.success) return next(new ValidationError('Invalid client_id format'));
       params.push(client_id);
       where += ' AND e.client_id = $1';
@@ -88,7 +88,7 @@ router.get('/', async (req, res, next) => {
 router.delete('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    if (!z.string().uuid().safeParse(id).success) {
+    if (!z.string().guid().safeParse(id).success) {
       return next(new ValidationError('Invalid viewer id'));
     }
 

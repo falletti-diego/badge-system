@@ -19,7 +19,7 @@ const LoginSchema = z.object({
   body: z.object({
     email: z.string().email('Invalid email format'),
     password: z.string().min(1, 'Password is required'),
-    client_id: z.string().uuid('Invalid client_id format').optional(),
+    client_id: z.string().guid('Invalid client_id format').optional(),
   }),
 });
 
@@ -43,7 +43,7 @@ const DemoStartSchema = z.object({
 const DemoSwitchRoleSchema = z.object({
   body: z.object({
     role: z.enum(['admin', 'manager', 'employee'], {
-      errorMap: () => ({ message: 'role must be one of: admin, manager, employee' }),
+      error: () => 'role must be one of: admin, manager, employee',
     }),
   }).strict(),
 });
@@ -73,10 +73,10 @@ const DemoContactSchema = z.object({
 
 const PostCheckinSchema = z.object({
   body: z.object({
-    employee_id: z.string().uuid('Invalid employee_id: must be valid UUID'),
-    site_id: z.string().uuid('Invalid site_id: must be valid UUID'),
+    employee_id: z.string().guid('Invalid employee_id: must be valid UUID'),
+    site_id: z.string().guid('Invalid site_id: must be valid UUID'),
     type: z.enum(['IN', 'OUT'], {
-      errorMap: () => ({ message: 'type must be either "IN" or "OUT"' }),
+      error: () => 'type must be either "IN" or "OUT"',
     }),
     latitude: z.number().min(-90, 'latitude must be between -90 and 90').max(90, 'latitude must be between -90 and 90').nullable().optional(),
     longitude: z.number().min(-180, 'longitude must be between -180 and 180').max(180, 'longitude must be between -180 and 180').nullable().optional(),
@@ -92,7 +92,7 @@ const PostCheckinSchema = z.object({
           ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'OFFLINE_TIMESTAMP_OUT_OF_WINDOW' });
         }
       }),
-    client_uuid: z.string().uuid('Invalid client_uuid: must be valid UUID').optional(),
+    client_uuid: z.string().guid('Invalid client_uuid: must be valid UUID').optional(),
     // is_offline is intentionally NOT accepted here: the server derives it from
     // occurred_at (see routes/checkins.js) rather than trusting client input —
     // it's not a client fact, it drives an audit trail and a dashboard badge.
@@ -109,7 +109,7 @@ const PostCheckinSchema = z.object({
     qr_content: z.string().max(500, 'qr_content must be at most 500 characters').optional(),
   }),
   query: z.object({
-    client_id: z.string().uuid('Invalid client_id: must be valid UUID').optional(),
+    client_id: z.string().guid('Invalid client_id: must be valid UUID').optional(),
   }),
 });
 
@@ -170,14 +170,14 @@ const GetCheckinsSchema = z.object({
 
 const PutCheckinSchema = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid checkin ID: must be valid UUID'),
+    id: z.string().guid('Invalid checkin ID: must be valid UUID'),
   }),
   query: z.object({
-    client_id: z.string().uuid('client_id must be a valid UUID').optional(),
+    client_id: z.string().guid('client_id must be a valid UUID').optional(),
   }),
   body: z.object({
     type: z.enum(['IN', 'OUT'], {
-      errorMap: () => ({ message: 'type must be either "IN" or "OUT"' }),
+      error: () => 'type must be either "IN" or "OUT"',
     }).optional(),
     timestamp: z.preprocess(
       val => val === '' ? undefined : val,
@@ -298,7 +298,7 @@ const GetShiftsSchema = z.object({
       .default(new Date().getFullYear()),
   }),
   params: z.object({
-    siteId: z.string().uuid('Invalid siteId: must be valid UUID'),
+    siteId: z.string().guid('Invalid siteId: must be valid UUID'),
   }),
 });
 
@@ -336,11 +336,11 @@ const PostShiftsSchema = z.object({
       .int('year must be an integer')
       .min(2020, 'year must be 2020 or later'),
     shifts_data: z.record(
-      z.string().uuid('employee_id must be valid UUID'),
+      z.string().guid('employee_id must be valid UUID'),
       z.record(
         z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD'),
         z.enum(['m', 'p', 's', 'R'], {
-          errorMap: () => ({ message: 'shift must be one of: m (mattino), p (pomeriggio), s (sera), R (riposo)' }),
+          error: () => 'shift must be one of: m (mattino), p (pomeriggio), s (sera), R (riposo)',
         })
       )
     ).refine(
@@ -349,7 +349,7 @@ const PostShiftsSchema = z.object({
     ),
   }),
   params: z.object({
-    siteId: z.string().uuid('Invalid siteId: must be valid UUID'),
+    siteId: z.string().guid('Invalid siteId: must be valid UUID'),
   }),
 });
 
@@ -371,11 +371,11 @@ const ExportShiftsSchema = z.object({
       .min(2020, 'year must be 2020 or later')
       .default(new Date().getFullYear()),
     format: z.enum(['pdf', 'csv'], {
-      errorMap: () => ({ message: 'format must be either "pdf" or "csv"' }),
+      error: () => 'format must be either "pdf" or "csv"',
     }).default('csv'),
   }),
   params: z.object({
-    siteId: z.string().uuid('Invalid siteId: must be valid UUID'),
+    siteId: z.string().guid('Invalid siteId: must be valid UUID'),
   }),
 });
 
@@ -397,7 +397,7 @@ function createValidationMiddleware(schema) {
       next();
     } catch (err) {
       if (err instanceof z.ZodError) {
-        const errors = err.errors.map((e) => ({
+        const errors = err.issues.map((e) => ({
           field: e.path.join('.'),
           message: e.message,
         }));
@@ -432,7 +432,7 @@ const UpdateSiteGeofenceSchema = z.object({
     geofence_enabled: z.boolean(),
   }),
   params: z.object({
-    id: z.string().uuid('Invalid site id'),
+    id: z.string().guid('Invalid site id'),
   }),
 });
 
@@ -445,7 +445,7 @@ const AdminClientSchema = z.object({
     name: z.string().min(2, 'name must be at least 2 characters').max(100),
     email: z.string().email('Invalid email format').max(100),
     plan: z.enum(['starter', 'growth', 'enterprise'], {
-      errorMap: () => ({ message: 'plan must be starter, growth, or enterprise' }),
+      error: () => 'plan must be starter, growth, or enterprise',
     }).default('starter'),
   }),
 });
@@ -456,7 +456,7 @@ const AdminClientSchema = z.object({
 
 const AdminSiteSchema = z.object({
   body: z.object({
-    client_id: z.string().uuid('client_id must be a valid UUID').optional(),
+    client_id: z.string().guid('client_id must be a valid UUID').optional(),
     name: z.string().min(2, 'name must be at least 2 characters').max(100),
     location: z.string().max(200).optional(),
   }),
@@ -468,14 +468,14 @@ const AdminSiteSchema = z.object({
 
 const AdminEmployeeSchema = z.object({
   body: z.object({
-    client_id: z.string().uuid('client_id must be a valid UUID').optional(),
+    client_id: z.string().guid('client_id must be a valid UUID').optional(),
     email: z.string().email('Invalid email format').max(100),
     name: z.string().min(2, 'name must be at least 2 characters').max(100),
     phone: z.string().max(20).optional(),
     role: z.enum(['employee', 'manager', 'senior_manager', 'director'], {
-      errorMap: () => ({ message: 'role must be employee, manager, senior_manager or director' }),
+      error: () => 'role must be employee, manager, senior_manager or director',
     }).default('employee'),
-    site_id: z.string().uuid('site_id must be a valid UUID').optional().nullable(),
+    site_id: z.string().guid('site_id must be a valid UUID').optional().nullable(),
     // Niente `.min(1)` qui: per role === 'manager' questo campo è legittimamente
     // vuoto (i manager non hanno assigned_sites). Il requisito "almeno una sede"
     // per i dipendenti è applicato dal `.refine()` sotto, condizionato dal ruolo —
@@ -483,7 +483,7 @@ const AdminEmployeeSchema = z.object({
     // creazione di ogni manager, indipendentemente dal ruolo (bug reale: creare
     // un manager da "Nuovo Dipendente" falliva sempre con "assigned_sites must
     // contain at least one site").
-    assigned_sites: z.array(z.string().uuid('each assigned_site must be a valid UUID'))
+    assigned_sites: z.array(z.string().guid('each assigned_site must be a valid UUID'))
       .default([]),
     password: z.string().min(8, 'password must be at least 8 characters').max(100).optional(),
     external_employee_id: z.string()
@@ -500,13 +500,13 @@ const AdminEmployeeSchema = z.object({
         message: 'hiring_date cannot be in the past',
       })
       .optional(),
-    manager_id: z.string().uuid('manager_id must be a valid UUID').optional().nullable(),
+    manager_id: z.string().guid('manager_id must be a valid UUID').optional().nullable(),
     // Usata solo per role manager/senior_manager — chi approva le loro
     // richieste personali (ferie/malattia/correzione cartellino). NULL è
     // sempre valido: ricade sull'admin (vedi design spec 2026-08-29,
     // decisione 4). Diversa da manager_id: vedi quella colonna nella
     // migration 042 per il motivo per cui non sono la stessa cosa.
-    reports_to_id: z.string().uuid('reports_to_id must be a valid UUID').optional().nullable(),
+    reports_to_id: z.string().guid('reports_to_id must be a valid UUID').optional().nullable(),
   }).refine(
     (data) => ['manager', 'senior_manager', 'director'].includes(data.role) || data.assigned_sites.length > 0,
     { message: 'employees must have at least one assigned site', path: ['assigned_sites'] }
@@ -540,13 +540,13 @@ const AdminEmployeeSchema = z.object({
 
 const AdminEmployeeRolePatchSchema = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid employee id: must be valid UUID'),
+    id: z.string().guid('Invalid employee id: must be valid UUID'),
   }),
   body: z.object({
     role: z.enum(['senior_manager', 'director'], {
-      errorMap: () => ({ message: 'role must be senior_manager or director' }),
+      error: () => 'role must be senior_manager or director',
     }),
-    reports_to_id: z.string().uuid('reports_to_id must be a valid UUID').optional().nullable(),
+    reports_to_id: z.string().guid('reports_to_id must be a valid UUID').optional().nullable(),
   }),
 });
 
@@ -556,7 +556,7 @@ const AdminEmployeeRolePatchSchema = z.object({
 
 const AdminViewerSchema = z.object({
   body: z.object({
-    client_id: z.string().uuid('client_id must be a valid UUID'),
+    client_id: z.string().guid('client_id must be a valid UUID'),
     email: z.string().email('Invalid email format').max(100),
     name: z.string().min(2, 'name must be at least 2 characters').max(100),
     password: z.string().min(8, 'password must be at least 8 characters').max(100).optional(),
@@ -631,7 +631,7 @@ const PostTimesheetSignSchema = z.object({
 const PostLeaveRequestSchema = z.object({
   body: z.object({
     leave_type: z.enum(['FERIE_1', 'FERIE_2', 'FERIE_3', 'MALATTIA'], {
-      errorMap: () => ({ message: 'leave_type must be one of: FERIE_1, FERIE_2, FERIE_3, MALATTIA' }),
+      error: () => 'leave_type must be one of: FERIE_1, FERIE_2, FERIE_3, MALATTIA',
     }),
     start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'start_date must be in YYYY-MM-DD format'),
     end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'end_date must be in YYYY-MM-DD format'),
@@ -658,11 +658,11 @@ const PostLeaveRequestSchema = z.object({
 
 const ApproveLeaveSchema = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid leave request ID: must be valid UUID'),
+    id: z.string().guid('Invalid leave request ID: must be valid UUID'),
   }),
   body: z.object({
     status: z.enum(['APPROVED', 'REJECTED'], {
-      errorMap: () => ({ message: 'status must be either APPROVED or REJECTED' }),
+      error: () => 'status must be either APPROVED or REJECTED',
     }),
     rejection_reason: z.string().max(500, 'rejection_reason must be at most 500 characters').optional().nullable(),
   }),
@@ -704,11 +704,11 @@ const PostEventRequestSchema = z.object({
 
 const ApproveEventRequestSchema = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid event request ID: must be valid UUID'),
+    id: z.string().guid('Invalid event request ID: must be valid UUID'),
   }),
   body: z.object({
     status: z.enum(['APPROVED', 'REJECTED'], {
-      errorMap: () => ({ message: 'status must be either APPROVED or REJECTED' }),
+      error: () => 'status must be either APPROVED or REJECTED',
     }),
     rejection_reason: z.string().max(500, 'rejection_reason must be at most 500 characters').optional().nullable(),
   }),
@@ -720,8 +720,8 @@ const ApproveEventRequestSchema = z.object({
 
 const GetApprovedEventsSchema = z.object({
   query: z.object({
-    site_id: z.preprocess(val => val === '' ? undefined : val, z.string().uuid().optional()),
-    employee_id: z.preprocess(val => val === '' ? undefined : val, z.string().uuid().optional()),
+    site_id: z.preprocess(val => val === '' ? undefined : val, z.string().guid().optional()),
+    employee_id: z.preprocess(val => val === '' ? undefined : val, z.string().guid().optional()),
     date_from: z.preprocess(val => val === '' ? undefined : val, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_from must be YYYY-MM-DD').optional()),
     date_to: z.preprocess(val => val === '' ? undefined : val, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date_to must be YYYY-MM-DD').optional()),
   }),

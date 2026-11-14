@@ -20,7 +20,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 *
 
 function validateClientId(req, next) {
   if (req.user.role === 'superadmin' && req.query.client_id) {
-    if (!z.string().uuid().safeParse(req.query.client_id).success) {
+    if (!z.string().guid().safeParse(req.query.client_id).success) {
       next(new ValidationError('Invalid client_id'));
       return null;
     }
@@ -33,7 +33,7 @@ function validateClientId(req, next) {
 // non come query string.
 function validateClientIdFromBody(req, next) {
   if (req.user.role === 'superadmin' && req.body.client_id) {
-    if (!z.string().uuid().safeParse(req.body.client_id).success) {
+    if (!z.string().guid().safeParse(req.body.client_id).success) {
       next(new ValidationError('Invalid client_id'));
       return null;
     }

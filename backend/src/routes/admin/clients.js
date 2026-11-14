@@ -96,7 +96,7 @@ router.get('/', async (req, res, next) => {
 router.delete('/:id', requireSuperadmin, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const uuidCheck = z.string().uuid().safeParse(id);
+    const uuidCheck = z.string().guid().safeParse(id);
     if (!uuidCheck.success) return next(new ValidationError('Invalid client id'));
 
     const result = await pool.query(

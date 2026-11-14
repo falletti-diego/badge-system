@@ -2,9 +2,6 @@
   "$schema": "https://github.com/IBM/audit-ci/raw/main/docs/schema.json",
   "high": true,
   "critical": true,
-  "allowlist": [
-    "GHSA-mrhx-c7xc-m3w5"
-  ],
-  "_comment_allowlist": "GHSA-mrhx-c7xc-m3w5 = zod <4.6.6 DoS (memory exhaustion su collezioni vincolate sovradimensionate). Eccezione TEMPORANEA: il fix e' zod v4 (major, breaking, 12 file) e va fatto come migrazione dedicata con TDD, non qui. Rischio reale basso: API interna dietro auth + rate-limit, zero clienti. Rimuovere questa voce quando la migrazione zod v4 e' completata.",
+  "allowlist": [],
   "report-type": "important"
 }

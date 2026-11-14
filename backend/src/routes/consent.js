@@ -31,7 +31,7 @@ router.post('/gps-acceptance', async (req, res, next) => {
 
     const parsed = schema.safeParse({ consent_given, privacy_policy_version });
     if (!parsed.success) {
-      return next(new ValidationError(parsed.error.errors[0].message));
+      return next(new ValidationError(parsed.error.issues[0].message));
     }
 
     const { consent_given: consentValue, privacy_policy_version: ppVersion } = parsed.data;

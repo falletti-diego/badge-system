@@ -30,7 +30,7 @@ router.get('/debug/employee-assignment/:employeeId', async (req, res, next) => {
   const { employeeId } = req.params;
   const { client_id, role } = req.user;
 
-  if (!z.string().uuid().safeParse(employeeId).success) {
+  if (!z.string().guid().safeParse(employeeId).success) {
     return next(new ValidationError('Invalid employee id'));
   }
 

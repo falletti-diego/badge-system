@@ -38,7 +38,7 @@ const ReportIllnessSchema = z.object({
 
 const DeleteIllnessSchema = z.object({
   params: z.object({
-    id: z.string().uuid('ID non valido'),
+    id: z.string().guid('ID non valido'),
   }),
   body: z.object({
     cancellation_reason: z.string().max(500).optional(),

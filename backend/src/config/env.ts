@@ -317,7 +317,7 @@ export function validateEnv(): AppConfig {
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error('❌ Configuration validation failed:');
-      error.errors.forEach((err) => {
+      error.issues.forEach((err) => {
         const path = err.path.join('.');
         console.error(`   ${path}: ${err.message}`);
       });
