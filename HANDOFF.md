@@ -1,8 +1,8 @@
-# Badge System — Session 122-123 Handoff
+# Badge System — Session 122-124 Handoff
 
 **Date:** 2026-11-14
-**Session:** 122-123 — Security audit + pentest (ambito via `/grill-me`), 5 fix di sicurezza applicati e andati live, riposizionamento marketing v7 (da anti-frode Face ID ad ampiezza suite) con deploy dell'hero demo, sblocco della CI Security Check (audit fix in-range + allowlist mirata zod), fix del disco EC2 pieno e redeploy backend.
-**Status:** ✅ **Tutto committato e pushato (origin/main `525bf2b`), CI/CD Pipeline VERDE, backend ri-deployato su EC2 e healthy, hero demo live su badge.dataxiom.it.** Due follow-up non bloccanti aperti (vedi Next Steps).
+**Session:** 122-124 — Security audit + pentest (ambito via `/grill-me`), 5 fix di sicurezza live, riposizionamento marketing v7 (da anti-frode Face ID ad ampiezza suite) con deploy dell'hero demo, sblocco della CI Security Check, fix del disco EC2 pieno, e i due follow-up completati: prune step nel deploy EC2 + migrazione zod v3→v4 con rimozione dell'allowlist.
+**Status:** ✅ **Tutto committato e pushato (origin/main `359c99c`), CI/CD Pipeline VERDE (Security Check senza allowlist), backend su zod v4 live su EC2 e healthy, hero demo v7 live su badge.dataxiom.it. Entrambi i follow-up tecnici della Session 123 CHIUSI.** Nessun follow-up bloccante aperto (residui non urgenti in Next Steps).
 
 ## Goal
 Richiesta in 5 parti: leggere i documenti chiave, analisi approfondita, security review + penetration test allo stato dell'arte (`/security-review`), proporre miglioramenti, proporre una strategia go-to-market analizzando i competitor. Poi, su richiesta successiva: applicare i fix, aggiornare i .md, riposizionare il marketing e portare tutto live con CI verde.
@@ -16,8 +16,9 @@ Richiesta in 5 parti: leggere i documenti chiave, analisi approfondita, security
   - 4.5 HSTS 1 anno + preload (`backend/src/app.js`). LIVE, header verificato.
   - Item Info NON toccato di proposito: `DB_SSL_REJECT_UNAUTHORIZED=false` (vedi Next Steps #3).
 - **Marketing v7** (`.agents/product-marketing.md`): messaggio-guida spostato da Face ID/anti-frode (ormai commodity) ad **ampiezza della suite**; fee-per-sede riconosciuto come debolezza vs NoBadge (sedi illimitate a €0); prezzi invariati. Delta: `docs/marketing/2026-11-14-strategia-mercato-delta.md`. Hero demo (`frontend-web/src/pages/TryDemoPage.jsx`) riscritto e deployato live via Netlify CLI (site prod esplicito).
-- **CI Security Check sbloccato**: `npm audit fix` (no `--force`) ha chiuso 5 high + 1 critical in-range; resta solo zod `<4.6.6` isolata con `audit-ci` + allowlist (`backend/.audit-ci.json`, `GHSA-mrhx-c7xc-m3w5`). CI/CD Pipeline verde.
-- **Infra EC2**: deploy fallito per disco pieno (99%), risolto via SSH con `docker image prune -af` (→21%), deploy ri-triggerato (success), nuova immagine live e healthy.
+- **CI Security Check sbloccato**: `npm audit fix` (no `--force`) ha chiuso 5 high + 1 critical in-range. L'ultima (zod `<4.6.6`) è stata chiusa alla radice dalla migrazione v4 (sotto), e l'allowlist in `backend/.audit-ci.json` è stata **rimossa**: il gate ora passa senza eccezioni.
+- **Infra EC2**: deploy fallito per disco pieno (99%), risolto via SSH con `docker image prune -af` (→21%). Poi reso permanente: step `docker image prune -af` aggiunto a `deploy-to-ec2.yml` prima del pull — ha girato al primo deploy reale, disco ora stabile a 1 immagine.
+- **zod v3→v4 (follow-up CHIUSO)**: migrazione TDD-driven. Tre break v4 gestiti preservando il comportamento: `errorMap`→`error` (11 schemi, messaggi custom ora coperti da `src/__tests__/zod-v4-migration.test.js`), `ZodError.errors`→`.issues` (middleware validazione + `env.ts` + `consent.js`), `z.string().uuid()`→`.guid()` (39 punti — v4 rende `.uuid()` strict RFC, `.guid()` è il loose che mantiene la semantica v3). Suite 1001+39 verde, lint 0 errori, live su prod (login malformato → 400 corretto, verificato).
 
 ## What Worked
 - Deploy frontend via Netlify CLI con **site ID prod esplicito** (`29a79b49` = badge.dataxiom.it), aggirando il link locale errato a `badge-system-staging`.
@@ -25,18 +26,20 @@ Richiesta in 5 parti: leggere i documenti chiave, analisi approfondita, security
 - `audit-ci` con allowlist di un singolo GHSA: CI verde mantenendo il gate severo su tutto il resto (verificato: senza allowlist fallisce ancora su zod).
 - `docker image prune -af` su EC2: preserva l'immagine del container attivo, libera spazio senza downtime.
 - Deploy backend: push su `main` → `ecr-push` → `deploy-to-ec2` (workflow_run); re-trigger manuale via `gh workflow run deploy-to-ec2.yml --ref main`.
+- Migrazione dipendenza major guidata dai test: scritti test di caratterizzazione sui comportamenti NON coperti (messaggi custom), visti andare RED su v4, fixati a GREEN. Per i cambi di semantica ambigui (`.uuid()` strict) scelta la via che **preserva** il comportamento v3 (`.guid()`), lasciando l'eventuale irrigidimento come decisione separata.
 
 ## What Didn't Work
 - **Falso allarme "demo rotta"**: l'IP `34.245.145.143` nel bundle frontend è una stringa di fallback MORTA — a runtime vince `window.API_CONFIG.API_URL` (da `public/config.js`), che risolve a `https://api.dataxiom.it`. La demo non era mai rotta; non inseguire quell'IP.
 - **`netlify deploy` ri-builda da git**: le modifiche frontend non committate non finiscono in produzione finché non sono committate.
-- **`npm audit fix --force`**: downgrada jest (devDependency, rompe la suite) e forza zod v4 non testato — da evitare.
-- **Deploy su disco EC2 pieno**: fallisce con `no space left on device`; va pruneato prima.
+- **`npm audit fix --force`**: downgrada jest (devDependency, rompe la suite) — da evitare; la migrazione zod v4 va fatta a mano, non con `--force`.
+- **Deploy su disco EC2 pieno**: fallisce con `no space left on device`; va pruneato prima (ora automatico nel workflow).
+- **Sorpresa zod v4**: `z.string().uuid()` è diventato strict RFC (valida version+variant) — i fixture di test con UUID finti (`11111111-…`) venivano rifiutati. Non un bug del codice ma un cambio di semantica; risolto con `.guid()` (loose) per preservare v3.
 
 ## Next Steps
-1. **(Follow-up, piccolo, basso rischio)** Aggiungere `docker image prune -af` allo script di deploy sulla EC2 (fix di radice del disco pieno — senza, si rirriempie a ogni deploy). SSH: `ubuntu@52.19.238.50` con `~/.ssh/badge-system-ec2-v2.pem`.
-2. **(Task TDD dedicato)** Migrazione zod v3→v4 (major breaking, 12 file che importano zod); al termine rimuovere l'allowlist in `backend/.audit-ci.json`.
-3. **(Item Info audit, task dedicato)** `DB_SSL_REJECT_UNAUTHORIZED=false` in produzione: scaricare/montare il CA bundle RDS `eu-west-1` nel container Alpine, puntarci `pg`, poi flag `true`. Rischio basso ora (RDS privato).
-4. **(Prodotto/business)** Aggiornare l'hero del sito marketing e rivedere il fee-per-sede nelle trattative multi-sede (vedi delta marketing). Collo di bottiglia reale: validare con 10-15 prospect (`docs/marketing/piano-tattico-3000-primo-cliente.md`).
+_I due follow-up tecnici della Session 123 (prune step EC2 + migrazione zod v4) sono CHIUSI — vedi Current Progress. Residui non bloccanti:_
+1. **(Item Info audit, task dedicato)** `DB_SSL_REJECT_UNAUTHORIZED=false` in produzione: scaricare/montare il CA bundle RDS `eu-west-1` nel container Alpine, puntarci `pg`, poi flag `true`. Rischio basso ora (RDS privato).
+2. **(Prodotto/business)** Aggiornare l'hero del sito marketing `dataxiom.it/badge-system` (quello della demo `badge.dataxiom.it` è già v7) e rivedere il fee-per-sede nelle trattative multi-sede (vedi delta marketing). Collo di bottiglia reale: validare con 10-15 prospect (`docs/marketing/piano-tattico-3000-primo-cliente.md`).
+3. **(Opzionale, pulizia)** `z.string().uuid()`/`.guid()` e `.email()` sono deprecati in zod v4 (funzionano, nessun warning a runtime). Se si vuole togliere la deprecation, migrare ai top-level `z.uuid()`/`z.email()` — ma `z.uuid()` è strict RFC: valutare prima se irrigidire la validazione UUID è voluto (vedi What Worked).
 
 ---
 
