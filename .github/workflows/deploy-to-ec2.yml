@@ -59,6 +59,20 @@ jobs:
             echo "✅ ECR login successful"
 
             echo ""
+            echo "🧹 Step 1.5: Prune unused Docker images to free disk space..."
+            # Fix di radice (Session 123): i deploy pullano :latest ripetutamente
+            # e il root volume EC2 si era riempito al 99%, facendo fallire
+            # l'estrazione dell'immagine con 'no space left on device'. Il prune
+            # va eseguito PRIMA del pull e PRIMA di fermare il container attivo:
+            # `docker image prune -af` conserva l'immagine del container in
+            # esecuzione e rimuove solo quelle inutilizzate/vecchie dei deploy
+            # precedenti, lasciando spazio per la nuova.
+            echo "Disk before prune:"; df -h / | tail -1
+            docker image prune -af || true
+            echo "Disk after prune:"; df -h / | tail -1
+            echo "✅ Disk cleaned"
+
+            echo ""
             echo "🐋 Step 2: Pull latest Docker image from ECR..."
             docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
             echo "✅ Image pulled successfully"
