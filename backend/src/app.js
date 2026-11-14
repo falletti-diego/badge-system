@@ -74,7 +74,16 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 app.set('trust proxy', 1);
 
 // Security middleware
-app.use(helmet());
+// HSTS: 1 year + includeSubDomains + preload (helmet's default is only 180
+// days, below the HSTS preload-list eligibility threshold). The rest of
+// helmet's defaults (CSP, nosniff, frameguard, etc.) are kept as-is.
+app.use(helmet({
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true,
+  },
+}));
 // CORS — explicit whitelist, no wildcards (MASVS-NETWORK)
 // Dev: set CORS_ORIGIN=http://localhost:5173 in .env
 // Prod: SSM /badge/production/CORS_ORIGIN = https://badge.dataxiom.it,https://dataxiom-badge.netlify.app

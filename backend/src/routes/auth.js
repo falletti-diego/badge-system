@@ -730,6 +730,19 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
       [newPasswordHash, employee_id]
     );
 
+    // Security (audit 2026-11-14, finding 4.3): revoke every existing session
+    // on password change. Deleting the user's used_tokens means any refresh
+    // token issued before this change is treated as a replay on next use — a
+    // stolen pre-change refresh token can no longer outlive the password it
+    // was issued under. @badge.local demo sessions (password_hash was NULL)
+    // never track jti, so skip them. The freshly-issued session's own refresh
+    // jti is re-tracked below, mirroring POST /login, so THIS session's
+    // refresh token still works on first use.
+    const wasDbUser = employee.password_hash != null;
+    if (wasDbUser) {
+      await pool.query('DELETE FROM used_tokens WHERE user_id = $1::uuid', [req.user.user_id]);
+    }
+
     // Generate new JWT token with must_change_password = false
     const tokenPayload = {
       user_id: req.user.user_id,
@@ -755,6 +768,13 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
       algorithm: JWT_ALGORITHM,
       expiresIn: REFRESH_TOKEN_EXPIRY,
     });
+
+    // Track this new session's refresh jti so its first refresh isn't seen as
+    // a replay (the DELETE above cleared every row, including this session's).
+    // Mirrors the used_tokens insert POST /login does for DB users.
+    if (wasDbUser) {
+      await pool.query('INSERT INTO used_tokens (user_id, jti) VALUES ($1, $2)', [req.user.user_id, jti]);
+    }
 
     logger.info({
       action: 'password_changed',
