@@ -226,9 +226,13 @@ jobs:
         working-directory: ./backend
         run: npm ci
 
-      - name: npm audit (fail on high/critical)
+      - name: npm audit (fail on high/critical, with documented allowlist)
         working-directory: ./backend
-        run: npm audit --audit-level=high
+        # audit-ci = npm audit --audit-level=high + una allowlist mirata e
+        # documentata (.audit-ci.json). Unica eccezione: GHSA-mrhx-c7xc-m3w5
+        # (zod <4.6.6), il cui fix e' zod v4 (major breaking, migrazione a
+        # parte). Qualunque ALTRA high/critical fa comunque fallire la build.
+        run: npx --yes audit-ci@^7 --config .audit-ci.json
 
       - name: Setup Python for detect-secrets
         uses: actions/setup-python@v5
