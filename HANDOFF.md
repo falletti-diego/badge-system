@@ -1,4 +1,46 @@
-# Badge System — Session 121 Handoff
+# Badge System — Session 122-123 Handoff
+
+**Date:** 2026-11-14
+**Session:** 122-123 — Security audit + pentest (ambito via `/grill-me`), 5 fix di sicurezza applicati e andati live, riposizionamento marketing v7 (da anti-frode Face ID ad ampiezza suite) con deploy dell'hero demo, sblocco della CI Security Check (audit fix in-range + allowlist mirata zod), fix del disco EC2 pieno e redeploy backend.
+**Status:** ✅ **Tutto committato e pushato (origin/main `525bf2b`), CI/CD Pipeline VERDE, backend ri-deployato su EC2 e healthy, hero demo live su badge.dataxiom.it.** Due follow-up non bloccanti aperti (vedi Next Steps).
+
+## Goal
+Richiesta in 5 parti: leggere i documenti chiave, analisi approfondita, security review + penetration test allo stato dell'arte (`/security-review`), proporre miglioramenti, proporre una strategia go-to-market analizzando i competitor. Poi, su richiesta successiva: applicare i fix, aggiornare i .md, riposizionare il marketing e portare tutto live con CI verde.
+
+## Current Progress
+- **Security audit** (`docs/security-audit-2026-11-14.md`): nessun finding critico/alto; nucleo di sicurezza allo stato dell'arte (JWT RS256 con algoritmo vincolato, isolamento multi-tenant `client_id`-first fail-closed, SQL parametrizzato, bcrypt + no user-enum + rotazione refresh con replay-detection, rate limiting, helmet/CORS). 5 fix medio-bassi, ora **committati e live**:
+  - 4.1 `.env.production` → `https://api.dataxiom.it` (hygiene; a runtime vince `window.API_CONFIG` da `public/config.js`).
+  - 4.2 RDS reso privato (già live, difesa in profondità).
+  - 4.3 revoca sessioni al cambio password + tracking jti nuova sessione (`backend/src/routes/auth.js` + test `auth-change-password-revoke.test.js`). LIVE.
+  - 4.4 nginx `server_tokens off` (già live).
+  - 4.5 HSTS 1 anno + preload (`backend/src/app.js`). LIVE, header verificato.
+  - Item Info NON toccato di proposito: `DB_SSL_REJECT_UNAUTHORIZED=false` (vedi Next Steps #3).
+- **Marketing v7** (`.agents/product-marketing.md`): messaggio-guida spostato da Face ID/anti-frode (ormai commodity) ad **ampiezza della suite**; fee-per-sede riconosciuto come debolezza vs NoBadge (sedi illimitate a €0); prezzi invariati. Delta: `docs/marketing/2026-11-14-strategia-mercato-delta.md`. Hero demo (`frontend-web/src/pages/TryDemoPage.jsx`) riscritto e deployato live via Netlify CLI (site prod esplicito).
+- **CI Security Check sbloccato**: `npm audit fix` (no `--force`) ha chiuso 5 high + 1 critical in-range; resta solo zod `<4.6.6` isolata con `audit-ci` + allowlist (`backend/.audit-ci.json`, `GHSA-mrhx-c7xc-m3w5`). CI/CD Pipeline verde.
+- **Infra EC2**: deploy fallito per disco pieno (99%), risolto via SSH con `docker image prune -af` (→21%), deploy ri-triggerato (success), nuova immagine live e healthy.
+
+## What Worked
+- Deploy frontend via Netlify CLI con **site ID prod esplicito** (`29a79b49` = badge.dataxiom.it), aggirando il link locale errato a `badge-system-staging`.
+- `npm audit fix` **senza** `--force`: fix in-range sicuri, nessun breaking, suite verde — la via a rischio minore rispetto a loosening del gate o migrazione zod forzata.
+- `audit-ci` con allowlist di un singolo GHSA: CI verde mantenendo il gate severo su tutto il resto (verificato: senza allowlist fallisce ancora su zod).
+- `docker image prune -af` su EC2: preserva l'immagine del container attivo, libera spazio senza downtime.
+- Deploy backend: push su `main` → `ecr-push` → `deploy-to-ec2` (workflow_run); re-trigger manuale via `gh workflow run deploy-to-ec2.yml --ref main`.
+
+## What Didn't Work
+- **Falso allarme "demo rotta"**: l'IP `34.245.145.143` nel bundle frontend è una stringa di fallback MORTA — a runtime vince `window.API_CONFIG.API_URL` (da `public/config.js`), che risolve a `https://api.dataxiom.it`. La demo non era mai rotta; non inseguire quell'IP.
+- **`netlify deploy` ri-builda da git**: le modifiche frontend non committate non finiscono in produzione finché non sono committate.
+- **`npm audit fix --force`**: downgrada jest (devDependency, rompe la suite) e forza zod v4 non testato — da evitare.
+- **Deploy su disco EC2 pieno**: fallisce con `no space left on device`; va pruneato prima.
+
+## Next Steps
+1. **(Follow-up, piccolo, basso rischio)** Aggiungere `docker image prune -af` allo script di deploy sulla EC2 (fix di radice del disco pieno — senza, si rirriempie a ogni deploy). SSH: `ubuntu@52.19.238.50` con `~/.ssh/badge-system-ec2-v2.pem`.
+2. **(Task TDD dedicato)** Migrazione zod v3→v4 (major breaking, 12 file che importano zod); al termine rimuovere l'allowlist in `backend/.audit-ci.json`.
+3. **(Item Info audit, task dedicato)** `DB_SSL_REJECT_UNAUTHORIZED=false` in produzione: scaricare/montare il CA bundle RDS `eu-west-1` nel container Alpine, puntarci `pg`, poi flag `true`. Rischio basso ora (RDS privato).
+4. **(Prodotto/business)** Aggiornare l'hero del sito marketing e rivedere il fee-per-sede nelle trattative multi-sede (vedi delta marketing). Collo di bottiglia reale: validare con 10-15 prospect (`docs/marketing/piano-tattico-3000-primo-cliente.md`).
+
+---
+
+## — Archivio: Session 121 Handoff —
 
 **Date:** 2026-09-13
 **Session:** 121 — Upgrade RDS PostgreSQL 14→16 (evita Extended Support), pulizia repo, ONB.2 (mezze giornate Ferie) via `/superpowers:brainstorming`→`/superpowers:writing-plans`→`/superpowers:subagent-driven-development` (16 task), 3 bug reali di produzione trovati e fixati durante l'esecuzione, pipeline CI/CD sbloccata dopo il merge (4 problemi indipendenti da ONB.2)
