@@ -157,9 +157,10 @@ export default function TryDemoPage() {
                 maxWidth: '38rem',
               }}
             >
-              Face ID nativo impedisce che un collega timbri al posto di un altro — con una
-              traccia di audit che regge a un controllo. Demo completa con dati realistici,
-              pronta in pochi secondi. Nessuna carta, nessun impegno.
+              Presenze, turni, ferie/malattia ed export paghe Zucchetti/TeamSystem in un
+              unico strumento per catene multi-sede — senza il peso di una suite HR. Demo
+              completa con dati realistici, pronta in pochi secondi. Nessuna carta, nessun
+              impegno.
             </Typography>
 
             {/* Signature element: real-ish live KPI teaser from the fixed demo dataset */}
