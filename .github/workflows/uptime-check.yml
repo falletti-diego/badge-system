@@ -1,0 +1,41 @@
+name: Uptime Check
+
+# Controllo esterno di disponibilità (aggiunto 2026-11-15, punto 3 resilienza
+# operativa): gli incidenti passati (disco pieno Session 123, crash-loop
+# Session 89) sono stati scoperti a mano. Un run fallito qui genera la
+# notifica email di GitHub Actions.
+#
+# Nota: GitHub disabilita i workflow schedulati dopo 60 giorni senza attività
+# sul repo — con il ritmo attuale di commit non è un problema, ma se il
+# progetto va in pausa lunga questo check si spegne in silenzio.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  uptime:
+    name: API + Dashboard raggiungibili
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check API health (https://api.dataxiom.it/health)
+        run: |
+          code=$(curl -s -o /tmp/health.json -w "%{http_code}" --max-time 15 --retry 2 --retry-delay 10 https://api.dataxiom.it/health)
+          echo "HTTP $code"; cat /tmp/health.json || true
+          [ "$code" = "200" ] || { echo "::error::API health check fallito (HTTP $code)"; exit 1; }
+
+      - name: Check dashboard (https://badge.dataxiom.it)
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 --retry 2 --retry-delay 10 https://badge.dataxiom.it)
+          echo "HTTP $code"
+          [ "$code" = "200" ] || { echo "::error::Dashboard check fallito (HTTP $code)"; exit 1; }
+
+      - name: Check scadenza certificato TLS API (>14 giorni)
+        run: |
+          expiry=$(echo | openssl s_client -servername api.dataxiom.it -connect api.dataxiom.it:443 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+          expiry_epoch=$(date -d "$expiry" +%s)
+          days_left=$(( (expiry_epoch - $(date +%s)) / 86400 ))
+          echo "Certificato API scade tra $days_left giorni ($expiry)"
+          [ "$days_left" -gt 14 ] || { echo "::error::Certificato TLS api.dataxiom.it scade tra $days_left giorni"; exit 1; }
