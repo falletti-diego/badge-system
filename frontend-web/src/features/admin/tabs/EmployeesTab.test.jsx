@@ -154,7 +154,9 @@ describe('EmployeesTab', () => {
     await waitFor(() => expect(apiClient.post).toHaveBeenCalled());
     const payload = apiClient.post.mock.calls[0][1];
     expect(payload.manager_id).toBeFalsy();
-  });
+    // timeout: 9 interazioni userEvent — il default di 5s è andato in timeout
+    // due volte di fila sui runner CI condivisi (2026-11-15), mai in locale
+  }, 15000);
 
   it('disables the submit button when Matricola has invalid characters', async () => {
     const user = userEvent.setup();
