@@ -1,4 +1,44 @@
-# Badge System — Session 122-124 Handoff
+# Badge System — Session 125 Handoff
+
+**Date:** 2026-11-15
+**Session:** 125 — Review completa del progetto rispetto alle good practice (voto 7.5/10) ed esecuzione dei punti 1-4 del piano risultante: pulizia repo, consolidamento migration in directory unica, resilienza operativa (disk guard + swap + allarmi + uptime check + runbook), hook anti-commit-non-pushati. Decisione costi AWS: mantenere tutto fino al 1° gennaio 2027.
+**Status:** ✅ **4 commit su main tutti pushati (`b489306`→`3e1c2f8`), CI VERDE sull'ultimo commit (prima run, col fix del test flaky — il timeout era davvero la causa), deploy EC2 verdi, API healthy, uptime check attivo.** Nessun task in-flight.
+
+## Goal
+Richiesta iniziale: valutare il progetto rispetto alle good practice di sviluppo e gestione. La review ha prodotto 5 punti prioritizzati; l'utente ha poi chiesto di eseguirli uno alla volta (1→4; il 5 è legato all'evento "primo cliente pagante", non a lavoro immediato).
+
+## Current Progress
+- **Review** (in conversazione, non in un file): punti di forza = disciplina test (1040+ test, Pattern 1-7 con enforcement automatico), CI solida, GDPR; debolezze = igiene repo, migration sparse, SPOF operativi, recidiva commit-non-pushati.
+- **Punto 1 — Pulizia** (`b489306`): rimossi `auth.js.bak`, `backend/src/config/{env.ts,index.ts}` (TS morto, mai importato dal backend CommonJS — era stato perfino toccato dalla migrazione zod v4 pur essendo morto), stub `mobile/` e `web-dashboard/`, step debug fossile in ci.yml; branch eliminati: 1 `[gone]` + 3 già fusi in main. Restano 5 branch unmerged non toccati (decisione utente caso per caso), incluso `worktree-smart-working-event-conflict` [ahead 2].
+- **Punto 2 — Migration** (`6d72039`): da 3 directory a 1. `backend/migrations/` è l'unica autoritativa (nuovo README con regole); root `migrations/` (legacy pre-runner giugno) archiviata in `docs/archive/migrations-legacy-root/`; bozza orfana `backend/src/migrations/022` eliminata; `apply-migrations-011-012.sh` + istruzioni archiviati; SCHEMA/CONFIGURATION/PROJECT_STRUCTURE/diagrams aggiornati alla realtà del runner (via la strategia Flyway aspirazionale). **Scoperta: `run-migrations.js` ha già state tracking serio (`schema_migrations`, checksum, transazioni) — nessun tool esterno necessario, la review iniziale sbagliava su questo.**
+- **Punto 3 — Resilienza operativa** (`30f3bc0`): (a) `infrastructure/ec2-disk-guard.sh` installato su EC2, cron `*/30` — auto-prune a ≥75% disco + vacuum journald, log `/var/log/badge-disk-guard.log`; chiude il buco del prune solo-al-deploy; (b) **swapfile 1GB** su EC2 (persistente, swappiness=10 — la t3.micro aveva 909MB RAM con ~70MB liberi e zero swap); (c) 3 allarmi CloudWatch (status-check, CPU>90%, RDS storage<2GB) → SNS `badge-system-alerts`, **email confermata dall'utente**; (d) `.github/workflows/uptime-check.yml` ogni 15min (API health + dashboard + scadenza cert TLS), prima run verificata verde; (e) `docs/RUNBOOK-OPERATIONS.md` con mappa monitoring, diagnosi rapida e procedura restore RDS **mai ancora testata** (TODO lì). Scoperta: esistevano già 7 allarmi CloudWatch da una sessione passata; col setup nuovo sono 10 = esattamente il limite free tier.
+- **Punto 4 — Enforcement anti-commit-non-pushati** (`22259db` + hardening in `3e1c2f8`): hook `Stop` in `.claude/settings.json` (committato → vale per ogni sessione futura) che esegue `.claude/hooks/check-unpushed.sh` a fine di ogni turno di Claude: avvisa se il branch è avanti sull'upstream (qualunque N) o se un branch senza upstream supera 5 commit assenti da ogni remoto; silenzioso quando allineato. JSON costruito con `jq` (finding della security review automatica sul nome branch non fidato).
+- **Fix test flaky** (`3e1c2f8`): `EmployeesTab.test.jsx` "does not submit a stale manager_id" — timeout 5s→15s per quel singolo test (9 interazioni userEvent, fallito 2 volte di fila sui runner CI, mai in locale).
+- **Decisione costi AWS (in memoria, non nel repo)**: mantenere l'infrastruttura attuale (~€50/mese) fino al **1° gennaio 2027**; vincolo: nessuna attività deve aggiungere costi (verificato: tutto il lavoro di oggi è a €0 — 10 allarmi = limite free tier, SNS/Actions gratis). Non riproporre il congelamento prima di quella data.
+
+## What Worked
+- Verifica "nessuno importa questo file" prima di ogni cancellazione (grep su require/import) — ha reso la pulizia a rischio zero.
+- Archiviare le migration legacy in `docs/archive/` invece di spostarle in `backend/migrations/`: qualunque `.sql` nella directory del runner **viene eseguito** al prossimo deploy — spostarle lì le avrebbe ri-applicate.
+- Per l'hook: script in file versionato (`.claude/hooks/`) invocato dal settings, non comando inline — testabile con pipe-test e niente escaping JSON fragile.
+- Test dell'hook con branch contenente virgolette in un repo usa-e-getta nello scratchpad (il tentativo di farlo nel repo vero con reset/branch è stato giustamente bloccato dai permessi).
+- `gh run rerun --failed` per distinguere flake da regressione: stesso test fallito 2 volte su run diverse ma sempre verde al rerun ⇒ flaky da runner lento, non bug.
+
+## What Didn't Work
+- **Modifica IAM bloccata dai permessi di sessione**: volevo dare `cloudwatch:PutMetricData` (scope namespace) all'utente IAM `badge-system-github-actions` (le credenziali presenti sull'host EC2) per pubblicare metriche disco/RAM. Negato dal classificatore — lacuna accettata e documentata nel runbook; se la si vuole, farla a mano in console o autorizzare esplicitamente.
+- **Il test `EmployeesTab` è flaky sistematico in CI** (2 timeout consecutivi a 5s). Il fix (timeout 15s) era in verifica a fine sessione: se la run 43726839686 è fallita ancora su quel test, il problema non è il timeout ma qualcosa di più profondo (interazione MUI Select + userEvent su runner lenti) — in quel caso valutare `vi.setConfig({testTimeout})` a livello di file o semplificare il test.
+- Prima lettura frettolosa di `git check-ignore` mi ha fatto credere che `backend/.env` fosse tracciato in git (falso allarme, è solo ignorato — nessun segreto committato).
+
+## Next Steps
+1. ~~Verificare CI run 43726839686~~ → **verificata VERDE prima di chiudere la sessione** (prima run passata col fix del timeout).
+2. **Punto 5 della review (al primo cliente pagante, non prima)**: security review esterna dell'auth fatta in casa (o migrazione Auth0) + valutare vincolo DB per la mutua esclusione Evento/Ferie/Malattia (Pattern 7).
+3. **Test di restore RDS** (procedura in `docs/RUNBOOK-OPERATIONS.md`): mai eseguito; ~30 min, pochi centesimi, da pianificare. L'utente è sensibile ai costi: chiedere prima.
+4. **Branch unmerged residui** (5, tra cui `worktree-smart-working-event-conflict` [ahead 2]): decidere caso per caso se recuperare o eliminare.
+5. **1° gennaio 2027**: riproporre la decisione congelamento AWS (vedi memoria `aws_cost_freeze_decision_2026_10_11`).
+6. Residui delle sessioni precedenti ancora validi: CA bundle RDS per `DB_SSL_REJECT_UNAUTHORIZED=true`; hero marketing `dataxiom.it/badge-system` (la demo è già v7); validazione con 10-15 prospect.
+
+---
+
+## — Archivio: Session 122-124 Handoff —
 
 **Date:** 2026-11-14
 **Session:** 122-124 — Security audit + pentest (ambito via `/grill-me`), 5 fix di sicurezza live, riposizionamento marketing v7 (da anti-frode Face ID ad ampiezza suite) con deploy dell'hero demo, sblocco della CI Security Check, fix del disco EC2 pieno, e i due follow-up completati: prune step nel deploy EC2 + migrazione zod v3→v4 con rimozione dell'allowlist.
