@@ -2,5 +2,19 @@
   "enableAllProjectMcpServers": true,
   "env": {
     "GITHUB_PERSONAL_ACCESS_TOKEN": ""
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-unpushed.sh\"",
+            "timeout": 10,
+            "statusMessage": "Controllo commit non pushati…"
+          }
+        ]
+      }
+    ]
   }
 }
