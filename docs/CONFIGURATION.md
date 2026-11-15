@@ -106,7 +106,7 @@ EXPO_PUBLIC_DEBUG=true
 **Database Setup:**
 1. Create AWS RDS instance (db.t3.micro)
 2. Get connection string: `postgresql://user:pass@hostname.rds.amazonaws.com:5432/badge_staging`
-3. Run migrations: `psql <CONNECTION_URL> < migrations/V001__initial_schema.sql`
+3. Bootstrap schema: `psql <CONNECTION_URL> -f backend/src/db/schema.sql`, poi `cd backend && npm run migrations`
 
 **Auth0 Setup:**
 1. Create Auth0 tenant (test/staging) at https://auth0.com

@@ -611,15 +611,18 @@ SELECT * FROM pg_policies;
 
 ### Migration Strategy
 
-Use **Flyway** or **Liquibase** for schema versioning:
+Schema versioning con runner custom (`backend/scripts/run-migrations.js`):
+file SQL numerati in `backend/migrations/` (unica directory autoritativa —
+vedi il README lì), applicati in ordine alfabetico con stato tracciato nella
+tabella `schema_migrations` (filename univoco + checksum, applicazione in
+transazione). Il bootstrap di un database nuovo è `backend/src/db/schema.sql`.
 
 ```
-migrations/
-├── V001__initial_schema.sql      (clients, sites, employees, check_ins, audit_log)
-├── V002__add_indexes.sql         (all indexes)
-├── V003__enable_rls.sql          (RLS policies)
-├── V004__audit_triggers.sql      (audit logging)
-└── V005__data_cleanup.sql        (backfill/migrate data)
+backend/migrations/
+├── 001_create_shifts_table.sql
+├── 002_add_correction_fields.sql
+├── ...
+└── 044_leave_half_day_units.sql
 ```
 
 ### Example Migration
@@ -650,12 +653,11 @@ ALTER TABLE sites ADD CONSTRAINT fk_client FOREIGN KEY (client_id) REFERENCES cl
 ### Running Migrations
 
 ```bash
-# Using Flyway
-flyway -url=jdbc:postgresql://localhost/badge_db -user=badge_user -password=*** migrate
+# Bootstrap di un DB nuovo (una tantum)
+psql badge_db -f backend/src/db/schema.sql
 
-# Or manually
-psql badge_db -f migrations/V001__initial_schema.sql
-psql badge_db -f migrations/V002__add_indexes.sql
+# Migration incrementali (idempotente: applica solo le non ancora applicate)
+cd backend && npm run migrations
 ```
 
 ---

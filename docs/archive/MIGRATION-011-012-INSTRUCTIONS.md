@@ -1,3 +1,6 @@
+> **ARCHIVIATO 2026-11-15** — procedura one-off di giugno 2026, già eseguita in produzione. Lo script è ora in `docs/archive/apply-migrations-011-012.sh`.
+
+
 # Migrations 011 & 012: GDPR Compliance for Italian Market
 
 **Status:** Ready for production RDS  
@@ -52,7 +55,7 @@
 
 4. **Run migration script:**
    ```bash
-   bash backend/migrations/apply-migrations-011-012.sh
+   bash docs/archive/apply-migrations-011-012.sh
    ```
 
 5. **Expected output:**
@@ -104,7 +107,7 @@
    export PGUSER=postgres
    export PGPASSWORD="<RDS_PASSWORD>"
    
-   bash backend/migrations/apply-migrations-011-012.sh
+   bash docs/archive/apply-migrations-011-012.sh
    ```
 
 ---
@@ -124,7 +127,7 @@
 
 - [Migration 011](../backend/migrations/011_add_dpa_acknowledgements.sql) — DPA acknowledgements
 - [Migration 012](../backend/migrations/012_add_consent_tracking.sql) — GPS consent tracking
-- [Application script](../backend/migrations/apply-migrations-011-012.sh) — Automated runner
+- [Application script](apply-migrations-011-012.sh) — Automated runner
 
 ---
 

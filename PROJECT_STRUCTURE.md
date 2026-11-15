@@ -25,7 +25,7 @@ badge/
 │   │   ├── routes/                 # API endpoint definitions
 │   │   ├── middleware/             # Auth, logging, error handling, CORS
 │   │   └── utils/                  # Validation (Zod), formatters, helpers
-│   ├── migrations/                 # Database migrations (future: TypeORM/Knex)
+│   ├── migrations/                 # Migration SQL (runner: scripts/run-migrations.js + schema_migrations)
 │   └── tests/                      # Jest unit + integration tests
 │
 ├── 📁 frontend-web/                # React + Vite Web Dashboard

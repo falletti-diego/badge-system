@@ -256,7 +256,7 @@ These diagrams enforce:
 | `docs/openapi.yaml` | OpenAPI 3.0 specification (machine-readable) |
 | `docs/SCHEMA.md` | PostgreSQL schema design and RLS policies |
 | `docs/ERRORS.md` | Complete error reference with HTTP codes |
-| `migrations/V001__initial_schema.sql` | Database migration script |
+| `backend/src/db/schema.sql` + `backend/migrations/` | Bootstrap schema + migration incrementali |
 
 ---
 
